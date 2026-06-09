@@ -23,6 +23,9 @@ public class TaskItem : BaseEntity, IUserOwnedEntity
 
     public DateTime? DueDate { get; set; }
 
+    /// <summary>Populated when Status transitions to Done.</summary>
+    public DateTime? CompletedDate { get; set; }
+
     /// <summary>Archived tasks are excluded from active work screens.</summary>
     public bool IsArchived { get; set; }
 

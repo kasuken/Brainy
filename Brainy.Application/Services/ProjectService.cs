@@ -109,7 +109,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             .Select(t => new
             {
                 t.Id, t.Title, t.Description, t.Status, t.Priority,
-                t.DueDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
+                t.DueDate, t.CompletedDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
                 t.CreatedAtUtc, t.UpdatedAtUtc,
                 SubtaskCount     = t.Subtasks.Count(s => !s.IsArchived),
                 DoneSubtaskCount = t.Subtasks.Count(s => !s.IsArchived && s.Status == TaskItemStatus.Done),
@@ -141,7 +141,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
 
         var taskDtos = tasks.Select(t => new TaskItemDto(
             t.Id, t.Title, t.Description, t.Status, t.Priority,
-            t.DueDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
+            t.DueDate, t.CompletedDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
             t.CreatedAtUtc, t.UpdatedAtUtc, t.SubtaskCount, t.DoneSubtaskCount))
             .ToList();
 

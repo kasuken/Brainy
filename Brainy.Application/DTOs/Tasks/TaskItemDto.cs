@@ -10,6 +10,7 @@ public record TaskItemDto(
     TaskItemStatus Status,
     TaskPriority Priority,
     DateTime? DueDate,
+    DateTime? CompletedDate,
     bool IsArchived,
     Guid ProjectId,
     Guid? ParentTaskId,
