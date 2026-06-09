@@ -1,13 +1,15 @@
 @page "/notes"
 @rendermode InteractiveServer
 @attribute [Authorize]
+@namespace Brainy.Web.Components.Pages.NotesPage
 
 @using Brainy.Application.DTOs.Notes
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
+@using Brainy.Web.Components.Pages.Notes
 
 @inject INoteService NoteService
-@inject NavigationManager Nav
+@inject IDialogService DialogService
 
 <PageTitle>Notes – Brainy</PageTitle>
 
@@ -21,7 +23,7 @@
         <MudButton Variant="Variant.Filled"
                    Color="Color.Primary"
                    StartIcon="@Icons.Material.Filled.Add"
-                   Href="/notes/create">
+                   OnClick="OpenCreateDialogAsync">
             New Note
         </MudButton>
     </MudStack>
@@ -51,7 +53,7 @@
                 Capture your first piece of knowledge to get started.
             </MudText>
             <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.Add" Href="/notes/create">
+                       StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialogAsync">
                 Create your first note
             </MudButton>
         </MudPaper>
@@ -134,19 +136,48 @@
     private string _searchText = string.Empty;
     private bool _loading = true;
 
-    protected override async Task OnInitializedAsync()
+    private static readonly DialogOptions _dialogOptions = new()
     {
-        _notes = await NoteService.GetAllAsync();
+        MaxWidth        = MaxWidth.Large,
+        FullWidth       = true,
+        BackdropClick   = false,
+        CloseOnEscapeKey = false,
+        CloseButton     = false,
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadNotesAsync();
+
+    private async Task LoadNotesAsync()
+    {
+        _loading = true;
+        _notes   = await NoteService.GetAllAsync();
         _loading = false;
+    }
+
+    private async Task OpenCreateDialogAsync()
+    {
+        var dialog = await DialogService.ShowAsync<NoteEditorDialog>("", _dialogOptions);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await LoadNotesAsync();
+    }
+
+    private async Task OnRowClick(TableRowClickEventArgs<NoteDto> args)
+    {
+        var parameters = new DialogParameters<NoteEditorDialog>
+        {
+            { x => x.NoteId, args.Item!.Id }
+        };
+        var dialog = await DialogService.ShowAsync<NoteEditorDialog>("", parameters, _dialogOptions);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await LoadNotesAsync();
     }
 
     private IEnumerable<NoteDto> FilteredNotes =>
         string.IsNullOrWhiteSpace(_searchText)
             ? _notes
             : _notes.Where(n => n.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
-
-    private void OnRowClick(TableRowClickEventArgs<NoteDto> args) =>
-        Nav.NavigateTo($"/notes/{args.Item!.Id}");
 
     private void ClearSearch() => _searchText = string.Empty;
 

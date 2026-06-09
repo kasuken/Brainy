@@ -1305,3 +1305,87 @@ body {
         border-bottom: 1px solid var(--line);
     }
 }
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Note Editor Dialog (ned) — editor inside a MudBlazor modal
+   Reuses .note-editor__* classes; these rules handle dialog-specific layout.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.ned {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.ned__title-section {
+    padding: 0.25rem 0 0;
+}
+
+/* Override the page-editor title input for the compact dialog header */
+.ned .note-editor__title-input {
+    font-size: clamp(1.35rem, 2.5vw, 1.9rem);
+    padding-bottom: 0.3rem;
+}
+
+.ned__body {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.ned__main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* Narrower textarea inside dialog */
+.ned__textarea {
+    min-height: 400px !important;
+}
+
+.ned__sidebar {
+    flex-direction: column !important;    /* override the responsive row rule */
+}
+
+/* Inside dialog, sidebar sections always stack vertically */
+.ned__sidebar .note-editor__sidebar-section {
+    flex: unset !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--line) !important;
+}
+
+.ned__sidebar .note-editor__sidebar-section:last-child {
+    border-bottom: none !important;
+}
+
+/* Dialog action area unsaved/saved badges align left */
+.ned-actions-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-right: auto;
+}
+
+@media (max-width: 720px) {
+    .ned__body {
+        grid-template-columns: 1fr;
+    }
+
+    .ned__sidebar {
+        flex-direction: row !important;
+        flex-wrap: wrap;
+    }
+
+    .ned__sidebar .note-editor__sidebar-section {
+        flex: 1 1 200px !important;
+        border-bottom: none !important;
+        border-right: 1px solid var(--line) !important;
+    }
+
+    .ned__sidebar .note-editor__sidebar-section:last-child {
+        border-right: none !important;
+    }
+}
