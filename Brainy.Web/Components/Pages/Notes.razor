@@ -1,0 +1,172 @@
+@page "/notes"
+@rendermode InteractiveServer
+
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+
+@inject INoteService NoteService
+@inject NavigationManager Nav
+
+<PageTitle>Notes – Brainy</PageTitle>
+
+<MudStack Row="false" Spacing="4">
+
+    @* Header row *@
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <MudText Typo="Typo.h5">
+            <MudIcon Icon="@Icons.Material.Filled.Notes" Class="mr-2" />Notes
+        </MudText>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   Href="/notes/create">
+            New Note
+        </MudButton>
+    </MudStack>
+
+    @* Search box *@
+    <MudTextField @bind-Value="_searchText"
+                  Placeholder="Search notes by title…"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Clearable="true"
+                  Immediate="true"
+                  Variant="Variant.Outlined"
+                  Class="mb-2" />
+
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (_notes.Count == 0)
+    {
+        @* Empty state: no notes exist yet *@
+        <MudPaper Class="pa-8 d-flex flex-column align-center" Elevation="0" Outlined="true">
+            <MudIcon Icon="@Icons.Material.Outlined.StickyNote2" Style="font-size:4rem;"
+                     Color="Color.Secondary" Class="mb-4" />
+            <MudText Typo="Typo.h6" GutterBottom="true">No notes yet</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+                Capture your first piece of knowledge to get started.
+            </MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add" Href="/notes/create">
+                Create your first note
+            </MudButton>
+        </MudPaper>
+    }
+    else
+    {
+        <MudTable Items="FilteredNotes"
+                  Dense="false"
+                  Hover="true"
+                  Striped="false"
+                  Breakpoint="Breakpoint.Sm"
+                  RowsPerPage="10"
+                  OnRowClick="OnRowClick"
+                  T="NoteDto"
+                  Class="cursor-pointer">
+
+            <ToolBarContent>
+                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
+                    @FilteredNotes.Count() note@(FilteredNotes.Count() == 1 ? "" : "s")
+                    @if (!string.IsNullOrWhiteSpace(_searchText))
+                    {
+                        <span> matching "<strong>@_searchText</strong>"</span>
+                    }
+                </MudText>
+            </ToolBarContent>
+
+            <HeaderContent>
+                <MudTh>Title</MudTh>
+                <MudTh>Category</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Updated</MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd DataLabel="Title">
+                    <MudText Typo="Typo.body1"><strong>@context.Title</strong></MudText>
+                    @if (!string.IsNullOrWhiteSpace(context.AiSummary))
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @TruncateSummary(context.AiSummary)
+                        </MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Category">
+                    <MudChip T="string" Size="Size.Small" Color="CategoryColor(context.ParaCategory)" Variant="Variant.Outlined">
+                        @context.ParaCategory
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Status">
+                    <MudChip T="string" Size="Size.Small" Color="StatusColor(context.Status)" Variant="Variant.Filled">
+                        @context.Status
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Updated">
+                    <MudText Typo="Typo.body2">@context.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudText>
+                </MudTd>
+            </RowTemplate>
+
+            <NoRecordsContent>
+                <MudStack Class="pa-6" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Style="font-size:3rem;" Color="Color.Secondary" />
+                    <MudText Typo="Typo.subtitle1">No notes match your search</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Try different keywords or <MudLink @onclick="ClearSearch">clear the search</MudLink>.
+                    </MudText>
+                </MudStack>
+            </NoRecordsContent>
+
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new[] { 10, 25, 50 }" />
+            </PagerContent>
+
+        </MudTable>
+    }
+
+</MudStack>
+
+@code {
+    private IReadOnlyList<NoteDto> _notes = [];
+    private string _searchText = string.Empty;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _notes = await NoteService.GetAllAsync();
+        _loading = false;
+    }
+
+    private IEnumerable<NoteDto> FilteredNotes =>
+        string.IsNullOrWhiteSpace(_searchText)
+            ? _notes
+            : _notes.Where(n => n.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+
+    private void OnRowClick(TableRowClickEventArgs<NoteDto> args) =>
+        Nav.NavigateTo($"/notes/{args.Item!.Id}");
+
+    private void ClearSearch() => _searchText = string.Empty;
+
+    private static string TruncateSummary(string summary) =>
+        summary.Length <= 120 ? summary : summary[..120] + "…";
+
+    private static Color CategoryColor(ParaCategory category) => category switch
+    {
+        ParaCategory.Project  => Color.Primary,
+        ParaCategory.Area     => Color.Tertiary,
+        ParaCategory.Resource => Color.Info,
+        ParaCategory.Archive  => Color.Default,
+        _                     => Color.Default
+    };
+
+    private static Color StatusColor(NoteStatus status) => status switch
+    {
+        NoteStatus.Inbox     => Color.Warning,
+        NoteStatus.Active    => Color.Success,
+        NoteStatus.Distilled => Color.Info,
+        NoteStatus.Archived  => Color.Default,
+        _                    => Color.Default
+    };
+}
