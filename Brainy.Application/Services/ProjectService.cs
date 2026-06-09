@@ -1,4 +1,6 @@
+using Brainy.Application.DTOs.Notes;
 using Brainy.Application.DTOs.Projects;
+using Brainy.Application.DTOs.Tasks;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -84,6 +86,81 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             x.TotalTasks, x.OpenTasks, x.DoneTasks,
             x.TotalTasks > 0 ? Math.Round((double)x.DoneTasks / x.TotalTasks * 100, 1) : 0))
             .ToList();
+    }
+
+    public async Task<ProjectDetailDto?> GetProjectDetailAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var project = await context.Projects
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (project is null) return null;
+
+        // Top-level tasks only (subtasks are shown nested in the UI)
+        var tasks = await context.Tasks
+            .AsNoTracking()
+            .Where(t => t.ProjectId == id && t.UserId == userId && !t.IsArchived && t.ParentTaskId == null)
+            .OrderBy(t => t.Status)
+            .ThenByDescending(t => t.Priority)
+            .ThenBy(t => t.DueDate)
+            .Select(t => new
+            {
+                t.Id, t.Title, t.Description, t.Status, t.Priority,
+                t.DueDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
+                t.CreatedAtUtc, t.UpdatedAtUtc,
+                SubtaskCount     = t.Subtasks.Count(s => !s.IsArchived),
+                DoneSubtaskCount = t.Subtasks.Count(s => !s.IsArchived && s.Status == TaskItemStatus.Done),
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var notes = await context.Notes
+            .AsNoTracking()
+            .Where(n => n.ProjectId == id && n.UserId == userId && n.Status != NoteStatus.Archived)
+            .Where(n => n.ParaCategory != ParaCategory.Resource)
+            .OrderByDescending(n => n.UpdatedAtUtc)
+            .Select(n => new NoteDto(n.Id, n.Title, n.Content, n.AiSummary,
+                n.Status, n.ParaCategory, n.SourceId, n.ProjectId, n.AreaId, n.ResourceId,
+                n.CreatedAtUtc, n.UpdatedAtUtc))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var resourceNotes = await context.Notes
+            .AsNoTracking()
+            .Where(n => n.ProjectId == id && n.UserId == userId && n.Status != NoteStatus.Archived)
+            .Where(n => n.ParaCategory == ParaCategory.Resource)
+            .OrderByDescending(n => n.UpdatedAtUtc)
+            .Select(n => new NoteDto(n.Id, n.Title, n.Content, n.AiSummary,
+                n.Status, n.ParaCategory, n.SourceId, n.ProjectId, n.AreaId, n.ResourceId,
+                n.CreatedAtUtc, n.UpdatedAtUtc))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var taskDtos = tasks.Select(t => new TaskItemDto(
+            t.Id, t.Title, t.Description, t.Status, t.Priority,
+            t.DueDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
+            t.CreatedAtUtc, t.UpdatedAtUtc, t.SubtaskCount, t.DoneSubtaskCount))
+            .ToList();
+
+        int totalTasks = await context.Tasks.CountAsync(
+            t => t.ProjectId == id && t.UserId == userId && !t.IsArchived, cancellationToken)
+            .ConfigureAwait(false);
+        int doneTasks = await context.Tasks.CountAsync(
+            t => t.ProjectId == id && t.UserId == userId && !t.IsArchived && t.Status == TaskItemStatus.Done, cancellationToken)
+            .ConfigureAwait(false);
+        int openTasks = totalTasks - doneTasks;
+
+        return new ProjectDetailDto(
+            project.Id, project.Name, project.Description, project.DesiredOutcome,
+            project.Status, project.Priority, project.StartDate, project.DueDate,
+            project.CompletedDate, project.IsArchived, project.AreaId,
+            project.CreatedAtUtc, project.UpdatedAtUtc, project.ArchivedAtUtc,
+            totalTasks, openTasks, doneTasks,
+            totalTasks > 0 ? Math.Round((double)doneTasks / totalTasks * 100, 1) : 0,
+            taskDtos, notes, resourceNotes);
     }
 
     public async Task<ProjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)

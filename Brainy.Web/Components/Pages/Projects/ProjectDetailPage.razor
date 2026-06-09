@@ -1,0 +1,836 @@
+@page "/projects/{ProjectId:guid}"
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Projects
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@attribute [Authorize]
+@inject IProjectService ProjectService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>@(_detail?.Name ?? "Project") — Brainy</PageTitle>
+
+@if (_loading)
+{
+    <div class="pd-loading">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+    </div>
+}
+else if (_detail is null)
+{
+    <div class="pd-notfound">
+        <span class="pd-notfound__glyph">⬡</span>
+        <p class="pd-notfound__title">Project not found</p>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                   OnClick='() => Nav.NavigateTo("/projects")'>
+            Back to Projects
+        </MudButton>
+    </div>
+}
+else
+{
+    <!-- ── Header ──────────────────────────────────────────────────── -->
+    <div class="pd-header">
+        <div class="pd-breadcrumb">
+            <button class="pd-back" @onclick='() => Nav.NavigateTo("/projects")'>
+                <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+                    <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                </svg>
+                Projects
+            </button>
+            <span class="pd-breadcrumb__sep">›</span>
+            <span class="pd-breadcrumb__current">@_detail.Name</span>
+        </div>
+
+        <div class="pd-title-row">
+            <div class="pd-ribbon pd-ribbon--@_detail.Priority.ToString().ToLower()"></div>
+            <div class="pd-title-block">
+                <div class="pd-badges">
+                    <span class="pd-badge pd-status--@_detail.Status.ToString().ToLower()">
+                        @StatusLabel(_detail.Status)
+                    </span>
+                    <span class="pd-badge pd-priority"
+                          style="color:@PriorityColor(_detail.Priority);background:@PriorityBg(_detail.Priority)">
+                        @PriorityLabel(_detail.Priority)
+                    </span>
+                </div>
+                <h1 class="pd-title">@_detail.Name</h1>
+                @if (!string.IsNullOrWhiteSpace(_detail.DesiredOutcome))
+                {
+                    <p class="pd-outcome">
+                        <span class="pd-outcome__label">Desired outcome</span>
+                        @_detail.DesiredOutcome
+                    </p>
+                }
+                @if (!string.IsNullOrWhiteSpace(_detail.Description))
+                {
+                    <p class="pd-description">@_detail.Description</p>
+                }
+            </div>
+            <div class="pd-actions">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.Edit"
+                           Size="Size.Small" OnClick="OpenEditDialog">
+                    Edit
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.Archive"
+                           Size="Size.Small" OnClick="ConfirmArchive">
+                    Archive
+                </MudButton>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Stats bar ────────────────────────────────────────────────── -->
+    <div class="pd-stats">
+        <div class="pd-stat">
+            <span class="pd-stat__value">@_detail.OpenTaskCount</span>
+            <span class="pd-stat__label">Open tasks</span>
+        </div>
+        <div class="pd-stat">
+            <span class="pd-stat__value">@_detail.DoneTaskCount</span>
+            <span class="pd-stat__label">Completed</span>
+        </div>
+        <div class="pd-stat">
+            <span class="pd-stat__value">@_detail.Notes.Count</span>
+            <span class="pd-stat__label">Notes</span>
+        </div>
+        <div class="pd-stat">
+            <span class="pd-stat__value">@_detail.ResourceNotes.Count</span>
+            <span class="pd-stat__label">Resources</span>
+        </div>
+        <div class="pd-stat pd-stat--wide">
+            <div class="pd-stat__progress-row">
+                <span class="pd-stat__pct">@_detail.ProgressPercent.ToString("F0")%</span>
+                <div class="pd-stat__track">
+                    <div class="pd-stat__fill" style="width:@(_detail.ProgressPercent.ToString("F0"))%"></div>
+                </div>
+            </div>
+            <span class="pd-stat__label">Progress</span>
+        </div>
+        @if (_detail.DueDate.HasValue)
+        {
+            <div class="pd-stat @(_detail.DueDate < DateTime.Today ? "pd-stat--overdue" : "")">
+                <span class="pd-stat__value">@_detail.DueDate.Value.ToString("MMM d")</span>
+                <span class="pd-stat__label">
+                    @(_detail.DueDate < DateTime.Today ? "Overdue" : "Due date")
+                </span>
+            </div>
+        }
+    </div>
+
+    <!-- ── Tabs ──────────────────────────────────────────────────────── -->
+    <MudTabs Elevation="0" Rounded="false" ApplyEffectsToContainer="true"
+             Class="pd-tabs" PanelClass="pd-panel">
+
+        <!-- Tasks tab -->
+        <MudTabPanel Text="Tasks" BadgeData="@(_detail.OpenTaskCount > 0 ? _detail.OpenTaskCount : (int?)null)"
+                     BadgeColor="Color.Primary">
+            <div class="pd-section-header">
+                <h2 class="pd-section-title">Tasks</h2>
+                <MudButton Variant="Variant.Text" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add" Size="Size.Small">
+                    Add task
+                </MudButton>
+            </div>
+
+            @if (!_detail.Tasks.Any())
+            {
+                <div class="pd-empty">
+                    <span class="pd-empty__icon">✓</span>
+                    <p>No tasks yet. Add a task to start tracking work.</p>
+                </div>
+            }
+            else
+            {
+                <div class="pd-task-list">
+                    @foreach (var task in _detail.Tasks)
+                    {
+                        <div class="pd-task @(task.Status == TaskItemStatus.Done ? "pd-task--done" : "")">
+                            <button class="pd-task__check @(task.Status == TaskItemStatus.Done ? "pd-task__check--done" : "")"
+                                    title="@(task.Status == TaskItemStatus.Done ? "Mark open" : "Mark done")">
+                                @if (task.Status == TaskItemStatus.Done)
+                                {
+                                    <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
+                                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
+                                    </svg>
+                                }
+                            </button>
+                            <div class="pd-task__body">
+                                <span class="pd-task__title">@task.Title</span>
+                                @if (!string.IsNullOrWhiteSpace(task.Description))
+                                {
+                                    <span class="pd-task__desc">@task.Description</span>
+                                }
+                            </div>
+                            <div class="pd-task__meta">
+                                @if (task.SubtaskCount > 0)
+                                {
+                                    <span class="pd-task__subtasks">
+                                        @task.DoneSubtaskCount/@task.SubtaskCount
+                                    </span>
+                                }
+                                @if (task.DueDate.HasValue)
+                                {
+                                    <span class="pd-task__due @(task.DueDate < DateTime.Today && task.Status != TaskItemStatus.Done ? "pd-task__due--overdue" : "")">
+                                        @task.DueDate.Value.ToString("MMM d")
+                                    </span>
+                                }
+                                <span class="pd-task__priority pd-tp--@task.Priority.ToString().ToLower()">
+                                    @task.Priority
+                                </span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </MudTabPanel>
+
+        <!-- Notes tab -->
+        <MudTabPanel Text="Notes" BadgeData="@(_detail.Notes.Count > 0 ? _detail.Notes.Count : (int?)null)"
+                     BadgeColor="Color.Secondary">
+            <div class="pd-section-header">
+                <h2 class="pd-section-title">Notes</h2>
+                <MudButton Variant="Variant.Text" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add" Size="Size.Small">
+                    Add note
+                </MudButton>
+            </div>
+
+            @if (!_detail.Notes.Any())
+            {
+                <div class="pd-empty">
+                    <span class="pd-empty__icon">📝</span>
+                    <p>No notes linked to this project yet.</p>
+                </div>
+            }
+            else
+            {
+                <div class="pd-note-grid">
+                    @foreach (var note in _detail.Notes)
+                    {
+                        <div class="pd-note-card" @onclick="() => OpenNote(note.Id)">
+                            <div class="pd-note-card__header">
+                                <span class="pd-note-status pd-note-status--@note.Status.ToString().ToLower()">
+                                    @note.Status
+                                </span>
+                                <span class="pd-note-card__date">@note.UpdatedAtUtc.ToString("MMM d")</span>
+                            </div>
+                            <h4 class="pd-note-card__title">@note.Title</h4>
+                            @if (!string.IsNullOrWhiteSpace(note.AiSummary))
+                            {
+                                <p class="pd-note-card__summary">@note.AiSummary</p>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(note.Content))
+                            {
+                                <p class="pd-note-card__summary">
+                                    @(note.Content.Length > 120 ? note.Content[..120] + "…" : note.Content)
+                                </p>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </MudTabPanel>
+
+        <!-- Resources tab -->
+        <MudTabPanel Text="Resources" BadgeData="@(_detail.ResourceNotes.Count > 0 ? _detail.ResourceNotes.Count : (int?)null)"
+                     BadgeColor="Color.Tertiary">
+            <div class="pd-section-header">
+                <h2 class="pd-section-title">Related Resources</h2>
+            </div>
+
+            @if (!_detail.ResourceNotes.Any())
+            {
+                <div class="pd-empty">
+                    <span class="pd-empty__icon">📚</span>
+                    <p>No resource notes linked to this project.</p>
+                </div>
+            }
+            else
+            {
+                <div class="pd-note-grid">
+                    @foreach (var res in _detail.ResourceNotes)
+                    {
+                        <div class="pd-note-card pd-note-card--resource" @onclick="() => OpenNote(res.Id)">
+                            <div class="pd-note-card__header">
+                                <span class="pd-resource-badge">Resource</span>
+                                <span class="pd-note-card__date">@res.UpdatedAtUtc.ToString("MMM d")</span>
+                            </div>
+                            <h4 class="pd-note-card__title">@res.Title</h4>
+                            @if (!string.IsNullOrWhiteSpace(res.AiSummary))
+                            {
+                                <p class="pd-note-card__summary">@res.AiSummary</p>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(res.Content))
+                            {
+                                <p class="pd-note-card__summary">
+                                    @(res.Content.Length > 120 ? res.Content[..120] + "…" : res.Content)
+                                </p>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </MudTabPanel>
+
+        <!-- Info tab -->
+        <MudTabPanel Text="Info">
+            <div class="pd-info-grid">
+                <div class="pd-info-row">
+                    <span class="pd-info-label">Status</span>
+                    <span class="pd-badge pd-status--@_detail.Status.ToString().ToLower()">@StatusLabel(_detail.Status)</span>
+                </div>
+                <div class="pd-info-row">
+                    <span class="pd-info-label">Priority</span>
+                    <span class="pd-badge pd-priority"
+                          style="color:@PriorityColor(_detail.Priority);background:@PriorityBg(_detail.Priority)">
+                        @PriorityLabel(_detail.Priority)
+                    </span>
+                </div>
+                @if (_detail.StartDate.HasValue)
+                {
+                    <div class="pd-info-row">
+                        <span class="pd-info-label">Start Date</span>
+                        <span>@_detail.StartDate.Value.ToString("MMMM d, yyyy")</span>
+                    </div>
+                }
+                @if (_detail.DueDate.HasValue)
+                {
+                    <div class="pd-info-row">
+                        <span class="pd-info-label">Due Date</span>
+                        <span class="@(_detail.DueDate < DateTime.Today ? "pd-overdue-text" : "")">
+                            @_detail.DueDate.Value.ToString("MMMM d, yyyy")
+                        </span>
+                    </div>
+                }
+                @if (_detail.CompletedDate.HasValue)
+                {
+                    <div class="pd-info-row">
+                        <span class="pd-info-label">Completed</span>
+                        <span>@_detail.CompletedDate.Value.ToString("MMMM d, yyyy")</span>
+                    </div>
+                }
+                <div class="pd-info-row">
+                    <span class="pd-info-label">Created</span>
+                    <span>@_detail.CreatedAtUtc.ToString("MMMM d, yyyy")</span>
+                </div>
+                <div class="pd-info-row">
+                    <span class="pd-info-label">Last updated</span>
+                    <span>@_detail.UpdatedAtUtc.ToString("MMMM d, yyyy 'at' h:mm tt")</span>
+                </div>
+            </div>
+        </MudTabPanel>
+    </MudTabs>
+}
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Project Detail page — "Open Dossier" workspace style
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Loading / not-found */
+.pd-loading, .pd-notfound {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 6rem 1rem;
+}
+.pd-notfound__glyph {
+    font-size: 3rem;
+    opacity: .15;
+    font-family: var(--font-display);
+    color: var(--clay);
+}
+.pd-notfound__title {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    color: var(--ink);
+    margin: 0;
+}
+
+/* Breadcrumb */
+.pd-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    margin-bottom: 1rem;
+    font-size: .8rem;
+    color: var(--ink-faint);
+}
+.pd-back {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    color: var(--clay);
+    font-family: var(--font-body);
+    font-size: .8rem;
+    font-weight: 600;
+    padding: 0;
+    transition: opacity .15s;
+}
+.pd-back:hover { opacity: .7; }
+.pd-breadcrumb__sep { color: var(--line-strong); }
+.pd-breadcrumb__current { color: var(--ink-soft); }
+
+/* Header */
+.pd-header {
+    margin-bottom: 1.5rem;
+}
+.pd-title-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+}
+.pd-ribbon {
+    width: 5px;
+    min-height: 80px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    margin-top: 4px;
+}
+.pd-ribbon--critical { background: var(--clay); }
+.pd-ribbon--high     { background: #d4722a; }
+.pd-ribbon--medium   { background: var(--gold); }
+.pd-ribbon--low      { background: var(--sage); }
+
+.pd-title-block { flex: 1; min-width: 0; }
+
+.pd-badges { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .6rem; }
+
+.pd-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: .2rem .65rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+.pd-status--notstarted { background: var(--paper-sunk); color: var(--ink-soft); }
+.pd-status--active     { background: rgba(111,122,90,.14); color: #4a5c38; }
+.pd-status--waiting    { background: rgba(205,154,58,.14); color: #7a5c0e; }
+.pd-status--completed  { background: rgba(192,86,29,.10); color: var(--clay-deep); }
+.pd-status--archived   { background: var(--paper-sunk); color: var(--ink-faint); }
+
+.pd-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0 0 .5rem;
+    letter-spacing: -.02em;
+    line-height: 1.15;
+}
+.pd-outcome {
+    font-size: .9rem;
+    color: var(--ink-soft);
+    margin: 0 0 .4rem;
+    line-height: 1.5;
+    padding: .5rem .75rem;
+    border-left: 3px solid var(--clay);
+    background: var(--clay-soft);
+    border-radius: 0 8px 8px 0;
+}
+.pd-outcome__label {
+    display: block;
+    font-size: .68rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--clay);
+    margin-bottom: .2rem;
+}
+.pd-description {
+    font-size: .88rem;
+    color: var(--ink-soft);
+    margin: .4rem 0 0;
+    line-height: 1.6;
+}
+.pd-actions {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    flex-shrink: 0;
+}
+
+/* Stats bar */
+.pd-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-bottom: 1.75rem;
+}
+.pd-stat {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: .75rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    min-width: 80px;
+    box-shadow: var(--shadow-sm);
+}
+.pd-stat--wide { flex: 1; min-width: 200px; }
+.pd-stat--overdue .pd-stat__value { color: #b03a18; }
+
+.pd-stat__value {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1;
+}
+.pd-stat__label {
+    font-size: .7rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+}
+.pd-stat__progress-row {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+.pd-stat__pct {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1;
+    flex-shrink: 0;
+}
+.pd-stat__track {
+    flex: 1;
+    height: 6px;
+    background: var(--paper-sunk);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.pd-stat__fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--clay-deep), var(--clay));
+    border-radius: 999px;
+    transition: width .6s ease;
+    min-width: 3px;
+}
+
+/* Tabs */
+.pd-tabs .mud-tab {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: .85rem;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.pd-panel { padding: 1.25rem 0 0; }
+
+/* Section header */
+.pd-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+.pd-section-title {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0;
+}
+
+/* Empty state */
+.pd-empty {
+    padding: 2.5rem 1rem;
+    text-align: center;
+    color: var(--ink-faint);
+    font-size: .9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .5rem;
+}
+.pd-empty__icon { font-size: 2rem; opacity: .4; }
+.pd-empty p { margin: 0; }
+
+/* Task list */
+.pd-task-list { display: flex; flex-direction: column; gap: .4rem; }
+
+.pd-task {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    padding: .75rem .9rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    transition: border-color .15s, box-shadow .15s;
+}
+.pd-task:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+.pd-task--done { opacity: .55; }
+
+.pd-task__check {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--line-strong);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    margin-top: 2px;
+    transition: border-color .15s, background .15s;
+    color: white;
+}
+.pd-task__check:hover { border-color: var(--sage); }
+.pd-task__check--done {
+    background: var(--sage);
+    border-color: var(--sage);
+}
+
+.pd-task__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .2rem; }
+.pd-task__title {
+    font-size: .9rem;
+    color: var(--ink);
+    font-weight: 500;
+    line-height: 1.4;
+}
+.pd-task--done .pd-task__title { text-decoration: line-through; }
+.pd-task__desc { font-size: .78rem; color: var(--ink-soft); }
+
+.pd-task__meta { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+.pd-task__subtasks {
+    font-size: .72rem;
+    background: var(--paper-sunk);
+    border-radius: 999px;
+    padding: .1rem .45rem;
+    color: var(--ink-soft);
+    font-weight: 600;
+}
+.pd-task__due { font-size: .75rem; color: var(--ink-soft); }
+.pd-task__due--overdue { color: #b03a18; font-weight: 600; }
+.pd-task__priority {
+    font-size: .68rem;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: .1rem .4rem;
+    border-radius: 4px;
+}
+.pd-tp--urgent   { color: #b03a18; background: rgba(176,58,24,.10); }
+.pd-tp--high     { color: #d4722a; background: rgba(212,114,42,.10); }
+.pd-tp--medium   { color: #a07820; background: rgba(160,120,32,.10); }
+.pd-tp--low      { color: var(--sage); background: rgba(111,122,90,.10); }
+
+/* Note cards */
+.pd-note-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+    gap: .9rem;
+}
+.pd-note-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: .9rem 1rem;
+    cursor: pointer;
+    transition: box-shadow .2s, border-color .2s, transform .15s;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+.pd-note-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--line-strong);
+    transform: translateY(-1px);
+}
+.pd-note-card--resource { border-left: 3px solid var(--gold); }
+
+.pd-note-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+}
+.pd-note-card__date { font-size: .72rem; color: var(--ink-faint); flex-shrink: 0; }
+.pd-note-card__title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0;
+    line-height: 1.3;
+}
+.pd-note-card:hover .pd-note-card__title { color: var(--clay); }
+.pd-note-card__summary {
+    font-size: .78rem;
+    color: var(--ink-soft);
+    margin: 0;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.pd-note-status {
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: .15rem .45rem;
+    border-radius: 999px;
+}
+.pd-note-status--inbox    { background: rgba(192,86,29,.12); color: var(--clay); }
+.pd-note-status--active   { background: rgba(111,122,90,.12); color: #4a5c38; }
+.pd-note-status--distilled { background: rgba(205,154,58,.12); color: #7a5c0e; }
+.pd-note-status--archived { background: var(--paper-sunk); color: var(--ink-faint); }
+
+.pd-resource-badge {
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: .15rem .45rem;
+    border-radius: 999px;
+    background: rgba(205,154,58,.14);
+    color: #7a5c0e;
+}
+
+/* Info tab */
+.pd-info-grid { display: flex; flex-direction: column; gap: 0; max-width: 540px; }
+.pd-info-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .75rem 0;
+    border-bottom: 1px solid var(--line);
+    gap: 1rem;
+}
+.pd-info-row:last-child { border-bottom: none; }
+.pd-info-label {
+    font-size: .78rem;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ink-faint);
+    flex-shrink: 0;
+}
+.pd-overdue-text { color: #b03a18; font-weight: 600; }
+
+@@media (max-width: 640px) {
+    .pd-title-row { flex-direction: column; }
+    .pd-actions { flex-direction: row; }
+    .pd-stats { gap: .4rem; }
+    .pd-stat { min-width: calc(50% - .25rem); }
+    .pd-stat--wide { min-width: 100%; }
+    .pd-note-grid { grid-template-columns: 1fr; }
+}
+</style>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private bool _loading = true;
+    private ProjectDetailDto? _detail;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_loading)
+            await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _detail = await ProjectService.GetProjectDetailAsync(ProjectId);
+        _loading = false;
+    }
+
+    private void OpenNote(Guid noteId) => Nav.NavigateTo($"/notes/{noteId}");
+
+    private async Task OpenEditDialog()
+    {
+        var parameters = new DialogParameters<ProjectEditorDialog>();
+        parameters.Add(x => x.ProjectId, ProjectId);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ProjectEditorDialog>("Edit Project", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task ConfirmArchive()
+    {
+        var name = _detail?.Name ?? "this project";
+        var confirmed = await DialogService.ShowMessageBox(
+            "Archive project",
+            $"Archive \"{name}\"? It will be hidden from active views.",
+            yesText: "Archive", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            await ProjectService.ArchiveAsync(ProjectId);
+            Snackbar.Add($"\"{name}\" archived.", Severity.Success);
+            Nav.NavigateTo("/projects");
+        }
+    }
+
+    private static string StatusLabel(ProjectStatus s) => s switch
+    {
+        ProjectStatus.NotStarted => "Not Started",
+        ProjectStatus.Active     => "Active",
+        ProjectStatus.Waiting    => "Waiting",
+        ProjectStatus.Completed  => "Completed",
+        ProjectStatus.Archived   => "Archived",
+        _                        => s.ToString()
+    };
+
+    private static string PriorityLabel(ProjectPriority p) => p switch
+    {
+        ProjectPriority.Critical => "⚑ Critical",
+        ProjectPriority.High     => "↑ High",
+        ProjectPriority.Medium   => "— Medium",
+        ProjectPriority.Low      => "↓ Low",
+        _                        => p.ToString()
+    };
+
+    private static string PriorityColor(ProjectPriority p) => p switch
+    {
+        ProjectPriority.Critical => "#c0561d",
+        ProjectPriority.High     => "#d4722a",
+        ProjectPriority.Medium   => "#a07820",
+        ProjectPriority.Low      => "#4a5c38",
+        _                        => "#9a9180"
+    };
+
+    private static string PriorityBg(ProjectPriority p) => p switch
+    {
+        ProjectPriority.Critical => "rgba(192,86,29,.10)",
+        ProjectPriority.High     => "rgba(212,114,42,.10)",
+        ProjectPriority.Medium   => "rgba(160,120,32,.10)",
+        ProjectPriority.Low      => "rgba(74,92,56,.10)",
+        _                        => "transparent"
+    };
+}

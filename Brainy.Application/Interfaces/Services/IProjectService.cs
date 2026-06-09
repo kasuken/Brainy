@@ -17,6 +17,9 @@ public interface IProjectService
     /// <summary>Returns all non-archived projects enriched with task statistics — used by the Project List page.</summary>
     Task<IReadOnlyList<ProjectSummaryDto>> GetProjectSummariesAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Returns the full project workspace — tasks, notes, and resource notes included.</summary>
+    Task<ProjectDetailDto?> GetProjectDetailAsync(Guid id, CancellationToken cancellationToken = default);
+
     Task<ProjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<ProjectDto> CreateAsync(CreateProjectDto dto, CancellationToken cancellationToken = default);
     Task<ProjectDto> UpdateAsync(UpdateProjectDto dto, CancellationToken cancellationToken = default);
