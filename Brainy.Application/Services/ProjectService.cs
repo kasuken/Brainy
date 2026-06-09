@@ -62,6 +62,28 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         return ToDto(project);
     }
 
+    public async Task<ProjectDto> UpdateAsync(UpdateProjectDto dto, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var project = await context.Projects
+            .FirstOrDefaultAsync(p => p.Id == dto.Id && p.UserId == userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Project '{dto.Id}' was not found.");
+
+        project.Name = dto.Name;
+        project.Description = dto.Description;
+        project.DueDate = dto.DueDate;
+        project.IsPriority = dto.IsPriority;
+        project.AreaId = dto.AreaId;
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return ToDto(project);
+    }
+
     public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);

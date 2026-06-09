@@ -8,6 +8,7 @@ public interface IProjectService
     Task<IReadOnlyList<ProjectDto>> GetAllActiveAsync(CancellationToken cancellationToken = default);
     Task<ProjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<ProjectDto> CreateAsync(CreateProjectDto dto, CancellationToken cancellationToken = default);
+    Task<ProjectDto> UpdateAsync(UpdateProjectDto dto, CancellationToken cancellationToken = default);
     Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }
