@@ -1,0 +1,741 @@
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject ITaskService TaskService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@if (_loading)
+{
+    <div class="tl-loading">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Medium" />
+    </div>
+}
+else
+{
+    <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
+    <div class="tl-toolbar">
+        <div class="tl-filters">
+            <div class="tl-filter-group">
+                <span class="tl-filter-label">Status</span>
+                <div class="tl-chips">
+                    <button class="tl-chip @(_statusFilter == null ? "tl-chip--active" : "")"
+                            @onclick="() => SetStatusFilter(null)">All</button>
+                    @foreach (var s in _boardStatuses)
+                    {
+                        <button class="tl-chip tl-chip--status-@s.ToString().ToLower() @(_statusFilter == s ? "tl-chip--active" : "")"
+                                @onclick="() => SetStatusFilter(s)">
+                            @StatusLabel(s)
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="tl-filter-group">
+                <span class="tl-filter-label">Priority</span>
+                <div class="tl-chips">
+                    <button class="tl-chip @(_priorityFilter == null ? "tl-chip--active" : "")"
+                            @onclick="() => SetPriorityFilter(null)">All</button>
+                    @foreach (var p in Enum.GetValues<TaskPriority>().OrderByDescending(x => x))
+                    {
+                        <button class="tl-chip tl-chip--pri-@p.ToString().ToLower() @(_priorityFilter == p ? "tl-chip--active" : "")"
+                                @onclick="() => SetPriorityFilter(p)">
+                            @PriorityLabel(p)
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="tl-filter-group tl-filter-group--right">
+                <button class="tl-chip @(_overdueOnly ? "tl-chip--overdue-active" : "")"
+                        @onclick="() => _overdueOnly = !_overdueOnly">
+                    ⚠ Overdue
+                </button>
+                <select class="tl-sort-select" @onchange="OnSortChanged">
+                    <option value="priority">↓ Priority</option>
+                    <option value="duedate">📅 Due Date</option>
+                    <option value="status">◎ Status</option>
+                    <option value="title">A Title</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="tl-summary">
+            <span>@FilteredTasks.Count() of @_allTasks.Count tasks</span>
+        </div>
+    </div>
+
+    <!-- ── List ───────────────────────────────────────────────────────── -->
+    @if (!FilteredTasks.Any())
+    {
+        <div class="tl-empty">
+            <span class="tl-empty__icon">⬡</span>
+            <p>No tasks match the current filters.</p>
+            <button class="tl-clear-btn" @onclick="ClearFilters">Clear filters</button>
+        </div>
+    }
+    else
+    {
+        <div class="tl-list">
+            <!-- Header row -->
+            <div class="tl-row tl-row--header">
+                <div class="tl-col tl-col--strip"></div>
+                <div class="tl-col tl-col--check"></div>
+                <div class="tl-col tl-col--title">Task</div>
+                <div class="tl-col tl-col--status">Status</div>
+                <div class="tl-col tl-col--priority">Priority</div>
+                <div class="tl-col tl-col--due">Due</div>
+                <div class="tl-col tl-col--actions"></div>
+            </div>
+
+            @foreach (var task in FilteredTasks)
+            {
+                var overdue = task.DueDate.HasValue && task.DueDate < DateTime.Today && task.Status != TaskItemStatus.Done;
+
+                <div class="tl-row @(task.Status == TaskItemStatus.Done ? "tl-row--done" : "") @(overdue ? "tl-row--overdue" : "")
+                                   @(_expandedTasks.Contains(task.Id) ? "tl-row--expanded" : "")"
+                     style="--row-index: @FilteredTasks.ToList().IndexOf(task)">
+
+                    <div class="tl-col tl-col--strip tl-strip--@task.Priority.ToString().ToLower()"></div>
+
+                    <div class="tl-col tl-col--check">
+                        <button class="tl-check @(task.Status == TaskItemStatus.Done ? "tl-check--done" : "")"
+                                @onclick="() => ToggleComplete(task)"
+                                title="@(task.Status == TaskItemStatus.Done ? "Reopen" : "Mark done")">
+                            @if (task.Status == TaskItemStatus.Done)
+                            {
+                                <svg viewBox="0 0 16 16" fill="currentColor" width="11" height="11">
+                                    <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
+                                </svg>
+                            }
+                        </button>
+                    </div>
+
+                    <div class="tl-col tl-col--title">
+                        <div class="tl-task-title @(task.Status == TaskItemStatus.Done ? "tl-task-title--done" : "")">
+                            @task.Title
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(task.Description))
+                        {
+                            <div class="tl-task-desc">@task.Description</div>
+                        }
+                        @if (task.SubtaskCount > 0)
+                        {
+                            <button class="tl-subtask-toggle" @onclick="() => ToggleSubtasks(task.Id)">
+                                <div class="tl-st-bar">
+                                    <div class="tl-st-bar__fill"
+                                         style="width:@(task.SubtaskCount > 0 ? task.DoneSubtaskCount * 100 / task.SubtaskCount : 0)%">
+                                    </div>
+                                </div>
+                                <span>@task.DoneSubtaskCount/@task.SubtaskCount subtask@(task.SubtaskCount != 1 ? "s" : "")</span>
+                                <span class="tl-chevron @(_expandedTasks.Contains(task.Id) ? "tl-chevron--open" : "")">›</span>
+                            </button>
+                        }
+                        @if (_expandedTasks.Contains(task.Id) && task.Subtasks?.Any() == true)
+                        {
+                            <div class="tl-subtask-list">
+                                @foreach (var sub in task.Subtasks)
+                                {
+                                    <div class="tl-subtask @(sub.Status == TaskItemStatus.Done ? "tl-subtask--done" : "")">
+                                        <div class="tl-strip--@sub.Priority.ToString().ToLower() tl-sub-strip"></div>
+                                        <span class="tl-subtask__dot">●</span>
+                                        <span class="tl-subtask__title">@sub.Title</span>
+                                        @if (sub.DueDate.HasValue)
+                                        {
+                                            <span class="tl-subtask__due @(sub.DueDate < DateTime.Today && sub.Status != TaskItemStatus.Done ? "tl-due--overdue" : "")">
+                                                @sub.DueDate.Value.ToString("MMM d")
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="tl-col tl-col--status">
+                        <span class="tl-status-badge tl-status--@task.Status.ToString().ToLower()">
+                            @StatusLabel(task.Status)
+                        </span>
+                    </div>
+
+                    <div class="tl-col tl-col--priority">
+                        <span class="tl-priority-badge tl-pri--@task.Priority.ToString().ToLower()">
+                            @PriorityLabel(task.Priority)
+                        </span>
+                    </div>
+
+                    <div class="tl-col tl-col--due">
+                        @if (task.DueDate.HasValue)
+                        {
+                            <span class="tl-due @(overdue ? "tl-due--overdue" : "")">
+                                @if (overdue)
+                                {
+                                    <span class="tl-due__icon">!</span>
+                                }
+                                @task.DueDate.Value.ToString("MMM d")
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="tl-due tl-due--none">—</span>
+                        }
+                    </div>
+
+                    <div class="tl-col tl-col--actions">
+                        <button class="tl-action" @onclick="() => OpenEditDialog(task.Id)" title="Edit">
+                            <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13">
+                                <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178z"/>
+                            </svg>
+                        </button>
+                        <button class="tl-action tl-action--archive" @onclick="() => ArchiveTask(task.Id, task.Title)" title="Archive">
+                            <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13">
+                                <path d="M0 2a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 1 12.5V5a1 1 0 0 1-1-1V2zm2 3v7.5A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5V5H2zm13-3H1v2h14V2zM5 7.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Task List Component — "Expedition Log" sortable list view
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.tl-loading {
+    display: flex;
+    justify-content: center;
+    padding: 3rem;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+.tl-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: .65rem;
+    margin-bottom: 1rem;
+    padding: .85rem 1rem;
+    background: var(--paper-sunk);
+    border-radius: 12px;
+    border: 1px solid var(--line);
+}
+.tl-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .65rem;
+    align-items: flex-start;
+}
+.tl-filter-group {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    flex-wrap: wrap;
+}
+.tl-filter-group--right { margin-left: auto; }
+.tl-filter-label {
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    flex-shrink: 0;
+    margin-right: .1rem;
+}
+.tl-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+
+/* Filter chips */
+.tl-chip {
+    font-family: var(--font-body);
+    font-size: .72rem;
+    font-weight: 600;
+    padding: .2rem .65rem;
+    border-radius: 999px;
+    border: 1.5px solid var(--line-strong);
+    background: var(--paper-raised);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+}
+.tl-chip:hover { border-color: var(--clay); color: var(--clay); }
+.tl-chip--active {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--paper);
+}
+.tl-chip--overdue-active {
+    background: #b03a18;
+    border-color: #b03a18;
+    color: #fff;
+}
+
+/* Status chip colors when active */
+.tl-chip--status-todo.tl-chip--active       { background: var(--ink-soft); border-color: var(--ink-soft); }
+.tl-chip--status-inprogress.tl-chip--active { background: var(--clay); border-color: var(--clay); }
+.tl-chip--status-waiting.tl-chip--active    { background: var(--gold); border-color: var(--gold); color: var(--ink); }
+.tl-chip--status-done.tl-chip--active       { background: var(--sage); border-color: var(--sage); }
+
+/* Priority chip colors when active */
+.tl-chip--pri-critical.tl-chip--active { background: #b03a18; border-color: #b03a18; }
+.tl-chip--pri-high.tl-chip--active     { background: #d4722a; border-color: #d4722a; }
+.tl-chip--pri-medium.tl-chip--active   { background: var(--gold); border-color: var(--gold); color: var(--ink); }
+.tl-chip--pri-low.tl-chip--active      { background: var(--sage); border-color: var(--sage); }
+
+/* Sort select */
+.tl-sort-select {
+    font-family: var(--font-body);
+    font-size: .72rem;
+    font-weight: 600;
+    padding: .22rem .6rem;
+    border-radius: 8px;
+    border: 1.5px solid var(--line-strong);
+    background: var(--paper-raised);
+    color: var(--ink-soft);
+    cursor: pointer;
+    outline: none;
+    transition: border-color .15s;
+}
+.tl-sort-select:hover, .tl-sort-select:focus { border-color: var(--clay); color: var(--ink); }
+
+.tl-summary {
+    font-size: .72rem;
+    color: var(--ink-faint);
+    font-weight: 500;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+.tl-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .5rem;
+    padding: 3rem 1rem;
+    color: var(--ink-faint);
+    font-size: .9rem;
+}
+.tl-empty__icon { font-size: 2rem; opacity: .2; }
+.tl-empty p { margin: 0; }
+.tl-clear-btn {
+    background: none;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 8px;
+    padding: .3rem .8rem;
+    font-family: var(--font-body);
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+    margin-top: .25rem;
+}
+.tl-clear-btn:hover { border-color: var(--clay); color: var(--clay); }
+
+/* ── List grid ───────────────────────────────────────────────────────────── */
+.tl-list {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.tl-row {
+    display: grid;
+    grid-template-columns: 4px 32px 1fr 110px 100px 80px 64px;
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+    transition: background .12s;
+    animation: tl-row-in .2s ease backwards;
+    animation-delay: calc(var(--row-index, 0) * 0.03s);
+}
+.tl-row:last-child { border-bottom: none; }
+.tl-row:not(.tl-row--header):hover { background: var(--paper-sunk); }
+.tl-row--done { opacity: .6; }
+.tl-row--overdue { background: rgba(176,58,24,.03); }
+.tl-row--header {
+    background: var(--paper-sunk);
+    border-bottom: 2px solid var(--line-strong);
+}
+
+@@keyframes tl-row-in {
+    from { opacity: 0; transform: translateX(-4px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Columns ─────────────────────────────────────────────────────────────── */
+.tl-col { padding: .65rem .5rem; }
+.tl-col--strip {
+    padding: 0;
+    height: 100%;
+    align-self: stretch;
+    border-radius: 0;
+}
+.tl-col--check { padding: .65rem .35rem .65rem .5rem; }
+.tl-col--title { padding: .65rem .6rem; }
+.tl-col--due   { font-size: .78rem; color: var(--ink-soft); text-align: right; padding-right: .7rem; }
+.tl-col--actions {
+    display: flex;
+    align-items: center;
+    gap: .2rem;
+    justify-content: flex-end;
+    padding-right: .6rem;
+    opacity: 0;
+    transition: opacity .15s;
+}
+.tl-row:hover .tl-col--actions { opacity: 1; }
+
+/* Header labels */
+.tl-row--header .tl-col {
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding-top: .5rem;
+    padding-bottom: .5rem;
+}
+
+/* Priority strip */
+.tl-strip--critical { background: var(--clay); }
+.tl-strip--high     { background: #d4722a; }
+.tl-strip--medium   { background: var(--gold); }
+.tl-strip--low      { background: var(--sage); }
+
+/* Check button */
+.tl-check {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--line-strong);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    color: white;
+    flex-shrink: 0;
+}
+.tl-check:hover { border-color: var(--sage); }
+.tl-check--done { background: var(--sage); border-color: var(--sage); }
+
+/* Task title */
+.tl-task-title {
+    font-size: .88rem;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.4;
+}
+.tl-task-title--done {
+    text-decoration: line-through;
+    color: var(--ink-soft);
+}
+.tl-task-desc {
+    font-size: .75rem;
+    color: var(--ink-soft);
+    margin-top: .15rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Subtask toggle */
+.tl-subtask-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: .7rem;
+    color: var(--ink-soft);
+    font-family: var(--font-body);
+    font-weight: 600;
+    padding: .15rem 0 0;
+    transition: color .15s;
+}
+.tl-subtask-toggle:hover { color: var(--clay); }
+.tl-st-bar {
+    width: 36px;
+    height: 3px;
+    background: var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.tl-st-bar__fill {
+    height: 100%;
+    background: var(--sage);
+    border-radius: 999px;
+    transition: width .4s ease;
+}
+.tl-chevron {
+    display: inline-block;
+    font-size: .85rem;
+    transition: transform .2s;
+    line-height: 1;
+}
+.tl-chevron--open { transform: rotate(90deg); }
+
+/* Subtask list */
+.tl-subtask-list {
+    margin-top: .4rem;
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+}
+.tl-subtask {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .78rem;
+    color: var(--ink-soft);
+    padding: .2rem .3rem;
+    border-radius: 5px;
+    background: var(--paper-sunk);
+}
+.tl-subtask--done { opacity: .5; text-decoration: line-through; }
+.tl-sub-strip {
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+.tl-subtask__dot { font-size: .45rem; color: var(--ink-faint); }
+.tl-subtask__title { flex: 1; }
+.tl-subtask__due { font-size: .68rem; color: var(--ink-faint); flex-shrink: 0; }
+.tl-due--overdue { color: #b03a18 !important; font-weight: 700; }
+
+/* Status badges */
+.tl-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: .18rem .55rem;
+    border-radius: 999px;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.tl-status--todo       { background: var(--paper-sunk); color: var(--ink-soft); }
+.tl-status--inprogress { background: rgba(192,86,29,.13); color: var(--clay); }
+.tl-status--waiting    { background: rgba(205,154,58,.14); color: #7a5c0e; }
+.tl-status--done       { background: rgba(111,122,90,.13); color: #4a5c38; }
+.tl-status--archived   { background: var(--paper-sunk); color: var(--ink-faint); }
+
+/* Priority badges */
+.tl-priority-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: .18rem .5rem;
+    border-radius: 5px;
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.tl-pri--critical { color: #b03a18; background: rgba(176,58,24,.10); }
+.tl-pri--high     { color: #d4722a; background: rgba(212,114,42,.10); }
+.tl-pri--medium   { color: #a07820; background: rgba(160,120,32,.10); }
+.tl-pri--low      { color: var(--sage); background: rgba(111,122,90,.10); }
+
+/* Due date */
+.tl-due {
+    display: inline-flex;
+    align-items: center;
+    gap: .2rem;
+    font-size: .78rem;
+    white-space: nowrap;
+}
+.tl-due__icon {
+    font-size: .7rem;
+    font-weight: 900;
+    color: #b03a18;
+}
+.tl-due--overdue { color: #b03a18; font-weight: 700; }
+.tl-due--none { color: var(--ink-faint); }
+
+/* Action buttons */
+.tl-action {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: .25rem;
+    color: var(--ink-faint);
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color .15s, background .15s;
+}
+.tl-action:hover         { color: var(--clay); background: var(--clay-soft); }
+.tl-action--archive:hover { color: var(--gold); background: rgba(205,154,58,.1); }
+
+@@media (max-width: 700px) {
+    .tl-row {
+        grid-template-columns: 4px 28px 1fr 80px 56px;
+    }
+    .tl-col--priority { display: none; }
+    .tl-col--actions  { display: none; }
+}
+@@media (max-width: 480px) {
+    .tl-row {
+        grid-template-columns: 4px 28px 1fr 56px;
+    }
+    .tl-col--status { display: none; }
+}
+</style>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public EventCallback OnTaskChanged { get; set; }
+
+    private List<TaskItemDto> _allTasks = new();
+    private TaskItemStatus? _statusFilter;
+    private TaskPriority? _priorityFilter;
+    private bool _overdueOnly;
+    private string _sortBy = "priority";
+    private bool _loading = true;
+    private Guid _loadedProjectId;
+    private readonly HashSet<Guid> _expandedTasks = new();
+
+    private static readonly TaskItemStatus[] _boardStatuses =
+        [TaskItemStatus.Todo, TaskItemStatus.InProgress, TaskItemStatus.Waiting, TaskItemStatus.Done];
+
+    private IEnumerable<TaskItemDto> FilteredTasks
+    {
+        get
+        {
+            var q = _allTasks.AsEnumerable();
+
+            if (_statusFilter.HasValue)
+                q = q.Where(t => t.Status == _statusFilter.Value);
+
+            if (_priorityFilter.HasValue)
+                q = q.Where(t => t.Priority == _priorityFilter.Value);
+
+            if (_overdueOnly)
+                q = q.Where(t => t.DueDate.HasValue && t.DueDate < DateTime.Today && t.Status != TaskItemStatus.Done);
+
+            q = _sortBy switch
+            {
+                "duedate" => q.OrderBy(t => t.DueDate == null).ThenBy(t => t.DueDate).ThenByDescending(t => t.Priority),
+                "status"  => q.OrderBy(t => t.Status).ThenByDescending(t => t.Priority),
+                "title"   => q.OrderBy(t => t.Title).ThenByDescending(t => t.Priority),
+                _         => q.OrderByDescending(t => t.Priority).ThenBy(t => t.DueDate ?? DateTime.MaxValue).ThenBy(t => t.Status),
+            };
+
+            return q;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTasksAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedProjectId != ProjectId)
+            await LoadTasksAsync();
+    }
+
+    private async Task LoadTasksAsync()
+    {
+        _loading = true;
+        _loadedProjectId = ProjectId;
+        var tasks = await TaskService.GetByProjectAsync(ProjectId);
+        _allTasks = tasks.ToList();
+        _loading = false;
+    }
+
+    private void SetStatusFilter(TaskItemStatus? s)   => _statusFilter   = s;
+    private void SetPriorityFilter(TaskPriority? p)   => _priorityFilter = p;
+    private void OnSortChanged(ChangeEventArgs e)     => _sortBy = e.Value?.ToString() ?? "priority";
+
+    private void ClearFilters()
+    {
+        _statusFilter   = null;
+        _priorityFilter = null;
+        _overdueOnly    = false;
+        _sortBy         = "priority";
+    }
+
+    private void ToggleSubtasks(Guid taskId)
+    {
+        if (!_expandedTasks.Add(taskId))
+            _expandedTasks.Remove(taskId);
+    }
+
+    private async Task ToggleComplete(TaskItemDto task)
+    {
+        try
+        {
+            TaskItemDto updated;
+            if (task.Status == TaskItemStatus.Done)
+                updated = await TaskService.ReopenAsync(task.Id);
+            else
+                updated = await TaskService.CompleteAsync(task.Id);
+
+            var idx = _allTasks.FindIndex(t => t.Id == task.Id);
+            if (idx >= 0) _allTasks[idx] = updated;
+
+            await OnTaskChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task OpenEditDialog(Guid taskId)
+    {
+        var parameters = new DialogParameters<TaskEditorDialog>();
+        parameters.Add(x => x.TaskId, taskId);
+        parameters.Add(x => x.ProjectId, ProjectId);
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TaskEditorDialog>("Edit Task", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadTasksAsync();
+            await OnTaskChanged.InvokeAsync();
+        }
+    }
+
+    private async Task ArchiveTask(Guid taskId, string title)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Archive task",
+            $"Archive \"{title}\"? It will be hidden from active views.",
+            yesText: "Archive", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            await TaskService.ArchiveAsync(taskId);
+            _allTasks.RemoveAll(t => t.Id == taskId);
+            await OnTaskChanged.InvokeAsync();
+            Snackbar.Add($"\"{title}\" archived.", Severity.Success);
+        }
+    }
+
+    private static string StatusLabel(TaskItemStatus s) => s switch
+    {
+        TaskItemStatus.InProgress => "In Progress",
+        _ => s.ToString()
+    };
+
+    private static string PriorityLabel(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => "⚑ Critical",
+        TaskPriority.High     => "↑ High",
+        TaskPriority.Medium   => "— Medium",
+        TaskPriority.Low      => "↓ Low",
+        _                     => p.ToString()
+    };
+}

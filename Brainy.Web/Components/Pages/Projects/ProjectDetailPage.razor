@@ -147,97 +147,7 @@ else
                     Add task
                 </MudButton>
             </div>
-
-            @if (!_detail.Tasks.Any())
-            {
-                <div class="pd-empty">
-                    <span class="pd-empty__icon">✓</span>
-                    <p>No tasks yet. Add a task to start tracking work.</p>
-                </div>
-            }
-            else
-            {
-                <div class="pd-task-list">
-                    @foreach (var task in _detail.Tasks)
-                    {
-                        <div class="pd-task @(task.Status == TaskItemStatus.Done ? "pd-task--done" : "")">
-                            <button class="pd-task__check @(task.Status == TaskItemStatus.Done ? "pd-task__check--done" : "")"
-                                    title="@(task.Status == TaskItemStatus.Done ? "Mark open" : "Mark done")">
-                                @if (task.Status == TaskItemStatus.Done)
-                                {
-                                    <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
-                                    </svg>
-                                }
-                            </button>
-                            <div class="pd-task__body">
-                                <span class="pd-task__title">@task.Title</span>
-                                @if (!string.IsNullOrWhiteSpace(task.Description))
-                                {
-                                    <span class="pd-task__desc">@task.Description</span>
-                                }
-                                @if (task.SubtaskCount > 0)
-                                {
-                                    <div class="pd-subtask-progress">
-                                        <div class="pd-subtask-progress__track">
-                                            <div class="pd-subtask-progress__fill"
-                                                 style="width:@(task.SubtaskCount > 0 ? (task.DoneSubtaskCount * 100 / task.SubtaskCount) : 0)%">
-                                            </div>
-                                        </div>
-                                        <button class="pd-subtask-toggle"
-                                                @onclick="() => ToggleSubtasks(task.Id)">
-                                            @task.DoneSubtaskCount/@task.SubtaskCount subtask@(task.SubtaskCount != 1 ? "s" : "")
-                                            <span class="pd-subtask-toggle__chevron @(_expandedTasks.Contains(task.Id) ? "pd-subtask-toggle__chevron--open" : "")">›</span>
-                                        </button>
-                                    </div>
-                                }
-                                @if (_expandedTasks.Contains(task.Id) && task.Subtasks?.Any() == true)
-                                {
-                                    <div class="pd-subtask-list">
-                                        @foreach (var sub in task.Subtasks)
-                                        {
-                                            <div class="pd-subtask @(sub.Status == TaskItemStatus.Done ? "pd-subtask--done" : "")">
-                                                <button class="pd-task__check pd-task__check--sm @(sub.Status == TaskItemStatus.Done ? "pd-task__check--done" : "")"
-                                                        title="@(sub.Status == TaskItemStatus.Done ? "Mark open" : "Mark done")">
-                                                    @if (sub.Status == TaskItemStatus.Done)
-                                                    {
-                                                        <svg viewBox="0 0 16 16" fill="currentColor" width="9" height="9">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
-                                                        </svg>
-                                                    }
-                                                </button>
-                                                <span class="pd-subtask__title">@sub.Title</span>
-                                                <div class="pd-task__meta">
-                                                    @if (sub.DueDate.HasValue)
-                                                    {
-                                                        <span class="pd-task__due @(sub.DueDate < DateTime.Today && sub.Status != TaskItemStatus.Done ? "pd-task__due--overdue" : "")">
-                                                            @sub.DueDate.Value.ToString("MMM d")
-                                                        </span>
-                                                    }
-                                                    <span class="pd-task__priority pd-tp--@sub.Priority.ToString().ToLower()">
-                                                        @sub.Priority
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                            <div class="pd-task__meta">
-                                @if (task.DueDate.HasValue)
-                                {
-                                    <span class="pd-task__due @(task.DueDate < DateTime.Today && task.Status != TaskItemStatus.Done ? "pd-task__due--overdue" : "")">
-                                        @task.DueDate.Value.ToString("MMM d")
-                                    </span>
-                                }
-                                <span class="pd-task__priority pd-tp--@task.Priority.ToString().ToLower()">
-                                    @task.Priority
-                                </span>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
+            <TaskListComponent ProjectId="ProjectId" OnTaskChanged="OnBoardTaskChanged" />
         </MudTabPanel>
 
         <!-- Board tab -->
@@ -897,7 +807,6 @@ else
 
     private bool _loading = true;
     private ProjectDetailDto? _detail;
-    private readonly HashSet<Guid> _expandedTasks = new();
 
     // Live progress — updated by PeriodicTimer independently of the full detail load
     private ProjectProgressDto? _progress;
@@ -985,12 +894,6 @@ else
     private async Task OnBoardTaskChanged()
     {
         await LoadAsync();
-    }
-
-    private void ToggleSubtasks(Guid taskId)
-    {
-        if (!_expandedTasks.Add(taskId))
-            _expandedTasks.Remove(taskId);
     }
 
     private async Task OpenEditDialog()
