@@ -1,0 +1,246 @@
+@using Brainy.Application.DTOs.Projects
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IProjectService ProjectService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <div style="display:flex;align-items:center;gap:0.6rem;">
+            <MudIcon Icon="@Icons.Material.Filled.CheckCircle"
+                     Style="color:var(--sage);font-size:1.4rem;" />
+            <MudText Typo="Typo.h6" Style="font-family:var(--font-display)">
+                Complete project
+            </MudText>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        <div class="pcd-body">
+
+            
+            <div class="pcd-project-header">
+                <div class="pcd-ribbon pcd-ribbon--@Project.Priority.ToString().ToLower()"></div>
+                <div class="pcd-project-info">
+                    <p class="pcd-project-name">@Project.Name</p>
+                    @if (!string.IsNullOrWhiteSpace(Project.DesiredOutcome))
+                    {
+                        <p class="pcd-project-outcome">@Project.DesiredOutcome</p>
+                    }
+                </div>
+            </div>
+
+            
+            <div class="pcd-stats">
+                <div class="pcd-stat">
+                    <span class="pcd-stat__value">@Project.OpenTaskCount</span>
+                    <span class="pcd-stat__label">Open tasks</span>
+                </div>
+                <div class="pcd-stat">
+                    <span class="pcd-stat__value">@Project.DoneTaskCount</span>
+                    <span class="pcd-stat__label">Completed</span>
+                </div>
+                <div class="pcd-stat @(Project.OverdueTaskCount > 0 ? "pcd-stat--warn" : "")">
+                    <span class="pcd-stat__value">@Project.OverdueTaskCount</span>
+                    <span class="pcd-stat__label">Overdue</span>
+                </div>
+                <div class="pcd-stat">
+                    <span class="pcd-stat__value">@(Project.TotalTaskCount > 0 ? $"{Project.ProgressPercent:F0}%" : "—")</span>
+                    <span class="pcd-stat__label">Progress</span>
+                </div>
+            </div>
+
+            @if (Project.OpenTaskCount > 0)
+            {
+                
+                <div class="pcd-section">
+                    <p class="pcd-section-label">
+                        What should happen to the
+                        <strong>@Project.OpenTaskCount open task@(Project.OpenTaskCount == 1 ? "" : "s")</strong>?
+                    </p>
+                    <MudRadioGroup @bind-Value="_taskAction" T="TaskCompletionAction"
+                                   Class="pcd-radio-group">
+                        <MudRadio Value="TaskCompletionAction.CompleteAll" Color="Color.Success">
+                            <span class="pcd-radio-label">Mark all as done</span>
+                            <span class="pcd-radio-hint">Remaining tasks will be marked as completed.</span>
+                        </MudRadio>
+                        <MudRadio Value="TaskCompletionAction.ArchiveAll" Color="Color.Default">
+                            <span class="pcd-radio-label">Archive remaining tasks</span>
+                            <span class="pcd-radio-hint">Open tasks are soft-archived. Notes are preserved.</span>
+                        </MudRadio>
+                        <MudRadio Value="TaskCompletionAction.LeaveAsIs" Color="Color.Default">
+                            <span class="pcd-radio-label">Leave tasks as they are</span>
+                            <span class="pcd-radio-hint">Open tasks stay open. You can tidy them up later.</span>
+                        </MudRadio>
+                    </MudRadioGroup>
+                </div>
+            }
+
+            
+            <div class="pcd-section pcd-section--archive">
+                <MudCheckBox @bind-Value="_archiveAfter" Color="Color.Default">
+                    <span class="pcd-radio-label">Also move to archives</span>
+                </MudCheckBox>
+                <p class="pcd-archive-hint">
+                    Completed projects can be archived to keep your workspace clean.
+                    All notes and history are preserved.
+                </p>
+            </div>
+
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel" Disabled="_saving">
+            Cancel
+        </MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Success"
+                   StartIcon="@Icons.Material.Filled.CheckCircle"
+                   OnClick="ConfirmAsync"
+                   Disabled="_saving">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Complete Project
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .pcd-body { display: flex; flex-direction: column; gap: 1.25rem; min-width: 360px; }
+
+    .pcd-project-header {
+        display: flex;
+        gap: 0.75rem;
+        align-items: stretch;
+        background: var(--paper-sunk);
+        border-radius: 8px;
+        overflow: hidden;
+        padding: 0.85rem 1rem;
+    }
+
+    .pcd-ribbon { width: 4px; border-radius: 2px; flex-shrink: 0; }
+    .pcd-ribbon--critical { background: var(--clay); }
+    .pcd-ribbon--high     { background: #d4722a; }
+    .pcd-ribbon--medium   { background: var(--gold); }
+    .pcd-ribbon--low      { background: var(--sage); }
+
+    .pcd-project-info { flex: 1; }
+    .pcd-project-name {
+        font-family: var(--font-display);
+        font-size: 1rem;
+        font-weight: 500;
+        color: var(--ink);
+        margin: 0 0 0.2rem;
+    }
+    .pcd-project-outcome {
+        font-size: 0.78rem;
+        color: var(--ink-soft);
+        margin: 0;
+    }
+
+    .pcd-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+    }
+
+    .pcd-stat {
+        text-align: center;
+        padding: 0.6rem 0.4rem;
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+    }
+
+    .pcd-stat--warn { border-color: rgba(185,28,28,0.3); }
+
+    .pcd-stat__value {
+        display: block;
+        font-family: var(--font-display);
+        font-size: 1.3rem;
+        font-weight: 500;
+        color: var(--ink);
+    }
+
+    .pcd-stat--warn .pcd-stat__value { color: #b91c1c; }
+
+    .pcd-stat__label {
+        display: block;
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--ink-faint);
+        margin-top: 0.1rem;
+    }
+
+    .pcd-section { display: flex; flex-direction: column; gap: 0.5rem; }
+    .pcd-section-label { font-size: 0.85rem; color: var(--ink-soft); margin: 0; }
+
+    .pcd-radio-group { display: flex; flex-direction: column; gap: 0.1rem; }
+
+    .pcd-radio-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--ink);
+        display: block;
+    }
+    .pcd-radio-hint {
+        font-size: 0.75rem;
+        color: var(--ink-faint);
+        display: block;
+        margin-top: -0.1rem;
+    }
+
+    .pcd-section--archive {
+        padding: 0.75rem 1rem;
+        background: var(--paper-sunk);
+        border-radius: 8px;
+    }
+
+    .pcd-archive-hint {
+        font-size: 0.75rem;
+        color: var(--ink-faint);
+        margin: 0.15rem 0 0 1.75rem;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>Project summary with task stats. Required.</summary>
+    [Parameter, EditorRequired]
+    public ProjectSummaryDto Project { get; set; } = null!;
+
+    private TaskCompletionAction _taskAction   = TaskCompletionAction.CompleteAll;
+    private bool                  _archiveAfter = false;
+    private bool                  _saving       = false;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task ConfirmAsync()
+    {
+        _saving = true;
+        try
+        {
+            await ProjectService.CompleteAsync(Project.Id, _taskAction);
+
+            if (_archiveAfter)
+                await ProjectService.ArchiveAsync(Project.Id);
+
+            Snackbar.Add("Project completed successfully.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not complete project: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

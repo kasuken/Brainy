@@ -122,6 +122,7 @@
                     <ProjectSummaryCard Project="p"
                                         OnNavigate="id => OpenDetail(id)"
                                         OnEdit="proj => OpenEditDialog(proj)"
+                                        OnComplete="proj => OpenCompletionDialog(proj)"
                                         OnArchive="proj => ConfirmArchive(proj.Id, proj.Name)" />
                 </div>
             }
@@ -677,6 +678,17 @@
         parameters.Add(x => x.ProjectId, null);
         var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
         var dialog = await DialogService.ShowAsync<ProjectEditorDialog>("New Project", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task OpenCompletionDialog(ProjectSummaryDto p)
+    {
+        var parameters = new DialogParameters<ProjectCompletionDialog>();
+        parameters.Add(x => x.Project, p);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ProjectCompletionDialog>("Complete Project", parameters, options);
         var result = await dialog.Result;
         if (result is not null && !result.Canceled)
             await LoadAsync();

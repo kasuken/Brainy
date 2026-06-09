@@ -73,9 +73,16 @@
     </div>
 
     
-    @if (OnEdit.HasDelegate || OnArchive.HasDelegate)
+    @if (OnEdit.HasDelegate || OnArchive.HasDelegate || OnComplete.HasDelegate)
     {
         <div class="psc__actions" @onclick:stopPropagation="true">
+            @if (OnComplete.HasDelegate && Project.Status != ProjectStatus.Completed && Project.Status != ProjectStatus.Archived)
+            {
+                <button class="psc__action-btn psc__action-btn--complete" title="Complete project"
+                        @onclick="() => OnComplete.InvokeAsync(Project)">
+                    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
+                </button>
+            }
             @if (OnEdit.HasDelegate)
             {
                 <button class="psc__action-btn" title="Edit" @onclick="() => OnEdit.InvokeAsync(Project)">
@@ -281,6 +288,12 @@
         background: rgba(185, 28, 28, 0.06);
     }
 
+    .psc__action-btn--complete svg { color: var(--sage); }
+    .psc__action-btn--complete:hover {
+        border-color: rgba(111, 122, 90, 0.4);
+        background: rgba(111, 122, 90, 0.1);
+    }
+
     @@media (max-width: 480px) {
         .psc__actions { opacity: 1; }
     }
@@ -302,6 +315,10 @@
     /// <summary>When set, an Archive action button is rendered.</summary>
     [Parameter]
     public EventCallback<ProjectSummaryDto> OnArchive { get; set; }
+
+    /// <summary>When set, a Complete action button is rendered (hidden when already completed/archived).</summary>
+    [Parameter]
+    public EventCallback<ProjectSummaryDto> OnComplete { get; set; }
 
     /// <summary>Renders in compact/narrow layout. Default: false.</summary>
     [Parameter]

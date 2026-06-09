@@ -295,6 +295,55 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         return ToDto(project);
     }
 
+    public async Task<ProjectDto> CompleteAsync(Guid id, TaskCompletionAction taskAction, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var project = await context.Projects
+            .Include(p => p.Tasks)
+            .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Project '{id}' was not found.");
+
+        var now = DateTime.UtcNow;
+
+        // Mark the project completed
+        project.Status        = ProjectStatus.Completed;
+        project.CompletedDate = project.CompletedDate ?? now;
+
+        // Handle remaining open tasks
+        var openTasks = project.Tasks
+            .Where(t => !t.IsArchived && t.Status != Domain.Enums.TaskItemStatus.Done)
+            .ToList();
+
+        switch (taskAction)
+        {
+            case TaskCompletionAction.CompleteAll:
+                foreach (var task in openTasks)
+                {
+                    task.Status        = Domain.Enums.TaskItemStatus.Done;
+                    task.CompletedDate = now;
+                }
+                break;
+
+            case TaskCompletionAction.ArchiveAll:
+                foreach (var task in openTasks)
+                {
+                    task.IsArchived    = true;
+                    task.ArchivedAtUtc = now;
+                }
+                break;
+
+            case TaskCompletionAction.LeaveAsIs:
+            default:
+                break;
+        }
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return ToDto(project);
+    }
+
     public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);

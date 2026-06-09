@@ -80,6 +80,14 @@ else
                            Size="Size.Small" OnClick="OpenEditDialog">
                     Edit
                 </MudButton>
+                @if (_detail.Status != ProjectStatus.Completed && _detail.Status != ProjectStatus.Archived)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Success"
+                               StartIcon="@Icons.Material.Filled.CheckCircle"
+                               Size="Size.Small" OnClick="OpenCompletionDialog">
+                        Complete
+                    </MudButton>
+                }
                 <MudButton Variant="Variant.Outlined" Color="Color.Default"
                            StartIcon="@Icons.Material.Filled.Archive"
                            Size="Size.Small" OnClick="ConfirmArchive">
@@ -946,6 +954,32 @@ else
             Snackbar.Add($"\"{noteTitle}\" removed from project.", Severity.Success);
             await LoadAsync();
         }
+    }
+
+    private async Task OpenCompletionDialog()
+    {
+        if (_detail is null) return;
+
+        var overdueTasks = _detail.Tasks.Count(t => !t.IsArchived
+            && t.Status != TaskItemStatus.Done
+            && t.DueDate.HasValue
+            && t.DueDate.Value.Date < DateTime.Today);
+
+        var summary = new ProjectSummaryDto(
+            _detail.Id, _detail.Name, _detail.Description, _detail.DesiredOutcome,
+            _detail.Status, _detail.Priority, _detail.StartDate, _detail.DueDate,
+            _detail.CompletedDate, _detail.IsArchived, _detail.AreaId,
+            _detail.CreatedAtUtc, _detail.UpdatedAtUtc, _detail.ArchivedAtUtc,
+            _detail.TotalTaskCount, _detail.OpenTaskCount, _detail.DoneTaskCount,
+            _detail.ProgressPercent, overdueTasks);
+
+        var parameters = new DialogParameters<ProjectCompletionDialog>();
+        parameters.Add(x => x.Project, summary);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ProjectCompletionDialog>("Complete Project", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            Nav.NavigateTo("/projects");
     }
 
     private async Task OpenEditDialog()

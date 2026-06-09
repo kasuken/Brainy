@@ -48,6 +48,13 @@ public interface IProjectService
     Task<ProjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<ProjectDto> CreateAsync(CreateProjectDto dto, CancellationToken cancellationToken = default);
     Task<ProjectDto> UpdateAsync(UpdateProjectDto dto, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Marks a project as <see cref="Domain.Enums.ProjectStatus.Completed"/>, sets
+    /// <c>CompletedDate</c>, and handles remaining open tasks according to
+    /// <paramref name="taskAction"/>. Notes and history are preserved.
+    /// </summary>
+    Task<ProjectDto> CompleteAsync(Guid id, TaskCompletionAction taskAction, CancellationToken cancellationToken = default);
+
     Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
