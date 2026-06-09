@@ -172,6 +172,57 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             .ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<NoteDto>> GetNotLinkedToProjectAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await context.Notes
+            .AsNoTracking()
+            .Where(n => n.UserId == userId && n.ProjectId == null && n.Status != NoteStatus.Archived)
+            .OrderByDescending(n => n.UpdatedAtUtc)
+            .Select(n => ToDto(n))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<NoteDto> LinkToProjectAsync(Guid noteId, Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var note = await context.Notes
+            .FirstOrDefaultAsync(n => n.Id == noteId && n.UserId == userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Note '{noteId}' was not found.");
+
+        note.ProjectId = projectId;
+
+        // Only upgrade category if it's not already categorised as a project item
+        if (note.ParaCategory != ParaCategory.Project && note.ParaCategory != ParaCategory.Resource)
+            note.ParaCategory = ParaCategory.Project;
+
+        // Promote inbox notes to Active
+        if (note.Status == NoteStatus.Inbox)
+            note.Status = NoteStatus.Active;
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return ToDto(note);
+    }
+
+    public async Task<NoteDto> UnlinkFromProjectAsync(Guid noteId, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var note = await context.Notes
+            .FirstOrDefaultAsync(n => n.Id == noteId && n.UserId == userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Note '{noteId}' was not found.");
+
+        note.ProjectId = null;
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return ToDto(note);
+    }
+
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);

@@ -42,4 +42,20 @@ public interface INoteService
     /// Only notes owned by the current user are affected.
     /// </summary>
     Task<int> BulkMoveCategoryAsync(IEnumerable<Guid> ids, ParaCategory category, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns all notes not currently linked to any project — used by the "link existing" picker.</summary>
+    Task<IReadOnlyList<NoteDto>> GetNotLinkedToProjectAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Links an existing note to a project. Sets <c>ProjectId</c> and updates
+    /// <c>ParaCategory</c> to <see cref="ParaCategory.Project"/> when it was not already
+    /// a resource note. Moves Inbox notes to <see cref="NoteStatus.Active"/> automatically.
+    /// </summary>
+    Task<NoteDto> LinkToProjectAsync(Guid noteId, Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes the project association from a note (sets <c>ProjectId</c> to null).
+    /// The note and its content are preserved; only the project link is cleared.
+    /// </summary>
+    Task<NoteDto> UnlinkFromProjectAsync(Guid noteId, CancellationToken cancellationToken = default);
 }

@@ -1,0 +1,288 @@
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject INoteService NoteService
+@inject ISnackbar Snackbar
+
+<MudDialog Class="pnd-dialog">
+    <TitleContent>
+        <div class="pnd-header">
+            <span class="pnd-header__glyph">📝</span>
+            <span class="pnd-header__title">Add Note to Project</span>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudTabs Elevation="0" Rounded="false" Class="pnd-tabs" PanelClass="pnd-panel">
+
+            <!-- ── Create new note ──────────────────────────────── -->
+            <MudTabPanel Text="New Note">
+                <MudStack Spacing="3" Class="pnd-form">
+                    <MudTextField @bind-Value="_newTitle"
+                                  Label="Title"
+                                  Required="true"
+                                  Variant="Variant.Outlined"
+                                  AutoFocus="true"
+                                  FullWidth="true" />
+                    <MudTextField @bind-Value="_newContent"
+                                  Label="Content"
+                                  Lines="5"
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true" />
+                    <MudSelect @bind-Value="_newCategory" Label="Type" Variant="Variant.Outlined" FullWidth="true">
+                        <MudSelectItem Value="ParaCategory.Project">📌 Project Note</MudSelectItem>
+                        <MudSelectItem Value="ParaCategory.Resource">📚 Resource Note</MudSelectItem>
+                    </MudSelect>
+                </MudStack>
+            </MudTabPanel>
+
+            <!-- ── Link existing note ──────────────────────────── -->
+            <MudTabPanel Text="Link Existing">
+                <MudStack Spacing="2" Class="pnd-form">
+                    <MudTextField @bind-Value="_search"
+                                  Label="Search notes…"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  FullWidth="true"
+                                  Immediate="true" />
+
+                    @if (_loadingNotes)
+                    {
+                        <div class="pnd-loading">
+                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+                        </div>
+                    }
+                    else if (!FilteredAvailableNotes.Any())
+                    {
+                        <div class="pnd-empty">
+                            <span>No notes available to link.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="pnd-note-list">
+                            @foreach (var note in FilteredAvailableNotes)
+                            {
+                                <div class="pnd-note-item @(_selectedNoteId == note.Id ? "pnd-note-item--selected" : "")"
+                                     @onclick="() => SelectNote(note.Id)">
+                                    <div class="pnd-note-item__info">
+                                        <span class="pnd-note-item__title">@note.Title</span>
+                                        @if (!string.IsNullOrWhiteSpace(note.Content))
+                                        {
+                                            <span class="pnd-note-item__preview">
+                                                @(note.Content.Length > 80 ? note.Content[..80] + "…" : note.Content)
+                                            </span>
+                                        }
+                                    </div>
+                                    <div class="pnd-note-item__meta">
+                                        <span class="pnd-cat pnd-cat--@note.ParaCategory.ToString().ToLower()">
+                                            @note.ParaCategory
+                                        </span>
+                                        <span class="pnd-note-item__date">@note.UpdatedAtUtc.ToString("MMM d")</span>
+                                    </div>
+                                    @if (_selectedNoteId == note.Id)
+                                    {
+                                        <span class="pnd-check">✓</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </MudStack>
+            </MudTabPanel>
+        </MudTabs>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_saving">
+            @(_saving ? "Saving…" : "Add to Project")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+.pnd-dialog .mud-dialog { border-radius: 16px; }
+.pnd-header {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+.pnd-header__glyph { font-size: 1.2rem; line-height: 1; }
+.pnd-header__title {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--ink);
+}
+
+.pnd-tabs .mud-tab {
+    font-family: var(--font-body);
+    font-size: .82rem;
+    font-weight: 600;
+    text-transform: none;
+}
+.pnd-panel { padding: 1rem 0 .25rem; }
+.pnd-form { padding: .1rem 0; }
+
+.pnd-loading, .pnd-empty {
+    display: flex;
+    justify-content: center;
+    padding: 2rem 1rem;
+    color: var(--ink-faint);
+    font-size: .85rem;
+}
+
+/* Note picker list */
+.pnd-note-list {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: .25rem;
+}
+.pnd-note-item {
+    display: flex;
+    align-items: flex-start;
+    gap: .6rem;
+    padding: .65rem .8rem;
+    border-radius: 10px;
+    border: 1.5px solid var(--line);
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    position: relative;
+}
+.pnd-note-item:hover { border-color: var(--clay); background: var(--clay-soft); }
+.pnd-note-item--selected {
+    border-color: var(--clay);
+    background: var(--clay-soft);
+}
+.pnd-note-item__info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    min-width: 0;
+}
+.pnd-note-item__title {
+    font-size: .88rem;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pnd-note-item__preview {
+    font-size: .72rem;
+    color: var(--ink-soft);
+    line-height: 1.4;
+}
+.pnd-note-item__meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: .2rem;
+    flex-shrink: 0;
+}
+.pnd-note-item__date { font-size: .68rem; color: var(--ink-faint); }
+.pnd-cat {
+    font-size: .62rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    padding: .1rem .35rem;
+    border-radius: 4px;
+}
+.pnd-cat--project  { background: rgba(192,86,29,.12); color: var(--clay); }
+.pnd-cat--resource { background: rgba(205,154,58,.12); color: #7a5c0e; }
+.pnd-cat--area     { background: rgba(111,122,90,.12); color: #4a5c38; }
+.pnd-cat--archive  { background: var(--paper-sunk); color: var(--ink-faint); }
+.pnd-check {
+    position: absolute;
+    right: .6rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--clay);
+    font-weight: 700;
+    font-size: .9rem;
+}
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid ProjectId { get; set; }
+
+    // New note fields
+    private string _newTitle = string.Empty;
+    private string _newContent = string.Empty;
+    private ParaCategory _newCategory = ParaCategory.Project;
+
+    // Link existing fields
+    private IReadOnlyList<NoteDto> _availableNotes = [];
+    private Guid? _selectedNoteId;
+    private string _search = string.Empty;
+    private bool _loadingNotes = true;
+    private bool _saving;
+
+    private IEnumerable<NoteDto> FilteredAvailableNotes =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _availableNotes
+            : _availableNotes.Where(n => n.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                                      || (n.Content?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _availableNotes = await NoteService.GetNotLinkedToProjectAsync();
+        _loadingNotes = false;
+    }
+
+    private void SelectNote(Guid noteId)
+    {
+        _selectedNoteId = _selectedNoteId == noteId ? null : noteId;
+    }
+
+    private async Task SubmitAsync()
+    {
+        // Determine which tab is "active" by checking state
+        if (_selectedNoteId.HasValue)
+        {
+            // Link existing
+            _saving = true;
+            try
+            {
+                await NoteService.LinkToProjectAsync(_selectedNoteId.Value, ProjectId);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+            finally { _saving = false; }
+        }
+        else if (!string.IsNullOrWhiteSpace(_newTitle))
+        {
+            // Create new
+            _saving = true;
+            try
+            {
+                await NoteService.CreateAsync(new CreateNoteDto(
+                    _newTitle.Trim(),
+                    _newContent.Trim(),
+                    _newCategory,
+                    ProjectId));
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+            finally { _saving = false; }
+        }
+        else
+        {
+            Snackbar.Add("Please create a new note or select an existing one to link.", Severity.Warning);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
