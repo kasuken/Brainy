@@ -1,47 +1,396 @@
-﻿@page "/"
+@page "/"
 @attribute [Authorize]
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject ITodayService TodayService
+@inject ITaskService TaskService
+@inject ISnackbar Snackbar
 
 <PageTitle>Today · Brainy</PageTitle>
 
+<style>
+    .td-page {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 3vw, 2rem);
+        font-family: var(--font-body);
+        color: var(--ink);
+    }
+
+    .td-eyebrow {
+        font-size: 0.7rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin: 0 0 0.4rem;
+    }
+
+    .td-greeting {
+        font-family: var(--font-display);
+        font-size: clamp(2rem, 5vw, 3.25rem);
+        font-weight: 600;
+        font-style: italic;
+        line-height: 1.1;
+        color: var(--ink);
+        margin: 0 0 0.4rem;
+    }
+
+    .td-date {
+        font-size: 0.82rem;
+        color: var(--ink-soft);
+        letter-spacing: 0.04em;
+        margin-bottom: 2rem;
+    }
+
+    .td-nav {
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+        margin-bottom: 2.5rem;
+        padding-bottom: 2rem;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .td-nav-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.4rem 0.85rem;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: var(--paper-raised);
+        font-size: 0.78rem;
+        color: var(--ink-soft);
+        text-decoration: none;
+        transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+
+    .td-nav-chip:hover { border-color: var(--clay); color: var(--clay-deep); background: var(--clay-soft); }
+
+    .td-sections { display: flex; flex-direction: column; gap: 2rem; }
+
+    .td-section { animation: td-fade-up 0.4s ease both; }
+
+    @@keyframes td-fade-up {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .td-section:nth-child(1) { animation-delay: 0.05s; }
+    .td-section:nth-child(2) { animation-delay: 0.10s; }
+    .td-section:nth-child(3) { animation-delay: 0.15s; }
+    .td-section:nth-child(4) { animation-delay: 0.20s; }
+    .td-section:nth-child(5) { animation-delay: 0.25s; }
+    .td-section:nth-child(6) { animation-delay: 0.30s; }
+
+    .td-section-head {
+        display: flex;
+        align-items: baseline;
+        gap: 0.65rem;
+        margin-bottom: 0.65rem;
+    }
+
+    .td-section-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+    }
+
+    .td-section-label--overdue { color: #b91c1c; }
+    .td-section-label--today   { color: var(--clay); }
+    .td-section-label--focus   { color: var(--espresso); }
+    .td-section-label--week    { color: var(--gold); }
+    .td-section-label--next    { color: var(--sage); }
+
+    .td-section-count { font-size: 0.72rem; color: var(--ink-faint); }
+
+    .td-task {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.65rem 0.85rem;
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-bottom: 0.4rem;
+        position: relative;
+        overflow: hidden;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .td-task::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 3px;
+    }
+
+    .td-task--critical::before { background: var(--clay); }
+    .td-task--high::before     { background: #d4722a; }
+    .td-task--medium::before   { background: var(--gold); }
+    .td-task--low::before      { background: var(--sage); }
+    .td-task--overdue { border-color: rgba(185,28,28,0.25); background: rgba(185,28,28,0.03); }
+
+    .td-task:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+
+    .td-task-body { flex: 1; min-width: 0; }
+
+    .td-task-title {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin: 0;
+    }
+
+    .td-task-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        margin-top: 0.15rem;
+        font-size: 0.72rem;
+        color: var(--ink-faint);
+    }
+
+    .td-task-project {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.1rem 0.45rem;
+        background: var(--paper-sunk);
+        border-radius: 4px;
+        font-size: 0.68rem;
+        color: var(--ink-soft);
+    }
+
+    .td-task-due { font-variant-numeric: tabular-nums; }
+    .td-task-due--overdue { color: #b91c1c; font-weight: 600; }
+
+    .td-empty {
+        padding: 0.6rem 0.85rem;
+        font-size: 0.78rem;
+        color: var(--ink-faint);
+        font-style: italic;
+    }
+
+    .td-skeleton {
+        height: 52px;
+        border-radius: 8px;
+        background: linear-gradient(90deg, var(--paper-sunk) 25%, var(--line) 50%, var(--paper-sunk) 75%);
+        background-size: 200% 100%;
+        animation: td-shimmer 1.4s ease infinite;
+        margin-bottom: 0.4rem;
+    }
+
+    @@keyframes td-shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+</style>
+
 <AuthorizeView>
     <Authorized>
-        <section class="today">
-            <p class="today__eyebrow">Today</p>
-            <h1 class="today__title">@Greeting,<br />@DisplayName.</h1>
-            <p class="today__lead">
-                This is your second brain &mdash; capture what matters, organize it close to action,
-                and turn what you know into something useful.
-            </p>
+        <div class="td-page">
 
-            <div class="today-grid">
-                <a class="today-card" href="/notes">
-                    <span class="today-card__icon">
-                        <MudIcon Icon="@Icons.Material.Outlined.Notes" />
-                    </span>
-                    <h2 class="today-card__title">Notes</h2>
-                    <p class="today-card__desc">Capture ideas fast and revisit your knowledge whenever you need it.</p>
-                    <span class="today-card__cta">Open notes &rarr;</span>
-                </a>
+            <p class="td-eyebrow">Daily briefing</p>
+            <h1 class="td-greeting">@Greeting, @DisplayName.</h1>
+            <p class="td-date">@DateTime.Now.ToString("dddd, MMMM d, yyyy")</p>
 
-                <a class="today-card" href="/inbox">
-                    <span class="today-card__icon">
-                        <MudIcon Icon="@Icons.Material.Outlined.Inbox" />
-                    </span>
-                    <h2 class="today-card__title">Inbox</h2>
-                    <p class="today-card__desc">Process everything you captured and decide where it belongs.</p>
-                    <span class="today-card__cta">Go to inbox &rarr;</span>
+            <nav class="td-nav">
+                <a class="td-nav-chip" href="/inbox">
+                    <MudIcon Icon="@Icons.Material.Outlined.Inbox" Style="font-size:13px;" /> Inbox
                 </a>
+                <a class="td-nav-chip" href="/projects">
+                    <MudIcon Icon="@Icons.Material.Outlined.FolderSpecial" Style="font-size:13px;" /> Projects
+                </a>
+                <a class="td-nav-chip" href="/notes">
+                    <MudIcon Icon="@Icons.Material.Outlined.Notes" Style="font-size:13px;" /> Notes
+                </a>
+                <a class="td-nav-chip" href="/archives">
+                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Style="font-size:13px;" /> Archives
+                </a>
+            </nav>
 
-                <a class="today-card" href="/projects">
-                    <span class="today-card__icon">
-                        <MudIcon Icon="@Icons.Material.Outlined.FolderSpecial" />
-                    </span>
-                    <h2 class="today-card__title">Projects</h2>
-                    <p class="today-card__desc">Focus on outcomes with deadlines and move your work forward.</p>
-                    <span class="today-card__cta">View projects &rarr;</span>
-                </a>
-            </div>
-        </section>
+            @if (_loading)
+            {
+                <div>
+                    <div class="td-skeleton"></div>
+                    <div class="td-skeleton" style="width:85%;"></div>
+                    <div class="td-skeleton" style="width:70%;"></div>
+                </div>
+            }
+            else
+            {
+                <div class="td-sections">
+
+                    @if (_currentTasks.Count > 0)
+                    {
+                        <section class="td-section">
+                            <div class="td-section-head">
+                                <span class="td-section-label td-section-label--focus">Current focus</span>
+                                <span class="td-section-count">@_currentTasks.Count active</span>
+                            </div>
+                            @foreach (var t in _currentTasks)
+                            {
+                                <div class="td-task @PriorityClass(t.Priority)">
+                                    <div class="td-task-body">
+                                        <p class="td-task-title">@t.Title</p>
+                                        <div class="td-task-meta">
+                                            <span class="td-task-project">@t.ProjectName</span>
+                                            @if (t.DueDate.HasValue)
+                                            {
+                                                <span class="td-task-due">@t.DueDate.Value.ToString("MMM d")</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <MudTooltip Text="Mark complete">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                                                       Size="Size.Small" Color="Color.Success"
+                                                       OnClick="() => HandleCompleted(t.Id)" />
+                                    </MudTooltip>
+                                </div>
+                            }
+                        </section>
+                    }
+
+                    @if (_overdue.Count > 0)
+                    {
+                        <section class="td-section">
+                            <div class="td-section-head">
+                                <span class="td-section-label td-section-label--overdue">Overdue</span>
+                                <span class="td-section-count">@_overdue.Count task@(_overdue.Count == 1 ? "" : "s")</span>
+                            </div>
+                            @foreach (var t in _overdue)
+                            {
+                                <div class="td-task @PriorityClass(t.Priority) td-task--overdue">
+                                    <div class="td-task-body">
+                                        <p class="td-task-title">@t.Title</p>
+                                        <div class="td-task-meta">
+                                            <span class="td-task-project">@t.ProjectName</span>
+                                            @if (t.DueDate.HasValue)
+                                            {
+                                                <span class="td-task-due td-task-due--overdue">@t.DueDate.Value.ToString("MMM d")</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <MudTooltip Text="Mark complete">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                                                       Size="Size.Small" Color="Color.Success"
+                                                       OnClick="() => HandleCompleted(t.Id)" />
+                                    </MudTooltip>
+                                </div>
+                            }
+                        </section>
+                    }
+
+                    <section class="td-section">
+                        <div class="td-section-head">
+                            <span class="td-section-label td-section-label--today">Due today</span>
+                            <span class="td-section-count">@_dueToday.Count task@(_dueToday.Count == 1 ? "" : "s")</span>
+                        </div>
+                        @if (_dueToday.Count == 0)
+                        {
+                            <p class="td-empty">Nothing due today — clear skies ahead.</p>
+                        }
+                        @foreach (var t in _dueToday)
+                        {
+                            <div class="td-task @PriorityClass(t.Priority)">
+                                <div class="td-task-body">
+                                    <p class="td-task-title">@t.Title</p>
+                                    <div class="td-task-meta">
+                                        <span class="td-task-project">@t.ProjectName</span>
+                                    </div>
+                                </div>
+                                <MudTooltip Text="Mark complete">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                                                   Size="Size.Small" Color="Color.Success"
+                                                   OnClick="() => HandleCompleted(t.Id)" />
+                                </MudTooltip>
+                            </div>
+                        }
+                    </section>
+
+                    @if (_dueThisWeek.Count > 0)
+                    {
+                        <section class="td-section">
+                            <div class="td-section-head">
+                                <span class="td-section-label td-section-label--week">This week</span>
+                                <span class="td-section-count">@_dueThisWeek.Count task@(_dueThisWeek.Count == 1 ? "" : "s")</span>
+                            </div>
+                            @foreach (var t in _dueThisWeek)
+                            {
+                                <div class="td-task @PriorityClass(t.Priority)">
+                                    <div class="td-task-body">
+                                        <p class="td-task-title">@t.Title</p>
+                                        <div class="td-task-meta">
+                                            <span class="td-task-project">@t.ProjectName</span>
+                                            @if (t.DueDate.HasValue)
+                                            {
+                                                <span class="td-task-due">@t.DueDate.Value.ToString("MMM d")</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <MudTooltip Text="Mark complete">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                                                       Size="Size.Small" Color="Color.Success"
+                                                       OnClick="() => HandleCompleted(t.Id)" />
+                                    </MudTooltip>
+                                </div>
+                            }
+                        </section>
+                    }
+
+                    @if (_nextTasks.Count > 0)
+                    {
+                        <section class="td-section">
+                            <div class="td-section-head">
+                                <span class="td-section-label td-section-label--next">Coming up</span>
+                                <span class="td-section-count">next 3 weeks</span>
+                            </div>
+                            @foreach (var t in _nextTasks)
+                            {
+                                <div class="td-task @PriorityClass(t.Priority)">
+                                    <div class="td-task-body">
+                                        <p class="td-task-title">@t.Title</p>
+                                        <div class="td-task-meta">
+                                            <span class="td-task-project">@t.ProjectName</span>
+                                            @if (t.DueDate.HasValue)
+                                            {
+                                                <span class="td-task-due">@t.DueDate.Value.ToString("MMM d")</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <MudTooltip Text="Mark complete">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                                                       Size="Size.Small" Color="Color.Success"
+                                                       OnClick="() => HandleCompleted(t.Id)" />
+                                    </MudTooltip>
+                                </div>
+                            }
+                        </section>
+                    }
+
+                    @if (_currentTasks.Count == 0 && _overdue.Count == 0
+                        && _dueToday.Count == 0 && _dueThisWeek.Count == 0 && _nextTasks.Count == 0)
+                    {
+                        <div style="text-align:center;padding:3rem 0;color:var(--ink-faint);">
+                            <MudIcon Icon="@Icons.Material.Outlined.CheckCircleOutline"
+                                     Style="font-size:2.5rem;color:var(--sage);display:block;margin:0 auto 0.5rem;" />
+                            <p style="font-family:var(--font-display);font-style:italic;font-size:1.25rem;color:var(--ink-soft);margin:0;">
+                                Your horizon is clear.
+                            </p>
+                            <p style="font-size:0.82rem;margin-top:0.4rem;">No active tasks with due dates in the next 3 weeks.</p>
+                        </div>
+                    }
+
+                </div>
+            }
+
+        </div>
     </Authorized>
 </AuthorizeView>
 
@@ -50,12 +399,19 @@
     private Task<AuthenticationState>? AuthState { get; set; }
 
     private string DisplayName { get; set; } = "there";
+    private bool _loading = true;
+
+    private IReadOnlyList<TodayTaskItemDto> _currentTasks = [];
+    private IReadOnlyList<TodayTaskItemDto> _overdue       = [];
+    private IReadOnlyList<TodayTaskItemDto> _dueToday      = [];
+    private IReadOnlyList<TodayTaskItemDto> _dueThisWeek   = [];
+    private IReadOnlyList<TodayTaskItemDto> _nextTasks      = [];
 
     private string Greeting => DateTime.Now.Hour switch
     {
-        >= 5 and < 12 => "Good morning",
+        >= 5 and < 12  => "Good morning",
         >= 12 and < 18 => "Good afternoon",
-        _ => "Good evening",
+        _               => "Good evening",
     };
 
     protected override async Task OnInitializedAsync()
@@ -66,10 +422,46 @@
             var name = state.User.Identity?.Name;
             if (!string.IsNullOrWhiteSpace(name))
             {
-                // Use the part before '@' for a friendlier greeting.
                 var at = name.IndexOf('@');
                 DisplayName = at > 0 ? name[..at] : name;
             }
         }
+        await LoadAsync();
     }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        _currentTasks = await TodayService.GetCurrentTasksAsync();
+        _overdue       = await TodayService.GetOverdueAsync();
+        _dueToday      = await TodayService.GetDueTodayAsync();
+        _dueThisWeek   = await TodayService.GetDueThisWeekAsync();
+        _nextTasks      = await TodayService.GetNextTasksAsync();
+
+        _loading = false;
+    }
+
+    private async Task HandleCompleted(Guid taskId)
+    {
+        try
+        {
+            await TaskService.CompleteAsync(taskId);
+            Snackbar.Add("Task completed.", Severity.Success);
+            await LoadAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not complete task.", Severity.Error);
+        }
+    }
+
+    private static string PriorityClass(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => "td-task--critical",
+        TaskPriority.High     => "td-task--high",
+        TaskPriority.Medium   => "td-task--medium",
+        _                     => "td-task--low",
+    };
 }

@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<INoteRelationshipService, NoteRelationshipService>();
         services.AddScoped<IRelatedNotesService, RelatedNotesService>();
+        services.AddScoped<ITodayService, TodayService>();
         return services;
     }
 }
