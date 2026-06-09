@@ -1,12 +1,13 @@
 namespace Brainy.Domain.Enums;
 
 /// <summary>
-/// Execution status of a task or subtask.
+/// Lifecycle status of a task or subtask.
 /// </summary>
 public enum TaskItemStatus
 {
     Todo = 0,
     InProgress = 1,
-    Blocked = 2,
-    Done = 3
+    Waiting = 2,
+    Done = 3,
+    Archived = 4
 }
