@@ -10,6 +10,7 @@
 
 @inject INoteService NoteService
 @inject IDialogService DialogService
+@inject ISnackbar Snackbar
 
 <PageTitle>Notes – Brainy</PageTitle>
 
@@ -68,6 +69,8 @@
                   RowsPerPage="10"
                   OnRowClick="OnRowClick"
                   T="NoteDto"
+                  MultiSelection="true"
+                  @bind-SelectedItems="_selectedNotes"
                   Class="cursor-pointer">
 
             <ToolBarContent>
@@ -78,6 +81,22 @@
                         <span> matching "<strong>@_searchText</strong>"</span>
                     }
                 </MudText>
+                <MudSpacer />
+                @if (_selectedNotes.Count > 0)
+                {
+                    <div class="notes-bulk-bar">
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled" Class="mr-2">
+                            @_selectedNotes.Count selected
+                        </MudChip>
+                        <MudButton Size="Size.Small"
+                                   Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.DriveFileMove"
+                                   OnClick="BulkMoveCategoryAsync">
+                            Move to…
+                        </MudButton>
+                    </div>
+                }
             </ToolBarContent>
 
             <HeaderContent>
@@ -135,6 +154,7 @@
     private IReadOnlyList<NoteDto> _notes = [];
     private string _searchText = string.Empty;
     private bool _loading = true;
+    private HashSet<NoteDto> _selectedNotes = [];
 
     private static readonly DialogOptions _dialogOptions = new()
     {
@@ -151,6 +171,7 @@
     {
         _loading = true;
         _notes   = await NoteService.GetAllAsync();
+        _selectedNotes.Clear();
         _loading = false;
     }
 
@@ -172,6 +193,34 @@
         var result = await dialog.Result;
         if (result is { Canceled: false })
             await LoadNotesAsync();
+    }
+
+    private async Task BulkMoveCategoryAsync()
+    {
+        if (_selectedNotes.Count == 0) return;
+
+        var mostCommon = _selectedNotes
+            .GroupBy(n => n.ParaCategory)
+            .OrderByDescending(g => g.Count())
+            .First().Key;
+
+        var parameters = new DialogParameters<MoveCategoryDialog>
+        {
+            { x => x.NoteCount,        _selectedNotes.Count },
+            { x => x.InitialCategory,  mostCommon           }
+        };
+
+        var opts = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, BackdropClick = true };
+        var dialog = await DialogService.ShowAsync<MoveCategoryDialog>("", parameters, opts);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: ParaCategory targetCategory })
+        {
+            var ids = _selectedNotes.Select(n => n.Id);
+            var moved = await NoteService.BulkMoveCategoryAsync(ids, targetCategory);
+            Snackbar.Add($"{moved} note{(moved == 1 ? "" : "s")} moved to {targetCategory}.", Severity.Success);
+            await LoadNotesAsync();
+        }
     }
 
     private IEnumerable<NoteDto> FilteredNotes =>

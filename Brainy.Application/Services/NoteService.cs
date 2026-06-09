@@ -3,6 +3,7 @@ using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Domain.Entities;
+using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Brainy.Application.Services;
@@ -85,6 +86,25 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return ToDto(note);
+    }
+
+    public async Task<int> BulkMoveCategoryAsync(IEnumerable<Guid> ids, ParaCategory category, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        var idList = ids as ICollection<Guid> ?? ids.ToList();
+        if (idList.Count == 0) return 0;
+
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await context.Notes
+            .Where(n => n.UserId == userId && idList.Contains(n.Id))
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(n => n.ParaCategory, category)
+                    .SetProperty(n => n.UpdatedAtUtc, DateTime.UtcNow),
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)

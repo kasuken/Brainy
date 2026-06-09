@@ -1,0 +1,194 @@
+@using Brainy.Domain.Enums
+
+<MudDialog Class="move-category-dialog">
+
+    <TitleContent>
+        <div class="mcd__title">
+            <MudIcon Icon="@Icons.Material.Filled.DriveFileMove" Class="mcd__title-icon" />
+            <span>Move to PARA Category</span>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        <div class="mcd__body">
+
+            <p class="mcd__summary">
+                Moving
+                <strong class="mcd__count">@NoteCount note@(NoteCount == 1 ? "" : "s")</strong>
+                to a new category.
+            </p>
+
+            <div class="mcd__options">
+                @foreach (var cat in Enum.GetValues<ParaCategory>())
+                {
+                    var isSelected = cat == _selected;
+                    <button type="button"
+                            class="mcd__option @(isSelected ? "mcd__option--active" : "")"
+                            @onclick="() => _selected = cat">
+                        <span class="mcd__option-dot" style="background: @DotColor(cat)"></span>
+                        <span class="mcd__option-label">@cat.ToString()</span>
+                        <span class="mcd__option-desc">@CategoryDescription(cat)</span>
+                        @if (isSelected)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Class="mcd__option-check" />
+                        }
+                    </button>
+                }
+            </div>
+
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mcd__btn-cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="Confirm"
+                   StartIcon="@Icons.Material.Filled.DriveFileMove"
+                   Class="mcd__btn-confirm">
+            Move @NoteCount note@(NoteCount == 1 ? "" : "s")
+        </MudButton>
+    </DialogActions>
+
+</MudDialog>
+
+<style>
+    .move-category-dialog .mud-dialog-title {
+        padding-bottom: 0;
+    }
+
+    .mcd__title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: var(--font-display);
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: var(--ink);
+    }
+
+    .mcd__title-icon {
+        color: var(--clay);
+    }
+
+    .mcd__body {
+        padding: 0.25rem 0 0.5rem;
+    }
+
+    .mcd__summary {
+        font-family: var(--font-body);
+        font-size: 0.875rem;
+        color: var(--ink-soft);
+        margin: 0 0 1.25rem;
+    }
+
+    .mcd__count {
+        color: var(--clay);
+    }
+
+    .mcd__options {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .mcd__option {
+        display: grid;
+        grid-template-columns: 10px 1fr auto auto;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border: 1.5px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper-raised);
+        cursor: pointer;
+        font-family: var(--font-body);
+        text-align: left;
+        transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+        width: 100%;
+    }
+
+    .mcd__option:hover {
+        border-color: var(--clay-ring);
+        background: var(--paper);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .mcd__option--active {
+        border-color: var(--clay);
+        background: var(--clay-soft);
+        box-shadow: 0 0 0 3px var(--clay-ring);
+    }
+
+    .mcd__option-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .mcd__option-label {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: var(--ink);
+    }
+
+    .mcd__option-desc {
+        font-size: 0.78rem;
+        color: var(--ink-faint);
+        justify-self: end;
+    }
+
+    .mcd__option-check {
+        color: var(--clay);
+        font-size: 1rem !important;
+    }
+
+    .mcd__btn-cancel {
+        color: var(--ink-soft) !important;
+    }
+
+    .mcd__btn-confirm {
+        background: var(--clay) !important;
+        color: #fff !important;
+    }
+
+    .mcd__btn-confirm:hover {
+        background: var(--clay-deep) !important;
+    }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>Number of notes being moved (for display only).</summary>
+    [Parameter] public int NoteCount { get; set; }
+
+    /// <summary>Pre-selected category (e.g. the most common one among selected notes).</summary>
+    [Parameter] public ParaCategory InitialCategory { get; set; } = ParaCategory.Project;
+
+    private ParaCategory _selected;
+
+    protected override void OnParametersSet() => _selected = InitialCategory;
+
+    private void Confirm() => MudDialog.Close(DialogResult.Ok(_selected));
+    private void Cancel()  => MudDialog.Cancel();
+
+    private static string DotColor(ParaCategory cat) => cat switch
+    {
+        ParaCategory.Project  => "#c0561d",
+        ParaCategory.Area     => "#6f7a5a",
+        ParaCategory.Resource => "#3a7bcd",
+        ParaCategory.Archive  => "#9a9180",
+        _                     => "#9a9180"
+    };
+
+    private static string CategoryDescription(ParaCategory cat) => cat switch
+    {
+        ParaCategory.Project  => "Active outcome",
+        ParaCategory.Area     => "Ongoing responsibility",
+        ParaCategory.Resource => "Reference material",
+        ParaCategory.Archive  => "Inactive / kept",
+        _                     => ""
+    };
+}
