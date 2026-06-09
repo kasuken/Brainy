@@ -1,11 +1,14 @@
 @page "/"
 @attribute [Authorize]
 @using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.DTOs.Projects
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @inject ITodayService TodayService
 @inject ITaskService TaskService
+@inject IProjectService ProjectService
 @inject ISnackbar Snackbar
+@inject NavigationManager Nav
 
 <PageTitle>Today · Brainy</PageTitle>
 
@@ -387,6 +390,25 @@
                         </div>
                     }
 
+                    @* ── Active Projects ── *@
+                    @if (_activeProjects.Count > 0)
+                    {
+                        <section class="td-section" style="margin-top:1rem;padding-top:2rem;border-top:1px solid var(--line);">
+                            <div class="td-section-head">
+                                <span class="td-section-label" style="color:var(--ink-soft);">Active projects</span>
+                                <span class="td-section-count">@_activeProjects.Count in progress</span>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                                @foreach (var p in _activeProjects)
+                                {
+                                    <ProjectSummaryCard Project="p"
+                                                        Compact="true"
+                                                        OnNavigate="OpenProject" />
+                                }
+                            </div>
+                        </section>
+                    }
+
                 </div>
             }
 
@@ -406,6 +428,7 @@
     private IReadOnlyList<TodayTaskItemDto> _dueToday      = [];
     private IReadOnlyList<TodayTaskItemDto> _dueThisWeek   = [];
     private IReadOnlyList<TodayTaskItemDto> _nextTasks      = [];
+    private IReadOnlyList<ProjectSummaryDto> _activeProjects = [];
 
     private string Greeting => DateTime.Now.Hour switch
     {
@@ -440,6 +463,9 @@
         _dueThisWeek   = await TodayService.GetDueThisWeekAsync();
         _nextTasks      = await TodayService.GetNextTasksAsync();
 
+        var summaries = await ProjectService.GetProjectSummariesAsync();
+        _activeProjects = summaries.Where(p => p.Status == ProjectStatus.Active).ToList();
+
         _loading = false;
     }
 
@@ -464,4 +490,6 @@
         TaskPriority.Medium   => "td-task--medium",
         _                     => "td-task--low",
     };
+
+    private void OpenProject(Guid id) => Nav.NavigateTo($"/projects/{id}");
 }

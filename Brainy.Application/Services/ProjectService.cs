@@ -62,6 +62,8 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        var today = DateTime.Today;
+
         var data = await context.Projects
             .AsNoTracking()
             .Where(p => p.UserId == userId && !p.IsArchived && p.Status != ProjectStatus.Archived)
@@ -70,9 +72,13 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
                 p.Id, p.Name, p.Description, p.DesiredOutcome, p.Status, p.Priority,
                 p.StartDate, p.DueDate, p.CompletedDate, p.IsArchived, p.AreaId,
                 p.CreatedAtUtc, p.UpdatedAtUtc, p.ArchivedAtUtc,
-                TotalTasks = p.Tasks.Count(t => !t.IsArchived),
-                OpenTasks  = p.Tasks.Count(t => !t.IsArchived && t.Status != TaskItemStatus.Done),
-                DoneTasks  = p.Tasks.Count(t => !t.IsArchived && t.Status == TaskItemStatus.Done),
+                TotalTasks   = p.Tasks.Count(t => !t.IsArchived),
+                OpenTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status != TaskItemStatus.Done),
+                DoneTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status == TaskItemStatus.Done),
+                OverdueTasks = p.Tasks.Count(t => !t.IsArchived
+                                                  && t.Status != TaskItemStatus.Done
+                                                  && t.DueDate.HasValue
+                                                  && t.DueDate.Value.Date < today),
             })
             .OrderByDescending(x => x.Priority)
             .ThenBy(x => x.Name)
@@ -84,7 +90,8 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             x.StartDate, x.DueDate, x.CompletedDate, x.IsArchived, x.AreaId,
             x.CreatedAtUtc, x.UpdatedAtUtc, x.ArchivedAtUtc,
             x.TotalTasks, x.OpenTasks, x.DoneTasks,
-            x.TotalTasks > 0 ? Math.Round((double)x.DoneTasks / x.TotalTasks * 100, 1) : 0))
+            x.TotalTasks > 0 ? Math.Round((double)x.DoneTasks / x.TotalTasks * 100, 1) : 0,
+            x.OverdueTasks))
             .ToList();
     }
 

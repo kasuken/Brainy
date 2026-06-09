@@ -1,0 +1,352 @@
+@using Brainy.Application.DTOs.Projects
+@using Brainy.Domain.Enums
+
+@* ─────────────────────────────────────────────────────────────────────────────
+   ProjectSummaryCard — reusable project summary widget.
+   Shows: name, progress, open tasks, overdue tasks, due date, priority.
+   Used in: Today screen, Projects List, Project Detail.
+───────────────────────────────────────────────────────────────────────────── *@
+
+<div class="psc @(Compact ? "psc--compact" : "")"
+     @onclick="HandleCardClick"
+     style="cursor: @(OnNavigate.HasDelegate ? "pointer" : "default")">
+
+    <div class="psc__ribbon psc__ribbon--@Project.Priority.ToString().ToLower()"></div>
+
+    <div class="psc__inner">
+
+        
+        <div class="psc__badges">
+            <span class="psc__badge psc__status--@Project.Status.ToString().ToLower()">
+                @StatusLabel(Project.Status)
+            </span>
+            <span class="psc__badge psc__priority"
+                  style="color:@PriorityColor(Project.Priority);background:@PriorityBg(Project.Priority);">
+                @PriorityLabel(Project.Priority)
+            </span>
+        </div>
+
+        
+        <h3 class="psc__name">@Project.Name</h3>
+
+        
+        @if (!Compact && !string.IsNullOrWhiteSpace(Project.DesiredOutcome))
+        {
+            <p class="psc__outcome">@Project.DesiredOutcome</p>
+        }
+
+        
+        <div class="psc__progress-row">
+            <div class="psc__track">
+                <div class="psc__fill" style="width:@(Project.ProgressPercent.ToString("F0"))%"></div>
+            </div>
+            <span class="psc__pct">@Project.ProgressPercent.ToString("F0")%</span>
+        </div>
+
+        
+        <div class="psc__stats">
+            <span class="psc__stat">
+                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2.5A.5.5 0 0 1 2.5 2h11a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 2.5Zm0 4A.5.5 0 0 1 2.5 6h11a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 6.5Zm0 4A.5.5 0 0 1 2.5 10h6a.5.5 0 0 1 0 1H2.5a.5.5 0 0 1-.5-.5Z"/></svg>
+                <strong>@Project.OpenTaskCount</strong>&nbsp;open
+            </span>
+
+            @if (Project.OverdueTaskCount > 0)
+            {
+                <span class="psc__stat psc__stat--overdue">
+                    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z"/></svg>
+                    @Project.OverdueTaskCount&nbsp;overdue
+                </span>
+            }
+
+            @if (Project.DueDate.HasValue)
+            {
+                var dueCls = Project.DueDate < DateTime.Today ? "psc__stat--overdue"
+                           : Project.DueDate <= DateTime.Today.AddDays(7) ? "psc__stat--soon"
+                           : "";
+                <span class="psc__stat @dueCls">
+                    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 .5a.5.5 0 0 1 .5.5V2h5V1a.5.5 0 0 1 1 0v1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h1V1A.5.5 0 0 1 5 .5ZM3 3a1 1 0 0 0-1 1v1h12V4a1 1 0 0 0-1-1H3Zm11 3H2v8a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6Z"/></svg>
+                    @Project.DueDate.Value.ToString("MMM d")
+                </span>
+            }
+        </div>
+
+    </div>
+
+    
+    @if (OnEdit.HasDelegate || OnArchive.HasDelegate)
+    {
+        <div class="psc__actions" @onclick:stopPropagation="true">
+            @if (OnEdit.HasDelegate)
+            {
+                <button class="psc__action-btn" title="Edit" @onclick="() => OnEdit.InvokeAsync(Project)">
+                    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3Zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5Zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178Z"/></svg>
+                </button>
+            }
+            @if (OnArchive.HasDelegate)
+            {
+                <button class="psc__action-btn psc__action-btn--warn" title="Archive"
+                        @onclick="() => OnArchive.InvokeAsync(Project)">
+                    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 2a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 1 12.5V5a1 1 0 0 1-1-1V2Zm2 3v7.5A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5V5H2Zm13-3H1v2h14V2ZM5 7.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5Z"/></svg>
+                </button>
+            }
+        </div>
+    }
+
+</div>
+
+<style>
+    .psc {
+        position: relative;
+        display: flex;
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+    }
+
+    .psc:hover {
+        border-color: var(--line-strong);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-1px);
+    }
+
+    /* Priority left ribbon */
+    .psc__ribbon {
+        flex: none;
+        width: 4px;
+    }
+
+    .psc__ribbon--critical { background: var(--clay); }
+    .psc__ribbon--high     { background: #d4722a; }
+    .psc__ribbon--medium   { background: var(--gold); }
+    .psc__ribbon--low      { background: var(--sage); }
+
+    .psc__inner {
+        flex: 1;
+        min-width: 0;
+        padding: 0.9rem 1rem;
+    }
+
+    /* Compact mode */
+    .psc--compact .psc__inner { padding: 0.65rem 0.85rem; }
+
+    /* Badges */
+    .psc__badges {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.45rem;
+    }
+
+    .psc__badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.12rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.67rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .psc__status--notstarted  { background: var(--paper-sunk); color: var(--ink-soft); }
+    .psc__status--active      { background: rgba(111,122,90,0.15); color: var(--sage); }
+    .psc__status--waiting     { background: rgba(205,154,58,0.15); color: #8a6a1c; }
+    .psc__status--completed   { background: rgba(111,122,90,0.25); color: #3d5c30; }
+    .psc__status--archived    { background: var(--paper-sunk); color: var(--ink-faint); }
+
+    /* Name */
+    .psc__name {
+        font-family: var(--font-display);
+        font-size: 1rem;
+        font-weight: 500;
+        color: var(--ink);
+        margin: 0 0 0.2rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        letter-spacing: -0.01em;
+    }
+
+    .psc--compact .psc__name { font-size: 0.9rem; }
+
+    /* Outcome */
+    .psc__outcome {
+        font-size: 0.78rem;
+        color: var(--ink-soft);
+        margin: 0 0 0.55rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* Progress */
+    .psc__progress-row {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        margin-bottom: 0.55rem;
+    }
+
+    .psc__track {
+        flex: 1;
+        height: 4px;
+        background: var(--paper-sunk);
+        border-radius: 999px;
+        overflow: hidden;
+    }
+
+    .psc__fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--clay) 0%, var(--gold) 100%);
+        border-radius: 999px;
+        transition: width 0.5s ease;
+        min-width: 2px;
+    }
+
+    .psc__pct {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--ink-soft);
+        font-variant-numeric: tabular-nums;
+        min-width: 2.5ch;
+        text-align: right;
+    }
+
+    /* Stats row */
+    .psc__stats {
+        display: flex;
+        gap: 0.8rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .psc__stat {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.75rem;
+        color: var(--ink-soft);
+    }
+
+    .psc__stat svg {
+        width: 12px;
+        height: 12px;
+        opacity: 0.65;
+        flex-shrink: 0;
+    }
+
+    .psc__stat--overdue { color: #b91c1c; font-weight: 600; }
+    .psc__stat--overdue svg { opacity: 1; }
+    .psc__stat--soon { color: #8a6a1c; }
+
+    /* Actions */
+    .psc__actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        padding: 0.6rem 0.5rem 0.6rem 0;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.15s;
+    }
+
+    .psc:hover .psc__actions { opacity: 1; }
+
+    .psc__action-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--paper-raised);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        transition: border-color 0.15s, background 0.15s;
+    }
+
+    .psc__action-btn svg { width: 12px; height: 12px; color: var(--ink-soft); }
+
+    .psc__action-btn:hover {
+        border-color: var(--clay-ring);
+        background: var(--clay-soft);
+    }
+
+    .psc__action-btn--warn:hover {
+        border-color: rgba(185, 28, 28, 0.3);
+        background: rgba(185, 28, 28, 0.06);
+    }
+
+    @@media (max-width: 480px) {
+        .psc__actions { opacity: 1; }
+    }
+</style>
+
+@code {
+    /// <summary>The project to render. Required.</summary>
+    [Parameter, EditorRequired]
+    public ProjectSummaryDto Project { get; set; } = null!;
+
+    /// <summary>When set, the card is clickable and navigates to the project detail.</summary>
+    [Parameter]
+    public EventCallback<Guid> OnNavigate { get; set; }
+
+    /// <summary>When set, an Edit action button is rendered.</summary>
+    [Parameter]
+    public EventCallback<ProjectSummaryDto> OnEdit { get; set; }
+
+    /// <summary>When set, an Archive action button is rendered.</summary>
+    [Parameter]
+    public EventCallback<ProjectSummaryDto> OnArchive { get; set; }
+
+    /// <summary>Renders in compact/narrow layout. Default: false.</summary>
+    [Parameter]
+    public bool Compact { get; set; }
+
+    private async Task HandleCardClick()
+    {
+        if (OnNavigate.HasDelegate)
+            await OnNavigate.InvokeAsync(Project.Id);
+    }
+
+    private static string StatusLabel(ProjectStatus s) => s switch
+    {
+        ProjectStatus.NotStarted => "Not started",
+        ProjectStatus.Active     => "Active",
+        ProjectStatus.Waiting    => "Waiting",
+        ProjectStatus.Completed  => "Completed",
+        ProjectStatus.Archived   => "Archived",
+        _                        => s.ToString(),
+    };
+
+    private static string PriorityLabel(ProjectPriority p) => p switch
+    {
+        ProjectPriority.Critical => "Critical",
+        ProjectPriority.High     => "High",
+        ProjectPriority.Medium   => "Medium",
+        ProjectPriority.Low      => "Low",
+        _                        => p.ToString(),
+    };
+
+    private static string PriorityColor(ProjectPriority p) => p switch
+    {
+        ProjectPriority.Critical => "var(--clay)",
+        ProjectPriority.High     => "#d4722a",
+        ProjectPriority.Medium   => "#8a6a1c",
+        ProjectPriority.Low      => "var(--sage)",
+        _                        => "var(--ink-soft)",
+    };
+
+    private static string PriorityBg(ProjectPriority p) => p switch
+    {
+        ProjectPriority.Critical => "rgba(192,86,29,0.12)",
+        ProjectPriority.High     => "rgba(212,114,42,0.12)",
+        ProjectPriority.Medium   => "rgba(205,154,58,0.15)",
+        ProjectPriority.Low      => "rgba(111,122,90,0.15)",
+        _                        => "var(--paper-sunk)",
+    };
+}

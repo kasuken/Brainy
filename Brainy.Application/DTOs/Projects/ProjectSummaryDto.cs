@@ -23,4 +23,5 @@ public record ProjectSummaryDto(
     int TotalTaskCount,
     int OpenTaskCount,
     int DoneTaskCount,
-    double ProgressPercent);
+    double ProgressPercent,
+    int OverdueTaskCount = 0);
