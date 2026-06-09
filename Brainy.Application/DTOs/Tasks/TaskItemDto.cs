@@ -17,4 +17,5 @@ public record TaskItemDto(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     int SubtaskCount,
-    int DoneSubtaskCount);
+    int DoneSubtaskCount,
+    IReadOnlyList<TaskItemDto>? Subtasks = null);

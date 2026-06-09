@@ -99,7 +99,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
 
         if (project is null) return null;
 
-        // Top-level tasks only (subtasks are shown nested in the UI)
+        // Top-level tasks only (subtasks are loaded separately and nested)
         var tasks = await context.Tasks
             .AsNoTracking()
             .Where(t => t.ProjectId == id && t.UserId == userId && !t.IsArchived && t.ParentTaskId == null)
@@ -116,6 +116,33 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        // Load subtasks for all top-level tasks in one query, then group by parent
+        var topLevelIds = tasks.Select(t => t.Id).ToList();
+        var subtasks = await context.Tasks
+            .AsNoTracking()
+            .Where(t => t.ProjectId == id && t.UserId == userId && !t.IsArchived
+                        && t.ParentTaskId != null && topLevelIds.Contains(t.ParentTaskId.Value))
+            .OrderBy(t => t.Status)
+            .ThenByDescending(t => t.Priority)
+            .ThenBy(t => t.DueDate)
+            .Select(t => new
+            {
+                t.Id, t.Title, t.Description, t.Status, t.Priority,
+                t.DueDate, t.CompletedDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
+                t.CreatedAtUtc, t.UpdatedAtUtc,
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var subtasksByParent = subtasks
+            .GroupBy(s => s.ParentTaskId!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<TaskItemDto>)g.Select(s => new TaskItemDto(
+                    s.Id, s.Title, s.Description, s.Status, s.Priority,
+                    s.DueDate, s.CompletedDate, s.IsArchived, s.ProjectId, s.ParentTaskId,
+                    s.CreatedAtUtc, s.UpdatedAtUtc, 0, 0)).ToList());
 
         var notes = await context.Notes
             .AsNoTracking()
@@ -142,7 +169,8 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         var taskDtos = tasks.Select(t => new TaskItemDto(
             t.Id, t.Title, t.Description, t.Status, t.Priority,
             t.DueDate, t.CompletedDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
-            t.CreatedAtUtc, t.UpdatedAtUtc, t.SubtaskCount, t.DoneSubtaskCount))
+            t.CreatedAtUtc, t.UpdatedAtUtc, t.SubtaskCount, t.DoneSubtaskCount,
+            subtasksByParent.GetValueOrDefault(t.Id)))
             .ToList();
 
         int totalTasks = await context.Tasks.CountAsync(
