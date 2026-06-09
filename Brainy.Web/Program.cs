@@ -1,11 +1,14 @@
 using Brainy.Data;
 using Brainy.Web.Components;
+using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+builder.Services.AddMudServices();
 
 // Data access layer (EF Core / SQL Server).
 builder.Services.AddBrainyData(builder.Configuration);
