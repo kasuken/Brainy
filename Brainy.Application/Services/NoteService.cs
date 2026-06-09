@@ -64,6 +64,7 @@ internal sealed class NoteService(IApplicationDbContext context) : INoteService
 
         note.Title = dto.Title;
         note.Content = dto.Content;
+        note.AiSummary = dto.AiSummary;
         note.Status = dto.Status;
         note.ParaCategory = dto.ParaCategory;
         note.ProjectId = dto.ProjectId;
@@ -90,6 +91,7 @@ internal sealed class NoteService(IApplicationDbContext context) : INoteService
         n.Id,
         n.Title,
         n.Content,
+        n.AiSummary,
         n.Status,
         n.ParaCategory,
         n.SourceId,

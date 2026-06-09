@@ -13,6 +13,12 @@ public class Note : BaseEntity
     /// <summary>Original, user-authored content. Never overwritten by AI output.</summary>
     public string Content { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Latest AI-generated summary for quick access. Always marked as AI-generated content.
+    /// Full summary history with provenance is stored in <see cref="Summaries"/>.
+    /// </summary>
+    public string? AiSummary { get; set; }
+
     public NoteStatus Status { get; set; }
 
     public ParaCategory ParaCategory { get; set; }

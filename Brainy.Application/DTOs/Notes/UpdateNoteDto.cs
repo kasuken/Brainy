@@ -7,6 +7,7 @@ public record UpdateNoteDto(
     Guid Id,
     string Title,
     string Content,
+    string? AiSummary,
     NoteStatus Status,
     ParaCategory ParaCategory,
     Guid? ProjectId,

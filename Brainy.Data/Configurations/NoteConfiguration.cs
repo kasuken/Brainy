@@ -19,6 +19,9 @@ public class NoteConfiguration : IEntityTypeConfiguration<Note>
         builder.Property(n => n.Content)
             .IsRequired();
 
+        builder.Property(n => n.AiSummary)
+            .HasMaxLength(4000);
+
         builder.Property(n => n.Status)
             .HasConversion<string>()
             .HasMaxLength(50);
