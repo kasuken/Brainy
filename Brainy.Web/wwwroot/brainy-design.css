@@ -1389,3 +1389,174 @@ body {
         border-right: none !important;
     }
 }
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   PARA Dashboard (.para-dash__)
+   Four large Fraunces numerals anchored by category-color accent bars.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.para-dash {
+    padding: clamp(1.5rem, 3vw, 2.5rem) 0;
+    font-family: var(--font-body);
+}
+
+.para-dash__header {
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+    max-width: 600px;
+}
+
+.para-dash__eyebrow {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--clay);
+    margin: 0 0 0.5rem;
+}
+
+.para-dash__title {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0 0 0.75rem;
+    line-height: 1.1;
+}
+
+.para-dash__lead {
+    font-size: 1rem;
+    color: var(--ink-soft);
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* Grid */
+.para-dash__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.25rem;
+}
+
+/* Card */
+.para-dash__card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1.75rem 1.75rem 1.5rem 2rem;
+    text-decoration: none;
+    color: var(--ink);
+    overflow: hidden;
+    transition: box-shadow 0.22s ease, transform 0.22s ease, border-color 0.22s ease;
+    animation: para-card-in 0.5s both;
+}
+
+.para-dash__card:nth-child(1) { animation-delay: 0.05s; }
+.para-dash__card:nth-child(2) { animation-delay: 0.12s; }
+.para-dash__card:nth-child(3) { animation-delay: 0.19s; }
+.para-dash__card:nth-child(4) { animation-delay: 0.26s; }
+
+@keyframes para-card-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.para-dash__card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-3px);
+}
+
+/* Left accent bar */
+.para-dash__card-accent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    border-radius: 4px 0 0 4px;
+    transition: width 0.22s ease;
+}
+
+.para-dash__card:hover .para-dash__card-accent { width: 6px; }
+
+.para-dash__card--project  .para-dash__card-accent { background: var(--clay); }
+.para-dash__card--area     .para-dash__card-accent { background: var(--sage); }
+.para-dash__card--resource .para-dash__card-accent { background: var(--gold); }
+.para-dash__card--archive  .para-dash__card-accent { background: var(--espresso); }
+
+/* Hover border colour per category */
+.para-dash__card--project:hover  { border-color: var(--clay-ring); }
+.para-dash__card--area:hover     { border-color: rgba(111, 122, 90, 0.38); }
+.para-dash__card--resource:hover { border-color: rgba(205, 154, 58, 0.38); }
+.para-dash__card--archive:hover  { border-color: rgba(29, 24, 18, 0.28); }
+
+.para-dash__card-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Large display numeral */
+.para-dash__card-count {
+    font-family: var(--font-display);
+    font-size: clamp(3rem, 5vw, 4.5rem);
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.para-dash__card--project  .para-dash__card-count { color: var(--clay); }
+.para-dash__card--area     .para-dash__card-count { color: var(--sage); }
+.para-dash__card--resource .para-dash__card-count { color: var(--gold); }
+.para-dash__card--archive  .para-dash__card-count { color: var(--espresso); }
+
+.para-dash__card-info {
+    flex: 1;
+    padding-top: 0.4rem;
+}
+
+.para-dash__card-name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin: 0 0 0.4rem;
+}
+
+.para-dash__card-desc {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    margin: 0 0 0.35rem;
+    line-height: 1.5;
+}
+
+.para-dash__card-archived {
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+    margin: 0;
+}
+
+/* CTA arrow */
+.para-dash__card-cta {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--ink-soft);
+    transition: color 0.18s ease, letter-spacing 0.18s ease;
+    align-self: flex-end;
+}
+
+.para-dash__card:hover .para-dash__card-cta {
+    color: var(--clay);
+    letter-spacing: 0.07em;
+}
+
+@media (max-width: 600px) {
+    .para-dash__grid { grid-template-columns: 1fr; }
+}

@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.AddScoped<IProjectService, ProjectService>();
         services.AddScoped<IAreaService, AreaService>();
         services.AddScoped<IResourceService, ResourceService>();
+        services.AddScoped<IParaSummaryService, ParaSummaryService>();
         return services;
     }
 }

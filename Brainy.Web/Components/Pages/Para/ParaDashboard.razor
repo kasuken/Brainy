@@ -1,0 +1,116 @@
+@page "/para"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@using Brainy.Application.DTOs.Para
+@using Brainy.Application.Interfaces.Services
+
+@inject IParaSummaryService ParaSummaryService
+
+<PageTitle>PARA Overview – Brainy</PageTitle>
+
+<div class="para-dash">
+
+    <header class="para-dash__header">
+        <p class="para-dash__eyebrow">Second Brain Architecture</p>
+        <h1 class="para-dash__title">Your PARA Overview</h1>
+        <p class="para-dash__lead">
+            Four categories that organize everything you capture into clear, actionable knowledge.
+        </p>
+    </header>
+
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+    }
+    else if (_summary is not null)
+    {
+        <div class="para-dash__grid">
+
+            @* Projects *@
+            <a href="/projects" class="para-dash__card para-dash__card--project">
+                <div class="para-dash__card-accent"></div>
+                <div class="para-dash__card-body">
+                    <span class="para-dash__card-count">@_summary.ActiveProjectCount</span>
+                    <div class="para-dash__card-info">
+                        <h2 class="para-dash__card-name">Projects</h2>
+                        <p class="para-dash__card-desc">Short-term outcomes with a clear deadline and next action.</p>
+                        @if (_summary.ArchivedProjectCount > 0)
+                        {
+                            <p class="para-dash__card-archived">@_summary.ArchivedProjectCount archived</p>
+                        }
+                    </div>
+                </div>
+                <span class="para-dash__card-cta">View projects &rarr;</span>
+            </a>
+
+            @* Areas *@
+            <a href="/areas" class="para-dash__card para-dash__card--area">
+                <div class="para-dash__card-accent"></div>
+                <div class="para-dash__card-body">
+                    <span class="para-dash__card-count">@_summary.ActiveAreaCount</span>
+                    <div class="para-dash__card-info">
+                        <h2 class="para-dash__card-name">Areas</h2>
+                        <p class="para-dash__card-desc">Ongoing responsibilities you maintain without a fixed end date.</p>
+                        @if (_summary.ArchivedAreaCount > 0)
+                        {
+                            <p class="para-dash__card-archived">@_summary.ArchivedAreaCount archived</p>
+                        }
+                    </div>
+                </div>
+                <span class="para-dash__card-cta">View areas &rarr;</span>
+            </a>
+
+            @* Resources *@
+            <a href="/resources" class="para-dash__card para-dash__card--resource">
+                <div class="para-dash__card-accent"></div>
+                <div class="para-dash__card-body">
+                    <span class="para-dash__card-count">@_summary.ActiveResourceCount</span>
+                    <div class="para-dash__card-info">
+                        <h2 class="para-dash__card-name">Resources</h2>
+                        <p class="para-dash__card-desc">Reference material and topics of interest for future use.</p>
+                        @if (_summary.ArchivedResourceCount > 0)
+                        {
+                            <p class="para-dash__card-archived">@_summary.ArchivedResourceCount archived</p>
+                        }
+                    </div>
+                </div>
+                <span class="para-dash__card-cta">View resources &rarr;</span>
+            </a>
+
+            @* Archives *@
+            <a href="/archives" class="para-dash__card para-dash__card--archive">
+                <div class="para-dash__card-accent"></div>
+                <div class="para-dash__card-body">
+                    <span class="para-dash__card-count">@_summary.TotalArchiveCount</span>
+                    <div class="para-dash__card-info">
+                        <h2 class="para-dash__card-name">Archives</h2>
+                        <p class="para-dash__card-desc">Inactive projects, areas, and resources kept for later reference.</p>
+                        @if (_summary.TotalArchiveCount > 0)
+                        {
+                            <p class="para-dash__card-archived">
+                                @_summary.ArchivedProjectCount&nbsp;project@(_summary.ArchivedProjectCount == 1 ? "" : "s"),
+                                @_summary.ArchivedAreaCount&nbsp;area@(_summary.ArchivedAreaCount == 1 ? "" : "s"),
+                                @_summary.ArchivedResourceCount&nbsp;resource@(_summary.ArchivedResourceCount == 1 ? "" : "s")
+                            </p>
+                        }
+                    </div>
+                </div>
+                <span class="para-dash__card-cta">Browse archives &rarr;</span>
+            </a>
+
+        </div>
+    }
+
+</div>
+
+@code {
+    private ParaSummaryDto? _summary;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _summary = await ParaSummaryService.GetSummaryAsync();
+        _loading = false;
+    }
+}
