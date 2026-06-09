@@ -1,0 +1,777 @@
+@page "/projects"
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Projects
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@attribute [Authorize]
+@inject IProjectService ProjectService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Projects — Brainy</PageTitle>
+
+<div class="proj-page">
+
+    <!-- ── Header ──────────────────────────────────────────────────────── -->
+    <div class="proj-header">
+        <div class="proj-header__text">
+            <h1 class="proj-header__title">Projects</h1>
+            <p class="proj-header__sub">
+                @(_summaries?.Count ?? 0) projects · @(_filtered?.Count ?? 0) shown
+            </p>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   Class="proj-header__new"
+                   OnClick="OpenCreateDialog">
+            New Project
+        </MudButton>
+    </div>
+
+    <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
+    <div class="proj-toolbar">
+        <div class="proj-search">
+            <MudIcon Icon="@Icons.Material.Outlined.Search" Class="proj-search__icon" />
+            <input class="proj-search__input"
+                   placeholder="Search projects…"
+                   value="@_searchText"
+                   @oninput="OnSearchInput" />
+            @if (!string.IsNullOrEmpty(_searchText))
+            {
+                <button class="proj-search__clear" @onclick="ClearSearch">✕</button>
+            }
+        </div>
+
+        <div class="proj-filters">
+            <span class="proj-filters__label">Status</span>
+            @foreach (var status in StatusFilters)
+            {
+                <button class="proj-chip @(IsStatusActive(status) ? "proj-chip--on" : "")"
+                        @onclick="() => ToggleStatusFilter(status)">
+                    <span class="proj-chip__dot" style="background:@StatusColor(status)"></span>
+                    @StatusLabel(status)
+                </button>
+            }
+            <span class="proj-filters__sep">·</span>
+            <span class="proj-filters__label">Priority</span>
+            @foreach (var pri in PriorityFilters)
+            {
+                <button class="proj-chip @(IsPriorityActive(pri) ? "proj-chip--on" : "")"
+                        style="@(IsPriorityActive(pri) ? $"--chip-accent:{PriorityColor(pri)}" : "")"
+                        @onclick="() => TogglePriorityFilter(pri)">
+                    @PriorityLabel(pri)
+                </button>
+            }
+        </div>
+
+        <div class="proj-sort">
+            <span class="proj-sort__label">Sort</span>
+            @foreach (var opt in SortOptions)
+            {
+                <button class="proj-sort__btn @(_sortBy == opt ? "proj-sort__btn--on" : "")"
+                        @onclick="() => SetSort(opt)">
+                    @opt
+                    @if (_sortBy == opt)
+                    {
+                        <span class="proj-sort__arrow">@(_sortAsc ? "↑" : "↓")</span>
+                    }
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- ── Content ──────────────────────────────────────────────────────── -->
+    @if (_loading)
+    {
+        <div class="proj-loading">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+            <span class="proj-loading__text">Loading projects…</span>
+        </div>
+    }
+    else if (_filtered is { Count: 0 })
+    {
+        <div class="proj-empty">
+            <div class="proj-empty__glyph">⬡</div>
+            <p class="proj-empty__title">
+                @(_summaries?.Count == 0 ? "No projects yet" : "Nothing matches")
+            </p>
+            <p class="proj-empty__sub">
+                @(_summaries?.Count == 0
+                    ? "Create your first project to start tracking outcomes."
+                    : "Try broadening your search or clearing filters.")
+            </p>
+            @if (_summaries?.Count == 0)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="OpenCreateDialog">
+                    Create first project
+                </MudButton>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="proj-grid">
+            @for (int i = 0; i < (_filtered?.Count ?? 0); i++)
+            {
+                var p = _filtered![i];
+                var idx = i;
+                <div class="proj-card" style="animation-delay:@(idx * 45)ms"
+                     @onclick="() => OpenDetail(p.Id)">
+
+                    <div class="proj-card__ribbon proj-ribbon--@p.Priority.ToString().ToLower()"></div>
+
+                    <div class="proj-card__inner">
+                        <div class="proj-card__badges">
+                            <span class="proj-badge proj-badge--status proj-status--@p.Status.ToString().ToLower()">
+                                @StatusLabel(p.Status)
+                            </span>
+                            <span class="proj-badge proj-badge--priority"
+                                  style="color:@PriorityColor(p.Priority);background:@PriorityBg(p.Priority)">
+                                @PriorityLabel(p.Priority)
+                            </span>
+                        </div>
+
+                        <h3 class="proj-card__name">@p.Name</h3>
+
+                        @if (!string.IsNullOrWhiteSpace(p.DesiredOutcome))
+                        {
+                            <p class="proj-card__outcome">@p.DesiredOutcome</p>
+                        }
+
+                        <!-- Progress track -->
+                        <div class="proj-card__progress">
+                            <div class="proj-progress-track">
+                                <div class="proj-progress-fill"
+                                     style="width:@(p.ProgressPercent.ToString("F0"))%"></div>
+                            </div>
+                            <span class="proj-progress-pct">@p.ProgressPercent.ToString("F0")%</span>
+                        </div>
+
+                        <!-- Footer meta -->
+                        <div class="proj-card__meta">
+                            <span class="proj-meta-item">
+                                <svg class="proj-meta-icon" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-9Zm5.78 6.53a.75.75 0 0 0 1.065-1.06L6.78 6.906l-.53.53 1.53 1.53-1.53 1.53.53.53L8.845 9.03Z"/>
+                                </svg>
+                                <strong>@p.OpenTaskCount</strong>&nbsp;open
+                                @if (p.TotalTaskCount > 0)
+                                {
+                                    <span class="proj-meta-total">/ @p.TotalTaskCount</span>
+                                }
+                            </span>
+
+                            @if (p.DueDate.HasValue)
+                            {
+                                <span class="proj-meta-item @(p.DueDate < DateTime.Today ? "proj-meta--overdue" : (p.DueDate <= DateTime.Today.AddDays(7) ? "proj-meta--soon" : ""))">
+                                    <svg class="proj-meta-icon" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M5 .5a.5.5 0 0 1 .5.5V2h5V1a.5.5 0 0 1 1 0v1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h1V1A.5.5 0 0 1 5 .5ZM3 3a1 1 0 0 0-1 1v1h12V4a1 1 0 0 0-1-1H3Zm11 3H2v8a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6Z"/>
+                                    </svg>
+                                    @p.DueDate.Value.ToString("MMM d")
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Action buttons -->
+                    <div class="proj-card__actions" @onclick:stopPropagation="true">
+                        <button class="proj-action-btn" title="Edit"
+                                @onclick="() => OpenEditDialog(p)">
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3Zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5Zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178Z"/>
+                            </svg>
+                        </button>
+                        <button class="proj-action-btn proj-action-btn--archive" title="Archive"
+                                @onclick="() => ConfirmArchive(p.Id, p.Name)">
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M0 2a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 1 12.5V5a1 1 0 0 1-1-1V2Zm2 3v7.5A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5V5H2Zm13-3H1v2h14V2ZM5 7.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5Z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Projects page — "Expedition Ledger" style within Archival Mind design
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.proj-page {
+    font-family: var(--font-body);
+    padding-bottom: 3rem;
+}
+
+/* Header */
+.proj-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+.proj-header__title {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0 0 .15rem;
+    letter-spacing: -.02em;
+    line-height: 1;
+}
+.proj-header__sub {
+    font-size: .8rem;
+    color: var(--ink-faint);
+    margin: 0;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+.proj-header__new {
+    flex-shrink: 0;
+}
+
+/* Toolbar */
+.proj-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    margin-bottom: 1.75rem;
+    padding: 1rem 1.25rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Search */
+.proj-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+.proj-search__icon {
+    color: var(--ink-faint);
+    font-size: 1.1rem !important;
+    flex-shrink: 0;
+}
+.proj-search__input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: .95rem;
+    color: var(--ink);
+    outline: none;
+    padding: .25rem 0;
+    border-bottom: 1.5px solid var(--line);
+    transition: border-color .2s;
+}
+.proj-search__input:focus { border-bottom-color: var(--clay); }
+.proj-search__input::placeholder { color: var(--ink-faint); }
+.proj-search__clear {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ink-faint);
+    font-size: .85rem;
+    padding: .15rem .3rem;
+    border-radius: 4px;
+    transition: color .15s;
+}
+.proj-search__clear:hover { color: var(--clay); }
+
+/* Filter chips */
+.proj-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+}
+.proj-filters__label {
+    font-size: .7rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin-right: .1rem;
+}
+.proj-filters__sep { color: var(--line-strong); margin: 0 .25rem; }
+
+.proj-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: .28rem .7rem;
+    border-radius: 999px;
+    border: 1.5px solid var(--line);
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: .78rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s;
+}
+.proj-chip:hover {
+    border-color: var(--clay);
+    color: var(--clay);
+}
+.proj-chip--on {
+    border-color: var(--chip-accent, var(--clay));
+    background: color-mix(in srgb, var(--chip-accent, var(--clay)) 10%, transparent);
+    color: var(--chip-accent, var(--clay));
+    font-weight: 600;
+}
+.proj-chip__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Sort */
+.proj-sort {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .3rem;
+    border-top: 1px solid var(--line);
+    padding-top: .65rem;
+}
+.proj-sort__label {
+    font-size: .7rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin-right: .2rem;
+}
+.proj-sort__btn {
+    background: none;
+    border: none;
+    font-family: var(--font-body);
+    font-size: .82rem;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: .2rem .5rem;
+    border-radius: 6px;
+    transition: color .15s, background .15s;
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+}
+.proj-sort__btn:hover { color: var(--ink); background: var(--paper-sunk); }
+.proj-sort__btn--on { color: var(--clay); font-weight: 600; }
+.proj-sort__arrow { font-size: .75rem; opacity: .7; }
+
+/* Loading / empty */
+.proj-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 5rem 0;
+}
+.proj-loading__text { color: var(--ink-faint); font-size: .9rem; }
+
+.proj-empty {
+    text-align: center;
+    padding: 5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .75rem;
+}
+.proj-empty__glyph {
+    font-size: 3.5rem;
+    line-height: 1;
+    opacity: .18;
+    color: var(--clay);
+    font-family: var(--font-display);
+}
+.proj-empty__title {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    color: var(--ink);
+    margin: 0;
+    font-weight: 500;
+}
+.proj-empty__sub { color: var(--ink-faint); font-size: .9rem; margin: 0; max-width: 36ch; }
+
+/* Grid */
+.proj-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+    gap: 1.1rem;
+}
+
+/* Card */
+.proj-card {
+    position: relative;
+    display: flex;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow .2s, transform .2s, border-color .2s;
+    animation: proj-rise .4s both ease-out;
+}
+.proj-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+    border-color: var(--line-strong);
+}
+
+@@keyframes proj-rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Priority ribbon */
+.proj-card__ribbon {
+    width: 4px;
+    flex-shrink: 0;
+    border-radius: 0;
+}
+.proj-ribbon--critical { background: var(--clay); }
+.proj-ribbon--high     { background: #d4722a; }
+.proj-ribbon--medium   { background: var(--gold); }
+.proj-ribbon--low      { background: var(--sage); }
+
+.proj-card__inner {
+    flex: 1;
+    padding: 1rem 1rem .85rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+    min-width: 0;
+}
+
+.proj-card__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+
+/* Badges */
+.proj-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: .18rem .6rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.proj-status--notstarted { background: var(--paper-sunk); color: var(--ink-soft); }
+.proj-status--active     { background: rgba(111,122,90,.14); color: #4a5c38; }
+.proj-status--waiting    { background: rgba(205,154,58,.14); color: #7a5c0e; }
+.proj-status--completed  { background: rgba(192,86,29,.10); color: var(--clay-deep); }
+.proj-status--archived   { background: var(--paper-sunk); color: var(--ink-faint); }
+
+.proj-card__name {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.proj-card:hover .proj-card__name { color: var(--clay); }
+
+.proj-card__outcome {
+    font-size: .8rem;
+    color: var(--ink-soft);
+    margin: 0;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Progress */
+.proj-card__progress {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+.proj-progress-track {
+    flex: 1;
+    height: 5px;
+    background: var(--paper-sunk);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.proj-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--clay-deep), var(--clay));
+    border-radius: 999px;
+    transition: width .5s ease;
+    min-width: 3px;
+}
+.proj-progress-pct {
+    font-size: .72rem;
+    font-weight: 700;
+    color: var(--ink-faint);
+    width: 2.6rem;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* Footer meta */
+.proj-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-top: auto;
+}
+.proj-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .78rem;
+    color: var(--ink-soft);
+}
+.proj-meta-item strong { color: var(--ink); }
+.proj-meta-total { color: var(--ink-faint); }
+.proj-meta-icon {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+    opacity: .55;
+}
+.proj-meta--overdue { color: #b03a18; font-weight: 600; }
+.proj-meta--soon { color: #7a5c0e; }
+
+/* Card action buttons */
+.proj-card__actions {
+    position: absolute;
+    top: .6rem;
+    right: .6rem;
+    display: flex;
+    gap: .2rem;
+    opacity: 0;
+    transition: opacity .15s;
+}
+.proj-card:hover .proj-card__actions { opacity: 1; }
+
+.proj-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--paper-raised);
+    cursor: pointer;
+    color: var(--ink-soft);
+    transition: background .15s, color .15s, border-color .15s;
+}
+.proj-action-btn svg { width: 14px; height: 14px; }
+.proj-action-btn:hover { background: var(--paper-sunk); color: var(--ink); border-color: var(--line-strong); }
+.proj-action-btn--archive:hover { color: var(--clay); border-color: var(--clay); }
+
+@@media (max-width: 640px) {
+    .proj-toolbar { padding: .85rem 1rem; }
+    .proj-grid { grid-template-columns: 1fr; }
+    .proj-card__actions { opacity: 1; }
+}
+</style>
+
+@code {
+    private bool _loading = true;
+    private List<ProjectSummaryDto>? _summaries;
+    private List<ProjectSummaryDto>? _filtered;
+
+    private string _searchText = "";
+    private readonly HashSet<ProjectStatus> _activeStatusFilters = [];
+    private readonly HashSet<ProjectPriority> _activePriorityFilters = [];
+    private string _sortBy = "Priority";
+    private bool _sortAsc;
+
+    private static readonly ProjectStatus[] StatusFilters =
+        [ProjectStatus.NotStarted, ProjectStatus.Active, ProjectStatus.Waiting, ProjectStatus.Completed];
+
+    private static readonly ProjectPriority[] PriorityFilters =
+        [ProjectPriority.Critical, ProjectPriority.High, ProjectPriority.Medium, ProjectPriority.Low];
+
+    private static readonly string[] SortOptions = ["Priority", "Name", "Due Date", "Progress"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var result = await ProjectService.GetProjectSummariesAsync();
+        _summaries = result.ToList();
+        ApplyFilters();
+        _loading = false;
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        _searchText = e.Value?.ToString() ?? "";
+        ApplyFilters();
+    }
+
+    private void ClearSearch()
+    {
+        _searchText = "";
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        IEnumerable<ProjectSummaryDto> q = _summaries ?? [];
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+            q = q.Where(p =>
+                p.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                (p.DesiredOutcome?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (p.Description?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false));
+
+        if (_activeStatusFilters.Count > 0)
+            q = q.Where(p => _activeStatusFilters.Contains(p.Status));
+
+        if (_activePriorityFilters.Count > 0)
+            q = q.Where(p => _activePriorityFilters.Contains(p.Priority));
+
+        q = _sortBy switch
+        {
+            "Name"     => _sortAsc ? q.OrderBy(p => p.Name) : q.OrderByDescending(p => p.Name),
+            "Due Date" => _sortAsc
+                ? q.OrderBy(p => p.DueDate ?? DateTime.MaxValue)
+                : q.OrderByDescending(p => p.DueDate ?? DateTime.MinValue),
+            "Progress" => _sortAsc ? q.OrderBy(p => p.ProgressPercent) : q.OrderByDescending(p => p.ProgressPercent),
+            _          => _sortAsc ? q.OrderBy(p => p.Priority) : q.OrderByDescending(p => p.Priority),
+        };
+
+        _filtered = q.ToList();
+    }
+
+    private void ToggleStatusFilter(ProjectStatus s)
+    {
+        if (!_activeStatusFilters.Remove(s)) _activeStatusFilters.Add(s);
+        ApplyFilters();
+    }
+
+    private void TogglePriorityFilter(ProjectPriority p)
+    {
+        if (!_activePriorityFilters.Remove(p)) _activePriorityFilters.Add(p);
+        ApplyFilters();
+    }
+
+    private void SetSort(string option)
+    {
+        if (_sortBy == option) _sortAsc = !_sortAsc;
+        else { _sortBy = option; _sortAsc = false; }
+        ApplyFilters();
+    }
+
+    private bool IsStatusActive(ProjectStatus s) => _activeStatusFilters.Contains(s);
+    private bool IsPriorityActive(ProjectPriority p) => _activePriorityFilters.Contains(p);
+
+    private static string StatusLabel(ProjectStatus s) => s switch
+    {
+        ProjectStatus.NotStarted => "Not Started",
+        ProjectStatus.Active     => "Active",
+        ProjectStatus.Waiting    => "Waiting",
+        ProjectStatus.Completed  => "Completed",
+        ProjectStatus.Archived   => "Archived",
+        _                        => s.ToString()
+    };
+
+    private static string StatusColor(ProjectStatus s) => s switch
+    {
+        ProjectStatus.Active    => "#4a5c38",
+        ProjectStatus.Waiting   => "#7a5c0e",
+        ProjectStatus.Completed => "#9c4416",
+        _                       => "#9a9180"
+    };
+
+    private static string PriorityLabel(ProjectPriority p) => p switch
+    {
+        ProjectPriority.Critical => "⚑ Critical",
+        ProjectPriority.High     => "↑ High",
+        ProjectPriority.Medium   => "— Medium",
+        ProjectPriority.Low      => "↓ Low",
+        _                        => p.ToString()
+    };
+
+    private static string PriorityColor(ProjectPriority p) => p switch
+    {
+        ProjectPriority.Critical => "#c0561d",
+        ProjectPriority.High     => "#d4722a",
+        ProjectPriority.Medium   => "#a07820",
+        ProjectPriority.Low      => "#4a5c38",
+        _                        => "#9a9180"
+    };
+
+    private static string PriorityBg(ProjectPriority p) => p switch
+    {
+        ProjectPriority.Critical => "rgba(192,86,29,.10)",
+        ProjectPriority.High     => "rgba(212,114,42,.10)",
+        ProjectPriority.Medium   => "rgba(160,120,32,.10)",
+        ProjectPriority.Low      => "rgba(74,92,56,.10)",
+        _                        => "transparent"
+    };
+
+    private void OpenDetail(Guid id) => Nav.NavigateTo($"/projects/{id}");
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters<ProjectEditorDialog>();
+        parameters.Add(x => x.ProjectId, null);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ProjectEditorDialog>("New Project", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task OpenEditDialog(ProjectSummaryDto p)
+    {
+        var parameters = new DialogParameters<ProjectEditorDialog>();
+        parameters.Add(x => x.ProjectId, p.Id);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ProjectEditorDialog>("Edit Project", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task ConfirmArchive(Guid id, string name)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Archive project",
+            $"Archive \"{name}\"? It will be moved to Archives and hidden from active views.",
+            yesText: "Archive", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            await ProjectService.ArchiveAsync(id);
+            Snackbar.Add($"\"{name}\" archived.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+}

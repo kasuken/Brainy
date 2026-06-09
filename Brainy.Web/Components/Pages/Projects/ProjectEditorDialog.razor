@@ -1,0 +1,148 @@
+@using Brainy.Application.DTOs.Projects
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IProjectService ProjectService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-family:var(--font-display)">
+            @(ProjectId.HasValue ? "Edit Project" : "New Project")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <div class="ped-fields">
+                <MudTextField @bind-Value="_name" Label="Name" Required="true"
+                              RequiredError="Name is required"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                <MudTextField @bind-Value="_desiredOutcome" Label="Desired Outcome"
+                              HelperText="What does 'done' look like?"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                <MudTextField @bind-Value="_description" Label="Description"
+                              Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                <div class="ped-row">
+                    <MudSelect @bind-Value="_status" Label="Status"
+                               Variant="Variant.Outlined" Margin="Margin.Dense">
+                        @foreach (var s in Enum.GetValues<ProjectStatus>().Where(s => s != ProjectStatus.Archived))
+                        {
+                            <MudSelectItem Value="s">@StatusLabel(s)</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudSelect @bind-Value="_priority" Label="Priority"
+                               Variant="Variant.Outlined" Margin="Margin.Dense">
+                        @foreach (var p in Enum.GetValues<ProjectPriority>().Reverse())
+                        {
+                            <MudSelectItem Value="p">@p.ToString()</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+
+                <div class="ped-row">
+                    <MudDatePicker @bind-Date="_startDate" Label="Start Date"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense"
+                                   Editable="true" />
+                    <MudDatePicker @bind-Date="_dueDate" Label="Due Date"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense"
+                                   Editable="true" />
+                </div>
+            </div>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="!_valid || _saving">
+            @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+            @(ProjectId.HasValue ? "Save changes" : "Create project")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+.ped-fields { display: flex; flex-direction: column; gap: .85rem; padding-top: .25rem; }
+.ped-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+@@media (max-width: 480px) { .ped-row { grid-template-columns: 1fr; } }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Guid? ProjectId { get; set; }
+
+    private MudForm _form = null!;
+    private bool _valid;
+    private bool _saving;
+
+    private string _name = "";
+    private string? _desiredOutcome;
+    private string? _description;
+    private ProjectStatus _status = ProjectStatus.NotStarted;
+    private ProjectPriority _priority = ProjectPriority.Medium;
+    private DateTime? _startDate;
+    private DateTime? _dueDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (ProjectId.HasValue)
+        {
+            var dto = await ProjectService.GetByIdAsync(ProjectId.Value);
+            if (dto is not null)
+            {
+                _name           = dto.Name;
+                _desiredOutcome = dto.DesiredOutcome;
+                _description    = dto.Description;
+                _status         = dto.Status;
+                _priority       = dto.Priority;
+                _startDate      = dto.StartDate;
+                _dueDate        = dto.DueDate;
+            }
+        }
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_valid) return;
+
+        _saving = true;
+        try
+        {
+            if (ProjectId.HasValue)
+            {
+                await ProjectService.UpdateAsync(new UpdateProjectDto(
+                    ProjectId.Value, _name, _description, _desiredOutcome,
+                    _status, _priority, _startDate, _dueDate, null));
+            }
+            else
+            {
+                await ProjectService.CreateAsync(new CreateProjectDto(
+                    _name, _description, _desiredOutcome, _status, _priority, _startDate, _dueDate));
+            }
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private static string StatusLabel(ProjectStatus s) => s switch
+    {
+        ProjectStatus.NotStarted => "Not Started",
+        ProjectStatus.Active     => "Active",
+        ProjectStatus.Waiting    => "Waiting",
+        ProjectStatus.Completed  => "Completed",
+        _                        => s.ToString()
+    };
+}

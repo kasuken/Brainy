@@ -5,7 +5,6 @@ using Brainy.Application.Interfaces.Services;
 using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
-
 namespace Brainy.Application.Services;
 
 /// <summary>
@@ -55,6 +54,36 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             .Select(p => ToDto(p))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<ProjectSummaryDto>> GetProjectSummariesAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var data = await context.Projects
+            .AsNoTracking()
+            .Where(p => p.UserId == userId && !p.IsArchived && p.Status != ProjectStatus.Archived)
+            .Select(p => new
+            {
+                p.Id, p.Name, p.Description, p.DesiredOutcome, p.Status, p.Priority,
+                p.StartDate, p.DueDate, p.CompletedDate, p.IsArchived, p.AreaId,
+                p.CreatedAtUtc, p.UpdatedAtUtc, p.ArchivedAtUtc,
+                TotalTasks = p.Tasks.Count(t => !t.IsArchived),
+                OpenTasks  = p.Tasks.Count(t => !t.IsArchived && t.Status != TaskItemStatus.Done),
+                DoneTasks  = p.Tasks.Count(t => !t.IsArchived && t.Status == TaskItemStatus.Done),
+            })
+            .OrderByDescending(x => x.Priority)
+            .ThenBy(x => x.Name)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return data.Select(x => new ProjectSummaryDto(
+            x.Id, x.Name, x.Description, x.DesiredOutcome, x.Status, x.Priority,
+            x.StartDate, x.DueDate, x.CompletedDate, x.IsArchived, x.AreaId,
+            x.CreatedAtUtc, x.UpdatedAtUtc, x.ArchivedAtUtc,
+            x.TotalTasks, x.OpenTasks, x.DoneTasks,
+            x.TotalTasks > 0 ? Math.Round((double)x.DoneTasks / x.TotalTasks * 100, 1) : 0))
+            .ToList();
     }
 
     public async Task<ProjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
