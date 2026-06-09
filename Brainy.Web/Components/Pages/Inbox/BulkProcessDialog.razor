@@ -1,5 +1,4 @@
 @using Brainy.Application.DTOs.Areas
-@using Brainy.Application.DTOs.Notes
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.DTOs.Resources
 @using Brainy.Application.Interfaces.Services
@@ -9,60 +8,56 @@
 @inject IAreaService AreaService
 @inject IResourceService ResourceService
 
-<MudDialog Class="pnd">
+<MudDialog Class="bpd">
 
     <TitleContent>
-        <div class="pnd__title">
-            <span class="pnd__title-icon" aria-hidden="true">
-                <MudIcon Icon="@Icons.Material.Outlined.MoveToInbox" />
+        <div class="bpd__title">
+            <span class="bpd__title-icon" aria-hidden="true">
+                <MudIcon Icon="@Icons.Material.Outlined.DoneAll" />
             </span>
-            <span>Process Note</span>
+            <span>Process @NoteCount note@(NoteCount == 1 ? "" : "s")</span>
         </div>
     </TitleContent>
 
     <DialogContent>
-        <div class="pnd__body">
+        <div class="bpd__body">
 
-            @* Note preview *@
-            <div class="pnd__preview">
-                <p class="pnd__preview-label">Note</p>
-                <p class="pnd__preview-title">@Note.Title</p>
-                @if (!string.IsNullOrWhiteSpace(Note.Content))
-                {
-                    <p class="pnd__preview-snippet">@Snippet</p>
-                }
-            </div>
+            <p class="bpd__summary">
+                Assign all
+                <strong class="bpd__count">@NoteCount selected note@(NoteCount == 1 ? "" : "s")</strong>
+                to the same destination.
+            </p>
 
             @* PARA category *@
-            <p class="pnd__section-label">Where does this belong?</p>
-            <div class="pnd__categories">
+            <p class="bpd__section-label">Where do they belong?</p>
+            <div class="bpd__categories">
                 @foreach (var cat in Enum.GetValues<ParaCategory>())
                 {
                     var active = cat == _category;
                     <button type="button"
-                            class="pnd__cat @(active ? "pnd__cat--active" : "")"
+                            class="bpd__cat @(active ? "bpd__cat--active" : "")"
                             @onclick="() => OnCategoryChanged(cat)">
-                        <span class="pnd__cat-dot" style="background: @DotColor(cat)"></span>
-                        <span class="pnd__cat-label">@cat</span>
-                        <span class="pnd__cat-desc">@CatDesc(cat)</span>
+                        <span class="bpd__cat-dot" style="background: @DotColor(cat)"></span>
+                        <span class="bpd__cat-label">@cat</span>
+                        <span class="bpd__cat-desc">@CatDesc(cat)</span>
                         @if (active)
                         {
-                            <MudIcon Icon="@Icons.Material.Filled.Check" Class="pnd__cat-check" />
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Class="bpd__cat-check" />
                         }
                     </button>
                 }
             </div>
 
-            @* Destination picker (only for Project / Area / Resource) *@
+            @* Destination picker *@
             @if (_category == ParaCategory.Project && _projects.Count > 0)
             {
-                <p class="pnd__section-label mt-4">Assign to project <span class="pnd__optional">(optional)</span></p>
+                <p class="bpd__section-label mt-4">Assign to project <span class="bpd__optional">(optional)</span></p>
                 <MudSelect T="Guid?" @bind-Value="_projectId"
                            Placeholder="— none —"
                            Clearable="true"
                            Variant="Variant.Outlined"
                            Dense="true"
-                           Class="pnd__dest-select">
+                           Class="bpd__dest-select">
                     @foreach (var p in _projects)
                     {
                         <MudSelectItem T="Guid?" Value="@p.Id">@p.Name</MudSelectItem>
@@ -71,13 +66,13 @@
             }
             else if (_category == ParaCategory.Area && _areas.Count > 0)
             {
-                <p class="pnd__section-label mt-4">Assign to area <span class="pnd__optional">(optional)</span></p>
+                <p class="bpd__section-label mt-4">Assign to area <span class="bpd__optional">(optional)</span></p>
                 <MudSelect T="Guid?" @bind-Value="_areaId"
                            Placeholder="— none —"
                            Clearable="true"
                            Variant="Variant.Outlined"
                            Dense="true"
-                           Class="pnd__dest-select">
+                           Class="bpd__dest-select">
                     @foreach (var a in _areas)
                     {
                         <MudSelectItem T="Guid?" Value="@a.Id">@a.Name</MudSelectItem>
@@ -86,13 +81,13 @@
             }
             else if (_category == ParaCategory.Resource && _resources.Count > 0)
             {
-                <p class="pnd__section-label mt-4">Assign to resource <span class="pnd__optional">(optional)</span></p>
+                <p class="bpd__section-label mt-4">Assign to resource <span class="bpd__optional">(optional)</span></p>
                 <MudSelect T="Guid?" @bind-Value="_resourceId"
                            Placeholder="— none —"
                            Clearable="true"
                            Variant="Variant.Outlined"
                            Dense="true"
-                           Class="pnd__dest-select">
+                           Class="bpd__dest-select">
                     @foreach (var r in _resources)
                     {
                         <MudSelectItem T="Guid?" Value="@r.Id">@r.Name</MudSelectItem>
@@ -101,16 +96,16 @@
             }
 
             @* Status *@
-            <p class="pnd__section-label mt-4">Mark as</p>
-            <div class="pnd__statuses">
+            <p class="bpd__section-label mt-4">Mark as</p>
+            <div class="bpd__statuses">
                 @foreach (var s in new[] { NoteStatus.Active, NoteStatus.Distilled, NoteStatus.Archived })
                 {
                     var active = s == _status;
                     <button type="button"
-                            class="pnd__status @(active ? "pnd__status--active" : "")"
+                            class="bpd__status @(active ? "bpd__status--active" : "")"
                             @onclick="() => _status = s">
-                        <MudIcon Icon="@StatusIcon(s)" Class="pnd__status-icon" />
-                        <span class="pnd__status-label">@s</span>
+                        <MudIcon Icon="@StatusIcon(s)" Class="bpd__status-icon" />
+                        <span class="bpd__status-label">@s</span>
                     </button>
                 }
             </div>
@@ -119,24 +114,24 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton OnClick="Cancel" Variant="Variant.Text" Class="pnd__btn-cancel">Cancel</MudButton>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Class="bpd__btn-cancel">Cancel</MudButton>
         <MudButton Variant="Variant.Filled"
                    Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.Check"
+                   StartIcon="@Icons.Material.Filled.DoneAll"
                    OnClick="Confirm"
-                   Class="pnd__btn-confirm">
-            Process note
+                   Class="bpd__btn-confirm">
+            Process @NoteCount note@(NoteCount == 1 ? "" : "s")
         </MudButton>
     </DialogActions>
 
 </MudDialog>
 
 <style>
-    .pnd .mud-dialog-title {
+    .bpd .mud-dialog-title {
         padding-bottom: 0;
     }
 
-    .pnd__title {
+    .bpd__title {
         display: flex;
         align-items: center;
         gap: 0.5rem;
@@ -146,54 +141,27 @@
         color: var(--ink);
     }
 
-    .pnd__title-icon {
+    .bpd__title-icon {
         color: var(--clay);
         display: flex;
     }
 
-    .pnd__body {
+    .bpd__body {
         padding: 0.25rem 0 0.5rem;
     }
 
-    /* ── Preview ── */
-    .pnd__preview {
-        background: var(--paper-sunk);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 0.85rem 1rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .pnd__preview-label {
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--ink-faint);
-        margin: 0 0 0.3rem;
-    }
-
-    .pnd__preview-title {
-        font-family: var(--font-display);
-        font-size: 1rem;
-        font-weight: 600;
-        color: var(--ink);
-        margin: 0 0 0.4rem;
-    }
-
-    .pnd__preview-snippet {
-        font-size: 0.8rem;
+    .bpd__summary {
+        font-family: var(--font-body);
+        font-size: 0.875rem;
         color: var(--ink-soft);
-        margin: 0;
-        line-height: 1.55;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
+        margin: 0 0 1.25rem;
     }
 
-    /* ── Section label ── */
-    .pnd__section-label {
+    .bpd__count {
+        color: var(--clay);
+    }
+
+    .bpd__section-label {
         font-size: 0.72rem;
         font-weight: 700;
         text-transform: uppercase;
@@ -202,14 +170,26 @@
         margin: 0 0 0.65rem;
     }
 
+    .bpd__optional {
+        font-weight: 400;
+        text-transform: none;
+        letter-spacing: 0;
+        color: var(--ink-faint);
+        font-size: 0.7rem;
+    }
+
+    .bpd__dest-select {
+        margin-bottom: 0.25rem;
+    }
+
     /* ── Category picker ── */
-    .pnd__categories {
+    .bpd__categories {
         display: flex;
         flex-direction: column;
         gap: 0.45rem;
     }
 
-    .pnd__cat {
+    .bpd__cat {
         display: grid;
         grid-template-columns: 10px 1fr max-content max-content;
         align-items: center;
@@ -225,37 +205,37 @@
         width: 100%;
     }
 
-    .pnd__cat:hover {
+    .bpd__cat:hover {
         border-color: var(--clay-ring);
         background: var(--paper);
         box-shadow: var(--shadow-sm);
     }
 
-    .pnd__cat--active {
+    .bpd__cat--active {
         border-color: var(--clay);
         background: var(--clay-soft);
         box-shadow: 0 0 0 3px var(--clay-ring);
     }
 
-    .pnd__cat-dot {
+    .bpd__cat-dot {
         width: 10px;
         height: 10px;
         border-radius: 50%;
         flex-shrink: 0;
     }
 
-    .pnd__cat-label {
+    .bpd__cat-label {
         font-weight: 600;
         font-size: 0.88rem;
         color: var(--ink);
     }
 
-    .pnd__cat-desc {
+    .bpd__cat-desc {
         font-size: 0.75rem;
         color: var(--ink-faint);
     }
 
-    .pnd__cat-check {
+    .bpd__cat-check {
         color: var(--clay);
         font-size: 1rem !important;
         width: 1rem !important;
@@ -263,13 +243,13 @@
     }
 
     /* ── Status picker ── */
-    .pnd__statuses {
+    .bpd__statuses {
         display: flex;
         gap: 0.5rem;
         flex-wrap: wrap;
     }
 
-    .pnd__status {
+    .bpd__status {
         display: flex;
         align-items: center;
         gap: 0.4rem;
@@ -285,47 +265,35 @@
         transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
     }
 
-    .pnd__status:hover {
+    .bpd__status:hover {
         border-color: var(--clay-ring);
         color: var(--ink);
     }
 
-    .pnd__status--active {
+    .bpd__status--active {
         border-color: var(--clay);
         background: var(--clay-soft);
         color: var(--clay-deep);
         font-weight: 600;
     }
 
-    .pnd__status-icon {
+    .bpd__status-icon {
         font-size: 0.95rem !important;
         width: 0.95rem !important;
         height: 0.95rem !important;
     }
 
-    .pnd__optional {
-        font-weight: 400;
-        text-transform: none;
-        letter-spacing: 0;
-        color: var(--ink-faint);
-        font-size: 0.7rem;
-    }
-
-    .pnd__dest-select {
-        margin-bottom: 0.25rem;
-    }
-
     /* ── Footer buttons ── */
-    .pnd__btn-cancel {
+    .bpd__btn-cancel {
         color: var(--ink-soft) !important;
     }
 
-    .pnd__btn-confirm {
+    .bpd__btn-confirm {
         background: var(--clay) !important;
         color: #fff !important;
     }
 
-    .pnd__btn-confirm:hover {
+    .bpd__btn-confirm:hover {
         background: var(--clay-deep) !important;
     }
 </style>
@@ -333,7 +301,7 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
-    [Parameter] public NoteDto Note { get; set; } = null!;
+    [Parameter] public int NoteCount { get; set; }
 
     private ParaCategory _category = ParaCategory.Project;
     private NoteStatus _status = NoteStatus.Active;
@@ -344,10 +312,6 @@
     private IReadOnlyList<ProjectDto> _projects = [];
     private IReadOnlyList<AreaDto> _areas = [];
     private IReadOnlyList<ResourceDto> _resources = [];
-
-    private string Snippet => Note.Content.Length <= 140
-        ? Note.Content
-        : Note.Content[..140] + "…";
 
     protected override async Task OnInitializedAsync()
     {
@@ -364,9 +328,17 @@
         _resourceId = null;
     }
 
+    /// <summary>Result tuple returned to the caller on confirmation.</summary>
+    public record BulkProcessResult(
+        ParaCategory Category,
+        NoteStatus Status,
+        Guid? ProjectId,
+        Guid? AreaId,
+        Guid? ResourceId);
+
     private void Confirm() =>
-        MudDialog.Close(DialogResult.Ok(new ProcessNoteDto(
-            Note.Id, _category, _status, _projectId, _areaId, _resourceId)));
+        MudDialog.Close(DialogResult.Ok(new BulkProcessResult(
+            _category, _status, _projectId, _areaId, _resourceId)));
 
     private void Cancel() => MudDialog.Cancel();
 

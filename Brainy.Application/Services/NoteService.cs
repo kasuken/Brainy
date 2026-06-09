@@ -123,6 +123,36 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         return ToDto(note);
     }
 
+    public async Task<int> BulkProcessInboxAsync(
+        IEnumerable<Guid> ids,
+        ParaCategory category,
+        NoteStatus status,
+        Guid? projectId = null,
+        Guid? areaId = null,
+        Guid? resourceId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        var idList = ids as ICollection<Guid> ?? ids.ToList();
+        if (idList.Count == 0) return 0;
+
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await context.Notes
+            .Where(n => n.UserId == userId && idList.Contains(n.Id))
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(n => n.ParaCategory, category)
+                    .SetProperty(n => n.Status, status)
+                    .SetProperty(n => n.ProjectId, projectId)
+                    .SetProperty(n => n.AreaId, areaId)
+                    .SetProperty(n => n.ResourceId, resourceId)
+                    .SetProperty(n => n.UpdatedAtUtc, DateTime.UtcNow),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public async Task<int> BulkMoveCategoryAsync(IEnumerable<Guid> ids, ParaCategory category, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(ids);

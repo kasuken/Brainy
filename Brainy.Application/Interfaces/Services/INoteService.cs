@@ -25,6 +25,19 @@ public interface INoteService
     Task<NoteDto> ProcessNoteAsync(ProcessNoteDto dto, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Moves multiple inbox notes to the same PARA category and status in a single
+    /// database operation. Only notes owned by the current user are affected.
+    /// </summary>
+    Task<int> BulkProcessInboxAsync(
+        IEnumerable<Guid> ids,
+        ParaCategory category,
+        NoteStatus status,
+        Guid? projectId = null,
+        Guid? areaId = null,
+        Guid? resourceId = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Moves multiple notes to a new PARA category in a single database operation.
     /// Only notes owned by the current user are affected.
     /// </summary>

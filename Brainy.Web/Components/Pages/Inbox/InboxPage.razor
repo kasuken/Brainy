@@ -45,13 +45,41 @@
 
         @if (!_loading && _notes.Count > 0)
         {
-            <MudButton Variant="Variant.Outlined"
-                       StartIcon="@Icons.Material.Outlined.DoneAll"
-                       OnClick="ProcessNextAsync"
-                       Disabled="_busy"
-                       Class="inbox-hero__cta">
-                Process next
-            </MudButton>
+            <div class="inbox-hero__actions">
+                @if (_selectedIds.Count > 0)
+                {
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.DoneAll"
+                               OnClick="BulkProcessSelectedAsync"
+                               Disabled="_busy"
+                               Class="inbox-hero__cta">
+                        Process @_selectedIds.Count selected
+                    </MudButton>
+                    <MudButton Variant="Variant.Text"
+                               OnClick="ClearSelection"
+                               Disabled="_busy"
+                               Class="inbox-hero__cta-clear">
+                        Clear
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Outlined.DoneAll"
+                               OnClick="ProcessNextAsync"
+                               Disabled="_busy"
+                               Class="inbox-hero__cta">
+                        Process next
+                    </MudButton>
+                    <MudButton Variant="Variant.Text"
+                               StartIcon="@Icons.Material.Outlined.CheckBox"
+                               OnClick="SelectAll"
+                               Class="inbox-hero__cta-clear">
+                        Select all
+                    </MudButton>
+                }
+            </div>
         }
     </div>
 
@@ -107,7 +135,23 @@
         <div class="inbox-list">
             @foreach (var note in _notes)
             {
-                <div class="inbox-card @(_busyId == note.Id ? "inbox-card--busy" : "")">
+                var isSelected = _selectedIds.Contains(note.Id);
+                <div class="inbox-card @(_busyId == note.Id ? "inbox-card--busy" : "") @(isSelected ? "inbox-card--selected" : "")">
+
+                    @* Checkbox *@
+                    <label class="inbox-card__checkbox-wrap" title="Select for bulk processing">
+                        <input type="checkbox"
+                               class="inbox-card__checkbox"
+                               checked="@isSelected"
+                               disabled="@_busy"
+                               @onchange="() => ToggleSelection(note.Id)" />
+                        <span class="inbox-card__checkbox-box" aria-hidden="true">
+                            @if (isSelected)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Class="inbox-card__checkbox-check" />
+                            }
+                        </span>
+                    </label>
 
                     <div class="inbox-card__body">
                         <div class="inbox-card__meta">
@@ -209,6 +253,18 @@
     .inbox-hero__cta {
         flex-shrink: 0;
         margin-top: 0.25rem;
+    }
+
+    .inbox-hero__actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
+        margin-top: 0.25rem;
+    }
+
+    .inbox-hero__cta-clear {
+        color: var(--mud-palette-text-secondary) !important;
     }
 
     /* ── Progress bar ── */
@@ -336,6 +392,56 @@
         pointer-events: none;
     }
 
+    .inbox-card--selected {
+        border-color: var(--clay, #c0561d);
+        background: rgba(192, 86, 29, 0.04);
+    }
+
+    /* ── Checkbox ── */
+    .inbox-card__checkbox-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        cursor: pointer;
+    }
+
+    .inbox-card__checkbox {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .inbox-card__checkbox-box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border: 1.5px solid var(--mud-palette-lines-default);
+        border-radius: 5px;
+        background: var(--mud-palette-surface);
+        transition: border-color 0.15s ease, background 0.15s ease;
+        flex-shrink: 0;
+    }
+
+    .inbox-card--selected .inbox-card__checkbox-box {
+        border-color: var(--clay, #c0561d);
+        background: var(--clay, #c0561d);
+    }
+
+    .inbox-card__checkbox-wrap:hover .inbox-card__checkbox-box {
+        border-color: var(--clay, #c0561d);
+    }
+
+    .inbox-card__checkbox-check {
+        color: #fff;
+        font-size: 0.8rem !important;
+        width: 0.8rem !important;
+        height: 0.8rem !important;
+    }
+
     .inbox-card__body {
         flex: 1;
         min-width: 0;
@@ -436,8 +542,17 @@
     private bool _busy;
     private Guid? _busyId;
     private int _totalOnLoad;
+    private HashSet<Guid> _selectedIds = [];
 
     private static readonly DialogOptions _processDialogOptions = new()
+    {
+        MaxWidth      = MaxWidth.Small,
+        FullWidth     = true,
+        BackdropClick = true,
+        CloseButton   = false,
+    };
+
+    private static readonly DialogOptions _bulkDialogOptions = new()
     {
         MaxWidth      = MaxWidth.Small,
         FullWidth     = true,
@@ -462,7 +577,54 @@
         _notes   = await NoteService.GetInboxAsync();
         if (_totalOnLoad == 0)
             _totalOnLoad = _notes.Count;
+        // Remove any selections for notes no longer in inbox
+        _selectedIds.IntersectWith(_notes.Select(n => n.Id));
         _loading = false;
+    }
+
+    private void ToggleSelection(Guid id)
+    {
+        if (!_selectedIds.Remove(id))
+            _selectedIds.Add(id);
+    }
+
+    private void SelectAll() => _selectedIds = _notes.Select(n => n.Id).ToHashSet();
+
+    private void ClearSelection() => _selectedIds.Clear();
+
+    private async Task BulkProcessSelectedAsync()
+    {
+        if (_selectedIds.Count == 0) return;
+
+        var count = _selectedIds.Count;
+        var parameters = new DialogParameters<BulkProcessDialog>
+        {
+            { x => x.NoteCount, count }
+        };
+
+        var dialog = await DialogService.ShowAsync<BulkProcessDialog>("", parameters, _bulkDialogOptions);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: BulkProcessDialog.BulkProcessResult r })
+        {
+            _busy = true;
+            try
+            {
+                var processed = await NoteService.BulkProcessInboxAsync(
+                    _selectedIds, r.Category, r.Status, r.ProjectId, r.AreaId, r.ResourceId);
+                Snackbar.Add($"{processed} note{(processed == 1 ? "" : "s")} moved to {r.Category}.", Severity.Success);
+                _selectedIds.Clear();
+                _notes = await NoteService.GetInboxAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Could not process notes: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _busy = false;
+            }
+        }
     }
 
     private async Task ProcessNoteAsync(NoteDto note)
@@ -483,6 +645,7 @@
             {
                 await NoteService.ProcessNoteAsync(dto);
                 Snackbar.Add($"\"{note.Title}\" moved to {dto.ParaCategory}.", Severity.Success);
+                _selectedIds.Remove(note.Id);
                 _notes = await NoteService.GetInboxAsync();
             }
             catch (Exception ex)
@@ -532,6 +695,7 @@
             await NoteService.ProcessNoteAsync(new ProcessNoteDto(
                 note.Id, ParaCategory.Archive, NoteStatus.Archived));
             Snackbar.Add($"\"{note.Title}\" archived.", Severity.Info);
+            _selectedIds.Remove(note.Id);
             _notes = await NoteService.GetInboxAsync();
         }
         catch (Exception ex)
