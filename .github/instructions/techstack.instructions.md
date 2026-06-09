@@ -19,15 +19,6 @@ Brainy must be built using the following technologies:
 
 Do not introduce alternative UI frameworks unless explicitly requested.
 
-Avoid:
-
-* Bootstrap components
-* Radzen
-* Fluent UI
-* Ant Design
-* Telerik
-* Syncfusion
-
 MudBlazor is the default component library.
 
 ### Backend
@@ -59,9 +50,7 @@ Avoid:
 
 Preferred options:
 
-* Entra ID
-* GitHub OAuth
-* Google OAuth
+* ASP.NET Core Identity
 
 Authentication implementation should be abstracted behind services.
 
@@ -76,6 +65,8 @@ Use:
 AI providers must be interchangeable.
 
 Never couple business logic directly to a specific AI vendor.
+
+Use Microsoft Agent Framework for orchestrating AI interactions.
 
 ### Architecture
 

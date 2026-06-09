@@ -67,8 +67,6 @@ Make it easy to save information from:
 - Documents
 - Voice notes
 - Images
-- GitHub issues or discussions
-- Chat conversations
 
 Capture must be frictionless.
 
@@ -151,6 +149,7 @@ Keep the interface simple.
 
 Main navigation should reflect the user’s mental model:
 
+- Today
 - Inbox
 - Projects
 - Areas
@@ -158,6 +157,25 @@ Main navigation should reflect the user’s mental model:
 - Archives
 - Search
 - Outputs
+
+The Today screen is the main screen of the application.
+
+Today must help the user focus on active execution, not knowledge storage. It should show:
+
+- Current task: the task the user is actively working on now
+- High-priority project work: important tasks from priority projects
+- Due today: tasks that expire today
+- Overdue: tasks that have already expired
+- Due this week: tasks that expire during the current week
+- Next tasks: tasks that expire in the coming days or weeks
+
+Do not show archived tasks on Today. Archived tasks belong only in Archives or inside archived project context.
+
+Do not create a standalone Tasks screen by default.
+
+Show tasks in the context of their project. Archived tasks must not appear in active project, area, inbox, search-result, or task-oriented views unless the user is explicitly viewing Archives.
+
+When a project is archived, treat its tasks as archived context too. They should be visible from the archived project or Archives, not from active work screens.
 
 The Inbox is for unprocessed captured items.
 
@@ -179,6 +197,8 @@ Core entities should include:
 - ActionItem
 - Output
 - Relationship
+- Task
+- Subtask
 
 Every note should support:
 
@@ -193,6 +213,21 @@ Every note should support:
 - Linked notes
 - AI summary
 - User highlights
+
+Tasks should support:
+
+- Parent project
+- Optional parent task for subtasks
+- Title
+- Description
+- Status
+- Priority
+- Due date
+- Archived state
+- Created date
+- Updated date
+
+Projects should support an archived state. Archived projects and archived tasks must be excluded from active work queries by default.
 
 ## Quality Bar
 

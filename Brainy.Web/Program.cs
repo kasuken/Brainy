@@ -1,3 +1,4 @@
+using Brainy.Data;
 using Brainy.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -5,6 +6,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Data access layer (EF Core / SQL Server).
+builder.Services.AddBrainyData(builder.Configuration);
 
 var app = builder.Build();
 
