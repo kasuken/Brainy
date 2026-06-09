@@ -2,12 +2,13 @@ namespace Brainy.Domain.Enums;
 
 /// <summary>
 /// Lifecycle stage of a <see cref="Entities.Project"/>.
+/// Only <see cref="Active"/> projects appear in active work views (Today, task pickers, etc.).
 /// </summary>
 public enum ProjectStatus
 {
-    Planning = 0,
+    NotStarted = 0,
     Active = 1,
-    OnHold = 2,
+    Waiting = 2,
     Completed = 3,
-    Cancelled = 4
+    Archived = 4
 }

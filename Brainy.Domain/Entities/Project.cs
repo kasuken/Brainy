@@ -19,7 +19,7 @@ public class Project : BaseEntity, IUserOwnedEntity
     /// <summary>The intended end state — what "done" looks like for this project.</summary>
     public string? DesiredOutcome { get; set; }
 
-    public ProjectStatus Status { get; set; } = ProjectStatus.Active;
+    public ProjectStatus Status { get; set; } = ProjectStatus.NotStarted;
 
     public ProjectPriority Priority { get; set; } = ProjectPriority.Medium;
 

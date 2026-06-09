@@ -20,7 +20,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
 
         return await context.Projects
             .AsNoTracking()
-            .Where(p => p.UserId == userId && !p.IsArchived)
+            .Where(p => p.UserId == userId && p.Status == ProjectStatus.Active)
             .OrderByDescending(p => p.Priority)
             .ThenBy(p => p.Name)
             .Select(p => ToDto(p))
@@ -107,6 +107,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
 
         project.IsArchived = true;
         project.ArchivedAtUtc = DateTime.UtcNow;
+        project.Status = ProjectStatus.Archived;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }

@@ -7,7 +7,7 @@ public record CreateProjectDto(
     string Name,
     string? Description = null,
     string? DesiredOutcome = null,
-    ProjectStatus Status = ProjectStatus.Active,
+    ProjectStatus Status = ProjectStatus.NotStarted,
     ProjectPriority Priority = ProjectPriority.Medium,
     DateTime? StartDate = null,
     DateTime? DueDate = null,
