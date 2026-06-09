@@ -163,6 +163,35 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             taskDtos, notes, resourceNotes);
     }
 
+    public async Task<ProjectProgressDto?> GetProjectProgressAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        // Verify ownership without loading the full project
+        var exists = await context.Projects
+            .AsNoTracking()
+            .AnyAsync(p => p.Id == id && p.UserId == userId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!exists) return null;
+
+        var total = await context.Tasks
+            .CountAsync(t => t.ProjectId == id && t.UserId == userId && !t.IsArchived, cancellationToken)
+            .ConfigureAwait(false);
+
+        var done = await context.Tasks
+            .CountAsync(t => t.ProjectId == id && t.UserId == userId && !t.IsArchived && t.Status == TaskItemStatus.Done, cancellationToken)
+            .ConfigureAwait(false);
+
+        return new ProjectProgressDto(
+            id,
+            total,
+            done,
+            total - done,
+            total > 0 ? Math.Round((double)done / total * 100, 1) : 0,
+            DateTime.UtcNow);
+    }
+
     public async Task<ProjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);

@@ -20,6 +20,13 @@ public interface IProjectService
     /// <summary>Returns the full project workspace — tasks, notes, and resource notes included.</summary>
     Task<ProjectDetailDto?> GetProjectDetailAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Returns a lightweight progress snapshot for a single project.
+    /// Designed for polling — only queries the Task table, no navigation properties loaded.
+    /// Returns null if the project does not belong to the current user.
+    /// </summary>
+    Task<ProjectProgressDto?> GetProjectProgressAsync(Guid id, CancellationToken cancellationToken = default);
+
     Task<ProjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<ProjectDto> CreateAsync(CreateProjectDto dto, CancellationToken cancellationToken = default);
     Task<ProjectDto> UpdateAsync(UpdateProjectDto dto, CancellationToken cancellationToken = default);

@@ -6,6 +6,7 @@
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @attribute [Authorize]
+@implements IAsyncDisposable
 @inject IProjectService ProjectService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -89,11 +90,11 @@ else
     <!-- ── Stats bar ────────────────────────────────────────────────── -->
     <div class="pd-stats">
         <div class="pd-stat">
-            <span class="pd-stat__value">@_detail.OpenTaskCount</span>
+            <span class="pd-stat__value">@OpenTaskCount</span>
             <span class="pd-stat__label">Open tasks</span>
         </div>
         <div class="pd-stat">
-            <span class="pd-stat__value">@_detail.DoneTaskCount</span>
+            <span class="pd-stat__value">@DoneTaskCount</span>
             <span class="pd-stat__label">Completed</span>
         </div>
         <div class="pd-stat">
@@ -106,12 +107,18 @@ else
         </div>
         <div class="pd-stat pd-stat--wide">
             <div class="pd-stat__progress-row">
-                <span class="pd-stat__pct">@_detail.ProgressPercent.ToString("F0")%</span>
+                <span class="pd-stat__pct">@ProgressPercent.ToString("F0")%</span>
                 <div class="pd-stat__track">
-                    <div class="pd-stat__fill" style="width:@(_detail.ProgressPercent.ToString("F0"))%"></div>
+                    <div class="pd-stat__fill" style="width:@(ProgressPercent.ToString("F0"))%"></div>
                 </div>
             </div>
-            <span class="pd-stat__label">Progress</span>
+            <span class="pd-stat__label">
+                Progress
+                @if (_progressRefreshing)
+                {
+                    <span class="pd-progress-pulse" title="Updating…"></span>
+                }
+            </span>
         </div>
         @if (_detail.DueDate.HasValue)
         {
@@ -734,6 +741,22 @@ else
 }
 .pd-overdue-text { color: #b03a18; font-weight: 600; }
 
+/* Progress auto-refresh pulse indicator */
+.pd-progress-pulse {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--clay);
+    margin-left: .35rem;
+    vertical-align: middle;
+    animation: pd-pulse 1s ease-in-out infinite;
+}
+@@keyframes pd-pulse {
+    0%, 100% { opacity: .2; transform: scale(.8); }
+    50%       { opacity: 1;  transform: scale(1.15); }
+}
+
 @@media (max-width: 640px) {
     .pd-title-row { flex-direction: column; }
     .pd-actions { flex-direction: row; }
@@ -750,15 +773,34 @@ else
     private bool _loading = true;
     private ProjectDetailDto? _detail;
 
+    // Live progress — updated by PeriodicTimer independently of the full detail load
+    private ProjectProgressDto? _progress;
+    private bool _progressRefreshing;
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource _cts = new();
+
+    // Computed helpers that prefer live progress when available
+    private int OpenTaskCount    => _progress?.OpenTaskCount    ?? _detail?.OpenTaskCount    ?? 0;
+    private int DoneTaskCount    => _progress?.DoneTaskCount    ?? _detail?.DoneTaskCount    ?? 0;
+    private double ProgressPercent => _progress?.ProgressPercent ?? _detail?.ProgressPercent ?? 0;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+        StartProgressPolling();
     }
 
     protected override async Task OnParametersSetAsync()
     {
         if (!_loading)
+        {
+            await _cts.CancelAsync();
+            _cts.Dispose();
+            _cts = new CancellationTokenSource();
+            _progress = null;
             await LoadAsync();
+            StartProgressPolling();
+        }
     }
 
     private async Task LoadAsync()
@@ -766,6 +808,39 @@ else
         _loading = true;
         _detail = await ProjectService.GetProjectDetailAsync(ProjectId);
         _loading = false;
+    }
+
+    private void StartProgressPolling()
+    {
+        _timer?.Dispose();
+        _timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
+        var token = _cts.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (await _timer.WaitForNextTickAsync(token))
+                {
+                    _progressRefreshing = true;
+                    await InvokeAsync(StateHasChanged);
+
+                    var fresh = await ProjectService.GetProjectProgressAsync(ProjectId, token);
+                    if (fresh is not null)
+                        _progress = fresh;
+
+                    _progressRefreshing = false;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (OperationCanceledException) { /* navigation away — expected */ }
+        }, token);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _cts.CancelAsync();
+        _cts.Dispose();
+        _timer?.Dispose();
     }
 
     private void OpenNote(Guid noteId) => Nav.NavigateTo($"/notes/{noteId}");
