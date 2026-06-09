@@ -1,9 +1,14 @@
+using Brainy.Domain.Enums;
+
 namespace Brainy.Application.DTOs.Projects;
 
 /// <summary>Payload for creating a new project.</summary>
 public record CreateProjectDto(
     string Name,
     string? Description = null,
+    string? DesiredOutcome = null,
+    ProjectStatus Status = ProjectStatus.Active,
+    ProjectPriority Priority = ProjectPriority.Medium,
+    DateTime? StartDate = null,
     DateTime? DueDate = null,
-    bool IsPriority = false,
     Guid? AreaId = null);

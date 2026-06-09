@@ -3,6 +3,7 @@ using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Domain.Entities;
+using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Brainy.Application.Services;
@@ -20,7 +21,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         return await context.Projects
             .AsNoTracking()
             .Where(p => p.UserId == userId && !p.IsArchived)
-            .OrderByDescending(p => p.IsPriority)
+            .OrderByDescending(p => p.Priority)
             .ThenBy(p => p.Name)
             .Select(p => ToDto(p))
             .ToListAsync(cancellationToken)
@@ -51,8 +52,11 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             UserId = userId,
             Name = dto.Name,
             Description = dto.Description,
+            DesiredOutcome = dto.DesiredOutcome,
+            Status = dto.Status,
+            Priority = dto.Priority,
+            StartDate = dto.StartDate,
             DueDate = dto.DueDate,
-            IsPriority = dto.IsPriority,
             AreaId = dto.AreaId
         };
 
@@ -75,9 +79,17 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
 
         project.Name = dto.Name;
         project.Description = dto.Description;
+        project.DesiredOutcome = dto.DesiredOutcome;
+        project.Status = dto.Status;
+        project.Priority = dto.Priority;
+        project.StartDate = dto.StartDate;
         project.DueDate = dto.DueDate;
-        project.IsPriority = dto.IsPriority;
         project.AreaId = dto.AreaId;
+
+        if (dto.Status == ProjectStatus.Completed && project.CompletedDate is null)
+            project.CompletedDate = DateTime.UtcNow;
+        else if (dto.Status != ProjectStatus.Completed)
+            project.CompletedDate = null;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -116,10 +128,15 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         p.Id,
         p.Name,
         p.Description,
+        p.DesiredOutcome,
+        p.Status,
+        p.Priority,
+        p.StartDate,
         p.DueDate,
+        p.CompletedDate,
         p.IsArchived,
-        p.IsPriority,
         p.AreaId,
         p.CreatedAtUtc,
-        p.UpdatedAtUtc);
+        p.UpdatedAtUtc,
+        p.ArchivedAtUtc);
 }

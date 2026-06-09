@@ -1,4 +1,5 @@
 using Brainy.Domain.Entities;
+using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -21,7 +22,19 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.Property(p => p.Description)
             .HasMaxLength(2000);
 
+        builder.Property(p => p.DesiredOutcome)
+            .HasMaxLength(1000);
+
+        builder.Property(p => p.Status)
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
+        builder.Property(p => p.Priority)
+            .HasConversion<string>()
+            .HasMaxLength(10);
+
         builder.HasIndex(p => p.IsArchived);
+        builder.HasIndex(p => new { p.UserId, p.Status });
 
         builder.HasMany(p => p.Tasks)
             .WithOne(t => t.Project)

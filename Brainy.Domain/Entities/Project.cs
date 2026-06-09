@@ -1,4 +1,5 @@
 using Brainy.Domain.Common;
+using Brainy.Domain.Enums;
 
 namespace Brainy.Domain.Entities;
 
@@ -15,15 +16,24 @@ public class Project : BaseEntity, IUserOwnedEntity
 
     public string? Description { get; set; }
 
+    /// <summary>The intended end state — what "done" looks like for this project.</summary>
+    public string? DesiredOutcome { get; set; }
+
+    public ProjectStatus Status { get; set; } = ProjectStatus.Active;
+
+    public ProjectPriority Priority { get; set; } = ProjectPriority.Medium;
+
+    public DateTime? StartDate { get; set; }
+
     public DateTime? DueDate { get; set; }
+
+    /// <summary>Populated when Status transitions to Completed.</summary>
+    public DateTime? CompletedDate { get; set; }
 
     /// <summary>When true, the project and its tasks are treated as archived context.</summary>
     public bool IsArchived { get; set; }
 
     public DateTime? ArchivedAtUtc { get; set; }
-
-    /// <summary>Higher values surface the project's work more prominently on Today.</summary>
-    public bool IsPriority { get; set; }
 
     public Guid? AreaId { get; set; }
 
