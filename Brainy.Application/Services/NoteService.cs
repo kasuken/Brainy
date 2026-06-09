@@ -88,6 +88,41 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         return ToDto(note);
     }
 
+    public async Task<IReadOnlyList<NoteDto>> GetInboxAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await context.Notes
+            .AsNoTracking()
+            .Where(n => n.UserId == userId && n.Status == NoteStatus.Inbox)
+            .OrderBy(n => n.CreatedAtUtc)
+            .Select(n => ToDto(n))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<NoteDto> ProcessNoteAsync(ProcessNoteDto dto, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var note = await context.Notes
+            .FirstOrDefaultAsync(n => n.Id == dto.Id && n.UserId == userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Note '{dto.Id}' was not found.");
+
+        note.Status       = dto.Status;
+        note.ParaCategory = dto.ParaCategory;
+        note.ProjectId    = dto.ProjectId;
+        note.AreaId       = dto.AreaId;
+        note.ResourceId   = dto.ResourceId;
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return ToDto(note);
+    }
+
     public async Task<int> BulkMoveCategoryAsync(IEnumerable<Guid> ids, ParaCategory category, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(ids);

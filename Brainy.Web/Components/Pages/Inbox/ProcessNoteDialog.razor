@@ -1,0 +1,309 @@
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Domain.Enums
+
+<MudDialog Class="pnd">
+
+    <TitleContent>
+        <div class="pnd__title">
+            <span class="pnd__title-icon" aria-hidden="true">
+                <MudIcon Icon="@Icons.Material.Outlined.MoveToInbox" />
+            </span>
+            <span>Process Note</span>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        <div class="pnd__body">
+
+            @* Note preview *@
+            <div class="pnd__preview">
+                <p class="pnd__preview-label">Note</p>
+                <p class="pnd__preview-title">@Note.Title</p>
+                @if (!string.IsNullOrWhiteSpace(Note.Content))
+                {
+                    <p class="pnd__preview-snippet">@Snippet</p>
+                }
+            </div>
+
+            @* PARA category *@
+            <p class="pnd__section-label">Where does this belong?</p>
+            <div class="pnd__categories">
+                @foreach (var cat in Enum.GetValues<ParaCategory>())
+                {
+                    var active = cat == _category;
+                    <button type="button"
+                            class="pnd__cat @(active ? "pnd__cat--active" : "")"
+                            @onclick="() => _category = cat">
+                        <span class="pnd__cat-dot" style="background: @DotColor(cat)"></span>
+                        <span class="pnd__cat-label">@cat</span>
+                        <span class="pnd__cat-desc">@CatDesc(cat)</span>
+                        @if (active)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Class="pnd__cat-check" />
+                        }
+                    </button>
+                }
+            </div>
+
+            @* Status *@
+            <p class="pnd__section-label mt-4">Mark as</p>
+            <div class="pnd__statuses">
+                @foreach (var s in new[] { NoteStatus.Active, NoteStatus.Distilled, NoteStatus.Archived })
+                {
+                    var active = s == _status;
+                    <button type="button"
+                            class="pnd__status @(active ? "pnd__status--active" : "")"
+                            @onclick="() => _status = s">
+                        <MudIcon Icon="@StatusIcon(s)" Class="pnd__status-icon" />
+                        <span class="pnd__status-label">@s</span>
+                    </button>
+                }
+            </div>
+
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Class="pnd__btn-cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Check"
+                   OnClick="Confirm"
+                   Class="pnd__btn-confirm">
+            Process note
+        </MudButton>
+    </DialogActions>
+
+</MudDialog>
+
+<style>
+    .pnd .mud-dialog-title {
+        padding-bottom: 0;
+    }
+
+    .pnd__title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: var(--font-display);
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: var(--ink);
+    }
+
+    .pnd__title-icon {
+        color: var(--clay);
+        display: flex;
+    }
+
+    .pnd__body {
+        padding: 0.25rem 0 0.5rem;
+    }
+
+    /* ── Preview ── */
+    .pnd__preview {
+        background: var(--paper-sunk);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.85rem 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .pnd__preview-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--ink-faint);
+        margin: 0 0 0.3rem;
+    }
+
+    .pnd__preview-title {
+        font-family: var(--font-display);
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--ink);
+        margin: 0 0 0.4rem;
+    }
+
+    .pnd__preview-snippet {
+        font-size: 0.8rem;
+        color: var(--ink-soft);
+        margin: 0;
+        line-height: 1.55;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* ── Section label ── */
+    .pnd__section-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--ink-soft);
+        margin: 0 0 0.65rem;
+    }
+
+    /* ── Category picker ── */
+    .pnd__categories {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+    }
+
+    .pnd__cat {
+        display: grid;
+        grid-template-columns: 10px 1fr max-content max-content;
+        align-items: center;
+        gap: 0.7rem;
+        padding: 0.65rem 0.9rem;
+        border: 1.5px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper-raised);
+        cursor: pointer;
+        font-family: var(--font-body);
+        text-align: left;
+        transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+        width: 100%;
+    }
+
+    .pnd__cat:hover {
+        border-color: var(--clay-ring);
+        background: var(--paper);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .pnd__cat--active {
+        border-color: var(--clay);
+        background: var(--clay-soft);
+        box-shadow: 0 0 0 3px var(--clay-ring);
+    }
+
+    .pnd__cat-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .pnd__cat-label {
+        font-weight: 600;
+        font-size: 0.88rem;
+        color: var(--ink);
+    }
+
+    .pnd__cat-desc {
+        font-size: 0.75rem;
+        color: var(--ink-faint);
+    }
+
+    .pnd__cat-check {
+        color: var(--clay);
+        font-size: 1rem !important;
+        width: 1rem !important;
+        height: 1rem !important;
+    }
+
+    /* ── Status picker ── */
+    .pnd__statuses {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .pnd__status {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.45rem 0.85rem;
+        border: 1.5px solid var(--line);
+        border-radius: 999px;
+        background: var(--paper-raised);
+        cursor: pointer;
+        font-family: var(--font-body);
+        font-size: 0.83rem;
+        font-weight: 500;
+        color: var(--ink-soft);
+        transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+    }
+
+    .pnd__status:hover {
+        border-color: var(--clay-ring);
+        color: var(--ink);
+    }
+
+    .pnd__status--active {
+        border-color: var(--clay);
+        background: var(--clay-soft);
+        color: var(--clay-deep);
+        font-weight: 600;
+    }
+
+    .pnd__status-icon {
+        font-size: 0.95rem !important;
+        width: 0.95rem !important;
+        height: 0.95rem !important;
+    }
+
+    /* ── Footer buttons ── */
+    .pnd__btn-cancel {
+        color: var(--ink-soft) !important;
+    }
+
+    .pnd__btn-confirm {
+        background: var(--clay) !important;
+        color: #fff !important;
+    }
+
+    .pnd__btn-confirm:hover {
+        background: var(--clay-deep) !important;
+    }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public NoteDto Note { get; set; } = null!;
+
+    private ParaCategory _category = ParaCategory.Project;
+    private NoteStatus _status = NoteStatus.Active;
+
+    private string Snippet => Note.Content.Length <= 140
+        ? Note.Content
+        : Note.Content[..140] + "…";
+
+    private void Confirm() =>
+        MudDialog.Close(DialogResult.Ok(new ProcessNoteDto(
+            Note.Id, _category, _status)));
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private static string DotColor(ParaCategory cat) => cat switch
+    {
+        ParaCategory.Project  => "#c0561d",
+        ParaCategory.Area     => "#6f7a5a",
+        ParaCategory.Resource => "#3a7bcd",
+        ParaCategory.Archive  => "#9a9180",
+        _                     => "#9a9180"
+    };
+
+    private static string CatDesc(ParaCategory cat) => cat switch
+    {
+        ParaCategory.Project  => "Active outcome",
+        ParaCategory.Area     => "Ongoing responsibility",
+        ParaCategory.Resource => "Reference material",
+        ParaCategory.Archive  => "Inactive / kept",
+        _                     => ""
+    };
+
+    private static string StatusIcon(NoteStatus s) => s switch
+    {
+        NoteStatus.Active    => Icons.Material.Outlined.PlayCircle,
+        NoteStatus.Distilled => Icons.Material.Outlined.AutoAwesome,
+        NoteStatus.Archived  => Icons.Material.Outlined.Archive,
+        _                    => Icons.Material.Outlined.Circle
+    };
+}

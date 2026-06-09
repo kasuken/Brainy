@@ -13,6 +13,18 @@ public interface INoteService
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns notes with <see cref="NoteStatus.Inbox"/> status owned by the current user,
+    /// ordered by capture date (oldest first — process what came in first).
+    /// </summary>
+    Task<IReadOnlyList<NoteDto>> GetInboxAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Moves a note out of the Inbox by assigning a PARA category, an optional destination
+    /// (project / area / resource) and a lifecycle status.
+    /// </summary>
+    Task<NoteDto> ProcessNoteAsync(ProcessNoteDto dto, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Moves multiple notes to a new PARA category in a single database operation.
     /// Only notes owned by the current user are affected.
     /// </summary>

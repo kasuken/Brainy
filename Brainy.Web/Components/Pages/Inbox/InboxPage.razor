@@ -1,0 +1,550 @@
+@page "/inbox"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@namespace Brainy.Web.Components.Pages.InboxPage
+
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@using Brainy.Web.Components.Pages.Inbox
+@using Brainy.Web.Components.Pages.Notes
+
+@inject INoteService NoteService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Inbox – Brainy</PageTitle>
+
+<div class="inbox-page">
+
+    @* ── Hero ── *@
+    <div class="inbox-hero">
+        <div class="inbox-hero__text">
+            <div class="inbox-hero__heading-row">
+                <MudText Typo="Typo.h4" Class="inbox-hero__heading">Inbox</MudText>
+                @if (!_loading && _notes.Count > 0)
+                {
+                    <span class="inbox-hero__badge">@_notes.Count</span>
+                }
+            </div>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                @if (_loading)
+                {
+                    <span>Loading…</span>
+                }
+                else if (_notes.Count == 0)
+                {
+                    <span>Your inbox is clear — nothing to process.</span>
+                }
+                else
+                {
+                    <span>Decide where each captured note belongs. Process one at a time.</span>
+                }
+            </MudText>
+        </div>
+
+        @if (!_loading && _notes.Count > 0)
+        {
+            <MudButton Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Outlined.DoneAll"
+                       OnClick="ProcessNextAsync"
+                       Disabled="_busy"
+                       Class="inbox-hero__cta">
+                Process next
+            </MudButton>
+        }
+    </div>
+
+    @* ── Progress bar when notes exist ── *@
+    @if (!_loading && _totalOnLoad > 0)
+    {
+        var processed = _totalOnLoad - _notes.Count;
+        <div class="inbox-progress" title="@processed of @_totalOnLoad processed">
+            <div class="inbox-progress__track">
+                <div class="inbox-progress__fill"
+                     style="width: @((processed * 100 / _totalOnLoad).ToString())%"></div>
+            </div>
+            <span class="inbox-progress__label">@processed / @_totalOnLoad processed</span>
+        </div>
+    }
+
+    @* ── Loading ── *@
+    @if (_loading)
+    {
+        <div class="inbox-state">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">Loading inbox…</MudText>
+        </div>
+    }
+
+    @* ── Empty / Zero-inbox ── *@
+    else if (_notes.Count == 0)
+    {
+        <div class="inbox-empty">
+            <div class="inbox-empty__orbit" aria-hidden="true">
+                <MudIcon Icon="@Icons.Material.Outlined.AllInbox" Class="inbox-empty__icon" />
+                <span class="inbox-empty__ring inbox-empty__ring--1"></span>
+                <span class="inbox-empty__ring inbox-empty__ring--2"></span>
+            </div>
+            <MudText Typo="Typo.h6" GutterBottom="true" Class="inbox-empty__headline">
+                All clear
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-5">
+                Every captured note has been processed. Great work.
+            </MudText>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.NoteAdd"
+                       Href="/notes">
+                Capture a new note
+            </MudButton>
+        </div>
+    }
+
+    @* ── Note cards ── *@
+    else
+    {
+        <div class="inbox-list">
+            @foreach (var note in _notes)
+            {
+                <div class="inbox-card @(_busyId == note.Id ? "inbox-card--busy" : "")">
+
+                    <div class="inbox-card__body">
+                        <div class="inbox-card__meta">
+                            <span class="inbox-card__pill">Unprocessed</span>
+                            <span class="inbox-card__date">
+                                @note.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                            </span>
+                        </div>
+
+                        <p class="inbox-card__title">@note.Title</p>
+
+                        @if (!string.IsNullOrWhiteSpace(note.Content))
+                        {
+                            <p class="inbox-card__snippet">@TruncateContent(note.Content)</p>
+                        }
+                    </div>
+
+                    <div class="inbox-card__actions">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Check"
+                                   Disabled="_busy"
+                                   OnClick="() => ProcessNoteAsync(note)"
+                                   Class="inbox-card__btn-process">
+                            Process
+                        </MudButton>
+
+                        <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                       Size="Size.Small"
+                                       title="Edit note"
+                                       Disabled="_busy"
+                                       OnClick="() => EditNoteAsync(note)"
+                                       Class="inbox-card__btn-icon" />
+
+                        <MudIconButton Icon="@Icons.Material.Outlined.Archive"
+                                       Size="Size.Small"
+                                       title="Archive without processing"
+                                       Disabled="_busy"
+                                       OnClick="() => QuickArchiveAsync(note)"
+                                       Class="inbox-card__btn-icon" />
+                    </div>
+
+                </div>
+            }
+        </div>
+    }
+
+</div>
+
+<style>
+    /* ── Page ── */
+    .inbox-page {
+        max-width: 720px;
+        margin: 0 auto;
+    }
+
+    /* ── Hero ── */
+    .inbox-hero {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 2rem 0 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    .inbox-hero__heading-row {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        margin-bottom: 0.35rem;
+    }
+
+    .inbox-hero__heading {
+        font-family: 'Fraunces', serif !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.5px;
+        color: var(--mud-palette-text-primary);
+        margin: 0 !important;
+    }
+
+    .inbox-hero__badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.6rem;
+        height: 1.6rem;
+        padding: 0 0.4rem;
+        border-radius: 999px;
+        background: var(--clay, #c0561d);
+        color: #fff;
+        font-size: 0.78rem;
+        font-weight: 700;
+        font-family: 'Hanken Grotesk', sans-serif;
+        line-height: 1;
+    }
+
+    .inbox-hero__cta {
+        flex-shrink: 0;
+        margin-top: 0.25rem;
+    }
+
+    /* ── Progress bar ── */
+    .inbox-progress {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1.75rem;
+    }
+
+    .inbox-progress__track {
+        flex: 1;
+        height: 5px;
+        border-radius: 99px;
+        background: var(--mud-palette-lines-default);
+        overflow: hidden;
+    }
+
+    .inbox-progress__fill {
+        height: 100%;
+        border-radius: 99px;
+        background: var(--clay, #c0561d);
+        transition: width 0.4s ease;
+    }
+
+    .inbox-progress__label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-secondary);
+        white-space: nowrap;
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
+
+    /* ── Loading / empty states ── */
+    .inbox-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 4rem 1rem;
+        text-align: center;
+        gap: 0.5rem;
+    }
+
+    .inbox-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 3.5rem 1rem 2rem;
+        text-align: center;
+        gap: 0.25rem;
+    }
+
+    .inbox-empty__orbit {
+        position: relative;
+        width: 72px;
+        height: 72px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .inbox-empty__icon {
+        font-size: 2.5rem !important;
+        width: 2.5rem !important;
+        height: 2.5rem !important;
+        color: var(--clay, #c0561d);
+        opacity: 0.65;
+        position: relative;
+        z-index: 1;
+    }
+
+    .inbox-empty__ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 1.5px solid var(--clay, #c0561d);
+    }
+
+    .inbox-empty__ring--1 {
+        opacity: 0.18;
+        animation: inbox-ring-pulse 2.4s ease-out infinite;
+    }
+
+    .inbox-empty__ring--2 {
+        opacity: 0.10;
+        animation: inbox-ring-pulse 2.4s ease-out 1.2s infinite;
+    }
+
+    @@keyframes inbox-ring-pulse {
+        0%   { transform: scale(1);   opacity: 0.18; }
+        100% { transform: scale(2.0); opacity: 0; }
+    }
+
+    .inbox-empty__headline {
+        font-family: 'Fraunces', serif !important;
+        font-weight: 600 !important;
+    }
+
+    /* ── Cards ── */
+    .inbox-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+    }
+
+    .inbox-card {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 14px;
+        padding: 1rem 1.2rem;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.2s ease;
+    }
+
+    .inbox-card:hover {
+        border-color: rgba(192, 86, 29, 0.4);
+        box-shadow: 0 4px 16px rgba(192, 86, 29, 0.08);
+    }
+
+    .inbox-card--busy {
+        opacity: 0.55;
+        pointer-events: none;
+    }
+
+    .inbox-card__body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .inbox-card__meta {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.35rem;
+        flex-wrap: wrap;
+    }
+
+    .inbox-card__pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.1rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background: rgba(192, 86, 29, 0.10);
+        color: #c0561d;
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
+
+    .inbox-card__date {
+        font-size: 0.75rem;
+        color: var(--mud-palette-text-secondary);
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
+
+    .inbox-card__title {
+        font-family: 'Fraunces', serif;
+        font-weight: 600;
+        font-size: 0.975rem;
+        color: var(--mud-palette-text-primary);
+        margin: 0 0 0.3rem;
+        line-height: 1.35;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .inbox-card__snippet {
+        font-size: 0.82rem;
+        color: var(--mud-palette-text-secondary);
+        line-height: 1.55;
+        margin: 0;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    /* ── Card actions ── */
+    .inbox-card__actions {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        flex-shrink: 0;
+    }
+
+    .inbox-card__btn-process {
+        white-space: nowrap;
+    }
+
+    .inbox-card__btn-icon {
+        color: var(--mud-palette-text-secondary) !important;
+    }
+
+    .inbox-card__btn-icon:hover {
+        color: var(--mud-palette-text-primary) !important;
+    }
+
+    /* ── Responsive ── */
+    @@media (max-width: 540px) {
+        .inbox-card {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .inbox-card__actions {
+            width: 100%;
+            justify-content: flex-end;
+        }
+
+        .inbox-hero {
+            flex-direction: column;
+        }
+    }
+</style>
+
+@code {
+    private IReadOnlyList<NoteDto> _notes = [];
+    private bool _loading = true;
+    private bool _busy;
+    private Guid? _busyId;
+    private int _totalOnLoad;
+
+    private static readonly DialogOptions _processDialogOptions = new()
+    {
+        MaxWidth      = MaxWidth.Small,
+        FullWidth     = true,
+        BackdropClick = true,
+        CloseButton   = false,
+    };
+
+    private static readonly DialogOptions _editDialogOptions = new()
+    {
+        MaxWidth         = MaxWidth.Large,
+        FullWidth        = true,
+        BackdropClick    = false,
+        CloseOnEscapeKey = false,
+        CloseButton      = false,
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _notes   = await NoteService.GetInboxAsync();
+        if (_totalOnLoad == 0)
+            _totalOnLoad = _notes.Count;
+        _loading = false;
+    }
+
+    private async Task ProcessNoteAsync(NoteDto note)
+    {
+        var parameters = new DialogParameters<ProcessNoteDialog>
+        {
+            { x => x.Note, note }
+        };
+
+        var dialog = await DialogService.ShowAsync<ProcessNoteDialog>("", parameters, _processDialogOptions);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: ProcessNoteDto dto })
+        {
+            _busy   = true;
+            _busyId = note.Id;
+            try
+            {
+                await NoteService.ProcessNoteAsync(dto);
+                Snackbar.Add($"\"{note.Title}\" moved to {dto.ParaCategory}.", Severity.Success);
+                _notes = await NoteService.GetInboxAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Could not process note: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _busy   = false;
+                _busyId = null;
+            }
+        }
+    }
+
+    /// <summary>Opens the process dialog for the first (oldest) note in the inbox.</summary>
+    private async Task ProcessNextAsync()
+    {
+        if (_notes.Count == 0) return;
+        await ProcessNoteAsync(_notes[0]);
+    }
+
+    private async Task EditNoteAsync(NoteDto note)
+    {
+        var parameters = new DialogParameters<NoteEditorDialog>
+        {
+            { x => x.NoteId, note.Id }
+        };
+        var dialog = await DialogService.ShowAsync<NoteEditorDialog>("", parameters, _editDialogOptions);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            _notes = await NoteService.GetInboxAsync();
+    }
+
+    private async Task QuickArchiveAsync(NoteDto note)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Archive Note",
+            $"Archive \"{note.Title}\" without processing?",
+            yesText: "Archive", cancelText: "Cancel");
+
+        if (confirmed != true) return;
+
+        _busy   = true;
+        _busyId = note.Id;
+        try
+        {
+            await NoteService.ProcessNoteAsync(new ProcessNoteDto(
+                note.Id, ParaCategory.Archive, NoteStatus.Archived));
+            Snackbar.Add($"\"{note.Title}\" archived.", Severity.Info);
+            _notes = await NoteService.GetInboxAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not archive note: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy   = false;
+            _busyId = null;
+        }
+    }
+
+    private static string TruncateContent(string content) =>
+        content.Length <= 160 ? content : content[..160] + "…";
+}
