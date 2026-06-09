@@ -1,12 +1,17 @@
 @page "/"
 @attribute [Authorize]
 @using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.DTOs.Today
 @using Brainy.Application.DTOs.Projects
+@using Brainy.Application.DTOs.Dashboard
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
+@using Brainy.Web.Components.Pages.Today
 @inject ITodayService TodayService
 @inject ITaskService TaskService
-@inject IProjectService ProjectService
+@inject ITodayNotificationService NotificationService
+@inject IUserDashboardPreferenceService PreferenceService
+@inject IProjectPrioritizationService ProjectPrioritizationService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 
@@ -228,246 +233,82 @@
             }
             else
             {
+                @* ── Notification bar ── *@
+                @if (_notifications.Count > 0)
+                {
+                    <div style="display:flex; flex-direction:column; gap:0.4rem; margin-bottom:1.5rem;">
+                        @foreach (var n in _notifications)
+                        {
+                            <MudAlert Severity="@NotificationSeverity(n.Kind)"
+                                      Dense="true"
+                                      Variant="Variant.Outlined">
+                                @n.Message
+                            </MudAlert>
+                        }
+                    </div>
+                }
+
+                @* ── Quick actions toolbar ── *@
+                <TodayQuickActions />
+
+                @* ── Daily snapshot strip ── *@
+                <DailyFocusSummaryWidget Aggregate="_aggregate" />
+
+                @* ── Current focus ── *@
+                <CurrentTaskWidget Task="_aggregate?.CurrentTask"
+                                   OnChanged="LoadAsync" />
+
+                @* ── Inbox reminder ── *@
+                <InboxReminderWidget InboxCount="_aggregate?.InboxCount ?? 0"
+                                     WarningThreshold="_aggregate?.InboxWarningThreshold ?? 10"
+                                     ShowWarning="_aggregate?.InboxWarning ?? false" />
+
+                @* ── Task sections ── *@
                 <div class="td-sections">
 
-                    @if (_currentTasks.Count > 0)
+                    <OverdueWidget Tasks="_aggregate?.Overdue ?? []"
+                                   OnComplete="HandleCompleted" />
+
+                    <DueTodayWidget Tasks="_aggregate?.DueToday ?? []"
+                                    OnComplete="HandleCompleted" />
+
+                    <HighPriorityProjectWorkWidget Tasks="_aggregate?.HighPriorityWork ?? []"
+                                                   OnComplete="HandleCompleted" />
+
+                    <DueThisWeekWidget Tasks="_aggregate?.DueThisWeek ?? []"
+                                       OnComplete="HandleCompleted" />
+
+                    <NextTasksWidget Tasks="_aggregate?.NextTasks ?? []" />
+
+                    @* Empty state — only shown when there is truly nothing to act on *@
+                    @if ((_aggregate?.CurrentTask == null)
+                         && !(_aggregate?.Overdue?.Any() ?? false)
+                         && !(_aggregate?.DueToday?.Any() ?? false)
+                         && !(_aggregate?.HighPriorityWork?.Any() ?? false)
+                         && !(_aggregate?.DueThisWeek?.Any() ?? false)
+                         && !(_aggregate?.NextTasks?.Any() ?? false))
                     {
-                        <section class="td-section">
-                            <div class="td-section-head">
-                                <span class="td-section-label td-section-label--focus">Current focus</span>
-                                <span class="td-section-count">@_currentTasks.Count active</span>
-                            </div>
-                            @foreach (var t in _currentTasks)
-                            {
-                                <div class="td-task @PriorityClass(t.Priority)">
-                                    <div class="td-task-body">
-                                        <p class="td-task-title">@t.Title</p>
-                                        <div class="td-task-meta">
-                                            <span class="td-task-project">@t.ProjectName</span>
-                                            @if (t.DueDate.HasValue)
-                                            {
-                                                <span class="td-task-due">@t.DueDate.Value.ToString("MMM d")</span>
-                                            }
-                                        </div>
-                                    </div>
-                                    <MudTooltip Text="Mark complete">
-                                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
-                                                       Size="Size.Small" Color="Color.Success"
-                                                       OnClick="() => HandleCompleted(t.Id)" />
-                                    </MudTooltip>
-                                </div>
-                            }
-                        </section>
-                    }
-
-                    @if (_overdue.Count > 0)
-                    {
-                        <section class="td-section">
-                            <div class="td-section-head">
-                                <span class="td-section-label td-section-label--overdue">Overdue</span>
-                                <span class="td-section-count">@_overdue.Count task@(_overdue.Count == 1 ? "" : "s")</span>
-                            </div>
-                            @foreach (var t in _overdue)
-                            {
-                                <div class="td-task @PriorityClass(t.Priority) td-task--overdue">
-                                    <div class="td-task-body">
-                                        <p class="td-task-title">@t.Title</p>
-                                        <div class="td-task-meta">
-                                            <span class="td-task-project">@t.ProjectName</span>
-                                            @if (t.DueDate.HasValue)
-                                            {
-                                                <span class="td-task-due td-task-due--overdue">@t.DueDate.Value.ToString("MMM d")</span>
-                                            }
-                                        </div>
-                                    </div>
-                                    <MudTooltip Text="Mark complete">
-                                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
-                                                       Size="Size.Small" Color="Color.Success"
-                                                       OnClick="() => HandleCompleted(t.Id)" />
-                                    </MudTooltip>
-                                </div>
-                            }
-                        </section>
-                    }
-
-                    <section class="td-section">
-                        <div class="td-section-head">
-                            <span class="td-section-label td-section-label--today">Due today</span>
-                            <span class="td-section-count">@_dueToday.Count task@(_dueToday.Count == 1 ? "" : "s")</span>
-                        </div>
-                        @if (_dueToday.Count == 0)
-                        {
-                            <p class="td-empty">Nothing due today — clear skies ahead.</p>
-                        }
-                        @foreach (var t in _dueToday)
-                        {
-                            <div class="td-task @PriorityClass(t.Priority)">
-                                <div class="td-task-body">
-                                    <p class="td-task-title">@t.Title</p>
-                                    <div class="td-task-meta">
-                                        <span class="td-task-project">@t.ProjectName</span>
-                                    </div>
-                                </div>
-                                <MudTooltip Text="Mark complete">
-                                    <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
-                                                   Size="Size.Small" Color="Color.Success"
-                                                   OnClick="() => HandleCompleted(t.Id)" />
-                                </MudTooltip>
-                            </div>
-                        }
-                    </section>
-
-                    @if (_dueThisWeek.Count > 0)
-                    {
-                        <section class="td-section">
-                            <div class="td-section-head">
-                                <span class="td-section-label td-section-label--week">This week</span>
-                                <span class="td-section-count">@_dueThisWeek.Count task@(_dueThisWeek.Count == 1 ? "" : "s")</span>
-                            </div>
-                            @foreach (var t in _dueThisWeek)
-                            {
-                                <div class="td-task @PriorityClass(t.Priority)">
-                                    <div class="td-task-body">
-                                        <p class="td-task-title">@t.Title</p>
-                                        <div class="td-task-meta">
-                                            <span class="td-task-project">@t.ProjectName</span>
-                                            @if (t.DueDate.HasValue)
-                                            {
-                                                <span class="td-task-due">@t.DueDate.Value.ToString("MMM d")</span>
-                                            }
-                                        </div>
-                                    </div>
-                                    <MudTooltip Text="Mark complete">
-                                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
-                                                       Size="Size.Small" Color="Color.Success"
-                                                       OnClick="() => HandleCompleted(t.Id)" />
-                                    </MudTooltip>
-                                </div>
-                            }
-                        </section>
-                    }
-
-                    @if (_nextTasks.Count > 0)
-                    {
-                        <section class="td-section">
-                            <div class="td-section-head">
-                                <span class="td-section-label td-section-label--next">Coming up</span>
-                                <span class="td-section-count">next 3 weeks</span>
-                            </div>
-                            @foreach (var t in _nextTasks)
-                            {
-                                <div class="td-task @PriorityClass(t.Priority)">
-                                    <div class="td-task-body">
-                                        <p class="td-task-title">@t.Title</p>
-                                        <div class="td-task-meta">
-                                            <span class="td-task-project">@t.ProjectName</span>
-                                            @if (t.DueDate.HasValue)
-                                            {
-                                                <span class="td-task-due">@t.DueDate.Value.ToString("MMM d")</span>
-                                            }
-                                        </div>
-                                    </div>
-                                    <MudTooltip Text="Mark complete">
-                                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
-                                                       Size="Size.Small" Color="Color.Success"
-                                                       OnClick="() => HandleCompleted(t.Id)" />
-                                    </MudTooltip>
-                                </div>
-                            }
-                        </section>
-                    }
-
-                    @if (_currentTasks.Count == 0 && _overdue.Count == 0
-                        && _dueToday.Count == 0 && _dueThisWeek.Count == 0 && _nextTasks.Count == 0)
-                    {
-                        <div style="text-align:center;padding:3rem 0;color:var(--ink-faint);">
-                            <MudIcon Icon="@Icons.Material.Outlined.CheckCircleOutline"
-                                     Style="font-size:2.5rem;color:var(--sage);display:block;margin:0 auto 0.5rem;" />
-                            <p style="font-family:var(--font-display);font-style:italic;font-size:1.25rem;color:var(--ink-soft);margin:0;">
-                                Your horizon is clear.
-                            </p>
-                            <p style="font-size:0.82rem;margin-top:0.4rem;">No active tasks with due dates in the next 3 weeks.</p>
-                        </div>
-                    }
-
-                    @* ── Active Projects ── *@
-                    @if (_activeProjects.Count > 0 || _overdueProjects.Count > 0
-                        || _projectsDueToday.Count > 0 || _projectsDueThisWeek.Count > 0)
-                    {
-                        <div style="margin-top:1rem;padding-top:2rem;border-top:1px solid var(--line);">
-
-                            @* Overdue projects *@
-                            @if (_overdueProjects.Count > 0)
-                            {
-                                <section class="td-section" style="margin-bottom:1.5rem;">
-                                    <div class="td-section-head">
-                                        <span class="td-section-label td-section-label--overdue">Projects overdue</span>
-                                        <span class="td-section-count">@_overdueProjects.Count project@(_overdueProjects.Count == 1 ? "" : "s")</span>
-                                    </div>
-                                    <div style="display:flex;flex-direction:column;gap:0.5rem;">
-                                        @foreach (var p in _overdueProjects)
-                                        {
-                                            <ProjectSummaryCard Project="p" Compact="true" OnNavigate="OpenProject" />
-                                        }
-                                    </div>
-                                </section>
-                            }
-
-                            @* Projects due today *@
-                            @if (_projectsDueToday.Count > 0)
-                            {
-                                <section class="td-section" style="margin-bottom:1.5rem;">
-                                    <div class="td-section-head">
-                                        <span class="td-section-label td-section-label--today">Projects due today</span>
-                                        <span class="td-section-count">@_projectsDueToday.Count project@(_projectsDueToday.Count == 1 ? "" : "s")</span>
-                                    </div>
-                                    <div style="display:flex;flex-direction:column;gap:0.5rem;">
-                                        @foreach (var p in _projectsDueToday)
-                                        {
-                                            <ProjectSummaryCard Project="p" Compact="true" OnNavigate="OpenProject" />
-                                        }
-                                    </div>
-                                </section>
-                            }
-
-                            @* Projects due this week *@
-                            @if (_projectsDueThisWeek.Count > 0)
-                            {
-                                <section class="td-section" style="margin-bottom:1.5rem;">
-                                    <div class="td-section-head">
-                                        <span class="td-section-label td-section-label--week">Projects due this week</span>
-                                        <span class="td-section-count">@_projectsDueThisWeek.Count project@(_projectsDueThisWeek.Count == 1 ? "" : "s")</span>
-                                    </div>
-                                    <div style="display:flex;flex-direction:column;gap:0.5rem;">
-                                        @foreach (var p in _projectsDueThisWeek)
-                                        {
-                                            <ProjectSummaryCard Project="p" Compact="true" OnNavigate="OpenProject" />
-                                        }
-                                    </div>
-                                </section>
-                            }
-
-                            @* All active projects *@
-                            @if (_activeProjects.Count > 0)
-                            {
-                                <section class="td-section">
-                                    <div class="td-section-head">
-                                        <span class="td-section-label" style="color:var(--ink-soft);">Active projects</span>
-                                        <span class="td-section-count">@_activeProjects.Count in progress</span>
-                                    </div>
-                                    <div style="display:flex;flex-direction:column;gap:0.5rem;">
-                                        @foreach (var p in _activeProjects)
-                                        {
-                                            <ProjectSummaryCard Project="p" Compact="true" OnNavigate="OpenProject" />
-                                        }
-                                    </div>
-                                </section>
-                            }
-
-                        </div>
+                        <EmptyTodayExperience />
                     }
 
                 </div>
+
+                @* ── Priority projects ── *@
+                @if (_prioritizedProjects.Count > 0)
+                {
+                    <div style="margin-top:2rem; padding-top:2rem; border-top:1px solid var(--line);">
+                        <div class="td-section-head" style="margin-bottom:0.75rem;">
+                            <span class="td-section-label" style="color:var(--ink-soft);">Priority Projects</span>
+                            <span class="td-section-count">@_prioritizedProjects.Count project@(_prioritizedProjects.Count == 1 ? "" : "s")</span>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+                            @foreach (var p in _prioritizedProjects)
+                            {
+                                <ProjectSummaryCard Project="p" Compact="true" OnNavigate="OpenProject" />
+                            }
+                        </div>
+                    </div>
+                }
             }
 
         </div>
@@ -481,15 +322,9 @@
     private string DisplayName { get; set; } = "there";
     private bool _loading = true;
 
-    private IReadOnlyList<TodayTaskItemDto> _currentTasks = [];
-    private IReadOnlyList<TodayTaskItemDto> _overdue       = [];
-    private IReadOnlyList<TodayTaskItemDto> _dueToday      = [];
-    private IReadOnlyList<TodayTaskItemDto> _dueThisWeek   = [];
-    private IReadOnlyList<TodayTaskItemDto> _nextTasks      = [];
-    private IReadOnlyList<ProjectSummaryDto> _activeProjects      = [];
-    private IReadOnlyList<ProjectSummaryDto> _overdueProjects     = [];
-    private IReadOnlyList<ProjectSummaryDto> _projectsDueToday   = [];
-    private IReadOnlyList<ProjectSummaryDto> _projectsDueThisWeek = [];
+    private TodayAggregateDto? _aggregate;
+    private IReadOnlyList<TodayNotificationDto> _notifications = [];
+    private IReadOnlyList<ProjectSummaryDto> _prioritizedProjects = [];
 
     private string Greeting => DateTime.Now.Hour switch
     {
@@ -518,19 +353,12 @@
         _loading = true;
         StateHasChanged();
 
-        _currentTasks = await TodayService.GetCurrentTasksAsync();
-        _overdue       = await TodayService.GetOverdueAsync();
-        _dueToday      = await TodayService.GetDueTodayAsync();
-        _dueThisWeek   = await TodayService.GetDueThisWeekAsync();
-        _nextTasks      = await TodayService.GetNextTasksAsync();
-
-        var summaries = await ProjectService.GetProjectSummariesAsync();
-        _activeProjects      = summaries.Where(p => p.Status == ProjectStatus.Active).ToList();
-        _overdueProjects     = await ProjectService.GetOverdueProjectsAsync();
-        _projectsDueToday   = await ProjectService.GetDueTodayProjectsAsync();
-        _projectsDueThisWeek = await ProjectService.GetDueThisWeekProjectsAsync();
+        _aggregate           = await TodayService.GetTodayAggregateAsync();
+        _notifications       = await NotificationService.GetNotificationsAsync();
+        _prioritizedProjects = await ProjectPrioritizationService.GetPrioritizedProjectsAsync(5);
 
         _loading = false;
+        StateHasChanged();
     }
 
     private async Task HandleCompleted(Guid taskId)
@@ -547,13 +375,12 @@
         }
     }
 
-    private static string PriorityClass(TaskPriority p) => p switch
-    {
-        TaskPriority.Critical => "td-task--critical",
-        TaskPriority.High     => "td-task--high",
-        TaskPriority.Medium   => "td-task--medium",
-        _                     => "td-task--low",
-    };
-
     private void OpenProject(Guid id) => Nav.NavigateTo($"/projects/{id}");
+
+    private static Severity NotificationSeverity(TodayNotificationKind kind) => kind switch
+    {
+        TodayNotificationKind.OverdueTasks => Severity.Warning,
+        TodayNotificationKind.DueToday     => Severity.Warning,
+        _                                  => Severity.Info,
+    };
 }

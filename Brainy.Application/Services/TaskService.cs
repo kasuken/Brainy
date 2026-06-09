@@ -38,7 +38,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             .ThenBy(t => t.Title)
             .Select(t => new TaskItemDto(
                 t.Id, t.Title, t.Description, t.Status, t.Priority,
-                t.DueDate, t.CompletedDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
+                t.DueDate, t.CompletedDate, t.IsArchived, t.IsCurrentTask, t.ProjectId, t.ParentTaskId,
                 t.CreatedAtUtc, t.UpdatedAtUtc,
                 t.Subtasks.Count(s => !s.IsArchived),
                 t.Subtasks.Count(s => !s.IsArchived && s.Status == TaskItemStatus.Done)))
@@ -205,9 +205,52 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<TaskItemDto?> GetCurrentTaskAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var task = await context.Tasks
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.UserId == userId && t.IsCurrentTask, cancellationToken)
+            .ConfigureAwait(false);
+
+        return task is null ? null : ToDto(task);
+    }
+
+    public async Task<TaskItemDto> SetCurrentTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        // Clear the flag on all tasks for this user first to enforce the one-per-user invariant
+        await context.Tasks
+            .Where(t => t.UserId == userId && t.IsCurrentTask)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsCurrentTask, false), cancellationToken)
+            .ConfigureAwait(false);
+
+        var task = await context.Tasks
+            .FirstOrDefaultAsync(t => t.Id == taskId && t.UserId == userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Task '{taskId}' was not found.");
+
+        task.IsCurrentTask = true;
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return ToDto(task);
+    }
+
+    public async Task ClearCurrentTaskAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        await context.Tasks
+            .Where(t => t.UserId == userId && t.IsCurrentTask)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsCurrentTask, false), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     private static TaskItemDto ToDto(TaskItem t) => new(
         t.Id, t.Title, t.Description, t.Status, t.Priority,
-        t.DueDate, t.CompletedDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
+        t.DueDate, t.CompletedDate, t.IsArchived, t.IsCurrentTask, t.ProjectId, t.ParentTaskId,
         t.CreatedAtUtc, t.UpdatedAtUtc,
         SubtaskCount: 0, DoneSubtaskCount: 0);
 }

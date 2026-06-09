@@ -1,0 +1,37 @@
+@* ─────────────────────────────────────────────────────────────────────────────
+   TodayQuickActions — compact action toolbar near the top of Today.
+   Four outlined buttons: browse tasks, set focus, process inbox, new note.
+───────────────────────────────────────────────────────────────────────────── *@
+@inject NavigationManager Nav
+
+<div class="td-section" style="display:flex; gap:0.5rem; flex-wrap:wrap; padding-bottom:0.5rem;">
+
+    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+               StartIcon="@Icons.Material.Outlined.TaskAlt"
+               Style="border-color:var(--line-strong); color:var(--ink-soft); font-size:0.78rem;"
+               OnClick="@(() => Nav.NavigateTo("/projects"))">
+        Complete a Task
+    </MudButton>
+
+    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+               StartIcon="@Icons.Material.Outlined.CenterFocusStrong"
+               Style="border-color:var(--line-strong); color:var(--ink-soft); font-size:0.78rem;"
+               OnClick="@(() => Nav.NavigateTo("/projects"))">
+        Set Focus
+    </MudButton>
+
+    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+               StartIcon="@Icons.Material.Outlined.Inbox"
+               Style="border-color:var(--line-strong); color:var(--ink-soft); font-size:0.78rem;"
+               OnClick="@(() => Nav.NavigateTo("/inbox"))">
+        Process Inbox
+    </MudButton>
+
+    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+               StartIcon="@Icons.Material.Outlined.NoteAdd"
+               Style="border-color:var(--line-strong); color:var(--ink-soft); font-size:0.78rem;"
+               OnClick="@(() => Nav.NavigateTo("/notes"))">
+        New Note
+    </MudButton>
+
+</div>

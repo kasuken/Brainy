@@ -1,4 +1,5 @@
 using Brainy.Application.DTOs.Tasks;
+using Brainy.Application.DTOs.Today;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -11,7 +12,10 @@ namespace Brainy.Application.Services;
 /// Provides task aggregations for the Today screen.
 /// Every query enforces: non-archived task, non-archived project, top-level only.
 /// </summary>
-internal sealed class TodayService(IApplicationDbContext context, ICurrentUserService currentUser) : ITodayService
+internal sealed class TodayService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IProjectPrioritizationService projectPrioritizationService) : ITodayService
 {
     // Base active-task predicate: excludes archived tasks, tasks from archived projects,
     // done/archived statuses, and subtasks.
@@ -113,8 +117,69 @@ internal sealed class TodayService(IApplicationDbContext context, ICurrentUserSe
     }
 
     // ---------------------------------------------------------------------------
+    // New aggregate & inbox methods
+    // ---------------------------------------------------------------------------
+
+    public async Task<int> GetInboxCountAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await context.Notes
+            .AsNoTracking()
+            .CountAsync(n => n.UserId == userId && n.Status == NoteStatus.Inbox, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<TodayAggregateDto> GetTodayAggregateAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        // DbContext is not thread-safe, so queries must run sequentially even though
+        // the intent is to gather all data in a single pass.
+        var currentTask         = await GetCurrentTaskByFlagAsync(userId, cancellationToken).ConfigureAwait(false);
+        var highPriorityWork    = await GetHighPriorityTasksAsync(cancellationToken).ConfigureAwait(false);
+        var overdue             = await GetOverdueAsync(cancellationToken).ConfigureAwait(false);
+        var dueToday            = await GetDueTodayAsync(cancellationToken).ConfigureAwait(false);
+        var dueThisWeek         = await GetDueThisWeekAsync(cancellationToken).ConfigureAwait(false);
+        var nextTasks           = await GetNextTasksAsync(cancellationToken).ConfigureAwait(false);
+        var inboxCount          = await GetInboxCountAsync(cancellationToken).ConfigureAwait(false);
+        var prioritizedProjects = await projectPrioritizationService
+                                        .GetPrioritizedProjectsAsync(cancellationToken: cancellationToken)
+                                        .ConfigureAwait(false);
+
+        var prefs = await context.DashboardPreferences
+            .AsNoTracking()
+            .Where(p => p.UserId == userId)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var threshold = prefs?.InboxWarningThreshold ?? 10;
+
+        return new TodayAggregateDto(
+            currentTask,
+            highPriorityWork,
+            overdue,
+            dueToday,
+            dueThisWeek,
+            nextTasks,
+            inboxCount,
+            inboxCount >= threshold,
+            threshold,
+            prioritizedProjects);
+    }
+
+    // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns the single task the user has designated as their Current Task, or null if none is set.
+    /// </summary>
+    private Task<TodayTaskItemDto?> GetCurrentTaskByFlagAsync(string userId, CancellationToken cancellationToken) =>
+        ActiveBase(userId)
+            .Where(t => t.IsCurrentTask)
+            .Select(ToDto)
+            .FirstOrDefaultAsync(cancellationToken);
 
     /// <summary>
     /// Base queryable that enforces the "active task" contract:

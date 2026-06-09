@@ -1,0 +1,88 @@
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Domain.Enums
+
+@* ─────────────────────────────────────────────────────────────────────────────
+   DueThisWeekWidget — tasks due within the next 6 days, grouped by project.
+───────────────────────────────────────────────────────────────────────────── *@
+
+<div class="td-widget td-section">
+    <div class="td-section-head">
+        <span class="td-section-label td-section-label--week">This week</span>
+        <span class="td-section-count">@Tasks.Count task@(Tasks.Count == 1 ? "" : "s")</span>
+        <MudIconButton Icon="@(_collapsed ? Icons.Material.Outlined.ExpandMore : Icons.Material.Outlined.ExpandLess)"
+                       Size="Size.Small" Style="margin-left:auto; color:var(--ink-faint);"
+                       OnClick="() => _collapsed = !_collapsed" />
+    </div>
+
+    @if (!_collapsed)
+    {
+        @if (Tasks.Count == 0)
+        {
+            <p class="td-empty">Nothing due this week.</p>
+        }
+        else
+        {
+            @foreach (var group in Tasks.GroupBy(t => t.ProjectName))
+            {
+                <div style="margin-bottom:0.85rem;">
+                    <div style="font-size:0.7rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:0.35rem; padding-left:0.1rem;">
+                        @group.Key
+                    </div>
+                    @foreach (var t in group)
+                    {
+                        <div class="td-task @PriorityClass(t.Priority)">
+                            <div class="td-task-body">
+                                <p class="td-task-title">@t.Title</p>
+                                <div class="td-task-meta">
+                                    <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
+                                        @t.Priority.ToString()
+                                    </MudChip>
+                                    @if (t.DueDate.HasValue)
+                                    {
+                                        <span class="td-task-due">@t.DueDate.Value.ToString("ddd, MMM d")</span>
+                                    }
+                                </div>
+                            </div>
+                            <MudTooltip Text="Mark complete">
+                                <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                                               Size="Size.Small" Color="Color.Success"
+                                               OnClick="() => OnComplete.InvokeAsync(t.Id)" />
+                            </MudTooltip>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    /// <summary>Tasks due within the next 6 days (excluding today).</summary>
+    [Parameter] public IReadOnlyList<TodayTaskItemDto> Tasks { get; set; } = [];
+
+    /// <summary>Raised with the task ID when the user marks a task complete.</summary>
+    [Parameter] public EventCallback<Guid> OnComplete { get; set; }
+
+    /// <summary>Initial collapsed state, managed locally after first render.</summary>
+    [Parameter] public bool Collapsed { get; set; }
+
+    private bool _collapsed;
+
+    protected override void OnInitialized() => _collapsed = Collapsed;
+
+    private static Color PriorityColor(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => Color.Error,
+        TaskPriority.High     => Color.Warning,
+        TaskPriority.Medium   => Color.Info,
+        _                     => Color.Default,
+    };
+
+    private static string PriorityClass(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => "td-task--critical",
+        TaskPriority.High     => "td-task--high",
+        TaskPriority.Medium   => "td-task--medium",
+        _                     => "td-task--low",
+    };
+}

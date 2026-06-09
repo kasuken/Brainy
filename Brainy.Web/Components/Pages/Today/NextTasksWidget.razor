@@ -1,0 +1,98 @@
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Domain.Enums
+
+@* ─────────────────────────────────────────────────────────────────────────────
+   NextTasksWidget — tasks due 7–21 days out. Shows 5 initially, expandable.
+───────────────────────────────────────────────────────────────────────────── *@
+
+<div class="td-widget td-section">
+    <div class="td-section-head">
+        <span class="td-section-label td-section-label--next">Coming up</span>
+        <span class="td-section-count">next 3 weeks · @Tasks.Count task@(Tasks.Count == 1 ? "" : "s")</span>
+        <MudIconButton Icon="@(_collapsed ? Icons.Material.Outlined.ExpandMore : Icons.Material.Outlined.ExpandLess)"
+                       Size="Size.Small" Style="margin-left:auto; color:var(--ink-faint);"
+                       OnClick="() => _collapsed = !_collapsed" />
+    </div>
+
+    @if (!_collapsed)
+    {
+        @if (Tasks.Count == 0)
+        {
+            <p class="td-empty">Nothing on the horizon for the next three weeks.</p>
+        }
+        else
+        {
+            @foreach (var t in VisibleTasks)
+            {
+                <div class="td-task @PriorityClass(t.Priority)">
+                    <div class="td-task-body">
+                        <p class="td-task-title">@t.Title</p>
+                        <div class="td-task-meta">
+                            <span class="td-task-project">@t.ProjectName</span>
+                            <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
+                                @t.Priority.ToString()
+                            </MudChip>
+                            @if (t.DueDate.HasValue)
+                            {
+                                <span class="td-task-due">@t.DueDate.Value.ToString("MMM d")</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (!_showAll && Tasks.Count > PageSize)
+            {
+                <MudButton Variant="Variant.Text" Size="Size.Small"
+                           StartIcon="@Icons.Material.Outlined.ExpandMore"
+                           Style="color:var(--ink-soft); margin-top:0.25rem;"
+                           OnClick="() => _showAll = true">
+                    Show @(Tasks.Count - PageSize) more
+                </MudButton>
+            }
+            else if (_showAll && Tasks.Count > PageSize)
+            {
+                <MudButton Variant="Variant.Text" Size="Size.Small"
+                           StartIcon="@Icons.Material.Outlined.ExpandLess"
+                           Style="color:var(--ink-soft); margin-top:0.25rem;"
+                           OnClick="() => _showAll = false">
+                    Show less
+                </MudButton>
+            }
+        }
+    }
+</div>
+
+@code {
+    private const int PageSize = 5;
+
+    /// <summary>Tasks due 7–21 days from today.</summary>
+    [Parameter] public IReadOnlyList<TodayTaskItemDto> Tasks { get; set; } = [];
+
+    /// <summary>Initial collapsed state, managed locally after first render.</summary>
+    [Parameter] public bool Collapsed { get; set; }
+
+    private bool _collapsed;
+    private bool _showAll;
+
+    protected override void OnInitialized() => _collapsed = Collapsed;
+
+    private IEnumerable<TodayTaskItemDto> VisibleTasks =>
+        _showAll ? Tasks : Tasks.Take(PageSize);
+
+    private static Color PriorityColor(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => Color.Error,
+        TaskPriority.High     => Color.Warning,
+        TaskPriority.Medium   => Color.Info,
+        _                     => Color.Default,
+    };
+
+    private static string PriorityClass(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => "td-task--critical",
+        TaskPriority.High     => "td-task--high",
+        TaskPriority.Medium   => "td-task--medium",
+        _                     => "td-task--low",
+    };
+}

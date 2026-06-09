@@ -1,4 +1,5 @@
 using Brainy.Application.DTOs.Tasks;
+using Brainy.Application.DTOs.Today;
 
 namespace Brainy.Application.Interfaces.Services;
 
@@ -40,4 +41,14 @@ public interface ITodayService
     /// Returns non-done tasks due 7–21 days from today, capped at 10, ordered by due date.
     /// </summary>
     Task<IReadOnlyList<TodayTaskItemDto>> GetNextTasksAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the count of inbox notes (captured but not yet processed) for the current user.
+    /// </summary>
+    Task<int> GetInboxCountAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns a single aggregated snapshot of all Today data for the current user.
+    /// </summary>
+    Task<TodayAggregateDto> GetTodayAggregateAsync(CancellationToken cancellationToken = default);
 }

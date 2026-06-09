@@ -37,4 +37,16 @@ public interface ITaskService
 
     /// <summary>Permanently deletes a task and all its subtasks.</summary>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the task currently flagged as the Current Task for the user, or null if none is set.</summary>
+    Task<TaskItemDto?> GetCurrentTaskAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Designates the specified task as the user's Current Task.
+    /// Clears the flag on all other tasks for that user first, ensuring only one Current Task exists at a time.
+    /// </summary>
+    Task<TaskItemDto> SetCurrentTaskAsync(Guid taskId, CancellationToken cancellationToken = default);
+
+    /// <summary>Clears the Current Task flag from all tasks belonging to the current user.</summary>
+    Task ClearCurrentTaskAsync(CancellationToken cancellationToken = default);
 }

@@ -1,0 +1,47 @@
+@* ─────────────────────────────────────────────────────────────────────────────
+   InboxReminderWidget — compact horizontal bar showing unprocessed inbox count.
+   Turns amber when InboxCount >= WarningThreshold.
+───────────────────────────────────────────────────────────────────────────── *@
+
+<div class="td-widget td-section">
+    <div style="display:flex; align-items:center; gap:0.75rem; padding:0.65rem 0.9rem;
+                background:var(--paper-raised);
+                border:1px solid @(IsWarning ? "rgba(205,154,58,0.5)" : "var(--line)");
+                border-radius:8px;
+                box-shadow:var(--shadow-sm);
+                transition: border-color 0.2s;">
+
+        <MudIcon Icon="@Icons.Material.Outlined.Inbox"
+                 Style="@($"color:{(IsWarning ? "var(--gold)" : "var(--ink-faint)")}; font-size:18px; flex-shrink:0;")" />
+
+        <span style="font-size:0.82rem; color:var(--ink-soft);">
+            <strong style="color:@(InboxCount > 0 ? "var(--ink)" : "var(--ink-faint)");">@InboxCount</strong>
+            &nbsp;item@(InboxCount == 1 ? "" : "s") in inbox
+        </span>
+
+        @if (IsWarning)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined"
+                     Style="margin-left:0.25rem;">
+                Your inbox is growing
+            </MudChip>
+        }
+
+        <a href="/inbox" class="td-nav-chip" style="margin-left:auto; text-decoration:none; font-size:0.75rem; padding:0.3rem 0.7rem;">
+            Process →
+        </a>
+    </div>
+</div>
+
+@code {
+    /// <summary>Number of unprocessed inbox items.</summary>
+    [Parameter] public int InboxCount { get; set; }
+
+    /// <summary>Threshold above which the warning chip is shown. Defaults to 10.</summary>
+    [Parameter] public int WarningThreshold { get; set; } = 10;
+
+    /// <summary>When true, an amber warning chip is displayed. Also auto-computed from InboxCount >= WarningThreshold.</summary>
+    [Parameter] public bool ShowWarning { get; set; }
+
+    private bool IsWarning => ShowWarning || InboxCount >= WarningThreshold;
+}

@@ -29,6 +29,12 @@ public class TaskItem : BaseEntity, IUserOwnedEntity
     /// <summary>Archived tasks are excluded from active work screens.</summary>
     public bool IsArchived { get; set; }
 
+    /// <summary>
+    /// When true, this task is the user's designated Current Task.
+    /// Only one task per user may have this flag set; the service layer enforces this invariant.
+    /// </summary>
+    public bool IsCurrentTask { get; set; }
+
     public DateTime? ArchivedAtUtc { get; set; }
 
     public Guid ProjectId { get; set; }

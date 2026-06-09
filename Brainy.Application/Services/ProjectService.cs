@@ -116,7 +116,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             .Select(t => new
             {
                 t.Id, t.Title, t.Description, t.Status, t.Priority,
-                t.DueDate, t.CompletedDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
+                t.DueDate, t.CompletedDate, t.IsArchived, t.IsCurrentTask, t.ProjectId, t.ParentTaskId,
                 t.CreatedAtUtc, t.UpdatedAtUtc,
                 SubtaskCount     = t.Subtasks.Count(s => !s.IsArchived),
                 DoneSubtaskCount = t.Subtasks.Count(s => !s.IsArchived && s.Status == TaskItemStatus.Done),
@@ -136,7 +136,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             .Select(t => new
             {
                 t.Id, t.Title, t.Description, t.Status, t.Priority,
-                t.DueDate, t.CompletedDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
+                t.DueDate, t.CompletedDate, t.IsArchived, t.IsCurrentTask, t.ProjectId, t.ParentTaskId,
                 t.CreatedAtUtc, t.UpdatedAtUtc,
             })
             .ToListAsync(cancellationToken)
@@ -148,7 +148,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
                 g => g.Key,
                 g => (IReadOnlyList<TaskItemDto>)g.Select(s => new TaskItemDto(
                     s.Id, s.Title, s.Description, s.Status, s.Priority,
-                    s.DueDate, s.CompletedDate, s.IsArchived, s.ProjectId, s.ParentTaskId,
+                    s.DueDate, s.CompletedDate, s.IsArchived, s.IsCurrentTask, s.ProjectId, s.ParentTaskId,
                     s.CreatedAtUtc, s.UpdatedAtUtc, 0, 0)).ToList());
 
         var notes = await context.Notes
@@ -175,7 +175,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
 
         var taskDtos = tasks.Select(t => new TaskItemDto(
             t.Id, t.Title, t.Description, t.Status, t.Priority,
-            t.DueDate, t.CompletedDate, t.IsArchived, t.ProjectId, t.ParentTaskId,
+            t.DueDate, t.CompletedDate, t.IsArchived, t.IsCurrentTask, t.ProjectId, t.ParentTaskId,
             t.CreatedAtUtc, t.UpdatedAtUtc, t.SubtaskCount, t.DoneSubtaskCount,
             subtasksByParent.GetValueOrDefault(t.Id)))
             .ToList();

@@ -12,6 +12,7 @@ public record TaskItemDto(
     DateTime? DueDate,
     DateTime? CompletedDate,
     bool IsArchived,
+    bool IsCurrentTask,
     Guid ProjectId,
     Guid? ParentTaskId,
     DateTime CreatedAtUtc,

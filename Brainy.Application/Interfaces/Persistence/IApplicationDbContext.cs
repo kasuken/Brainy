@@ -23,6 +23,7 @@ public interface IApplicationDbContext
     DbSet<NoteRelationship> NoteRelationships { get; }
     DbSet<TaskItem> Tasks { get; }
     DbSet<Output> Outputs { get; }
+    DbSet<UserDashboardPreference> DashboardPreferences { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -1,0 +1,203 @@
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject ITaskService TaskService
+@inject ICurrentTaskRecommendationService RecommendationService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<div class="td-widget td-section">
+    <div class="td-section-head">
+        <span class="td-section-label td-section-label--focus">Current focus</span>
+        @if (Task is not null)
+        {
+            <span class="td-section-count">1 active</span>
+        }
+        <MudIconButton Icon="@(_collapsed ? Icons.Material.Outlined.ExpandMore : Icons.Material.Outlined.ExpandLess)"
+                       Size="Size.Small" Style="margin-left:auto; color:var(--ink-faint);"
+                       OnClick="() => _collapsed = !_collapsed" />
+    </div>
+
+    @if (!_collapsed)
+    {
+        @if (Task is not null)
+        {
+            <div style="border: 1px solid var(--line); border-left: 4px solid var(--clay); border-radius: 8px; background: var(--paper-raised); padding: 1.1rem 1.25rem; box-shadow: var(--shadow-sm);">
+
+                <div style="display:flex; align-items:flex-start; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.6rem;">
+                    <h2 style="font-family:var(--font-display); font-style:italic; font-size:1.3rem; font-weight:600; color:var(--ink); margin:0; flex:1; min-width:0; line-height:1.25;">
+                        @Task.Title
+                    </h2>
+                    <MudChip T="string" Size="Size.Small" Color="@PriorityColor(Task.Priority)" Variant="Variant.Outlined">
+                        @Task.Priority.ToString()
+                    </MudChip>
+                </div>
+
+                <div class="td-task-meta" style="margin-bottom:0.9rem;">
+                    <span class="td-task-project">@Task.ProjectName</span>
+                    @if (Task.DueDate.HasValue)
+                    {
+                        <span class="td-task-due @(Task.DueDate.Value.Date < DateTime.Today ? "td-task-due--overdue" : "")">
+                            Due @Task.DueDate.Value.ToString("MMM d")
+                        </span>
+                    }
+                </div>
+
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                               StartIcon="@Icons.Material.Outlined.CheckCircle"
+                               OnClick="HandleCompleteAsync"
+                               Disabled="_busy">
+                        Mark Complete
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                               StartIcon="@Icons.Material.Outlined.ClearAll"
+                               OnClick="HandleClearFocusAsync"
+                               Disabled="_busy">
+                        Clear Focus
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small"
+                               StartIcon="@Icons.Material.Outlined.SwapHoriz"
+                               OnClick="@(() => Nav.NavigateTo($"/projects/{Task.ProjectId}"))">
+                        Switch Task
+                    </MudButton>
+                </div>
+
+            </div>
+        }
+        else if (_recommendation is not null)
+        {
+            <div class="td-task @PriorityClass(_recommendation.Priority)">
+                <div class="td-task-body">
+                    <p class="td-task-title" style="font-family:var(--font-display); font-style:italic;">
+                        Suggested: @_recommendation.Title
+                    </p>
+                    <div class="td-task-meta">
+                        <span class="td-task-project">@_recommendation.ProjectName</span>
+                        @if (_recommendation.DueDate.HasValue)
+                        {
+                            <span class="td-task-due">@_recommendation.DueDate.Value.ToString("MMM d")</span>
+                        }
+                        <MudChip T="string" Size="Size.Small" Color="@PriorityColor(_recommendation.Priority)" Variant="Variant.Outlined">
+                            @_recommendation.Priority.ToString()
+                        </MudChip>
+                    </div>
+                </div>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary"
+                           OnClick="HandleSetFocusAsync"
+                           Disabled="_busy">
+                    Set as Focus
+                </MudButton>
+            </div>
+        }
+        else if (!_loadingRecommendation)
+        {
+            <p class="td-empty">Nothing in focus. Set a task as your current focus.</p>
+        }
+    }
+</div>
+
+@code {
+    /// <summary>The current task in progress, or null when none is set.</summary>
+    [Parameter] public TodayTaskItemDto? Task { get; set; }
+
+    /// <summary>Invoked after any action (complete, clear, set focus) so the parent can reload.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    /// <summary>Initial collapsed state, managed locally after first render.</summary>
+    [Parameter] public bool Collapsed { get; set; }
+
+    private bool _collapsed;
+    private bool _busy;
+    private bool _loadingRecommendation;
+    private TodayTaskItemDto? _recommendation;
+    private Guid? _prevTaskId = Guid.NewGuid(); // sentinel so first run always loads
+
+    protected override void OnInitialized() => _collapsed = Collapsed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload recommendation only when the Task identity changes
+        var currentId = Task?.Id;
+        if (currentId == _prevTaskId) return;
+
+        _prevTaskId = currentId;
+
+        if (Task is null)
+        {
+            _loadingRecommendation = true;
+            _recommendation = await RecommendationService.GetRecommendationAsync();
+            _loadingRecommendation = false;
+        }
+        else
+        {
+            _recommendation = null;
+        }
+    }
+
+    private async Task HandleCompleteAsync()
+    {
+        if (Task is null) return;
+        _busy = true;
+        try
+        {
+            await TaskService.CompleteAsync(Task.Id);
+            Snackbar.Add("Task completed.", Severity.Success);
+            await OnChanged.InvokeAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not complete task.", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task HandleClearFocusAsync()
+    {
+        _busy = true;
+        try
+        {
+            await TaskService.ClearCurrentTaskAsync();
+            Snackbar.Add("Focus cleared.", Severity.Info);
+            await OnChanged.InvokeAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not clear focus.", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task HandleSetFocusAsync()
+    {
+        if (_recommendation is null) return;
+        _busy = true;
+        try
+        {
+            await TaskService.SetCurrentTaskAsync(_recommendation.Id);
+            Snackbar.Add("Focus set.", Severity.Success);
+            await OnChanged.InvokeAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not set focus.", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+
+    private static Color PriorityColor(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => Color.Error,
+        TaskPriority.High     => Color.Warning,
+        TaskPriority.Medium   => Color.Info,
+        _                     => Color.Default,
+    };
+
+    private static string PriorityClass(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => "td-task--critical",
+        TaskPriority.High     => "td-task--high",
+        TaskPriority.Medium   => "td-task--medium",
+        _                     => "td-task--low",
+    };
+}

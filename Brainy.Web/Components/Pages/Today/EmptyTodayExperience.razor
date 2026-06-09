@@ -1,0 +1,43 @@
+@* ─────────────────────────────────────────────────────────────────────────────
+   EmptyTodayExperience — shown when the user has no active tasks at all.
+   Encourages processing the inbox or creating a project.
+───────────────────────────────────────────────────────────────────────────── *@
+@inject NavigationManager Nav
+
+<div class="td-section" style="text-align:center; padding:3rem 1rem;">
+
+    <MudIcon Icon="@Icons.Material.Outlined.CheckCircleOutline"
+             Style="font-size:3rem; color:var(--sage); display:block; margin:0 auto 1rem;" />
+
+    <h2 style="font-family:var(--font-display); font-style:italic; font-size:1.75rem; font-weight:600; color:var(--ink-soft); margin:0 0 0.5rem;">
+        Your horizon is clear.
+    </h2>
+
+    <p style="font-size:0.85rem; color:var(--ink-faint); margin:0 0 2rem; max-width:340px; margin-left:auto; margin-right:auto;">
+        No active tasks, nothing overdue, nothing due this week. A pristine slate.
+    </p>
+
+    <div style="display:flex; justify-content:center; gap:0.75rem; flex-wrap:wrap;">
+
+        <MudButton Variant="Variant.Outlined" Size="Size.Medium"
+                   StartIcon="@Icons.Material.Outlined.Inbox"
+                   Style="border-color:var(--line-strong); color:var(--ink-soft);"
+                   OnClick="@(() => Nav.NavigateTo("/inbox"))">
+            Process Inbox
+        </MudButton>
+
+        <MudButton Variant="Variant.Outlined" Size="Size.Medium"
+                   StartIcon="@Icons.Material.Outlined.FolderSpecial"
+                   Style="border-color:var(--line-strong); color:var(--ink-soft);"
+                   OnClick="@(() => Nav.NavigateTo("/projects"))">
+            Create Project
+        </MudButton>
+
+        <div style="display:flex; align-items:center; gap:0.4rem; padding:0.4rem 0.85rem; border:1px solid var(--line); border-radius:999px; background:var(--paper-raised); font-size:0.78rem; color:var(--sage);">
+            <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Style="font-size:14px;" />
+            All clear
+        </div>
+
+    </div>
+
+</div>
