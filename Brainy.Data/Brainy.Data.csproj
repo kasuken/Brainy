@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Brainy.Application\Brainy.Application.csproj" />
     <ProjectReference Include="..\Brainy.Domain\Brainy.Domain.csproj" />
   </ItemGroup>
 

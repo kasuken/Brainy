@@ -1,3 +1,4 @@
+using Brainy.Application.Interfaces.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +24,9 @@ public static class DependencyInjection
 
         services.AddDbContext<BrainyDbContext>(options =>
             options.UseSqlServer(connectionString));
+
+        // Expose the concrete context via the Application-layer abstraction.
+        services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<BrainyDbContext>());
 
         return services;
     }

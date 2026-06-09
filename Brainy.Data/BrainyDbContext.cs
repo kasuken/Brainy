@@ -1,3 +1,4 @@
+using Brainy.Application.Interfaces.Persistence;
 using Brainy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,7 +8,7 @@ namespace Brainy.Data;
 /// The Entity Framework Core context for Brainy. Entity shapes are configured via
 /// <see cref="IEntityTypeConfiguration{TEntity}"/> implementations in the Configurations folder.
 /// </summary>
-public class BrainyDbContext(DbContextOptions<BrainyDbContext> options) : DbContext(options)
+public class BrainyDbContext(DbContextOptions<BrainyDbContext> options) : DbContext(options), IApplicationDbContext
 {
     public DbSet<Area> Areas => Set<Area>();
 

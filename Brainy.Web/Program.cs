@@ -1,3 +1,4 @@
+using Brainy.Application;
 using Brainy.Data;
 using Brainy.Web.Components;
 using MudBlazor.Services;
@@ -12,6 +13,9 @@ builder.Services.AddMudServices();
 
 // Data access layer (EF Core / SQL Server).
 builder.Services.AddBrainyData(builder.Configuration);
+
+// Application-layer services.
+builder.Services.AddBrainyApplication();
 
 var app = builder.Build();
 
