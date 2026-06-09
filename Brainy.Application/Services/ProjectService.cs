@@ -28,6 +28,21 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             .ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<ProjectDto>> GetAllNonArchivedAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await context.Projects
+            .AsNoTracking()
+            .Where(p => p.UserId == userId && p.Status != ProjectStatus.Archived && !p.IsArchived)
+            .OrderByDescending(p => p.Priority)
+            .ThenBy(p => p.Status)
+            .ThenBy(p => p.Name)
+            .Select(p => ToDto(p))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public async Task<ProjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
