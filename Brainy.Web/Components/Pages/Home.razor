@@ -391,22 +391,80 @@
                     }
 
                     @* ── Active Projects ── *@
-                    @if (_activeProjects.Count > 0)
+                    @if (_activeProjects.Count > 0 || _overdueProjects.Count > 0
+                        || _projectsDueToday.Count > 0 || _projectsDueThisWeek.Count > 0)
                     {
-                        <section class="td-section" style="margin-top:1rem;padding-top:2rem;border-top:1px solid var(--line);">
-                            <div class="td-section-head">
-                                <span class="td-section-label" style="color:var(--ink-soft);">Active projects</span>
-                                <span class="td-section-count">@_activeProjects.Count in progress</span>
-                            </div>
-                            <div style="display:flex;flex-direction:column;gap:0.5rem;">
-                                @foreach (var p in _activeProjects)
-                                {
-                                    <ProjectSummaryCard Project="p"
-                                                        Compact="true"
-                                                        OnNavigate="OpenProject" />
-                                }
-                            </div>
-                        </section>
+                        <div style="margin-top:1rem;padding-top:2rem;border-top:1px solid var(--line);">
+
+                            @* Overdue projects *@
+                            @if (_overdueProjects.Count > 0)
+                            {
+                                <section class="td-section" style="margin-bottom:1.5rem;">
+                                    <div class="td-section-head">
+                                        <span class="td-section-label td-section-label--overdue">Projects overdue</span>
+                                        <span class="td-section-count">@_overdueProjects.Count project@(_overdueProjects.Count == 1 ? "" : "s")</span>
+                                    </div>
+                                    <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                                        @foreach (var p in _overdueProjects)
+                                        {
+                                            <ProjectSummaryCard Project="p" Compact="true" OnNavigate="OpenProject" />
+                                        }
+                                    </div>
+                                </section>
+                            }
+
+                            @* Projects due today *@
+                            @if (_projectsDueToday.Count > 0)
+                            {
+                                <section class="td-section" style="margin-bottom:1.5rem;">
+                                    <div class="td-section-head">
+                                        <span class="td-section-label td-section-label--today">Projects due today</span>
+                                        <span class="td-section-count">@_projectsDueToday.Count project@(_projectsDueToday.Count == 1 ? "" : "s")</span>
+                                    </div>
+                                    <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                                        @foreach (var p in _projectsDueToday)
+                                        {
+                                            <ProjectSummaryCard Project="p" Compact="true" OnNavigate="OpenProject" />
+                                        }
+                                    </div>
+                                </section>
+                            }
+
+                            @* Projects due this week *@
+                            @if (_projectsDueThisWeek.Count > 0)
+                            {
+                                <section class="td-section" style="margin-bottom:1.5rem;">
+                                    <div class="td-section-head">
+                                        <span class="td-section-label td-section-label--week">Projects due this week</span>
+                                        <span class="td-section-count">@_projectsDueThisWeek.Count project@(_projectsDueThisWeek.Count == 1 ? "" : "s")</span>
+                                    </div>
+                                    <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                                        @foreach (var p in _projectsDueThisWeek)
+                                        {
+                                            <ProjectSummaryCard Project="p" Compact="true" OnNavigate="OpenProject" />
+                                        }
+                                    </div>
+                                </section>
+                            }
+
+                            @* All active projects *@
+                            @if (_activeProjects.Count > 0)
+                            {
+                                <section class="td-section">
+                                    <div class="td-section-head">
+                                        <span class="td-section-label" style="color:var(--ink-soft);">Active projects</span>
+                                        <span class="td-section-count">@_activeProjects.Count in progress</span>
+                                    </div>
+                                    <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                                        @foreach (var p in _activeProjects)
+                                        {
+                                            <ProjectSummaryCard Project="p" Compact="true" OnNavigate="OpenProject" />
+                                        }
+                                    </div>
+                                </section>
+                            }
+
+                        </div>
                     }
 
                 </div>
@@ -428,7 +486,10 @@
     private IReadOnlyList<TodayTaskItemDto> _dueToday      = [];
     private IReadOnlyList<TodayTaskItemDto> _dueThisWeek   = [];
     private IReadOnlyList<TodayTaskItemDto> _nextTasks      = [];
-    private IReadOnlyList<ProjectSummaryDto> _activeProjects = [];
+    private IReadOnlyList<ProjectSummaryDto> _activeProjects      = [];
+    private IReadOnlyList<ProjectSummaryDto> _overdueProjects     = [];
+    private IReadOnlyList<ProjectSummaryDto> _projectsDueToday   = [];
+    private IReadOnlyList<ProjectSummaryDto> _projectsDueThisWeek = [];
 
     private string Greeting => DateTime.Now.Hour switch
     {
@@ -464,7 +525,10 @@
         _nextTasks      = await TodayService.GetNextTasksAsync();
 
         var summaries = await ProjectService.GetProjectSummariesAsync();
-        _activeProjects = summaries.Where(p => p.Status == ProjectStatus.Active).ToList();
+        _activeProjects      = summaries.Where(p => p.Status == ProjectStatus.Active).ToList();
+        _overdueProjects     = await ProjectService.GetOverdueProjectsAsync();
+        _projectsDueToday   = await ProjectService.GetDueTodayProjectsAsync();
+        _projectsDueThisWeek = await ProjectService.GetDueThisWeekProjectsAsync();
 
         _loading = false;
     }

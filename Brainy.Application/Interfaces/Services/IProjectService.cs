@@ -17,6 +17,24 @@ public interface IProjectService
     /// <summary>Returns all non-archived projects enriched with task statistics — used by the Project List page.</summary>
     Task<IReadOnlyList<ProjectSummaryDto>> GetProjectSummariesAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Returns non-archived, non-completed projects whose due date is today.
+    /// Used by the Today screen for deadline monitoring.
+    /// </summary>
+    Task<IReadOnlyList<ProjectSummaryDto>> GetDueTodayProjectsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns non-archived, non-completed projects due within the next 1–6 days (excluding today).
+    /// Used by the Today screen for deadline monitoring.
+    /// </summary>
+    Task<IReadOnlyList<ProjectSummaryDto>> GetDueThisWeekProjectsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns non-archived, non-completed projects whose due date is in the past.
+    /// Ordered by due date ascending (most overdue first).
+    /// </summary>
+    Task<IReadOnlyList<ProjectSummaryDto>> GetOverdueProjectsAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Returns the full project workspace — tasks, notes, and resource notes included.</summary>
     Task<ProjectDetailDto?> GetProjectDetailAsync(Guid id, CancellationToken cancellationToken = default);
 

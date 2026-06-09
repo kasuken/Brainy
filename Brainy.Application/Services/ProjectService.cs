@@ -383,4 +383,123 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         p.CreatedAtUtc,
         p.UpdatedAtUtc,
         p.ArchivedAtUtc);
+
+    // ── Deadline monitoring ──────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<ProjectSummaryDto>> GetDueTodayProjectsAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var today  = DateTime.Today;
+
+        var data = await BuildDeadlineSummaryQuery(userId, today)
+            .Where(p => p.DueDate.HasValue && p.DueDate.Value.Date == today)
+            .OrderByDescending(x => x.Priority)
+            .ThenBy(x => x.Name)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return data.Select(x => MapToSummary(x, today)).ToList();
+    }
+
+    public async Task<IReadOnlyList<ProjectSummaryDto>> GetDueThisWeekProjectsAsync(CancellationToken cancellationToken = default)
+    {
+        var userId   = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var today    = DateTime.Today;
+        var tomorrow = today.AddDays(1);
+        var weekEnd  = today.AddDays(6);
+
+        var data = await BuildDeadlineSummaryQuery(userId, today)
+            .Where(p => p.DueDate.HasValue
+                        && p.DueDate.Value.Date >= tomorrow
+                        && p.DueDate.Value.Date <= weekEnd)
+            .OrderBy(x => x.DueDate)
+            .ThenByDescending(x => x.Priority)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return data.Select(x => MapToSummary(x, today)).ToList();
+    }
+
+    public async Task<IReadOnlyList<ProjectSummaryDto>> GetOverdueProjectsAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var today  = DateTime.Today;
+
+        var data = await BuildDeadlineSummaryQuery(userId, today)
+            .Where(p => p.DueDate.HasValue && p.DueDate.Value.Date < today)
+            .OrderBy(x => x.DueDate)
+            .ThenByDescending(x => x.Priority)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return data.Select(x => MapToSummary(x, today)).ToList();
+    }
+
+    /// <summary>
+    /// Base query for deadline monitoring: non-archived, non-completed, non-archived projects
+    /// with a due date set. Includes task subquery projections.
+    /// </summary>
+    private IQueryable<DeadlineProjection> BuildDeadlineSummaryQuery(string userId, DateTime today) =>
+        context.Projects
+            .AsNoTracking()
+            .Where(p => p.UserId == userId
+                        && !p.IsArchived
+                        && p.Status != ProjectStatus.Archived
+                        && p.Status != ProjectStatus.Completed
+                        && p.DueDate.HasValue)
+            .Select(p => new DeadlineProjection
+            {
+                Id           = p.Id,
+                Name         = p.Name,
+                Description  = p.Description,
+                DesiredOutcome = p.DesiredOutcome,
+                Status       = p.Status,
+                Priority     = p.Priority,
+                StartDate    = p.StartDate,
+                DueDate      = p.DueDate,
+                CompletedDate = p.CompletedDate,
+                IsArchived   = p.IsArchived,
+                AreaId       = p.AreaId,
+                CreatedAtUtc = p.CreatedAtUtc,
+                UpdatedAtUtc = p.UpdatedAtUtc,
+                ArchivedAtUtc = p.ArchivedAtUtc,
+                TotalTasks   = p.Tasks.Count(t => !t.IsArchived),
+                OpenTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status != TaskItemStatus.Done),
+                DoneTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status == TaskItemStatus.Done),
+                OverdueTasks = p.Tasks.Count(t => !t.IsArchived
+                                                  && t.Status != TaskItemStatus.Done
+                                                  && t.DueDate.HasValue
+                                                  && t.DueDate.Value.Date < today),
+            });
+
+    private static ProjectSummaryDto MapToSummary(DeadlineProjection x, DateTime _) => new(
+        x.Id, x.Name, x.Description, x.DesiredOutcome, x.Status, x.Priority,
+        x.StartDate, x.DueDate, x.CompletedDate, x.IsArchived, x.AreaId,
+        x.CreatedAtUtc, x.UpdatedAtUtc, x.ArchivedAtUtc,
+        x.TotalTasks, x.OpenTasks, x.DoneTasks,
+        x.TotalTasks > 0 ? Math.Round((double)x.DoneTasks / x.TotalTasks * 100, 1) : 0,
+        x.OverdueTasks);
+
+    /// <summary>Anonymous-type-equivalent for EF projection in deadline queries.</summary>
+    private sealed class DeadlineProjection
+    {
+        public Guid Id { get; init; }
+        public string Name { get; init; } = string.Empty;
+        public string? Description { get; init; }
+        public string? DesiredOutcome { get; init; }
+        public ProjectStatus Status { get; init; }
+        public ProjectPriority Priority { get; init; }
+        public DateTime? StartDate { get; init; }
+        public DateTime? DueDate { get; init; }
+        public DateTime? CompletedDate { get; init; }
+        public bool IsArchived { get; init; }
+        public Guid? AreaId { get; init; }
+        public DateTime CreatedAtUtc { get; init; }
+        public DateTime UpdatedAtUtc { get; init; }
+        public DateTime? ArchivedAtUtc { get; init; }
+        public int TotalTasks { get; init; }
+        public int OpenTasks { get; init; }
+        public int DoneTasks { get; init; }
+        public int OverdueTasks { get; init; }
+    }
 }
