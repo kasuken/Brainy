@@ -1,0 +1,137 @@
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject ITaskService TaskService
+@inject ISnackbar Snackbar
+
+<MudDialog Class="ted-dialog">
+    <TitleContent>
+        <div class="ted-header">
+            <span class="ted-header__glyph">@(TaskId.HasValue ? "✎" : "+")</span>
+            <span class="ted-header__title">@(TaskId.HasValue ? "Edit Task" : "New Task")</span>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3" Class="ted-form">
+            <MudTextField @bind-Value="_title"
+                          Label="Title"
+                          Required="true"
+                          Variant="Variant.Outlined"
+                          Immediate="true"
+                          AutoFocus="true"
+                          FullWidth="true" />
+            <MudTextField @bind-Value="_description"
+                          Label="Description"
+                          Lines="3"
+                          Variant="Variant.Outlined"
+                          FullWidth="true" />
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudSelect @bind-Value="_priority" Label="Priority" Variant="Variant.Outlined" FullWidth="true">
+                        <MudSelectItem Value="TaskPriority.Low">↓ Low</MudSelectItem>
+                        <MudSelectItem Value="TaskPriority.Medium">— Medium</MudSelectItem>
+                        <MudSelectItem Value="TaskPriority.High">↑ High</MudSelectItem>
+                        <MudSelectItem Value="TaskPriority.Critical">⚑ Critical</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect @bind-Value="_status" Label="Status" Variant="Variant.Outlined" FullWidth="true">
+                        <MudSelectItem Value="TaskItemStatus.Todo">To Do</MudSelectItem>
+                        <MudSelectItem Value="TaskItemStatus.InProgress">In Progress</MudSelectItem>
+                        <MudSelectItem Value="TaskItemStatus.Waiting">Waiting</MudSelectItem>
+                        <MudSelectItem Value="TaskItemStatus.Done">Done</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+            <MudDatePicker @bind-Date="_dueDate"
+                           Label="Due Date"
+                           Variant="Variant.Outlined"
+                           Clearable="true"
+                           DateFormat="MMM d, yyyy" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_saving">
+            @(_saving ? "Saving…" : (TaskId.HasValue ? "Save changes" : "Create task"))
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+.ted-dialog .mud-dialog { border-radius: 16px; }
+.ted-header {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+.ted-header__glyph {
+    font-size: 1.3rem;
+    color: var(--clay);
+    line-height: 1;
+}
+.ted-header__title {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--ink);
+}
+.ted-form { padding: .25rem 0 .5rem; }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid? TaskId { get; set; }
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public TaskItemStatus InitialStatus { get; set; } = TaskItemStatus.Todo;
+
+    private string _title = string.Empty;
+    private string? _description;
+    private TaskPriority _priority = TaskPriority.Medium;
+    private TaskItemStatus _status = TaskItemStatus.Todo;
+    private DateTime? _dueDate;
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _status = InitialStatus;
+
+        if (TaskId.HasValue)
+        {
+            var task = await TaskService.GetByIdAsync(TaskId.Value);
+            if (task is not null)
+            {
+                _title       = task.Title;
+                _description = task.Description;
+                _priority    = task.Priority;
+                _status      = task.Status;
+                _dueDate     = task.DueDate;
+            }
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_title)) return;
+        _saving = true;
+        try
+        {
+            if (TaskId.HasValue)
+                await TaskService.UpdateAsync(new UpdateTaskDto(TaskId.Value, _title, _description, _status, _priority, _dueDate));
+            else
+                await TaskService.CreateAsync(new CreateTaskDto(ProjectId, _title, _description, _priority, _dueDate));
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

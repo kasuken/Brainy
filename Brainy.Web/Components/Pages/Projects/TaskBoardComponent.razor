@@ -1,0 +1,566 @@
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject ITaskService TaskService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@if (_loading)
+{
+    <div class="tb-skeleton">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Medium" />
+    </div>
+}
+else
+{
+    <div class="tb-board">
+        @foreach (var col in _columns)
+        {
+            var tasks = _tasksByStatus.GetValueOrDefault(col.Status) ?? [];
+            var isDragOver = _dragOverStatus == col.Status;
+
+            <div class="tb-column @(isDragOver ? "tb-column--dragover" : "")"
+                 style="--col-color: @col.Color"
+                 @ondragenter="() => OnDragEnter(col.Status)"
+                 @ondragover:preventDefault
+                 @ondrop:preventDefault
+                 @ondrop="() => OnDrop(col.Status)">
+
+                <!-- Column header -->
+                <div class="tb-col-header">
+                    <div class="tb-col-accent"></div>
+                    <div class="tb-col-meta">
+                        <span class="tb-col-name">@col.Name</span>
+                        <span class="tb-col-count">@tasks.Count</span>
+                    </div>
+                </div>
+
+                <!-- Card list (also a drop zone) -->
+                <div class="tb-col-body"
+                     @ondragover:preventDefault
+                     @ondrop:preventDefault
+                     @ondrop="() => OnDrop(col.Status)">
+
+                    @if (!tasks.Any())
+                    {
+                        <div class="tb-col-empty">
+                            <span class="tb-col-empty__icon">@col.EmptyIcon</span>
+                            <span>@col.EmptyLabel</span>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var task in tasks)
+                        {
+                            <div class="tb-card @(task.Id == _draggingTaskId ? "tb-card--dragging" : "") @(task.Status == TaskItemStatus.Done ? "tb-card--done" : "")"
+                                 draggable="true"
+                                 @ondragstart="() => OnDragStart(task.Id)"
+                                 @ondragend="OnDragEnd"
+                                 @ondragover:preventDefault>
+
+                                <div class="tb-card__strip tb-strip--@task.Priority.ToString().ToLower()"></div>
+
+                                <div class="tb-card__inner">
+                                    <div class="tb-card__title">@task.Title</div>
+
+                                    @if (!string.IsNullOrWhiteSpace(task.Description))
+                                    {
+                                        <div class="tb-card__desc">@task.Description</div>
+                                    }
+
+                                    @if (task.SubtaskCount > 0)
+                                    {
+                                        <div class="tb-card__subtasks">
+                                            <div class="tb-subtask-bar">
+                                                <div class="tb-subtask-bar__fill"
+                                                     style="width:@(task.SubtaskCount > 0 ? task.DoneSubtaskCount * 100 / task.SubtaskCount : 0)%">
+                                                </div>
+                                            </div>
+                                            <span>@task.DoneSubtaskCount/@task.SubtaskCount</span>
+                                        </div>
+                                    }
+
+                                    <div class="tb-card__footer">
+                                        @if (task.DueDate.HasValue)
+                                        {
+                                            var overdue = task.DueDate < DateTime.Today && task.Status != TaskItemStatus.Done;
+                                            <span class="tb-card__due @(overdue ? "tb-card__due--overdue" : "")">
+                                                <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10">
+                                                    <path d="M11 6.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zm-3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zM3.5 6a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1zM11 9.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zm-3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zM3.5 9a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1z"/>
+                                                    <path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5zM1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4H1z"/>
+                                                </svg>
+                                                @task.DueDate.Value.ToString("MMM d")
+                                            </span>
+                                        }
+                                        <span class="tb-card__priority tb-p--@task.Priority.ToString().ToLower()">
+                                            @PriorityLabel(task.Priority)
+                                        </span>
+                                        <div class="tb-card__actions">
+                                            <button class="tb-action" @onclick="() => OpenEditDialog(task.Id)" title="Edit task">
+                                                <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
+                                                    <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178z"/>
+                                                </svg>
+                                            </button>
+                                            <button class="tb-action tb-action--delete" @onclick="() => ConfirmDeleteTask(task.Id, task.Title)" title="Delete task">
+                                                <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
+                                                    <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                                    <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+
+                    <button class="tb-add-btn" @onclick="() => OpenAddDialog(col.Status)">
+                        <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
+                            <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/>
+                        </svg>
+                        Add task
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Task Board Component — "Field Log" Kanban
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.tb-skeleton {
+    display: flex;
+    justify-content: center;
+    padding: 4rem;
+}
+
+/* Board grid */
+.tb-board {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(220px, 1fr));
+    gap: 1rem;
+    align-items: start;
+    overflow-x: auto;
+    padding-bottom: .5rem;
+}
+
+/* Column */
+.tb-column {
+    background: var(--paper-sunk);
+    border-radius: 14px;
+    border: 2px solid transparent;
+    transition: border-color .2s, background .2s;
+    overflow: hidden;
+    min-height: 200px;
+}
+.tb-column--dragover {
+    border-color: var(--col-color, var(--clay));
+    background: color-mix(in srgb, var(--col-color, var(--clay)) 6%, var(--paper-sunk));
+}
+
+/* Column header */
+.tb-col-header { position: relative; }
+.tb-col-accent {
+    height: 4px;
+    background: var(--col-color);
+    border-radius: 2px 2px 0 0;
+}
+.tb-col-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .65rem .9rem .4rem;
+}
+.tb-col-name {
+    font-family: var(--font-body);
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--col-color);
+}
+.tb-col-count {
+    font-family: var(--font-display);
+    font-size: .9rem;
+    font-weight: 500;
+    color: var(--ink-faint);
+    background: var(--paper-raised);
+    border-radius: 999px;
+    padding: .1rem .5rem;
+    min-width: 1.6rem;
+    text-align: center;
+    line-height: 1.4;
+}
+
+/* Column body */
+.tb-col-body {
+    padding: .4rem .6rem .6rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    min-height: 80px;
+}
+
+/* Empty state */
+.tb-col-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .35rem;
+    padding: 1.5rem .5rem;
+    color: var(--ink-faint);
+    font-size: .78rem;
+    text-align: center;
+    opacity: .6;
+    pointer-events: none;
+}
+.tb-col-empty__icon {
+    font-size: 1.4rem;
+    line-height: 1;
+}
+
+/* Task card */
+.tb-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    display: flex;
+    align-items: stretch;
+    cursor: grab;
+    transition: box-shadow .2s, transform .15s, opacity .2s;
+    animation: tb-card-in .22s ease backwards;
+    overflow: hidden;
+    position: relative;
+}
+.tb-card:hover {
+    box-shadow: 0 4px 14px rgba(33,29,23,.12);
+    transform: translateY(-1px);
+}
+.tb-card:active { cursor: grabbing; }
+.tb-card--dragging {
+    opacity: .25;
+    transform: rotate(1.5deg) scale(1.03);
+    box-shadow: 0 12px 28px rgba(33,29,23,.2);
+}
+.tb-card--done {
+    opacity: .55;
+}
+.tb-card--done .tb-card__title {
+    text-decoration: line-through;
+    color: var(--ink-soft);
+}
+
+@@keyframes tb-card-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Priority left strip */
+.tb-card__strip {
+    width: 4px;
+    flex-shrink: 0;
+    border-radius: 0;
+}
+.tb-strip--critical { background: var(--clay); }
+.tb-strip--high     { background: #d4722a; }
+.tb-strip--medium   { background: var(--gold); }
+.tb-strip--low      { background: var(--sage); }
+
+/* Card inner */
+.tb-card__inner {
+    flex: 1;
+    padding: .65rem .7rem .55rem;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    min-width: 0;
+}
+.tb-card__title {
+    font-size: .88rem;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.4;
+    word-break: break-word;
+}
+.tb-card__desc {
+    font-size: .75rem;
+    color: var(--ink-soft);
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Subtask mini-progress */
+.tb-card__subtasks {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .68rem;
+    color: var(--ink-faint);
+    font-weight: 600;
+}
+.tb-subtask-bar {
+    flex: 1;
+    height: 2px;
+    background: var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+    max-width: 50px;
+}
+.tb-subtask-bar__fill {
+    height: 100%;
+    background: var(--sage);
+    border-radius: 999px;
+    transition: width .4s ease;
+}
+
+/* Card footer */
+.tb-card__footer {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    flex-wrap: wrap;
+    margin-top: .1rem;
+}
+.tb-card__due {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    font-size: .7rem;
+    color: var(--ink-soft);
+    font-weight: 500;
+    flex-shrink: 0;
+}
+.tb-card__due--overdue {
+    color: #b03a18;
+    font-weight: 700;
+}
+.tb-card__priority {
+    font-size: .64rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    padding: .1rem .35rem;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.tb-p--critical { color: #b03a18; background: rgba(176,58,24,.10); }
+.tb-p--high     { color: #d4722a; background: rgba(212,114,42,.10); }
+.tb-p--medium   { color: #a07820; background: rgba(160,120,32,.10); }
+.tb-p--low      { color: var(--sage); background: rgba(111,122,90,.10); }
+
+/* Card action buttons (revealed on hover) */
+.tb-card__actions {
+    display: flex;
+    align-items: center;
+    gap: .2rem;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity .15s;
+    flex-shrink: 0;
+}
+.tb-card:hover .tb-card__actions { opacity: 1; }
+.tb-action {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: .2rem;
+    color: var(--ink-faint);
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color .15s, background .15s;
+}
+.tb-action:hover { color: var(--clay); background: var(--clay-soft); }
+.tb-action--delete:hover { color: #b03a18; background: rgba(176,58,24,.08); }
+
+/* Add task button */
+.tb-add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .35rem;
+    width: 100%;
+    background: none;
+    border: 1.5px dashed var(--line-strong);
+    border-radius: 8px;
+    padding: .55rem .75rem;
+    font-family: var(--font-body);
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--ink-faint);
+    cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+    margin-top: .1rem;
+}
+.tb-add-btn:hover {
+    color: var(--col-color);
+    border-color: var(--col-color);
+    background: color-mix(in srgb, var(--col-color, var(--clay)) 4%, transparent);
+}
+
+@@media (max-width: 900px) {
+    .tb-board {
+        grid-template-columns: repeat(2, minmax(200px, 1fr));
+    }
+}
+@@media (max-width: 560px) {
+    .tb-board {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public EventCallback OnTaskChanged { get; set; }
+
+    private record ColumnDef(
+        TaskItemStatus Status,
+        string Name,
+        string Color,
+        string EmptyIcon,
+        string EmptyLabel);
+
+    private static readonly ColumnDef[] _columns =
+    [
+        new(TaskItemStatus.Todo,       "To Do",       "#9a9180", "○", "Nothing queued"),
+        new(TaskItemStatus.InProgress, "In Progress", "#c0561d", "◎", "Nothing active"),
+        new(TaskItemStatus.Waiting,    "Waiting",     "#cd9a3a", "◷", "Nothing on hold"),
+        new(TaskItemStatus.Done,       "Done",        "#6f7a5a", "✓", "Nothing complete yet"),
+    ];
+
+    private Dictionary<TaskItemStatus, List<TaskItemDto>> _tasksByStatus = new();
+    private Guid? _draggingTaskId;
+    private TaskItemStatus? _dragOverStatus;
+    private bool _loading = true;
+    private Guid _loadedProjectId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTasksAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedProjectId != ProjectId)
+            await LoadTasksAsync();
+    }
+
+    private async Task LoadTasksAsync()
+    {
+        _loading = true;
+        _loadedProjectId = ProjectId;
+        var tasks = await TaskService.GetByProjectAsync(ProjectId);
+        _tasksByStatus = new Dictionary<TaskItemStatus, List<TaskItemDto>>
+        {
+            [TaskItemStatus.Todo]       = tasks.Where(t => t.Status == TaskItemStatus.Todo).ToList(),
+            [TaskItemStatus.InProgress] = tasks.Where(t => t.Status == TaskItemStatus.InProgress).ToList(),
+            [TaskItemStatus.Waiting]    = tasks.Where(t => t.Status == TaskItemStatus.Waiting).ToList(),
+            [TaskItemStatus.Done]       = tasks.Where(t => t.Status == TaskItemStatus.Done).ToList(),
+        };
+        _loading = false;
+    }
+
+    private void OnDragStart(Guid taskId) => _draggingTaskId = taskId;
+
+    private void OnDragEnter(TaskItemStatus status) => _dragOverStatus = status;
+
+    private void OnDragEnd()
+    {
+        _draggingTaskId = null;
+        _dragOverStatus = null;
+    }
+
+    private async Task OnDrop(TaskItemStatus targetStatus)
+    {
+        _dragOverStatus = null;
+        if (_draggingTaskId is null) return;
+
+        var taskId = _draggingTaskId.Value;
+        _draggingTaskId = null;
+
+        var source = _tasksByStatus.Values.SelectMany(l => l).FirstOrDefault(t => t.Id == taskId);
+        if (source is null || source.Status == targetStatus) return;
+
+        try
+        {
+            var updated = await TaskService.UpdateAsync(new UpdateTaskDto(
+                taskId, source.Title, source.Description,
+                targetStatus, source.Priority, source.DueDate));
+
+            _tasksByStatus[source.Status].RemoveAll(t => t.Id == taskId);
+            _tasksByStatus[targetStatus].Add(updated);
+
+            await OnTaskChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not move task: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenAddDialog(TaskItemStatus initialStatus)
+    {
+        var parameters = new DialogParameters<TaskEditorDialog>();
+        parameters.Add(x => x.ProjectId, ProjectId);
+        parameters.Add(x => x.InitialStatus, initialStatus);
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TaskEditorDialog>("New Task", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadTasksAsync();
+            await OnTaskChanged.InvokeAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(Guid taskId)
+    {
+        var parameters = new DialogParameters<TaskEditorDialog>();
+        parameters.Add(x => x.TaskId, taskId);
+        parameters.Add(x => x.ProjectId, ProjectId);
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TaskEditorDialog>("Edit Task", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadTasksAsync();
+            await OnTaskChanged.InvokeAsync();
+        }
+    }
+
+    private async Task ConfirmDeleteTask(Guid taskId, string title)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Delete task",
+            $"Permanently delete \"{title}\"? This cannot be undone.",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            await TaskService.DeleteAsync(taskId);
+            foreach (var list in _tasksByStatus.Values)
+                list.RemoveAll(t => t.Id == taskId);
+            await OnTaskChanged.InvokeAsync();
+        }
+    }
+
+    private static string PriorityLabel(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => "⚑ Critical",
+        TaskPriority.High     => "↑ High",
+        TaskPriority.Medium   => "— Med",
+        TaskPriority.Low      => "↓ Low",
+        _                     => p.ToString()
+    };
+}

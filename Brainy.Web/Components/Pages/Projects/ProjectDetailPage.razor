@@ -8,6 +8,7 @@
 @attribute [Authorize]
 @implements IAsyncDisposable
 @inject IProjectService ProjectService
+@inject ITaskService TaskService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
@@ -141,7 +142,8 @@ else
             <div class="pd-section-header">
                 <h2 class="pd-section-title">Tasks</h2>
                 <MudButton Variant="Variant.Text" Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Add" Size="Size.Small">
+                           StartIcon="@Icons.Material.Filled.Add" Size="Size.Small"
+                           OnClick='() => OpenAddTaskDialog()'>
                     Add task
                 </MudButton>
             </div>
@@ -236,6 +238,11 @@ else
                     }
                 </div>
             }
+        </MudTabPanel>
+
+        <!-- Board tab -->
+        <MudTabPanel Text="Board">
+            <TaskBoardComponent ProjectId="ProjectId" OnTaskChanged="OnBoardTaskChanged" />
         </MudTabPanel>
 
         <!-- Notes tab -->
@@ -963,6 +970,22 @@ else
     }
 
     private void OpenNote(Guid noteId) => Nav.NavigateTo($"/notes/{noteId}");
+
+    private async Task OpenAddTaskDialog()
+    {
+        var parameters = new DialogParameters<TaskEditorDialog>();
+        parameters.Add(x => x.ProjectId, ProjectId);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TaskEditorDialog>("New Task", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task OnBoardTaskChanged()
+    {
+        await LoadAsync();
+    }
 
     private void ToggleSubtasks(Guid taskId)
     {
