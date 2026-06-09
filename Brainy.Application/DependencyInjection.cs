@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<IParaSummaryService, ParaSummaryService>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<INoteRelationshipService, NoteRelationshipService>();
+        services.AddScoped<IRelatedNotesService, RelatedNotesService>();
         return services;
     }
 }

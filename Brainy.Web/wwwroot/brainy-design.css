@@ -1381,6 +1381,77 @@ body {
     height: 0.85rem !important;
 }
 
+/* Related notes sidebar section -------------------------------------------- */
+.ned-related__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.7rem;
+}
+
+.ned-related__header .note-editor__sidebar-heading {
+    margin-bottom: 0;
+}
+
+.ned-related__spinner {
+    width: 14px !important;
+    height: 14px !important;
+}
+
+.ned-related__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.ned-related__item {
+    display: grid;
+    grid-template-columns: 8px 1fr auto;
+    align-items: center;
+    gap: 0.5rem;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    padding: 0.35rem 0.4rem;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    transition: background 0.12s ease;
+}
+
+.ned-related__item:hover {
+    background: var(--paper-sunk);
+}
+
+.ned-related__item-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.ned-related__item-title {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ned-related__item:hover .ned-related__item-title {
+    color: var(--clay);
+}
+
+.ned-related__item-score {
+    font-size: 0.65rem;
+    letter-spacing: -0.02em;
+    color: var(--clay);
+    opacity: 0.7;
+    font-family: monospace;
+    flex-shrink: 0;
+}
+
 /* Loading / not-found states ---------------------------------------------- */
 .note-editor-loading {
     display: flex;

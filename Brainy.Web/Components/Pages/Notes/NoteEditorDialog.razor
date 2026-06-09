@@ -2,12 +2,14 @@
 
 @using Brainy.Application.DTOs.Notes
 @using Brainy.Application.DTOs.NoteRelationships
+@using Brainy.Application.DTOs.RelatedNotes
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @using Markdig
 
 @inject INoteService NoteService
 @inject INoteRelationshipService RelationshipService
+@inject IRelatedNotesService RelatedNotesService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject NavigationManager Nav
@@ -261,6 +263,45 @@
                                     }
                                 </div>
 
+                                @* ── Related Notes (AI-free similarity) ── *@
+                                <div class="note-editor__sidebar-section">
+                                    <div class="ned-related__header">
+                                        <h3 class="note-editor__sidebar-heading">Related Notes</h3>
+                                        @if (_relatedLoading)
+                                        {
+                                            <MudProgressCircular Indeterminate="true"
+                                                                 Size="Size.Small"
+                                                                 Color="Color.Primary"
+                                                                 Class="ned-related__spinner" />
+                                        }
+                                    </div>
+
+                                    @if (!_relatedLoading && _relatedNotes.Count == 0)
+                                    {
+                                        <p class="ned-links__empty">No similar notes found yet.</p>
+                                    }
+                                    else if (_relatedNotes.Count > 0)
+                                    {
+                                        <div class="ned-related__list">
+                                            @foreach (var r in _relatedNotes)
+                                            {
+                                                <button type="button"
+                                                        class="ned-related__item"
+                                                        title="Open: @r.Title"
+                                                        @onclick="() => OpenLinkedNoteAsync(r.Id)">
+                                                    <span class="ned-related__item-dot"
+                                                          style="background:@CatDotColor(r.ParaCategory)"></span>
+                                                    <span class="ned-related__item-title">@r.Title</span>
+                                                    <span class="ned-related__item-score"
+                                                          title="Similarity: @((r.SimilarityScore * 100).ToString("F0"))%">
+                                                        @ScoreBar(r.SimilarityScore)
+                                                    </span>
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
                                 <div class="note-editor__sidebar-section">
                                     <h3 class="note-editor__sidebar-heading">Metadata</h3>
                                     <div class="note-editor__meta">
@@ -354,6 +395,11 @@
     private IReadOnlyList<NoteRelationshipDto> _links = [];
     private bool _linksLoading;
 
+    // ── Related notes ──
+    private IReadOnlyList<RelatedNoteDto> _relatedNotes = [];
+    private bool _relatedLoading;
+    private CancellationTokenSource? _relatedCts;
+
     private static readonly MarkdownPipeline _pipeline =
         new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
 
@@ -375,6 +421,10 @@
             _model.Status        = note.Status;
 
             _links = await RelationshipService.GetForNoteAsync(NoteId.Value);
+
+            _relatedLoading = true;
+            _relatedNotes   = await RelatedNotesService.GetRelatedAsync(NoteId.Value);
+            _relatedLoading = false;
         }
         _loading = false;
     }
@@ -411,12 +461,14 @@
         _model.Title = e.Value?.ToString() ?? string.Empty;
         _titleError  = string.IsNullOrWhiteSpace(_model.Title);
         MarkDirty();
+        ScheduleRelatedRefresh();
     }
 
     private void OnContentInput(ChangeEventArgs e)
     {
         _model.Content = e.Value?.ToString() ?? string.Empty;
         MarkDirty();
+        ScheduleRelatedRefresh();
     }
 
     private void OnParaCategoryChanged(ParaCategory value)
@@ -627,8 +679,65 @@
         _                            => t.ToString()
     };
 
+    // ── Related notes helpers ─────────────────────────────────────────────────
+
+    private void ScheduleRelatedRefresh()
+    {
+        if (!NoteId.HasValue) return;
+        _relatedCts?.Cancel();
+        _relatedCts = new CancellationTokenSource();
+        _ = ExecuteRelatedRefreshAsync(_relatedCts.Token);
+    }
+
+    private async Task ExecuteRelatedRefreshAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(1500, ct);
+            if (ct.IsCancellationRequested) return;
+
+            _relatedLoading = true;
+            StateHasChanged();
+
+            _relatedNotes   = await RelatedNotesService.GetRelatedByContentAsync(
+                NoteId!.Value, _model.Title, _model.Content, 5, ct);
+
+            _relatedLoading = false;
+            StateHasChanged();
+        }
+        catch (OperationCanceledException) { }
+        catch
+        {
+            _relatedLoading = false;
+        }
+    }
+
+    private static string ScoreBar(double score)
+    {
+        // ▪ (filled blocks) as a visual indicator: 1-4 blocks
+        var blocks = score switch
+        {
+            >= 0.20 => "████",
+            >= 0.12 => "███░",
+            >= 0.07 => "██░░",
+            _       => "█░░░"
+        };
+        return blocks;
+    }
+
+    private static string CatDotColor(ParaCategory cat) => cat switch
+    {
+        ParaCategory.Project  => "#c0561d",
+        ParaCategory.Area     => "#6f7a5a",
+        ParaCategory.Resource => "#3a7bcd",
+        ParaCategory.Archive  => "#9a9180",
+        _                     => "#9a9180"
+    };
+
     public async ValueTask DisposeAsync()
     {
+        _relatedCts?.Cancel();
+        _relatedCts?.Dispose();
         _locationChangingHandler?.Dispose();
         await CleanupJsAsync();
     }
