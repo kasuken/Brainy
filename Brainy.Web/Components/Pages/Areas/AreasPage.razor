@@ -1,0 +1,684 @@
+@page "/areas"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.Interfaces.Services
+@inject IAreaService AreaService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Areas — Brainy</PageTitle>
+
+<div class="area-page">
+
+    <!-- ── Header ──────────────────────────────────────────────────────── -->
+    <div class="area-header">
+        <div class="area-header__text">
+            <h1 class="area-header__title">Areas</h1>
+            <p class="area-header__sub">
+                @(_areas?.Count ?? 0) areas · @(_filtered?.Count ?? 0) shown
+            </p>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   Class="area-header__new"
+                   OnClick="OpenCreateDialog">
+            New Area
+        </MudButton>
+    </div>
+
+    <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
+    <div class="area-toolbar">
+        <div class="area-search">
+            <MudIcon Icon="@Icons.Material.Outlined.Search" Class="area-search__icon" />
+            <input class="area-search__input"
+                   placeholder="Search areas…"
+                   value="@_searchText"
+                   @oninput="OnSearchInput" />
+            @if (!string.IsNullOrEmpty(_searchText))
+            {
+                <button class="area-search__clear" @onclick="ClearSearch">✕</button>
+            }
+        </div>
+
+        <div class="area-filters">
+            <button class="area-chip @(_showArchived ? "area-chip--on" : "")"
+                    @onclick="ToggleArchived">
+                <MudIcon Icon="@Icons.Material.Outlined.Archive" Style="font-size:.85rem" />
+                Show Archived
+            </button>
+        </div>
+
+        <div class="area-sort">
+            <span class="area-sort__label">Sort</span>
+            @foreach (var opt in SortOptions)
+            {
+                <button class="area-sort__btn @(_sortBy == opt ? "area-sort__btn--on" : "")"
+                        @onclick="() => SetSort(opt)">
+                    @opt
+                    @if (_sortBy == opt)
+                    {
+                        <span class="area-sort__arrow">@(_sortAsc ? "↑" : "↓")</span>
+                    }
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- ── Content ──────────────────────────────────────────────────────── -->
+    @if (_loading)
+    {
+        <div class="area-loading">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+            <span class="area-loading__text">Loading areas…</span>
+        </div>
+    }
+    else if (_filtered is { Count: 0 })
+    {
+        <div class="area-empty">
+            <div class="area-empty__glyph">◈</div>
+            <p class="area-empty__title">
+                @(_areas?.Count == 0 ? "No areas yet" : "Nothing matches")
+            </p>
+            <p class="area-empty__sub">
+                @(_areas?.Count == 0
+                    ? "Areas represent ongoing responsibilities — health, finances, work."
+                    : "Try broadening your search or clearing filters.")
+            </p>
+            @if (_areas?.Count == 0)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="OpenCreateDialog">
+                    Create your first area
+                </MudButton>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="area-grid">
+            @for (int i = 0; i < (_filtered?.Count ?? 0); i++)
+            {
+                var a = _filtered![i];
+                var idx = i;
+                <div class="area-card" style="animation-delay:@(idx * 45)ms">
+                    <!-- Actions (hover) -->
+                    <div class="area-card__actions">
+                        <button class="area-action-btn" title="Edit" @onclick="() => OpenEditDialog(a)" @onclick:stopPropagation="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                        @if (a.IsArchived)
+                        {
+                            <button class="area-action-btn area-action-btn--restore" title="Restore"
+                                    @onclick="() => ConfirmRestore(a.Id, a.Name)" @onclick:stopPropagation="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="1 4 1 10 7 10"/>
+                                    <path d="M3.51 15a9 9 0 1 0 .49-4.5"/>
+                                </svg>
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="area-action-btn area-action-btn--archive" title="Archive"
+                                    @onclick="() => ConfirmArchive(a.Id, a.Name)" @onclick:stopPropagation="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="21 8 21 21 3 21 3 8"/>
+                                    <rect x="1" y="3" width="22" height="5"/>
+                                    <line x1="10" y1="12" x2="14" y2="12"/>
+                                </svg>
+                            </button>
+                        }
+                        <button class="area-action-btn area-action-btn--delete" title="Delete"
+                                @onclick="() => ConfirmDelete(a.Id, a.Name)" @onclick:stopPropagation="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6l-1 14H6L5 6"/>
+                                <path d="M10 11v6M14 11v6"/>
+                                <path d="M9 6V4h6v2"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Card body -->
+                    <div class="area-card__inner" @onclick="() => OpenDetail(a.Id)">
+                        @if (a.IsArchived)
+                        {
+                            <div class="area-card__badges">
+                                <span class="area-badge area-badge--archived">Archived</span>
+                            </div>
+                        }
+
+                        <p class="area-card__name">@a.Name</p>
+
+                        @if (!string.IsNullOrWhiteSpace(a.Purpose))
+                        {
+                            <p class="area-card__purpose">
+                                @(a.Purpose.Length > 100 ? a.Purpose[..100] + "…" : a.Purpose)
+                            </p>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(a.Description))
+                        {
+                            <p class="area-card__desc">
+                                @(a.Description.Length > 120 ? a.Description[..120] + "…" : a.Description)
+                            </p>
+                        }
+
+                        <div class="area-card__meta">
+                            <span class="area-meta-item">
+                                <svg class="area-meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                @a.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Areas page — "Archival Mind" design system
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.area-page {
+    font-family: var(--font-body);
+    padding-bottom: 3rem;
+}
+
+/* Header */
+.area-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+.area-header__title {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0 0 .15rem;
+    letter-spacing: -.02em;
+    line-height: 1;
+}
+.area-header__sub {
+    font-size: .8rem;
+    color: var(--ink-faint);
+    margin: 0;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+.area-header__new {
+    flex-shrink: 0;
+}
+
+/* Toolbar */
+.area-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    margin-bottom: 1.75rem;
+    padding: 1rem 1.25rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Search */
+.area-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+.area-search__icon {
+    color: var(--ink-faint);
+    font-size: 1.1rem !important;
+    flex-shrink: 0;
+}
+.area-search__input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: .95rem;
+    color: var(--ink);
+    outline: none;
+    padding: .25rem 0;
+    border-bottom: 1.5px solid var(--line);
+    transition: border-color .2s;
+}
+.area-search__input:focus { border-bottom-color: var(--clay); }
+.area-search__input::placeholder { color: var(--ink-faint); }
+.area-search__clear {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ink-faint);
+    font-size: .85rem;
+    padding: .15rem .3rem;
+    border-radius: 4px;
+    transition: color .15s;
+}
+.area-search__clear:hover { color: var(--clay); }
+
+/* Filter chips */
+.area-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+}
+.area-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .28rem .7rem;
+    border-radius: 999px;
+    border: 1.5px solid var(--line);
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: .78rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s;
+}
+.area-chip:hover {
+    border-color: var(--clay);
+    color: var(--clay);
+}
+.area-chip--on {
+    border-color: var(--clay);
+    background: color-mix(in srgb, var(--clay) 10%, transparent);
+    color: var(--clay);
+    font-weight: 600;
+}
+
+/* Sort */
+.area-sort {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .3rem;
+    border-top: 1px solid var(--line);
+    padding-top: .65rem;
+}
+.area-sort__label {
+    font-size: .7rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin-right: .2rem;
+}
+.area-sort__btn {
+    background: none;
+    border: none;
+    font-family: var(--font-body);
+    font-size: .82rem;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: .2rem .5rem;
+    border-radius: 6px;
+    transition: color .15s, background .15s;
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+}
+.area-sort__btn:hover { color: var(--ink); background: var(--paper-sunk); }
+.area-sort__btn--on { color: var(--clay); font-weight: 600; }
+.area-sort__arrow { font-size: .75rem; opacity: .7; }
+
+/* Loading / empty */
+.area-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 5rem 0;
+}
+.area-loading__text { color: var(--ink-faint); font-size: .9rem; }
+
+.area-empty {
+    text-align: center;
+    padding: 5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .75rem;
+}
+.area-empty__glyph {
+    font-size: 3.5rem;
+    line-height: 1;
+    opacity: .18;
+    color: var(--sage);
+    font-family: var(--font-display);
+}
+.area-empty__title {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    color: var(--ink);
+    margin: 0;
+    font-weight: 500;
+}
+.area-empty__sub { color: var(--ink-faint); font-size: .9rem; margin: 0; max-width: 40ch; }
+
+/* Grid */
+.area-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: 1.1rem;
+}
+
+/* Card */
+.area-card {
+    position: relative;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow .2s, transform .2s, border-color .2s;
+    animation: area-rise .4s both ease-out;
+}
+.area-card:hover {
+    box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,.1));
+    transform: translateY(-2px);
+    border-color: var(--line-strong);
+}
+
+@@keyframes area-rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.area-card__inner {
+    padding: 1.1rem 1rem .9rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    cursor: pointer;
+    min-width: 0;
+}
+
+/* Badges */
+.area-card__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+.area-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: .18rem .6rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.area-badge--archived {
+    background: var(--paper-sunk);
+    color: var(--ink-faint);
+}
+
+/* Name */
+.area-card__name {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-style: italic;
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.area-card:hover .area-card__name { color: var(--clay); }
+
+/* Purpose */
+.area-card__purpose {
+    font-size: .82rem;
+    font-style: italic;
+    color: var(--ink-soft);
+    margin: 0;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Description */
+.area-card__desc {
+    font-size: .82rem;
+    color: var(--ink-soft);
+    margin: 0;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Meta */
+.area-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .6rem;
+    margin-top: auto;
+    padding-top: .35rem;
+}
+.area-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .75rem;
+    color: var(--ink-faint);
+}
+.area-meta-icon {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    opacity: .5;
+}
+
+/* Card action buttons */
+.area-card__actions {
+    position: absolute;
+    top: .6rem;
+    right: .6rem;
+    display: flex;
+    gap: .2rem;
+    opacity: 0;
+    transition: opacity .15s;
+    z-index: 1;
+}
+.area-card:hover .area-card__actions { opacity: 1; }
+
+.area-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--paper-raised);
+    cursor: pointer;
+    color: var(--ink-soft);
+    transition: background .15s, color .15s, border-color .15s;
+}
+.area-action-btn svg { width: 14px; height: 14px; }
+.area-action-btn:hover { background: var(--paper-sunk); color: var(--ink); border-color: var(--line-strong); }
+.area-action-btn--archive:hover { color: var(--clay); border-color: var(--clay); }
+.area-action-btn--restore:hover { color: var(--sage); border-color: var(--sage); }
+.area-action-btn--delete:hover  { color: #b03a18; border-color: #b03a18; }
+
+@@media (max-width: 640px) {
+    .area-toolbar { padding: .85rem 1rem; }
+    .area-grid { grid-template-columns: 1fr; }
+    .area-card__actions { opacity: 1; }
+}
+</style>
+
+@code {
+    private bool _loading = true;
+    private List<AreaDto>? _areas;
+    private List<AreaDto>? _filtered;
+
+    private string _searchText = "";
+    private bool _showArchived;
+    private string _sortBy = "Name";
+    private bool _sortAsc = true;
+
+    private static readonly string[] SortOptions = ["Name", "Created"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var result = _showArchived
+            ? await AreaService.GetAllArchivedAsync()
+            : await AreaService.GetAllActiveAsync();
+        _areas = result.ToList();
+        ApplyFilter();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        _searchText = e.Value?.ToString() ?? "";
+        ApplyFilter();
+    }
+
+    private void ClearSearch()
+    {
+        _searchText = "";
+        ApplyFilter();
+    }
+
+    private async Task ToggleArchived()
+    {
+        _showArchived = !_showArchived;
+        await LoadAsync();
+    }
+
+    private void ApplyFilter()
+    {
+        IEnumerable<AreaDto> q = _areas ?? [];
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+            q = q.Where(a =>
+                a.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                (a.Description?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Purpose?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false));
+
+        q = _sortBy switch
+        {
+            "Created" => _sortAsc
+                ? q.OrderBy(a => a.CreatedAtUtc)
+                : q.OrderByDescending(a => a.CreatedAtUtc),
+            _ => _sortAsc
+                ? q.OrderBy(a => a.Name)
+                : q.OrderByDescending(a => a.Name),
+        };
+
+        _filtered = q.ToList();
+    }
+
+    private void OpenDetail(Guid id) => Nav.NavigateTo($"/areas/{id}");
+
+    private void SetSort(string option)
+    {
+        if (_sortBy == option) _sortAsc = !_sortAsc;
+        else { _sortBy = option; _sortAsc = true; }
+        ApplyFilter();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters<AreaEditorDialog>();
+        parameters.Add(x => x.AreaId, null);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<AreaEditorDialog>("New Area", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task OpenEditDialog(AreaDto area)
+    {
+        var parameters = new DialogParameters<AreaEditorDialog>();
+        parameters.Add(x => x.AreaId, area.Id);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<AreaEditorDialog>("Edit Area", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task ConfirmArchive(Guid id, string name)
+    {
+        var box = await DialogService.ShowMessageBox(
+            "Archive area",
+            $"Archive \"{name}\"? It will be hidden from active views.",
+            yesText: "Archive", cancelText: "Cancel");
+
+        if (box == true)
+        {
+            await AreaService.ArchiveAsync(id);
+            Snackbar.Add($"\"{name}\" archived.", Severity.Info);
+            await LoadAsync();
+        }
+    }
+
+    private async Task ConfirmRestore(Guid id, string name)
+    {
+        var box = await DialogService.ShowMessageBox(
+            "Restore area",
+            $"Restore \"{name}\" to active areas?",
+            yesText: "Restore", cancelText: "Cancel");
+
+        if (box == true)
+        {
+            await AreaService.RestoreAsync(id);
+            Snackbar.Add($"\"{name}\" restored.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task ConfirmDelete(Guid id, string name)
+    {
+        var box = await DialogService.ShowMessageBox(
+            "Delete area",
+            $"Permanently delete \"{name}\"? This cannot be undone.",
+            yesText: "Delete", noText: "Cancel");
+
+        if (box == true)
+        {
+            await AreaService.DeleteAsync(id);
+            Snackbar.Add($"\"{name}\" deleted.", Severity.Warning);
+            await LoadAsync();
+        }
+    }
+}

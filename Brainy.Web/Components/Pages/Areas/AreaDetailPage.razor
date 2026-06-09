@@ -1,0 +1,858 @@
+@page "/areas/{AreaId:guid}"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.DTOs.Projects
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IAreaService AreaService
+@inject IProjectService ProjectService
+@inject INoteService NoteService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>@(_detail?.Name ?? "Area") — Brainy</PageTitle>
+
+@if (_loading)
+{
+    <div class="ad-loading">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+    </div>
+}
+else if (_detail is null)
+{
+    <div class="ad-notfound">
+        <span class="ad-notfound__glyph">◈</span>
+        <p class="ad-notfound__title">Area not found</p>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                   OnClick='() => Nav.NavigateTo("/areas")'>
+            Back to Areas
+        </MudButton>
+    </div>
+}
+else
+{
+    <!-- ── Header ──────────────────────────────────────────────────── -->
+    <div class="ad-header">
+        <div class="ad-breadcrumb">
+            <button class="ad-back" @onclick='() => Nav.NavigateTo("/areas")'>
+                <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+                    <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                </svg>
+                Areas
+            </button>
+            <span class="ad-breadcrumb__sep">›</span>
+            <span class="ad-breadcrumb__current">@_detail.Name</span>
+        </div>
+
+        <div class="ad-title-row">
+            <div class="ad-title-block">
+                <div class="ad-title-top">
+                    <h1 class="ad-title">@_detail.Name</h1>
+                    @if (_detail.IsArchived)
+                    {
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small"
+                                 Class="ad-archived-chip">
+                            Archived
+                        </MudChip>
+                    }
+                </div>
+            </div>
+            <div class="ad-actions">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.Edit"
+                           Size="Size.Small" OnClick="OpenEditDialogAsync">
+                    Edit
+                </MudButton>
+                @if (_detail.IsArchived)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Success"
+                               StartIcon="@Icons.Material.Filled.Unarchive"
+                               Size="Size.Small" OnClick="ConfirmRestoreAsync">
+                        Restore
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.Archive"
+                               Size="Size.Small" OnClick="ConfirmArchiveAsync">
+                        Archive
+                    </MudButton>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Dashboard Summary Strip ──────────────────────────────── -->
+    <div class="ad-stats">
+        <div class="ad-stat-tile">
+            <span class="ad-stat-tile__value @(_detail.ActiveProjectCount > 0 ? "ad-stat-tile__value--clay" : "")">
+                @_detail.ActiveProjectCount
+            </span>
+            <span class="ad-stat-tile__label">Active Projects</span>
+        </div>
+        <div class="ad-stat-tile">
+            <span class="ad-stat-tile__value @(_detail.OpenTaskCount > 0 ? "ad-stat-tile__value--red" : "")">
+                @_detail.OpenTaskCount
+            </span>
+            <span class="ad-stat-tile__label">Open Tasks</span>
+        </div>
+        <div class="ad-stat-tile">
+            <span class="ad-stat-tile__value @(_detail.RecentNoteCount > 0 ? "ad-stat-tile__value--sage" : "")">
+                @_detail.RecentNoteCount
+            </span>
+            <span class="ad-stat-tile__label">Notes</span>
+        </div>
+    </div>
+
+    <!-- ── Purpose & Description ────────────────────────────────── -->
+    @if (!string.IsNullOrWhiteSpace(_detail.Purpose) || !string.IsNullOrWhiteSpace(_detail.Description))
+    {
+        <div class="ad-section ad-section--meta">
+            @if (!string.IsNullOrWhiteSpace(_detail.Purpose))
+            {
+                <div class="ad-purpose">
+                    <span class="ad-meta-label">Purpose</span>
+                    <p class="ad-purpose__text">@_detail.Purpose</p>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(_detail.Description))
+            {
+                <p class="ad-description">@_detail.Description</p>
+            }
+        </div>
+    }
+
+    <!-- ── Related Projects ─────────────────────────────────────── -->
+    <div class="ad-section">
+        <div class="ad-section-head">
+            <div class="ad-section-head__left">
+                <h2 class="ad-section-title">Projects</h2>
+                @if (_linkedProjects.Count > 0)
+                {
+                    <span class="ad-count-badge">@_linkedProjects.Count</span>
+                }
+            </div>
+            <MudButton Variant="Variant.Text" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Link"
+                       Size="Size.Small"
+                       OnClick="ToggleLinkProjectPicker"
+                       Disabled="_savingProjectLink">
+                Link Project
+            </MudButton>
+        </div>
+
+        @if (_showLinkProjectPicker)
+        {
+            <div class="ad-picker-panel">
+                <MudSelect T="Guid?" @bind-Value="_selectedProjectId"
+                           Label="Select a project"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           AnchorOrigin="Origin.BottomLeft"
+                           Placeholder="Choose project to link…">
+                    @foreach (var p in _availableProjects)
+                    {
+                        <MudSelectItem T="Guid?" Value="p.Id">@p.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <div class="ad-picker-panel__actions">
+                    <MudButton Variant="Variant.Text" Size="Size.Small"
+                               OnClick="ToggleLinkProjectPicker">Cancel</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Size="Size.Small"
+                               Disabled="@(_selectedProjectId is null || _savingProjectLink)"
+                               OnClick="LinkProjectAsync">
+                        @if (_savingProjectLink)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        }
+                        Link
+                    </MudButton>
+                </div>
+                @if (_availableProjects.Count == 0)
+                {
+                    <p class="ad-picker-empty">All non-archived projects are already linked to an area.</p>
+                }
+            </div>
+        }
+
+        @if (_linkedProjects.Count == 0)
+        {
+            <div class="ad-empty">
+                <span class="ad-empty__icon">📂</span>
+                <p>No projects linked to this area yet.</p>
+            </div>
+        }
+        else
+        {
+            <div class="ad-list">
+                @foreach (var project in _linkedProjects)
+                {
+                    <div class="ad-row">
+                        <div class="ad-row__info">
+                            <a class="ad-row__name" href="/projects/@project.Id">@project.Name</a>
+                            <div class="ad-row__badges">
+                                <span class="ad-badge ad-badge--status ad-status--@project.Status.ToString().ToLower()">
+                                    @ProjectStatusLabel(project.Status)
+                                </span>
+                                <span class="ad-badge ad-badge--priority ad-priority--@project.Priority.ToString().ToLower()">
+                                    @PriorityLabel(project.Priority)
+                                </span>
+                            </div>
+                        </div>
+                        <MudIconButton Icon="@Icons.Material.Filled.LinkOff"
+                                       Size="Size.Small"
+                                       title="Unlink project"
+                                       Color="Color.Default"
+                                       Class="ad-row__unlink"
+                                       OnClick="() => UnlinkProjectAsync(project.Id, project.Name)" />
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- ── Related Notes ────────────────────────────────────────── -->
+    <div class="ad-section">
+        <div class="ad-section-head">
+            <div class="ad-section-head__left">
+                <h2 class="ad-section-title">Notes</h2>
+                @if (_linkedNotes.Count > 0)
+                {
+                    <span class="ad-count-badge">@_linkedNotes.Count</span>
+                }
+            </div>
+            <MudButton Variant="Variant.Text" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Link"
+                       Size="Size.Small"
+                       OnClick="ToggleLinkNotePicker"
+                       Disabled="_savingNoteLink">
+                Link Note
+            </MudButton>
+        </div>
+
+        @if (_showLinkNotePicker)
+        {
+            <div class="ad-picker-panel">
+                <MudSelect T="Guid?" @bind-Value="_selectedNoteId"
+                           Label="Select a note"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           AnchorOrigin="Origin.BottomLeft"
+                           Placeholder="Choose note to link…">
+                    @foreach (var n in _availableNotes)
+                    {
+                        <MudSelectItem T="Guid?" Value="n.Id">@n.Title</MudSelectItem>
+                    }
+                </MudSelect>
+                <div class="ad-picker-panel__actions">
+                    <MudButton Variant="Variant.Text" Size="Size.Small"
+                               OnClick="ToggleLinkNotePicker">Cancel</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Size="Size.Small"
+                               Disabled="@(_selectedNoteId is null || _savingNoteLink)"
+                               OnClick="LinkNoteAsync">
+                        @if (_savingNoteLink)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        }
+                        Link
+                    </MudButton>
+                </div>
+                @if (_availableNotes.Count == 0)
+                {
+                    <p class="ad-picker-empty">No unlinked notes available to add.</p>
+                }
+            </div>
+        }
+
+        @if (_linkedNotes.Count == 0)
+        {
+            <div class="ad-empty">
+                <span class="ad-empty__icon">📝</span>
+                <p>No notes linked to this area yet.</p>
+            </div>
+        }
+        else
+        {
+            <div class="ad-list">
+                @foreach (var note in _linkedNotes)
+                {
+                    <div class="ad-row">
+                        <div class="ad-row__info">
+                            <a class="ad-row__name" href="/notes">@note.Title</a>
+                            <div class="ad-row__badges">
+                                <span class="ad-badge ad-badge--para ad-para--@note.ParaCategory.ToString().ToLower()">
+                                    @ParaCategoryLabel(note.ParaCategory)
+                                </span>
+                            </div>
+                        </div>
+                        <MudIconButton Icon="@Icons.Material.Filled.LinkOff"
+                                       Size="Size.Small"
+                                       title="Unlink note"
+                                       Color="Color.Default"
+                                       Class="ad-row__unlink"
+                                       OnClick="() => UnlinkNoteAsync(note.Id, note.Title)" />
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+<!-- Archive confirmation -->
+<MudMessageBox @ref="_archiveMsgBox" Title="Archive Area?" CancelText="Cancel">
+    <MessageContent>
+        Archiving <strong>@_detail?.Name</strong> will hide it from active views. You can restore it at any time.
+    </MessageContent>
+    <YesButton>
+        <MudButton Color="Color.Warning" Variant="Variant.Filled">Archive</MudButton>
+    </YesButton>
+</MudMessageBox>
+
+<!-- Restore confirmation -->
+<MudMessageBox @ref="_restoreMsgBox" Title="Restore Area?" CancelText="Cancel">
+    <MessageContent>
+        Restore <strong>@_detail?.Name</strong> back to active areas?
+    </MessageContent>
+    <YesButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled">Restore</MudButton>
+    </YesButton>
+</MudMessageBox>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Area Detail page — "Living Archive" workspace style
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Loading / not-found */
+.ad-loading, .ad-notfound {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 6rem 1rem;
+}
+.ad-notfound__glyph {
+    font-size: 3rem;
+    opacity: .15;
+    font-family: var(--font-display);
+    color: var(--clay);
+}
+.ad-notfound__title {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    color: var(--ink);
+    margin: 0;
+}
+
+/* Breadcrumb */
+.ad-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    margin-bottom: 1rem;
+    font-size: .8rem;
+    color: var(--ink-faint);
+}
+.ad-back {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    color: var(--clay);
+    font-family: var(--font-body);
+    font-size: .8rem;
+    font-weight: 600;
+    padding: 0;
+    transition: opacity .15s;
+}
+.ad-back:hover { opacity: .7; }
+.ad-breadcrumb__sep { color: var(--line-strong); }
+.ad-breadcrumb__current { color: var(--ink-soft); }
+
+/* Header */
+.ad-header { margin-bottom: 1.5rem; }
+
+.ad-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+.ad-title-block { flex: 1; min-width: 0; }
+.ad-title-top {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+}
+.ad-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+    font-weight: 500;
+    font-style: italic;
+    color: var(--ink);
+    margin: 0;
+    letter-spacing: -.02em;
+    line-height: 1.15;
+}
+.ad-archived-chip { flex-shrink: 0; }
+.ad-actions {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    flex-shrink: 0;
+}
+
+/* Stats strip */
+.ad-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-bottom: 1.75rem;
+}
+.ad-stat-tile {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: .9rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+    min-width: 110px;
+    box-shadow: var(--shadow-sm);
+}
+.ad-stat-tile__value {
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    line-height: 1;
+}
+.ad-stat-tile__value--clay  { color: var(--clay); }
+.ad-stat-tile__value--red   { color: #b03a18; }
+.ad-stat-tile__value--sage  { color: var(--sage); }
+.ad-stat-tile__label {
+    font-size: .7rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+}
+
+/* Section */
+.ad-section {
+    margin-bottom: 2rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.25rem 1.4rem;
+    background: var(--paper-raised);
+}
+.ad-section--meta {
+    background: var(--clay-soft);
+    border-color: rgba(192,86,29,.18);
+}
+.ad-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+.ad-section-head__left {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+.ad-section-title {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0;
+}
+.ad-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 .4rem;
+    border-radius: 999px;
+    background: var(--clay-soft);
+    color: var(--clay-deep);
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+}
+
+/* Purpose block */
+.ad-meta-label {
+    display: block;
+    font-size: .68rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--clay);
+    margin-bottom: .3rem;
+}
+.ad-purpose {
+    padding: .6rem .85rem;
+    border-left: 3px solid var(--clay);
+    background: rgba(255,255,255,.55);
+    border-radius: 0 8px 8px 0;
+    margin-bottom: .75rem;
+}
+.ad-purpose__text {
+    font-size: .9rem;
+    color: var(--ink);
+    margin: 0;
+    line-height: 1.6;
+}
+.ad-description {
+    font-size: .88rem;
+    color: var(--ink-soft);
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* Row list */
+.ad-list { display: flex; flex-direction: column; gap: .4rem; }
+.ad-row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .65rem .85rem;
+    background: var(--paper-sunk);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    transition: border-color .15s, box-shadow .15s;
+}
+.ad-row:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+.ad-row__info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    flex-wrap: wrap;
+}
+.ad-row__name {
+    font-size: .9rem;
+    font-weight: 600;
+    color: var(--ink);
+    text-decoration: none;
+    transition: color .15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+}
+.ad-row__name:hover { color: var(--clay); text-decoration: underline; }
+.ad-row__badges { display: flex; flex-wrap: wrap; gap: .3rem; }
+.ad-row__unlink { flex-shrink: 0; opacity: .35; transition: opacity .15s; }
+.ad-row:hover .ad-row__unlink { opacity: 1; }
+
+/* Badges */
+.ad-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: .15rem .55rem;
+    border-radius: 999px;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+/* Status badges */
+.ad-status--notstarted { background: var(--paper-sunk); color: var(--ink-soft); }
+.ad-status--active     { background: rgba(111,122,90,.14); color: #4a5c38; }
+.ad-status--waiting    { background: rgba(205,154,58,.14); color: #7a5c0e; }
+.ad-status--completed  { background: rgba(192,86,29,.10); color: var(--clay-deep); }
+.ad-status--archived   { background: var(--paper-sunk); color: var(--ink-faint); }
+
+/* Priority badges */
+.ad-priority--critical { color: #b03a18; background: rgba(176,58,24,.10); }
+.ad-priority--high     { color: #d4722a; background: rgba(212,114,42,.10); }
+.ad-priority--medium   { color: #a07820; background: rgba(160,120,32,.10); }
+.ad-priority--low      { color: var(--sage); background: rgba(111,122,90,.10); }
+
+/* PARA category badges */
+.ad-para--project  { background: rgba(192,86,29,.10); color: var(--clay-deep); }
+.ad-para--area     { background: rgba(111,122,90,.14); color: #4a5c38; }
+.ad-para--resource { background: rgba(205,154,58,.14); color: #7a5c0e; }
+.ad-para--archive  { background: var(--paper-sunk); color: var(--ink-faint); }
+
+/* Empty state */
+.ad-empty {
+    padding: 2.5rem 1rem;
+    text-align: center;
+    color: var(--ink-faint);
+    font-size: .9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .5rem;
+}
+.ad-empty__icon { font-size: 2rem; opacity: .4; }
+.ad-empty p { margin: 0; }
+
+/* Inline picker panel */
+.ad-picker-panel {
+    background: var(--paper-sunk);
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    padding: .9rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .65rem;
+}
+.ad-picker-panel__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: .5rem;
+}
+.ad-picker-empty {
+    font-size: .8rem;
+    color: var(--ink-faint);
+    margin: 0;
+    font-style: italic;
+}
+
+@@media (max-width: 640px) {
+    .ad-title-row  { flex-direction: column; }
+    .ad-actions    { flex-direction: row; flex-wrap: wrap; }
+    .ad-stats      { gap: .5rem; }
+    .ad-stat-tile  { min-width: calc(50% - .375rem); }
+    .ad-row__name  { max-width: 180px; }
+}
+</style>
+
+@code {
+    [Parameter] public Guid AreaId { get; set; }
+
+    private bool _loading = true;
+    private AreaDetailDto? _detail;
+
+    private List<ProjectSummaryDto> _linkedProjects    = [];
+    private List<ProjectSummaryDto> _availableProjects = [];
+    private List<NoteDto>           _linkedNotes       = [];
+    private List<NoteDto>           _availableNotes    = [];
+
+    // Link project picker state
+    private bool   _showLinkProjectPicker;
+    private Guid?  _selectedProjectId;
+    private bool   _savingProjectLink;
+
+    // Link note picker state
+    private bool   _showLinkNotePicker;
+    private Guid?  _selectedNoteId;
+    private bool   _savingNoteLink;
+
+    // Confirmation dialogs
+    private MudMessageBox _archiveMsgBox = null!;
+    private MudMessageBox _restoreMsgBox = null!;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        _detail = await AreaService.GetDetailAsync(AreaId);
+
+        if (_detail is not null)
+        {
+            var allProjects = await ProjectService.GetProjectSummariesAsync();
+            _linkedProjects    = [.. allProjects.Where(p => p.AreaId == AreaId)];
+            _availableProjects = [.. allProjects.Where(p => p.AreaId is null && !p.IsArchived)];
+
+            var allNotes = await NoteService.GetAllAsync();
+            _linkedNotes    = [.. allNotes.Where(n => n.AreaId == AreaId)];
+            _availableNotes = [.. allNotes.Where(n => n.AreaId is null)];
+        }
+
+        _loading = false;
+    }
+
+    // ── Edit dialog ────────────────────────────────────────────────────────
+
+    private async Task OpenEditDialogAsync()
+    {
+        var parameters = new DialogParameters<AreaEditorDialog>
+        {
+            { x => x.AreaId, AreaId }
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog   = await DialogService.ShowAsync<AreaEditorDialog>("Edit Area", parameters, options);
+        var result   = await dialog.Result;
+
+        if (result is { Canceled: false })
+            await LoadAsync();
+    }
+
+    // ── Archive / Restore ──────────────────────────────────────────────────
+
+    private async Task ConfirmArchiveAsync()
+    {
+        bool? confirmed = await _archiveMsgBox.ShowAsync();
+        if (confirmed is not true) return;
+
+        try
+        {
+            await AreaService.ArchiveAsync(AreaId);
+            Snackbar.Add("Area archived.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task ConfirmRestoreAsync()
+    {
+        bool? confirmed = await _restoreMsgBox.ShowAsync();
+        if (confirmed is not true) return;
+
+        try
+        {
+            await AreaService.RestoreAsync(AreaId);
+            Snackbar.Add("Area restored.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    // ── Project linking ────────────────────────────────────────────────────
+
+    private void ToggleLinkProjectPicker()
+    {
+        _showLinkProjectPicker = !_showLinkProjectPicker;
+        _selectedProjectId = null;
+    }
+
+    private async Task LinkProjectAsync()
+    {
+        if (_selectedProjectId is null) return;
+
+        _savingProjectLink = true;
+        try
+        {
+            await AreaService.LinkProjectAsync(AreaId, _selectedProjectId.Value);
+            Snackbar.Add("Project linked.", Severity.Success);
+            _showLinkProjectPicker = false;
+            _selectedProjectId = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingProjectLink = false;
+        }
+    }
+
+    private async Task UnlinkProjectAsync(Guid projectId, string projectName)
+    {
+        try
+        {
+            await AreaService.UnlinkProjectAsync(projectId);
+            Snackbar.Add($"Unlinked \"{projectName}\" from area.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    // ── Note linking ───────────────────────────────────────────────────────
+
+    private void ToggleLinkNotePicker()
+    {
+        _showLinkNotePicker = !_showLinkNotePicker;
+        _selectedNoteId = null;
+    }
+
+    private async Task LinkNoteAsync()
+    {
+        if (_selectedNoteId is null) return;
+
+        _savingNoteLink = true;
+        try
+        {
+            await AreaService.LinkNoteAsync(AreaId, _selectedNoteId.Value);
+            Snackbar.Add("Note linked.", Severity.Success);
+            _showLinkNotePicker = false;
+            _selectedNoteId = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingNoteLink = false;
+        }
+    }
+
+    private async Task UnlinkNoteAsync(Guid noteId, string noteTitle)
+    {
+        try
+        {
+            await AreaService.UnlinkNoteAsync(noteId);
+            Snackbar.Add($"Unlinked \"{noteTitle}\" from area.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    // ── Display helpers ────────────────────────────────────────────────────
+
+    private static string ProjectStatusLabel(ProjectStatus s) => s switch
+    {
+        ProjectStatus.NotStarted => "Not Started",
+        ProjectStatus.Active     => "Active",
+        ProjectStatus.Waiting    => "Waiting",
+        ProjectStatus.Completed  => "Completed",
+        ProjectStatus.Archived   => "Archived",
+        _                        => s.ToString()
+    };
+
+    private static string PriorityLabel(ProjectPriority p) => p switch
+    {
+        ProjectPriority.Critical => "Critical",
+        ProjectPriority.High     => "High",
+        ProjectPriority.Medium   => "Medium",
+        ProjectPriority.Low      => "Low",
+        _                        => p.ToString()
+    };
+
+    private static string ParaCategoryLabel(ParaCategory c) => c switch
+    {
+        ParaCategory.Project  => "Project",
+        ParaCategory.Area     => "Area",
+        ParaCategory.Resource => "Resource",
+        ParaCategory.Archive  => "Archive",
+        _                     => c.ToString()
+    };
+}

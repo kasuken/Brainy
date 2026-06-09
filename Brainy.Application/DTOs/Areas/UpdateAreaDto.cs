@@ -4,4 +4,5 @@ namespace Brainy.Application.DTOs.Areas;
 public record UpdateAreaDto(
     Guid Id,
     string Name,
-    string? Description);
+    string? Description,
+    string? Purpose);

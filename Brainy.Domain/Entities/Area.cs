@@ -14,7 +14,13 @@ public class Area : BaseEntity, IUserOwnedEntity
 
     public string? Description { get; set; }
 
+    /// <summary>The ongoing responsibility this area represents — the "why" behind it.</summary>
+    public string? Purpose { get; set; }
+
     public bool IsArchived { get; set; }
+
+    /// <summary>When this area was archived. Null if active.</summary>
+    public DateTime? ArchivedAtUtc { get; set; }
 
     public ICollection<Project> Projects { get; set; } = new List<Project>();
 

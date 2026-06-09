@@ -1,0 +1,99 @@
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.Interfaces.Services
+@inject IAreaService AreaService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-family:var(--font-display)">
+            @(AreaId.HasValue ? "Edit Area" : "New Area")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <div class="aed-fields">
+                <MudTextField @bind-Value="_name" Label="Name" Required="true"
+                              RequiredError="Name is required"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                <MudTextField @bind-Value="_purpose" Label="Purpose"
+                              HelperText="The ongoing responsibility this area represents"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                <MudTextField @bind-Value="_description" Label="Description"
+                              Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </div>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="!_valid || _saving">
+            @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+            @(AreaId.HasValue ? "Save changes" : "Create area")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+.aed-fields { display: flex; flex-direction: column; gap: .85rem; padding-top: .25rem; }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Guid? AreaId { get; set; }
+
+    private MudForm _form = null!;
+    private bool _valid;
+    private bool _saving;
+
+    private string _name = "";
+    private string? _purpose;
+    private string? _description;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AreaId.HasValue)
+        {
+            var dto = await AreaService.GetByIdAsync(AreaId.Value);
+            if (dto is not null)
+            {
+                _name        = dto.Name;
+                _purpose     = dto.Purpose;
+                _description = dto.Description;
+            }
+        }
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_valid) return;
+
+        _saving = true;
+        try
+        {
+            if (AreaId.HasValue)
+            {
+                await AreaService.UpdateAsync(new UpdateAreaDto(
+                    AreaId.Value, _name, _description, _purpose));
+            }
+            else
+            {
+                await AreaService.CreateAsync(new CreateAreaDto(_name, _description, _purpose));
+            }
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
