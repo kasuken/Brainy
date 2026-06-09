@@ -5,6 +5,7 @@ using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -18,6 +19,9 @@ builder.Services.AddBrainyData(builder.Configuration);
 builder.Services.AddBrainyApplication();
 
 var app = builder.Build();
+
+// Apply any pending EF Core migrations on startup.
+await DatabaseInitializer.MigrateAsync(app.Services);
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
