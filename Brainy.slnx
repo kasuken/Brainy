@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="Brainy.Application/Brainy.Application.csproj" />
+  <Project Path="Brainy.Application.Tests/Brainy.Application.Tests.csproj" />
   <Project Path="Brainy.Data/Brainy.Data.csproj" />
   <Project Path="Brainy.Domain/Brainy.Domain.csproj" />
   <Project Path="Brainy.Web/Brainy.Web.csproj" />
