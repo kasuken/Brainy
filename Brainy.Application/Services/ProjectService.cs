@@ -43,6 +43,20 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             .ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<ProjectDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await context.Projects
+            .AsNoTracking()
+            .Where(p => p.UserId == userId && (p.IsArchived || p.Status == ProjectStatus.Archived))
+            .OrderByDescending(p => p.ArchivedAtUtc)
+            .ThenBy(p => p.Name)
+            .Select(p => ToDto(p))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public async Task<ProjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
@@ -127,7 +141,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<ProjectDto> RestoreAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
@@ -135,6 +149,33 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Project '{id}' was not found.");
+
+        project.IsArchived = false;
+        project.ArchivedAtUtc = null;
+        project.Status = ProjectStatus.NotStarted;
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return ToDto(project);
+    }
+
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var project = await context.Projects
+            .Include(p => p.Tasks)
+            .Include(p => p.Notes)
+            .Include(p => p.Outputs)
+            .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Project '{id}' was not found.");
+
+        if (project.Tasks.Count > 0 || project.Notes.Count > 0 || project.Outputs.Count > 0)
+            throw new InvalidOperationException(
+                $"Project '{project.Name}' cannot be deleted because it still has " +
+                $"{project.Tasks.Count} task(s), {project.Notes.Count} note(s), and " +
+                $"{project.Outputs.Count} output(s). Remove or reassign them first.");
 
         context.Projects.Remove(project);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

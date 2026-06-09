@@ -11,9 +11,22 @@ public interface IProjectService
     /// <summary>Returns all non-archived projects — used by Project List and project pickers.</summary>
     Task<IReadOnlyList<ProjectDto>> GetAllNonArchivedAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Returns all archived projects — used by the Archives view.</summary>
+    Task<IReadOnlyList<ProjectDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default);
+
     Task<ProjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<ProjectDto> CreateAsync(CreateProjectDto dto, CancellationToken cancellationToken = default);
     Task<ProjectDto> UpdateAsync(UpdateProjectDto dto, CancellationToken cancellationToken = default);
     Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Restores an archived project back to <see cref="Domain.Enums.ProjectStatus.NotStarted"/>.
+    /// </summary>
+    Task<ProjectDto> RestoreAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Permanently deletes a project. Throws <see cref="InvalidOperationException"/>
+    /// if the project still has tasks, notes, or outputs.
+    /// </summary>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }
