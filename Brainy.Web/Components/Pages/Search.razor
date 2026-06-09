@@ -1,0 +1,363 @@
+@page "/search"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@namespace Brainy.Web.Components.Pages
+
+@using Brainy.Application.DTOs.Search
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+
+@inject ISearchService SearchService
+@inject NavigationManager Nav
+
+<PageTitle>Search – Brainy</PageTitle>
+
+<div class="search-page">
+
+    @* ── Hero search bar ── *@
+    <div class="search-hero">
+        <MudText Typo="Typo.h4" Class="search-hero__heading mb-1">
+            Search your knowledge
+        </MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary mb-5">
+            Find notes by title or content — results ordered by relevance.
+        </MudText>
+
+        <div class="search-input-wrap">
+            <MudTextField @bind-Value="_query"
+                          Placeholder="Type to search…"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Clearable="true"
+                          Immediate="true"
+                          DebounceInterval="300"
+                          OnDebounceIntervalElapsed="RunSearchAsync"
+                          Variant="Variant.Outlined"
+                          Class="search-input"
+                          TextChanged="OnTextChanged" />
+        </div>
+    </div>
+
+    @* ── Results area ── *@
+    <div class="search-results-area">
+
+        @if (_searching)
+        {
+            <div class="search-state search-state--loading">
+                <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Medium" />
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">Searching…</MudText>
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_query) && _results.Count == 0 && _hasSearched)
+        {
+            <div class="search-state">
+                <MudIcon Icon="@Icons.Material.Outlined.SearchOff"
+                         Class="search-state__icon mud-secondary-text" />
+                <MudText Typo="Typo.h6" GutterBottom="true">No results for "@_query"</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Try shorter terms, different keywords, or check your spelling.
+                </MudText>
+            </div>
+        }
+        else if (string.IsNullOrWhiteSpace(_query) && !_hasSearched)
+        {
+            <div class="search-state search-state--idle">
+                <MudIcon Icon="@Icons.Material.Outlined.AutoStories"
+                         Class="search-state__icon mud-secondary-text" />
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Start typing to search across all your notes.
+                </MudText>
+            </div>
+        }
+        else if (_results.Count > 0)
+        {
+            <div class="search-meta mb-4">
+                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
+                    <strong>@_results.Count</strong> result@(_results.Count == 1 ? "" : "s")
+                    for <em>"@_lastQuery"</em>
+                </MudText>
+            </div>
+
+            <div class="search-results-list">
+                @foreach (var result in _results)
+                {
+                    <div class="search-card" @onclick="() => OpenNote(result.Id)">
+
+                        <div class="search-card__header">
+                            @* PARA badge *@
+                            <MudChip T="string"
+                                     Size="Size.Small"
+                                     Color="CategoryColor(result.ParaCategory)"
+                                     Variant="Variant.Outlined"
+                                     Class="search-card__badge">
+                                @result.ParaCategory
+                            </MudChip>
+
+                            @* Relevance pill *@
+                            @if (result.Relevance == 2)
+                            {
+                                <span class="search-card__relevance-pill">Title match</span>
+                            }
+
+                            <MudSpacer />
+
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @result.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                            </MudText>
+                        </div>
+
+                        <MudText Typo="Typo.subtitle1" Class="search-card__title">
+                            @HighlightTitle(result.Title, _lastQuery)
+                        </MudText>
+
+                        @if (!string.IsNullOrWhiteSpace(result.ContentSnippet))
+                        {
+                            <p class="search-card__snippet">
+                                @HighlightSnippet(result.ContentSnippet, _lastQuery)
+                            </p>
+                        }
+
+                    </div>
+                }
+            </div>
+        }
+
+    </div>
+
+</div>
+
+<style>
+    /* ── Page layout ── */
+    .search-page {
+        max-width: 780px;
+        margin: 0 auto;
+    }
+
+    /* ── Hero ── */
+    .search-hero {
+        text-align: center;
+        padding: 2.5rem 0 2rem;
+    }
+
+    .search-hero__heading {
+        font-family: 'Fraunces', serif;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.5px;
+    }
+
+    .search-input-wrap {
+        position: relative;
+        max-width: 620px;
+        margin: 0 auto;
+    }
+
+    .search-input {
+        font-size: 1.05rem;
+    }
+
+    .search-input .mud-input-root {
+        border-radius: 16px !important;
+        background: var(--mud-palette-surface);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+        transition: box-shadow 0.2s ease;
+    }
+
+    .search-input .mud-input-root:hover,
+    .search-input .mud-input-root:focus-within {
+        box-shadow: 0 4px 20px rgba(192,86,29,0.18);
+    }
+
+    /* ── State screens ── */
+    .search-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 1rem;
+        text-align: center;
+        gap: 0.5rem;
+    }
+
+    .search-state__icon {
+        font-size: 3.5rem !important;
+        width: 3.5rem !important;
+        height: 3.5rem !important;
+        margin-bottom: 0.75rem;
+        opacity: 0.55;
+    }
+
+    /* ── Meta line ── */
+    .search-meta {
+        padding: 0 0.25rem;
+    }
+
+    /* ── Result cards ── */
+    .search-results-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .search-card {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 14px;
+        padding: 1.1rem 1.3rem;
+        cursor: pointer;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.15s ease;
+    }
+
+    .search-card:hover {
+        border-color: var(--mud-palette-primary);
+        box-shadow: 0 4px 16px rgba(192,86,29,0.12);
+        transform: translateY(-1px);
+    }
+
+    .search-card__header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .search-card__badge {
+        font-size: 0.72rem !important;
+    }
+
+    .search-card__relevance-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.15rem 0.55rem;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        background: rgba(192, 86, 29, 0.12);
+        color: #c0561d;
+        letter-spacing: 0.02em;
+    }
+
+    .search-card__title {
+        font-family: 'Fraunces', serif;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        margin-bottom: 0.35rem;
+        line-height: 1.35;
+    }
+
+    .search-card__snippet {
+        font-size: 0.875rem;
+        color: var(--mud-palette-text-secondary);
+        line-height: 1.6;
+        margin: 0;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* Highlighted match terms */
+    .search-highlight {
+        background: rgba(205, 154, 58, 0.28);
+        color: #7a5800;
+        border-radius: 3px;
+        padding: 0 2px;
+        font-weight: 600;
+    }
+</style>
+
+@code {
+    private string _query = string.Empty;
+    private string _lastQuery = string.Empty;
+    private IReadOnlyList<SearchResultDto> _results = [];
+    private bool _searching;
+    private bool _hasSearched;
+
+    private async Task OnTextChanged(string value)
+    {
+        _query = value;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            _results = [];
+            _hasSearched = false;
+        }
+    }
+
+    private async Task RunSearchAsync()
+    {
+        var term = _query?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            _results = [];
+            _hasSearched = false;
+            return;
+        }
+
+        _searching = true;
+        _hasSearched = true;
+        StateHasChanged();
+
+        try
+        {
+            _results = await SearchService.SearchAsync(term);
+            _lastQuery = term;
+        }
+        finally
+        {
+            _searching = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenNote(Guid id) => Nav.NavigateTo($"/notes/{id}");
+
+    private static Color CategoryColor(ParaCategory category) => category switch
+    {
+        ParaCategory.Project  => Color.Primary,
+        ParaCategory.Area     => Color.Tertiary,
+        ParaCategory.Resource => Color.Info,
+        ParaCategory.Archive  => Color.Default,
+        _                     => Color.Default
+    };
+
+    /// <summary>Returns a RenderFragment that wraps matched text in a highlight span.</summary>
+    private static RenderFragment HighlightTitle(string title, string query) =>
+        builder => RenderHighlighted(builder, title, query);
+
+    private static RenderFragment HighlightSnippet(string snippet, string query) =>
+        builder => RenderHighlighted(builder, snippet, query);
+
+    private static void RenderHighlighted(
+        Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder,
+        string text,
+        string term)
+    {
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            builder.AddContent(0, text);
+            return;
+        }
+
+        var seq = 0;
+        var idx = 0;
+        while (idx < text.Length)
+        {
+            var pos = text.IndexOf(term, idx, StringComparison.OrdinalIgnoreCase);
+            if (pos < 0)
+            {
+                builder.AddContent(seq++, text[idx..]);
+                break;
+            }
+            if (pos > idx)
+                builder.AddContent(seq++, text[idx..pos]);
+
+            builder.OpenElement(seq++, "mark");
+            builder.AddAttribute(seq++, "class", "search-highlight");
+            builder.AddContent(seq++, text[pos..(pos + term.Length)]);
+            builder.CloseElement();
+
+            idx = pos + term.Length;
+        }
+    }
+}

@@ -34,6 +34,8 @@ public class NoteConfiguration : IEntityTypeConfiguration<Note>
 
         builder.HasIndex(n => n.Status);
         builder.HasIndex(n => n.ParaCategory);
+        // Supports fast title-based search and ordering.
+        builder.HasIndex(n => new { n.UserId, n.Title });
 
         builder.HasOne(n => n.Source)
             .WithMany(s => s.Notes)
