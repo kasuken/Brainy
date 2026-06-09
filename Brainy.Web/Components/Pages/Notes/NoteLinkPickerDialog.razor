@@ -1,0 +1,293 @@
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.DTOs.NoteRelationships
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+
+@inject INoteService NoteService
+
+<MudDialog Class="nlp">
+
+    <TitleContent>
+        <div class="nlp__title">
+            <span class="nlp__title-icon" aria-hidden="true">
+                <MudIcon Icon="@Icons.Material.Outlined.AddLink" />
+            </span>
+            <span>Link a note</span>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        <div class="nlp__body">
+
+            @* Search *@
+            <MudTextField @bind-Value="_search"
+                          Placeholder="Search notes…"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          Clearable="true"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="nlp__search mb-3" />
+
+            @* Results *@
+            <div class="nlp__results">
+                @if (_loading)
+                {
+                    <div class="nlp__state">
+                        <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+                    </div>
+                }
+                else if (!Filtered.Any())
+                {
+                    <div class="nlp__state nlp__state--empty">
+                        <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Class="nlp__state-icon" />
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">No notes found.</MudText>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var note in Filtered)
+                    {
+                        var selected = _selectedId == note.Id;
+                        <button type="button"
+                                class="nlp__row @(selected ? "nlp__row--active" : "")"
+                                @onclick="() => _selectedId = note.Id">
+                            <span class="nlp__row-dot" style="background: @CatColor(note.ParaCategory)"></span>
+                            <span class="nlp__row-title">@note.Title</span>
+                            <span class="nlp__row-cat">@note.ParaCategory</span>
+                            @if (selected)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Class="nlp__row-check" />
+                            }
+                        </button>
+                    }
+                }
+            </div>
+
+            @* Relationship type *@
+            <p class="nlp__section-label mt-4">Relationship type</p>
+            <div class="nlp__types">
+                @foreach (var t in Enum.GetValues<RelationshipType>())
+                {
+                    var active = t == _type;
+                    <button type="button"
+                            class="nlp__type @(active ? "nlp__type--active" : "")"
+                            @onclick="() => _type = t">
+                        @RelTypLabel(t)
+                    </button>
+                }
+            </div>
+
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Class="nlp__btn-cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.AddLink"
+                   Disabled="_selectedId is null"
+                   OnClick="Confirm"
+                   Class="nlp__btn-confirm">
+            Link note
+        </MudButton>
+    </DialogActions>
+
+</MudDialog>
+
+<style>
+    .nlp .mud-dialog-title { padding-bottom: 0; }
+
+    .nlp__title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: var(--font-display);
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--ink);
+    }
+
+    .nlp__title-icon { color: var(--clay); display: flex; }
+
+    .nlp__body { padding: 0.25rem 0 0.5rem; }
+
+    /* Results list */
+    .nlp__results {
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper-raised);
+    }
+
+    .nlp__state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 1.5rem;
+        text-align: center;
+    }
+
+    .nlp__state--empty .nlp__state-icon {
+        font-size: 1.8rem !important;
+        width: 1.8rem !important;
+        height: 1.8rem !important;
+        opacity: 0.4;
+    }
+
+    .nlp__row {
+        display: grid;
+        grid-template-columns: 10px 1fr max-content max-content;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.55rem 0.85rem;
+        width: 100%;
+        border: none;
+        border-bottom: 1px solid var(--line);
+        background: transparent;
+        cursor: pointer;
+        font-family: var(--font-body);
+        text-align: left;
+        transition: background 0.12s ease;
+    }
+
+    .nlp__row:last-child { border-bottom: none; }
+    .nlp__row:hover { background: var(--paper-sunk); }
+
+    .nlp__row--active {
+        background: var(--clay-soft);
+    }
+
+    .nlp__row-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .nlp__row-title {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--ink);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .nlp__row-cat {
+        font-size: 0.72rem;
+        color: var(--ink-faint);
+    }
+
+    .nlp__row-check {
+        color: var(--clay);
+        font-size: 0.95rem !important;
+        width: 0.95rem !important;
+        height: 0.95rem !important;
+    }
+
+    /* Section label */
+    .nlp__section-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--ink-soft);
+        margin: 0 0 0.55rem;
+    }
+
+    /* Relationship type pills */
+    .nlp__types {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+
+    .nlp__type {
+        padding: 0.3rem 0.75rem;
+        border: 1.5px solid var(--line);
+        border-radius: 999px;
+        background: var(--paper-raised);
+        cursor: pointer;
+        font-family: var(--font-body);
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--ink-soft);
+        transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+    }
+
+    .nlp__type:hover { border-color: var(--clay-ring); color: var(--ink); }
+
+    .nlp__type--active {
+        border-color: var(--clay);
+        background: var(--clay-soft);
+        color: var(--clay-deep);
+        font-weight: 600;
+    }
+
+    /* Buttons */
+    .nlp__btn-cancel { color: var(--ink-soft) !important; }
+    .nlp__btn-confirm { background: var(--clay) !important; color: #fff !important; }
+    .nlp__btn-confirm:hover { background: var(--clay-deep) !important; }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>The note being edited — excluded from search results.</summary>
+    [Parameter] public Guid CurrentNoteId { get; set; }
+
+    /// <summary>Already-linked note IDs to exclude from the picker.</summary>
+    [Parameter] public IEnumerable<Guid> ExcludedNoteIds { get; set; } = [];
+
+    private string _search = string.Empty;
+    private RelationshipType _type = RelationshipType.Related;
+    private Guid? _selectedId;
+    private IReadOnlyList<NoteDto> _allNotes = [];
+    private bool _loading = true;
+
+    private IEnumerable<NoteDto> Filtered =>
+        _allNotes.Where(n =>
+            string.IsNullOrWhiteSpace(_search) ||
+            n.Title.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await NoteService.GetAllAsync();
+        var excluded = ExcludedNoteIds.ToHashSet();
+        excluded.Add(CurrentNoteId);
+        _allNotes = all.Where(n => !excluded.Contains(n.Id)).ToList();
+        _loading = false;
+    }
+
+    private void Confirm()
+    {
+        if (_selectedId is null) return;
+        MudDialog.Close(DialogResult.Ok(new CreateNoteRelationshipDto(
+            CurrentNoteId, _selectedId.Value, _type)));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private static string CatColor(ParaCategory cat) => cat switch
+    {
+        ParaCategory.Project  => "#c0561d",
+        ParaCategory.Area     => "#6f7a5a",
+        ParaCategory.Resource => "#3a7bcd",
+        ParaCategory.Archive  => "#9a9180",
+        _                     => "#9a9180"
+    };
+
+    private static string RelTypLabel(RelationshipType t) => t switch
+    {
+        RelationshipType.Related     => "Related",
+        RelationshipType.References  => "References",
+        RelationshipType.FollowUp    => "Follow-up",
+        RelationshipType.Duplicate   => "Duplicate",
+        RelationshipType.Supports    => "Supports",
+        RelationshipType.Contradicts => "Contradicts",
+        _                            => t.ToString()
+    };
+}

@@ -1,11 +1,13 @@
 @implements IAsyncDisposable
 
 @using Brainy.Application.DTOs.Notes
+@using Brainy.Application.DTOs.NoteRelationships
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @using Markdig
 
 @inject INoteService NoteService
+@inject INoteRelationshipService RelationshipService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject NavigationManager Nav
@@ -206,6 +208,59 @@
 
                             @if (_originalNote is not null)
                             {
+                                @* ── Linked Notes ── *@
+                                <div class="note-editor__sidebar-section">
+                                    <div class="ned-links__header">
+                                        <h3 class="note-editor__sidebar-heading">Linked Notes</h3>
+                                        <button type="button"
+                                                class="ned-links__add-btn"
+                                                title="Link a note"
+                                                @onclick="OpenLinkPickerAsync">
+                                            <MudIcon Icon="@Icons.Material.Outlined.AddLink"
+                                                     Class="ned-links__add-icon" />
+                                        </button>
+                                    </div>
+
+                                    @if (_linksLoading)
+                                    {
+                                        <div class="ned-links__loading">
+                                            <MudProgressCircular Indeterminate="true"
+                                                                 Size="Size.Small"
+                                                                 Color="Color.Primary" />
+                                        </div>
+                                    }
+                                    else if (_links.Count == 0)
+                                    {
+                                        <p class="ned-links__empty">No linked notes yet.</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="ned-links__list">
+                                            @foreach (var link in _links)
+                                            {
+                                                <div class="ned-links__item">
+                                                    <span class="ned-links__type-badge">
+                                                        @RelTypLabel(link.Type)
+                                                    </span>
+                                                    <button type="button"
+                                                            class="ned-links__note-title"
+                                                            title="Open @link.LinkedNoteTitle"
+                                                            @onclick="() => OpenLinkedNoteAsync(link.LinkedNoteId)">
+                                                        @link.LinkedNoteTitle
+                                                    </button>
+                                                    <button type="button"
+                                                            class="ned-links__remove"
+                                                            title="Remove link"
+                                                            @onclick="() => RemoveLinkAsync(link)">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.LinkOff"
+                                                                 Class="ned-links__remove-icon" />
+                                                    </button>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
                                 <div class="note-editor__sidebar-section">
                                     <h3 class="note-editor__sidebar-heading">Metadata</h3>
                                     <div class="note-editor__meta">
@@ -295,6 +350,10 @@
     private bool _saving;
     private IDisposable? _locationChangingHandler;
 
+    // ── Relationships ──
+    private IReadOnlyList<NoteRelationshipDto> _links = [];
+    private bool _linksLoading;
+
     private static readonly MarkdownPipeline _pipeline =
         new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
 
@@ -314,6 +373,8 @@
             _model.Content       = note.Content;
             _model.ParaCategory  = note.ParaCategory;
             _model.Status        = note.Status;
+
+            _links = await RelationshipService.GetForNoteAsync(NoteId.Value);
         }
         _loading = false;
     }
@@ -474,6 +535,97 @@
         try { await JS.InvokeVoidAsync("brainyNoteEditor.removeBeforeunloadWarning"); }
         catch { /* ignore: circuit may be tearing down */ }
     }
+
+    // ── Relationship helpers ──────────────────────────────────────────────────
+
+    private async Task OpenLinkPickerAsync()
+    {
+        if (!NoteId.HasValue) return;
+
+        var excluded = _links.Select(l => l.LinkedNoteId);
+        var parameters = new DialogParameters<NoteLinkPickerDialog>
+        {
+            { x => x.CurrentNoteId,   NoteId.Value },
+            { x => x.ExcludedNoteIds, excluded     }
+        };
+
+        var opts = new DialogOptions
+        {
+            MaxWidth      = MaxWidth.Small,
+            FullWidth     = true,
+            BackdropClick = true,
+            CloseButton   = false
+        };
+        var dialog = await DialogService.ShowAsync<NoteLinkPickerDialog>("", parameters, opts);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: CreateNoteRelationshipDto dto })
+        {
+            _linksLoading = true;
+            try
+            {
+                await RelationshipService.CreateAsync(dto);
+                _links = await RelationshipService.GetForNoteAsync(NoteId.Value);
+                Snackbar.Add("Note linked.", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Could not link note: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _linksLoading = false;
+            }
+        }
+    }
+
+    private async Task RemoveLinkAsync(NoteRelationshipDto link)
+    {
+        if (!NoteId.HasValue) return;
+        _linksLoading = true;
+        try
+        {
+            await RelationshipService.DeleteAsync(link.Id);
+            _links = await RelationshipService.GetForNoteAsync(NoteId.Value);
+            Snackbar.Add("Link removed.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not remove link: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _linksLoading = false;
+        }
+    }
+
+    private async Task OpenLinkedNoteAsync(Guid linkedNoteId)
+    {
+        var parameters = new DialogParameters<NoteEditorDialog>
+        {
+            { x => x.NoteId, linkedNoteId }
+        };
+        var opts = new DialogOptions
+        {
+            MaxWidth         = MaxWidth.Large,
+            FullWidth        = true,
+            BackdropClick    = false,
+            CloseOnEscapeKey = false,
+            CloseButton      = false
+        };
+        await DialogService.ShowAsync<NoteEditorDialog>("", parameters, opts);
+    }
+
+    private static string RelTypLabel(RelationshipType t) => t switch
+    {
+        RelationshipType.Related     => "Related",
+        RelationshipType.References  => "References",
+        RelationshipType.FollowUp    => "Follow-up",
+        RelationshipType.Duplicate   => "Duplicate",
+        RelationshipType.Supports    => "Supports",
+        RelationshipType.Contradicts => "Contradicts",
+        _                            => t.ToString()
+    };
 
     public async ValueTask DisposeAsync()
     {

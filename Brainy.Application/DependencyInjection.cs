@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<IResourceService, ResourceService>();
         services.AddScoped<IParaSummaryService, ParaSummaryService>();
         services.AddScoped<ISearchService, SearchService>();
+        services.AddScoped<INoteRelationshipService, NoteRelationshipService>();
         return services;
     }
 }
