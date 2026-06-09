@@ -279,6 +279,7 @@ When generating code:
 - Store original user content separately from AI-generated content
 - Track provenance for summaries and extracted insights
 - Design for auditability
+- Design all the components, pages and layout by using the skill `frontend-design`
 
 AI-generated data should always be marked as AI-generated.
 
