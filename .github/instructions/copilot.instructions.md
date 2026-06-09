@@ -280,6 +280,8 @@ When generating code:
 - Track provenance for summaries and extracted insights
 - Design for auditability
 - Design all the components, pages and layout by using the skill `frontend-design`
+- For all the subpages like create, edit use Modals of MudBlazor
+- When possible, groups all the components and pages related to the same feature in the same folder, for example, all the components and pages related to Notes should be in a folder called Notes
 
 AI-generated data should always be marked as AI-generated.
 
