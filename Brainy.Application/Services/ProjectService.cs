@@ -293,13 +293,22 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
         var project = await context.Projects
+            .Include(p => p.Tasks)
             .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Project '{id}' was not found.");
 
-        project.IsArchived = true;
-        project.ArchivedAtUtc = DateTime.UtcNow;
-        project.Status = ProjectStatus.Archived;
+        var now = DateTime.UtcNow;
+        project.IsArchived    = true;
+        project.ArchivedAtUtc = now;
+        project.Status        = ProjectStatus.Archived;
+
+        // Cascade: archive all non-archived tasks belonging to the project
+        foreach (var task in project.Tasks.Where(t => !t.IsArchived))
+        {
+            task.IsArchived    = true;
+            task.ArchivedAtUtc = now;
+        }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -309,13 +318,21 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
         var project = await context.Projects
+            .Include(p => p.Tasks)
             .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Project '{id}' was not found.");
 
-        project.IsArchived = false;
+        project.IsArchived    = false;
         project.ArchivedAtUtc = null;
-        project.Status = ProjectStatus.NotStarted;
+        project.Status        = ProjectStatus.NotStarted;
+
+        // Restore tasks that were archived together with the project
+        foreach (var task in project.Tasks.Where(t => t.IsArchived))
+        {
+            task.IsArchived    = false;
+            task.ArchivedAtUtc = null;
+        }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
