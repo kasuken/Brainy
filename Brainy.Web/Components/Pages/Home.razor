@@ -1,7 +1,75 @@
 ﻿@page "/"
+@attribute [Authorize]
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Today · Brainy</PageTitle>
 
-<h1>Hello, world!</h1>
+<AuthorizeView>
+    <Authorized>
+        <section class="today">
+            <p class="today__eyebrow">Today</p>
+            <h1 class="today__title">@Greeting,<br />@DisplayName.</h1>
+            <p class="today__lead">
+                This is your second brain &mdash; capture what matters, organize it close to action,
+                and turn what you know into something useful.
+            </p>
 
-Welcome to your new app.
+            <div class="today-grid">
+                <a class="today-card" href="/notes">
+                    <span class="today-card__icon">
+                        <MudIcon Icon="@Icons.Material.Outlined.Notes" />
+                    </span>
+                    <h2 class="today-card__title">Notes</h2>
+                    <p class="today-card__desc">Capture ideas fast and revisit your knowledge whenever you need it.</p>
+                    <span class="today-card__cta">Open notes &rarr;</span>
+                </a>
+
+                <a class="today-card" href="/inbox">
+                    <span class="today-card__icon">
+                        <MudIcon Icon="@Icons.Material.Outlined.Inbox" />
+                    </span>
+                    <h2 class="today-card__title">Inbox</h2>
+                    <p class="today-card__desc">Process everything you captured and decide where it belongs.</p>
+                    <span class="today-card__cta">Go to inbox &rarr;</span>
+                </a>
+
+                <a class="today-card" href="/projects">
+                    <span class="today-card__icon">
+                        <MudIcon Icon="@Icons.Material.Outlined.FolderSpecial" />
+                    </span>
+                    <h2 class="today-card__title">Projects</h2>
+                    <p class="today-card__desc">Focus on outcomes with deadlines and move your work forward.</p>
+                    <span class="today-card__cta">View projects &rarr;</span>
+                </a>
+            </div>
+        </section>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string DisplayName { get; set; } = "there";
+
+    private string Greeting => DateTime.Now.Hour switch
+    {
+        >= 5 and < 12 => "Good morning",
+        >= 12 and < 18 => "Good afternoon",
+        _ => "Good evening",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            var name = state.User.Identity?.Name;
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                // Use the part before '@' for a friendlier greeting.
+                var at = name.IndexOf('@');
+                DisplayName = at > 0 ? name[..at] : name;
+            }
+        }
+    }
+}

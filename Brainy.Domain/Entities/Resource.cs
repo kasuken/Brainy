@@ -1,10 +1,15 @@
+using Brainy.Domain.Common;
+
 namespace Brainy.Domain.Entities;
 
 /// <summary>
 /// A topic of interest or reference material (PARA: Resource).
 /// </summary>
-public class Resource : BaseEntity
+public class Resource : BaseEntity, IUserOwnedEntity
 {
+    /// <summary>Identity key of the owning user.</summary>
+    public string UserId { get; set; } = string.Empty;
+
     public string Name { get; set; } = string.Empty;
 
     public string? Description { get; set; }

@@ -12,6 +12,8 @@ public class OutputConfiguration : IEntityTypeConfiguration<Output>
 
         builder.HasKey(o => o.Id);
 
+        builder.ConfigureUserOwnership();
+
         builder.Property(o => o.Title)
             .IsRequired()
             .HasMaxLength(500);

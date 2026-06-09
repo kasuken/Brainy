@@ -1,6 +1,12 @@
 using Brainy.Application;
+using Brainy.Application.Interfaces.Identity;
 using Brainy.Data;
+using Brainy.Data.Identity;
 using Brainy.Web.Components;
+using Brainy.Web.Components.Account;
+using Brainy.Web.Identity;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Identity;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,8 +18,32 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddMudServices();
 
+// Authentication / Identity.
+builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddScoped<IdentityRedirectManager>();
+builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
+
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultScheme = IdentityConstants.ApplicationScheme;
+        options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
+    })
+    .AddIdentityCookies();
+
 // Data access layer (EF Core / SQL Server).
 builder.Services.AddBrainyData(builder.Configuration);
+
+builder.Services.AddIdentityCore<ApplicationUser>(options =>
+    {
+        // No confirmation email is required to sign in.
+        options.SignIn.RequireConfirmedAccount = false;
+    })
+    .AddEntityFrameworkStores<BrainyDbContext>()
+    .AddSignInManager()
+    .AddDefaultTokenProviders();
+
+// Current-user accessor used by the application layer for per-user data scoping.
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
 // Application-layer services.
 builder.Services.AddBrainyApplication();
@@ -38,5 +68,8 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// Map additional endpoints required by the Identity /Account Razor components.
+app.MapAdditionalIdentityEndpoints();
 
 app.Run();

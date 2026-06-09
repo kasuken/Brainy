@@ -12,6 +12,8 @@ public class ResourceConfiguration : IEntityTypeConfiguration<Resource>
 
         builder.HasKey(r => r.Id);
 
+        builder.ConfigureUserOwnership();
+
         builder.Property(r => r.Name)
             .IsRequired()
             .HasMaxLength(200);

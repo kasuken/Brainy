@@ -1,5 +1,7 @@
 using Brainy.Application.DTOs.Notes;
+using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
 using Brainy.Domain.Enums;
 using FluentAssertions;
@@ -15,7 +17,9 @@ namespace Brainy.Application.Tests.Services;
 /// </summary>
 public class NoteServiceTests
 {
-    private static INoteService BuildService(string dbName)
+    private const string DefaultUserId = "test-user-1";
+
+    private static INoteService BuildService(string dbName, string userId = DefaultUserId)
     {
         var services = new ServiceCollection();
 
@@ -24,6 +28,8 @@ public class NoteServiceTests
 
         services.AddScoped<Brainy.Application.Interfaces.Persistence.IApplicationDbContext>(
             sp => sp.GetRequiredService<BrainyDbContext>());
+
+        services.AddSingleton<ICurrentUserService>(new FakeCurrentUserService(userId));
 
         services.AddBrainyApplication();
 
@@ -186,5 +192,64 @@ public class NoteServiceTests
         var act = () => sut.DeleteAsync(Guid.NewGuid());
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    // ── Per-user isolation ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetAllAsync_OnlyReturnsNotesOwnedByCurrentUser()
+    {
+        var dbName = nameof(GetAllAsync_OnlyReturnsNotesOwnedByCurrentUser);
+        var userA = BuildService(dbName, "user-a");
+        var userB = BuildService(dbName, "user-b");
+
+        await userA.CreateAsync(new CreateNoteDto("A note"));
+        await userB.CreateAsync(new CreateNoteDto("B note 1"));
+        await userB.CreateAsync(new CreateNoteDto("B note 2"));
+
+        var resultForA = await userA.GetAllAsync();
+
+        resultForA.Should().ContainSingle()
+            .Which.Title.Should().Be("A note");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_WhenNoteBelongsToAnotherUser_ReturnsNull()
+    {
+        var dbName = nameof(GetByIdAsync_WhenNoteBelongsToAnotherUser_ReturnsNull);
+        var userA = BuildService(dbName, "user-a");
+        var userB = BuildService(dbName, "user-b");
+        var createdByA = await userA.CreateAsync(new CreateNoteDto("A private note"));
+
+        var result = await userB.GetByIdAsync(createdByA.Id);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenNoteBelongsToAnotherUser_ThrowsKeyNotFoundException()
+    {
+        var dbName = nameof(DeleteAsync_WhenNoteBelongsToAnotherUser_ThrowsKeyNotFoundException);
+        var userA = BuildService(dbName, "user-a");
+        var userB = BuildService(dbName, "user-b");
+        var createdByA = await userA.CreateAsync(new CreateNoteDto("A private note"));
+
+        var act = () => userB.DeleteAsync(createdByA.Id);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task CreateAsync_StampsNoteWithCurrentUserId()
+    {
+        var dbName = nameof(CreateAsync_StampsNoteWithCurrentUserId);
+        var sut = BuildService(dbName, "owner-123");
+
+        var created = await sut.CreateAsync(new CreateNoteDto("Owned note"));
+
+        var options = new DbContextOptionsBuilder<BrainyDbContext>().UseInMemoryDatabase(dbName).Options;
+        await using var context = new BrainyDbContext(options);
+        var stored = await context.Notes.SingleAsync(n => n.Id == created.Id);
+        stored.UserId.Should().Be("owner-123");
     }
 }

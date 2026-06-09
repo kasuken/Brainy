@@ -1,11 +1,16 @@
+using Brainy.Domain.Common;
+
 namespace Brainy.Domain.Entities;
 
 /// <summary>
 /// A short-term outcome with a deadline (PARA: Project). Archived projects and their
 /// tasks are excluded from active work queries by default.
 /// </summary>
-public class Project : BaseEntity
+public class Project : BaseEntity, IUserOwnedEntity
 {
+    /// <summary>Identity key of the owning user.</summary>
+    public string UserId { get; set; } = string.Empty;
+
     public string Name { get; set; } = string.Empty;
 
     public string? Description { get; set; }

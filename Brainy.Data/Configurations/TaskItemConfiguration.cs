@@ -12,6 +12,8 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
 
         builder.HasKey(t => t.Id);
 
+        builder.ConfigureUserOwnership();
+
         builder.Property(t => t.Title)
             .IsRequired()
             .HasMaxLength(500);

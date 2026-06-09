@@ -1,3 +1,4 @@
+using Brainy.Domain.Common;
 using Brainy.Domain.Enums;
 
 namespace Brainy.Domain.Entities;
@@ -5,8 +6,11 @@ namespace Brainy.Domain.Entities;
 /// <summary>
 /// The original origin of a captured note, preserved for provenance and citation.
 /// </summary>
-public class Source : BaseEntity
+public class Source : BaseEntity, IUserOwnedEntity
 {
+    /// <summary>Identity key of the owning user.</summary>
+    public string UserId { get; set; } = string.Empty;
+
     public SourceType Type { get; set; }
 
     public string? Title { get; set; }

@@ -12,6 +12,8 @@ public class AreaConfiguration : IEntityTypeConfiguration<Area>
 
         builder.HasKey(a => a.Id);
 
+        builder.ConfigureUserOwnership();
+
         builder.Property(a => a.Name)
             .IsRequired()
             .HasMaxLength(200);

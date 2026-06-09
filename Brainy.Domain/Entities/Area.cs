@@ -1,10 +1,15 @@
+using Brainy.Domain.Common;
+
 namespace Brainy.Domain.Entities;
 
 /// <summary>
 /// An ongoing responsibility without a fixed end date (PARA: Area).
 /// </summary>
-public class Area : BaseEntity
+public class Area : BaseEntity, IUserOwnedEntity
 {
+    /// <summary>Identity key of the owning user.</summary>
+    public string UserId { get; set; } = string.Empty;
+
     public string Name { get; set; } = string.Empty;
 
     public string? Description { get; set; }

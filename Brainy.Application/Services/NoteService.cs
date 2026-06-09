@@ -1,4 +1,5 @@
 using Brainy.Application.DTOs.Notes;
+using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Domain.Entities;
@@ -7,15 +8,18 @@ using Microsoft.EntityFrameworkCore;
 namespace Brainy.Application.Services;
 
 /// <summary>
-/// Handles CRUD operations for <see cref="Note"/> entities.
+/// Handles CRUD operations for <see cref="Note"/> entities, scoped to the current user.
 /// Reads use <c>AsNoTracking</c> for performance; writes load tracked entities.
 /// </summary>
-internal sealed class NoteService(IApplicationDbContext context) : INoteService
+internal sealed class NoteService(IApplicationDbContext context, ICurrentUserService currentUser) : INoteService
 {
     public async Task<IReadOnlyList<NoteDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
         return await context.Notes
             .AsNoTracking()
+            .Where(n => n.UserId == userId)
             .OrderByDescending(n => n.UpdatedAtUtc)
             .Select(n => ToDto(n))
             .ToListAsync(cancellationToken)
@@ -24,9 +28,11 @@ internal sealed class NoteService(IApplicationDbContext context) : INoteService
 
     public async Task<NoteDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
         var note = await context.Notes
             .AsNoTracking()
-            .FirstOrDefaultAsync(n => n.Id == id, cancellationToken)
+            .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false);
 
         return note is null ? null : ToDto(note);
@@ -36,9 +42,12 @@ internal sealed class NoteService(IApplicationDbContext context) : INoteService
     {
         ArgumentNullException.ThrowIfNull(dto);
 
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
         var note = new Note
         {
             Id = Guid.NewGuid(),
+            UserId = userId,
             Title = dto.Title,
             Content = dto.Content,
             ParaCategory = dto.ParaCategory,
@@ -57,8 +66,10 @@ internal sealed class NoteService(IApplicationDbContext context) : INoteService
     {
         ArgumentNullException.ThrowIfNull(dto);
 
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
         var note = await context.Notes
-            .FirstOrDefaultAsync(n => n.Id == dto.Id, cancellationToken)
+            .FirstOrDefaultAsync(n => n.Id == dto.Id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{dto.Id}' was not found.");
 
@@ -78,8 +89,10 @@ internal sealed class NoteService(IApplicationDbContext context) : INoteService
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
         var note = await context.Notes
-            .FirstOrDefaultAsync(n => n.Id == id, cancellationToken)
+            .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{id}' was not found.");
 

@@ -1,3 +1,4 @@
+using Brainy.Domain.Common;
 using Brainy.Domain.Enums;
 
 namespace Brainy.Domain.Entities;
@@ -6,8 +7,11 @@ namespace Brainy.Domain.Entities;
 /// The central unit of knowledge. Holds the user's original content separately from
 /// AI-generated summaries and user highlights.
 /// </summary>
-public class Note : BaseEntity
+public class Note : BaseEntity, IUserOwnedEntity
 {
+    /// <summary>Identity key of the owning user.</summary>
+    public string UserId { get; set; } = string.Empty;
+
     public string Title { get; set; } = string.Empty;
 
     /// <summary>Original, user-authored content. Never overwritten by AI output.</summary>

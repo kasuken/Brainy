@@ -1,0 +1,138 @@
+@page "/Account/Register"
+@layout AuthLayout
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using Brainy.Data.Identity
+
+@inject UserManager<ApplicationUser> UserManager
+@inject IUserStore<ApplicationUser> UserStore
+@inject SignInManager<ApplicationUser> SignInManager
+@inject ILogger<Register> Logger
+@inject NavigationManager NavigationManager
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Register · Brainy</PageTitle>
+
+<a class="auth-minibrand" href="/">
+    <span class="auth-wordmark__mark">B</span>
+    Brainy
+</a>
+
+<span class="auth-eyebrow">Get started</span>
+<h2 class="auth-title">Build your second brain</h2>
+<p class="auth-subtitle">One account. Every idea, note, and project in one place.</p>
+
+<StatusMessage Message="@Message" />
+
+<EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register" class="auth-form">
+    <DataAnnotationsValidator />
+
+    <div class="brainy-field">
+        <label for="email" class="brainy-label">Email</label>
+        <InputText @bind-Value="Input.Email" id="email" class="brainy-input"
+                   autocomplete="username" aria-required="true" placeholder="name@example.com" />
+        <ValidationMessage For="() => Input.Email" class="validation-message" />
+    </div>
+
+    <div class="brainy-field">
+        <label for="password" class="brainy-label">Password</label>
+        <InputText type="password" @bind-Value="Input.Password" id="password" class="brainy-input"
+                   autocomplete="new-password" aria-required="true" placeholder="Choose a password" />
+        <ValidationMessage For="() => Input.Password" class="validation-message" />
+    </div>
+
+    <div class="brainy-field">
+        <label for="confirmPassword" class="brainy-label">Confirm password</label>
+        <InputText type="password" @bind-Value="Input.ConfirmPassword" id="confirmPassword" class="brainy-input"
+                   autocomplete="new-password" aria-required="true" placeholder="Re-enter your password" />
+        <ValidationMessage For="() => Input.ConfirmPassword" class="validation-message" />
+    </div>
+
+    <button type="submit" class="brainy-btn">Create account</button>
+</EditForm>
+
+<div class="auth-divider">Already a member</div>
+
+<p class="auth-switch">
+    Already have an account? <a href="@LoginUrl">Log in instead</a>
+</p>
+
+@code {
+    private IEnumerable<IdentityError>? identityErrors;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = new();
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    private string LoginUrl =>
+        NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl });
+
+    private string? Message =>
+        identityErrors is null ? null : $"Error: {string.Join(", ", identityErrors.Select(error => error.Description))}";
+
+    public async Task RegisterUser(EditContext editContext)
+    {
+        var user = CreateUser();
+
+        await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
+        var emailStore = GetEmailStore();
+        await emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
+        var result = await UserManager.CreateAsync(user, Input.Password);
+
+        if (!result.Succeeded)
+        {
+            identityErrors = result.Errors;
+            return;
+        }
+
+        Logger.LogInformation("User created a new account with password.");
+
+        // No email confirmation is required: sign the user in immediately.
+        await SignInManager.SignInAsync(user, isPersistent: false);
+        RedirectManager.RedirectTo(ReturnUrl);
+    }
+
+    private static ApplicationUser CreateUser()
+    {
+        try
+        {
+            return Activator.CreateInstance<ApplicationUser>();
+        }
+        catch
+        {
+            throw new InvalidOperationException($"Can't create an instance of '{nameof(ApplicationUser)}'. " +
+                $"Ensure that '{nameof(ApplicationUser)}' is not an abstract class and has a parameterless constructor.");
+        }
+    }
+
+    private IUserEmailStore<ApplicationUser> GetEmailStore()
+    {
+        if (!UserManager.SupportsUserEmail)
+        {
+            throw new NotSupportedException("The default UI requires a user store with email support.");
+        }
+        return (IUserEmailStore<ApplicationUser>)UserStore;
+    }
+
+    private sealed class InputModel
+    {
+        [Required]
+        [EmailAddress]
+        [Display(Name = "Email")]
+        public string Email { get; set; } = "";
+
+        [Required]
+        [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
+        [DataType(DataType.Password)]
+        [Display(Name = "Password")]
+        public string Password { get; set; } = "";
+
+        [DataType(DataType.Password)]
+        [Display(Name = "Confirm password")]
+        [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
+        public string ConfirmPassword { get; set; } = "";
+    }
+}

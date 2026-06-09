@@ -12,6 +12,8 @@ public class SourceConfiguration : IEntityTypeConfiguration<Source>
 
         builder.HasKey(s => s.Id);
 
+        builder.ConfigureUserOwnership();
+
         builder.Property(s => s.Type)
             .HasConversion<string>()
             .HasMaxLength(50);

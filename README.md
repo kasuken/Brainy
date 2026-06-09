@@ -47,6 +47,26 @@ Migrations are applied automatically on startup. No manual `dotnet ef database u
 
 ---
 
+## Authentication & Per-User Data
+
+Brainy uses **ASP.NET Core Identity** with cookie authentication.
+
+- Register a new account at `/Account/Register` and sign in at `/Account/Login`.
+- **No email confirmation is required** — new accounts are signed in immediately.
+- All application pages require authentication; unauthenticated visitors are redirected to the login page.
+
+**Every principal entity is owned by the user who created it.** `Note`, `Project`, `Area`,
+`Resource`, `Source`, `Output`, `Tag`, and `TaskItem` each carry a required `UserId` foreign
+key to the Identity user, and the application services scope every read, create, update, and
+delete to the current user. Child records (highlights, summaries, action items, subtasks,
+relationships) inherit ownership through their parent. Users can only ever see and modify
+their own data.
+
+The current user is resolved from the Blazor authentication state via `ICurrentUserService`,
+which the `Brainy.Web` host implements with `AuthenticationStateProvider`.
+
+---
+
 ## Database Migrations
 
 ### Strategy

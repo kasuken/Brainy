@@ -1,14 +1,19 @@
 using Brainy.Application.Interfaces.Persistence;
+using Brainy.Data.Identity;
 using Brainy.Domain.Entities;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Brainy.Data;
 
 /// <summary>
-/// The Entity Framework Core context for Brainy. Entity shapes are configured via
-/// <see cref="IEntityTypeConfiguration{TEntity}"/> implementations in the Configurations folder.
+/// The Entity Framework Core context for Brainy. Includes ASP.NET Core Identity
+/// schema (via <see cref="IdentityDbContext{TUser}"/>). Entity shapes are configured
+/// via <see cref="IEntityTypeConfiguration{TEntity}"/> implementations in the
+/// Configurations folder.
 /// </summary>
-public class BrainyDbContext(DbContextOptions<BrainyDbContext> options) : DbContext(options), IApplicationDbContext
+public class BrainyDbContext(DbContextOptions<BrainyDbContext> options)
+    : IdentityDbContext<ApplicationUser>(options), IApplicationDbContext
 {
     public DbSet<Area> Areas => Set<Area>();
 
@@ -36,8 +41,9 @@ public class BrainyDbContext(DbContextOptions<BrainyDbContext> options) : DbCont
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(BrainyDbContext).Assembly);
+        // Configure Identity schema first, then apply Brainy entity configurations.
         base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(BrainyDbContext).Assembly);
     }
 
     public override int SaveChanges()

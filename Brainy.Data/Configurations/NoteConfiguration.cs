@@ -12,6 +12,8 @@ public class NoteConfiguration : IEntityTypeConfiguration<Note>
 
         builder.HasKey(n => n.Id);
 
+        builder.ConfigureUserOwnership();
+
         builder.Property(n => n.Title)
             .IsRequired()
             .HasMaxLength(500);

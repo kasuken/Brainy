@@ -1,3 +1,4 @@
+using Brainy.Domain.Common;
 using Brainy.Domain.Enums;
 
 namespace Brainy.Domain.Entities;
@@ -7,8 +8,11 @@ namespace Brainy.Domain.Entities;
 /// <see cref="ParentTaskId"/>. Mapped to the "Task" table; named TaskItem to avoid
 /// clashing with <see cref="System.Threading.Tasks.Task"/>.
 /// </summary>
-public class TaskItem : BaseEntity
+public class TaskItem : BaseEntity, IUserOwnedEntity
 {
+    /// <summary>Identity key of the owning user.</summary>
+    public string UserId { get; set; } = string.Empty;
+
     public string Title { get; set; } = string.Empty;
 
     public string? Description { get; set; }

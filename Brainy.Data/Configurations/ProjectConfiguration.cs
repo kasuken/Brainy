@@ -12,6 +12,8 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
         builder.HasKey(p => p.Id);
 
+        builder.ConfigureUserOwnership();
+
         builder.Property(p => p.Name)
             .IsRequired()
             .HasMaxLength(200);

@@ -1,23 +1,53 @@
 @inherits LayoutComponentBase
 
-<MudThemeProvider />
+<MudThemeProvider Theme="_theme" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudAppBar Elevation="1" Color="Color.Primary">
+    <MudAppBar Elevation="0" Class="brainy-appbar">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
-        <MudText Typo="Typo.h6" Class="ml-2">Brainy</MudText>
+        <a href="/" class="brainy-appbar__brand">
+            <span class="brainy-appbar__mark">B</span>
+            <span class="brainy-appbar__name">Brainy</span>
+        </a>
         <MudSpacer />
+        <AuthorizeView>
+            <Authorized>
+                <div class="brainy-user">
+                    <span class="brainy-user__avatar">@GetInitials(context.User.Identity?.Name)</span>
+                    <span class="brainy-user__email d-none d-sm-flex">@context.User.Identity?.Name</span>
+                </div>
+                <form action="Account/Logout" method="post" class="brainy-logout-form">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="ReturnUrl" value="Account/Login" />
+                    <button type="submit" class="brainy-logout-btn" title="Log out">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                            <polyline points="16 17 21 12 16 7" />
+                            <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
+                        <span class="d-none d-sm-inline">Log out</span>
+                    </button>
+                </form>
+            </Authorized>
+            <NotAuthorized>
+                <MudButton Href="Account/Login" Color="Color.Inherit"
+                           StartIcon="@Icons.Material.Filled.Login" Variant="Variant.Text">
+                    Log in
+                </MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
     </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen" Elevation="1" ClipMode="DrawerClipMode.Always">
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="0" ClipMode="DrawerClipMode.Always" Class="brainy-drawer">
         <NavMenu />
     </MudDrawer>
 
     <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-8">
             @Body
         </MudContainer>
     </MudMainContent>
@@ -27,4 +57,56 @@
     private bool _drawerOpen = true;
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "?";
+        }
+
+        return char.ToUpperInvariant(name.TrimStart()[0]).ToString();
+    }
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#c0561d",
+            PrimaryContrastText = "#fdf8f0",
+            Secondary = "#6f7a5a",
+            Tertiary = "#cd9a3a",
+            Background = "#f3ede1",
+            BackgroundGray = "#ece3d3",
+            Surface = "#fcfaf4",
+            AppbarBackground = "#1d1812",
+            AppbarText = "#f4ece0",
+            DrawerBackground = "#fbf7ef",
+            DrawerText = "#3a342b",
+            DrawerIcon = "#7a7163",
+            TextPrimary = "#211d17",
+            TextSecondary = "#6b6253",
+            ActionDefault = "#6b6253",
+            Divider = "#ded5c4",
+            LinesDefault = "#ded5c4",
+            LinesInputs = "#cabea8",
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography { FontFamily = new[] { "Hanken Grotesk", "sans-serif" } },
+            H1 = new H1Typography { FontFamily = new[] { "Fraunces", "serif" }, FontWeight = "500" },
+            H2 = new H2Typography { FontFamily = new[] { "Fraunces", "serif" }, FontWeight = "500" },
+            H3 = new H3Typography { FontFamily = new[] { "Fraunces", "serif" }, FontWeight = "500" },
+            H4 = new H4Typography { FontFamily = new[] { "Fraunces", "serif" }, FontWeight = "500" },
+            H5 = new H5Typography { FontFamily = new[] { "Fraunces", "serif" }, FontWeight = "600" },
+            H6 = new H6Typography { FontFamily = new[] { "Fraunces", "serif" }, FontWeight = "600" },
+            Subtitle1 = new Subtitle1Typography { FontFamily = new[] { "Hanken Grotesk", "sans-serif" } },
+            Subtitle2 = new Subtitle2Typography { FontFamily = new[] { "Hanken Grotesk", "sans-serif" } },
+            Button = new ButtonTypography { FontFamily = new[] { "Hanken Grotesk", "sans-serif" }, FontWeight = "600", TextTransform = "none" },
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DefaultBorderRadius = "12px",
+        },
+    };
 }
