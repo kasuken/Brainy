@@ -10,588 +10,494 @@
 
 <PageTitle>Resources — Brainy</PageTitle>
 
-<div class="res-page">
-    <div class="res-header">
-        <div class="res-header__text">
-            <h1 class="res-header__title">Resources</h1>
-            <p class="res-header__sub">
-                @(_resources?.Count ?? 0) @(_showArchived ? "archived resources" : "resources") · @(_filtered?.Count ?? 0) shown
-            </p>
-        </div>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.Add"
-                   Class="res-header__new"
-                   OnClick="OpenCreateDialog">
-            New Resource
-        </MudButton>
-    </div>
+<style>
+    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
 
-    <div class="res-toolbar">
-        <div class="res-search">
-            <MudIcon Icon="@Icons.Material.Outlined.Search" Class="res-search__icon" />
-            <input class="res-search__input"
-                   placeholder="Search resources…"
-                   value="@_searchText"
-                   @oninput="OnSearchInput" />
-            @if (!string.IsNullOrEmpty(_searchText))
-            {
-                <button type="button" class="res-search__clear" @onclick="ClearSearch">✕</button>
-            }
-        </div>
+    .rep-page {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 1.5rem 0;
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
 
-        <div class="res-filters">
-            <button type="button"
-                    class="res-chip @(_selectedTopic is null ? "res-chip--on" : "")"
-                    @onclick="ClearTopicFilter">
-                All Topics
-            </button>
+    .rep-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+    }
 
-            @foreach (var topic in TopicOptions)
-            {
-                <button type="button"
-                        class="res-chip @(_selectedTopic == topic ? "res-chip--on" : "")"
-                        @onclick="() => ToggleTopic(topic)">
-                    @topic
-                </button>
-            }
+    @@media (min-width: 1024px) {
+        .rep-layout {
+            grid-template-columns: 360px 1fr;
+            align-items: start;
+            gap: 4rem;
+        }
+    }
 
-            <button type="button"
-                    class="res-chip @(_showArchived ? "res-chip--on" : "")"
-                    @onclick="ToggleArchived">
-                <MudIcon Icon="@Icons.Material.Outlined.Archive" Style="font-size:.85rem" />
-                Show Archived
-            </button>
-        </div>
+    /* ── Sidebar ── */
+    .rep-sidebar {
+        position: sticky;
+        top: 2rem;
+        display: flex;
+        flex-direction: column;
+        animation: rep-fade-up 0.4s ease both;
+    }
 
-        <div class="res-sort">
-            <span class="res-sort__label">Sort</span>
-            @foreach (var opt in SortOptions)
-            {
-                <button type="button"
-                        class="res-sort__btn @(_sortBy == opt ? "res-sort__btn--on" : "")"
-                        @onclick="() => SetSort(opt)">
-                    @opt
-                    @if (_sortBy == opt)
+    @@keyframes rep-fade-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .rep-eyebrow {
+        font-size: 0.75rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 700;
+        margin: 0 0 0.5rem;
+    }
+
+    .rep-title {
+        font-family: 'Fraunces', serif;
+        font-size: clamp(2.5rem, 6vw, 4rem);
+        font-weight: 600;
+        line-height: 1;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.02em;
+        margin: 0 0 0.5rem;
+    }
+
+    .rep-meta {
+        font-size: 0.85rem;
+        color: var(--mud-palette-text-secondary);
+        margin: 0 0 2rem;
+        font-weight: 500;
+    }
+
+    .rep-widget {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+    }
+    
+    .rep-filter-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .rep-filter-label {
+        width: 100%;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        margin-bottom: 0.5rem;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        padding-bottom: 0.35rem;
+    }
+
+    .rep-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 8px;
+        background: var(--mud-palette-table-lines);
+        border: 1px solid transparent;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-secondary);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .rep-chip:hover {
+        background: var(--mud-palette-surface);
+        border-color: var(--mud-palette-lines-default);
+    }
+
+    .rep-chip--on {
+        background: rgba(251, 192, 45, 0.1);
+        border-color: rgba(251, 192, 45, 0.3);
+        color: #e5a400; /* Darkened mustard for contrast */
+    }
+
+    /* ── Main Area ── */
+    .rep-main {
+        animation: rep-fade-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    .rep-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.5rem;
+    }
+
+    @@keyframes rep-card-in {
+        from { opacity: 0; transform: translateY(15px) scale(0.98); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ── Resource Card ── */
+    .rep-card {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 14px;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        cursor: pointer;
+        overflow: hidden;
+        transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    }
+
+    .rep-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.05);
+        border-color: rgba(251, 192, 45, 0.35);
+    }
+
+    .rep-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 4px;
+        background: var(--mud-palette-lines-default);
+        transition: background 0.3s ease, opacity 0.3s ease;
+        opacity: 0.5;
+    }
+
+    .rep-card:hover::before {
+        background: #fbc02d;
+        opacity: 1;
+    }
+
+    .rep-card--archived {
+        opacity: 0.7;
+    }
+    
+    .rep-card--archived:hover::before {
+        background: var(--mud-palette-text-disabled);
+    }
+
+    .rep-card-actions {
+        display: flex;
+        gap: 0.25rem;
+        position: absolute;
+        top: 1rem; right: 1rem;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+
+    .rep-card:hover .rep-card-actions {
+        opacity: 1;
+    }
+
+    .rep-action-btn {
+        background: var(--mud-palette-background);
+        border: 1px solid var(--mud-palette-lines-default);
+        color: var(--mud-palette-text-secondary);
+        width: 32px; height: 32px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .rep-action-btn:hover {
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        border-color: var(--mud-palette-text-primary);
+    }
+
+    .rep-action-btn--delete:hover {
+        color: #d32f2f;
+        border-color: #d32f2f;
+    }
+
+    .rep-card-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+        padding-right: 4rem; /* skip actions overlap */
+    }
+
+    .rep-card-icon {
+        color: var(--mud-palette-text-disabled);
+        margin-top: 2px;
+    }
+
+    .rep-card:hover .rep-card-icon {
+        color: #e5a400;
+    }
+
+    .rep-card-title {
+        font-family: 'Fraunces', serif;
+        font-size: 1.35rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        margin: 0;
+        line-height:1.2;
+    }
+
+    .rep-card-topic {
+        display: inline-block;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #8a6a1c;
+        background: rgba(205,154,58,0.15);
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        margin-bottom: 0.85rem;
+        align-self: flex-start;
+    }
+
+    .rep-card-desc {
+        font-size: 0.9rem;
+        color: var(--mud-palette-text-secondary);
+        margin: 0 0 1rem;
+        line-height: 1.5;
+        flex: 1;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    
+    .rep-card-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-bottom: 1.25rem;
+    }
+    
+    .rep-tag {
+        font-size: 0.7rem;
+        font-weight: 500;
+        padding: 0.15rem 0.4rem;
+        border-radius: 4px;
+        background: var(--mud-palette-table-lines);
+        color: var(--mud-palette-text-secondary);
+        border: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .rep-card-meta {
+        font-size: 0.75rem;
+        color: var(--mud-palette-text-disabled);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        border-top: 1px solid var(--mud-palette-lines-default);
+        padding-top: 0.85rem;
+        margin-top: auto;
+    }
+</style>
+
+<div class="rep-page">
+    <div class="rep-layout">
+
+        @* ── Sidebar ── *@
+        <aside class="rep-sidebar">
+            <p class="rep-eyebrow">Library</p>
+            <h1 class="rep-title">Resources</h1>
+            <p class="rep-meta">@(_resources?.Count ?? 0) @(_showArchived ? "archived resources total" : "resources total") · @(_filtered?.Count ?? 0) shown</p>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Size="Size.Large"
+                       Class="mb-6"
+                       Style="font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; border-radius: 8px;"
+                       FullWidth="true"
+                       OnClick="OpenCreateDialog">
+                New Resource
+            </MudButton>
+
+            <div class="rep-widget">
+                <MudTextField @bind-Value="_searchText"
+                              Placeholder="Search resources…"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Outlined.Search"
+                              Clearable="true"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              OnKeyDown="@(() => ApplyFilter())"
+                              OnKeyUp="@(() => ApplyFilter())"    
+                              Class="mb-5" />
+
+                <div class="rep-filter-label">Topics</div>
+                <div class="rep-filter-group">
+                    <button type="button"
+                            class="rep-chip @(_selectedTopic is null ? "rep-chip--on" : "")"
+                            @onclick="ClearTopicFilter">
+                        All Topics
+                    </button>
+                    @foreach (var topic in TopicOptions)
                     {
-                        <span class="res-sort__arrow">@(_sortAsc ? "↑" : "↓")</span>
+                        <button type="button"
+                                class="rep-chip @(_selectedTopic == topic ? "rep-chip--on" : "")"
+                                @onclick="() => ToggleTopic(topic)">
+                            @topic
+                        </button>
                     }
-                </button>
-            }
-        </div>
-    </div>
+                </div>
 
-    @if (_loading)
-    {
-        <div class="res-loading">
-            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
-            <span class="res-loading__text">Loading resources…</span>
-        </div>
-    }
-    else if (_filtered is { Count: 0 })
-    {
-        <div class="res-empty">
-            <div class="res-empty__glyph">✦</div>
-            <p class="res-empty__title">
-                @EmptyTitle
-            </p>
-            <p class="res-empty__sub">
-                @EmptySubtitle
-            </p>
-            @if ((_resources?.Count ?? 0) == 0 && !_showArchived)
-            {
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Add"
-                           OnClick="OpenCreateDialog">
-                    Create your first resource
-                </MudButton>
-            }
-        </div>
-    }
-    else
-    {
-        <div class="res-grid">
-            @for (var i = 0; i < (_filtered?.Count ?? 0); i++)
-            {
-                var r = _filtered![i];
-                var idx = i;
-                <div class="res-card" style="animation-delay:@(idx * 45)ms">
-                    <div class="res-card__actions">
-                        <button type="button" class="res-action-btn" title="Edit"
-                                @onclick="() => OpenEditDialog(r)" @onclick:stopPropagation="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                            </svg>
-                        </button>
-                        @if (r.IsArchived)
-                        {
-                            <button type="button" class="res-action-btn res-action-btn--restore" title="Restore"
-                                    @onclick="() => ConfirmRestore(r.Id, r.Name)" @onclick:stopPropagation="true">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="1 4 1 10 7 10" />
-                                    <path d="M3.51 15a9 9 0 1 0 .49-4.5" />
-                                </svg>
-                            </button>
-                        }
-                        else
-                        {
-                            <button type="button" class="res-action-btn res-action-btn--archive" title="Archive"
-                                    @onclick="() => ConfirmArchive(r.Id, r.Name)" @onclick:stopPropagation="true">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="21 8 21 21 3 21 3 8" />
-                                    <rect x="1" y="3" width="22" height="5" />
-                                    <line x1="10" y1="12" x2="14" y2="12" />
-                                </svg>
-                            </button>
-                        }
-                        <button type="button" class="res-action-btn res-action-btn--delete" title="Delete"
-                                @onclick="() => ConfirmDelete(r.Id, r.Name)" @onclick:stopPropagation="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="3 6 5 6 21 6" />
-                                <path d="M19 6l-1 14H6L5 6" />
-                                <path d="M10 11v6M14 11v6" />
-                                <path d="M9 6V4h6v2" />
-                            </svg>
-                        </button>
-                    </div>
+                <div class="rep-filter-label">Status</div>
+                <div class="rep-filter-group">
+                    <button type="button"
+                            class="rep-chip @(_showArchived ? "rep-chip--on" : "")"
+                            @onclick="ToggleArchived">
+                        <MudIcon Icon="@Icons.Material.Outlined.Archive" Style="font-size:.85rem; margin-right:4px;" />
+                        Show Archived
+                    </button>
+                </div>
 
-                    <div class="res-card__inner" @onclick="() => OpenDetail(r.Id)">
-                        @if (r.IsArchived)
-                        {
-                            <div class="res-card__badges">
-                                <span class="res-badge res-badge--archived">Archived</span>
-                            </div>
-                        }
-
-                        <p class="res-card__name">@r.Name</p>
-
-                        @if (!string.IsNullOrWhiteSpace(r.Topic))
-                        {
-                            <span class="res-card__topic">📚 @r.Topic</span>
-                        }
-
-                        @if (!string.IsNullOrWhiteSpace(r.Description))
-                        {
-                            <p class="res-card__desc">
-                                @(r.Description.Length > 120 ? r.Description[..120] + "…" : r.Description)
-                            </p>
-                        }
-
-                        @if (r.Tags.Count > 0)
-                        {
-                            <div class="res-card__tags">
-                                @foreach (var tag in r.Tags)
-                                {
-                                    <span class="res-tag-chip">@tag</span>
-                                }
-                            </div>
-                        }
-
-                        <div class="res-card__meta">
-                            <span class="res-meta-item">
-                                <svg class="res-meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                    <line x1="16" y1="2" x2="16" y2="6" />
-                                    <line x1="8" y1="2" x2="8" y2="6" />
-                                    <line x1="3" y1="10" x2="21" y2="10" />
-                                </svg>
-                                Updated @r.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
-                            </span>
-
-                            @if (r.Tags.Count > 0)
+                <div class="rep-filter-label">Sort By</div>
+                <div class="rep-filter-group" style="margin-bottom:0;">
+                    @foreach (var opt in SortOptions)
+                    {
+                        <button class="rep-chip @(_sortBy == opt ? "rep-chip--on" : "")"
+                                @onclick="() => SetSort(opt)">
+                            @opt
+                            @if (_sortBy == opt)
                             {
-                                <span class="res-meta-item">🏷️ @r.Tags.Count tag@(r.Tags.Count == 1 ? "" : "s")</span>
+                                <span style="opacity:0.7; font-size:0.7rem;">@(_sortAsc ? "↑" : "↓")</span>
                             }
-                        </div>
-                    </div>
+                        </button>
+                    }
+                </div>
+            </div>
+        </aside>
+
+        @* ── Main Layout ── *@
+        <main class="rep-main">
+            @if (_loading)
+            {
+                <div style="padding: 5rem 0; text-align: center;">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                    <p style="margin-top: 1rem; color: var(--mud-palette-text-disabled); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem;">Loading resources…</p>
                 </div>
             }
-        </div>
-    }
+            else if (_filtered is { Count: 0 })
+            {
+                <div style="padding: 5rem 2rem; display: flex; flex-direction: column; align-items: center; text-align: center; border: 1px dashed var(--mud-palette-lines-default); border-radius: 16px; background: var(--mud-palette-table-lines);">
+                    <MudIcon Icon="@Icons.Material.Outlined.CollectionsBookmark" Style="font-size:4rem; color: var(--mud-palette-text-disabled); margin-bottom: 1.5rem;" />
+                    <h2 style="font-family: 'Fraunces', serif; font-size: 1.75rem; margin: 0 0 0.5rem; color: var(--mud-palette-text-primary);">
+                        @EmptyTitle
+                    </h2>
+                    <p style="color: var(--mud-palette-text-secondary); margin: 0 0 2rem; max-width: 400px;">
+                        @EmptySubtitle
+                    </p>
+                    @if ((_resources?.Count ?? 0) == 0 && !_showArchived)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="OpenCreateDialog">
+                            Create your first resource
+                        </MudButton>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="rep-grid">
+                    @for (int i = 0; i < (_filtered?.Count ?? 0); i++)
+                    {
+                        var r = _filtered![i];
+                        var idx = i;
+                        <div class="rep-card @(r.IsArchived ? "rep-card--archived" : "")" 
+                             style="animation-delay:@(idx * 35)ms; animation: rep-card-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;"
+                             @onclick="() => OpenDetail(r.Id)">
+                             
+                            <div class="rep-card-actions">
+                                <button class="rep-action-btn" title="Edit" @onclick="() => OpenEditDialog(r)" @onclick:stopPropagation="true">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
+                                </button>
+                                @if (r.IsArchived)
+                                {
+                                    <button class="rep-action-btn" title="Restore" @onclick="() => ConfirmRestore(r.Id, r.Name)" @onclick:stopPropagation="true">
+                                        <MudIcon Icon="@Icons.Material.Outlined.RestorePage" Size="Size.Small" />
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="rep-action-btn" title="Archive" @onclick="() => ConfirmArchive(r.Id, r.Name)" @onclick:stopPropagation="true">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
+                                    </button>
+                                }
+                                <button class="rep-action-btn rep-action-btn--delete" title="Delete" @onclick="() => ConfirmDelete(r.Id, r.Name)" @onclick:stopPropagation="true">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" />
+                                </button>
+                            </div>
+                            
+                            <div class="rep-card-header">
+                                @if (r.IsArchived)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Archive" Size="Size.Medium" Class="rep-card-icon" />
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Outlined.MenuBook" Size="Size.Medium" Class="rep-card-icon" />
+                                }
+                                <div style="display:flex; flex-direction:column; gap:0.2rem;">
+                                    <h3 class="rep-card-title">@r.Name</h3>
+                                    @if (!string.IsNullOrWhiteSpace(r.Topic))
+                                    {
+                                        <span class="rep-card-topic">@r.Topic</span>
+                                    }
+                                </div>
+                            </div>
+                            
+                            @if (!string.IsNullOrWhiteSpace(r.Description))
+                            {
+                                <p class="rep-card-desc">@(r.Description.Length > 120 ? r.Description[..120] + "…" : r.Description)</p>
+                            }
+                            else
+                            {
+                                <div style="flex:1;"></div>
+                            }
+                            
+                            @if (r.Tags.Count > 0)
+                            {
+                                <div class="rep-card-tags">
+                                    @foreach (var tag in r.Tags)
+                                    {
+                                        <span class="rep-tag">@tag</span>
+                                    }
+                                </div>
+                            }
+                            
+                            <div class="rep-card-meta">
+                                <span style="display:flex; align-items:center; gap:0.35rem;">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
+                                    Updated @r.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                </span>
+                                @if (r.Tags.Count > 0)
+                                {
+                                    <span>🏷️ @r.Tags.Count</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </main>
+    </div>
 </div>
-
-<style>
-.res-page {
-    font-family: var(--font-body);
-    padding-bottom: 3rem;
-}
-
-.res-header {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
-}
-
-.res-header__title {
-    font-family: var(--font-display);
-    font-size: clamp(2rem, 4vw, 2.75rem);
-    font-weight: 500;
-    color: var(--ink);
-    margin: 0 0 .15rem;
-    letter-spacing: -.02em;
-    line-height: 1;
-}
-
-.res-header__sub {
-    font-size: .8rem;
-    color: var(--ink-faint);
-    margin: 0;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-}
-
-.res-header__new {
-    flex-shrink: 0;
-}
-
-.res-toolbar {
-    display: flex;
-    flex-direction: column;
-    gap: .75rem;
-    margin-bottom: 1.75rem;
-    padding: 1rem 1.25rem;
-    background: var(--paper-raised);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    box-shadow: var(--shadow-sm);
-}
-
-.res-search {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-}
-
-.res-search__icon {
-    color: var(--ink-faint);
-    font-size: 1.1rem !important;
-    flex-shrink: 0;
-}
-
-.res-search__input {
-    flex: 1;
-    border: none;
-    background: transparent;
-    font-family: var(--font-body);
-    font-size: .95rem;
-    color: var(--ink);
-    outline: none;
-    padding: .25rem 0;
-    border-bottom: 1.5px solid var(--line);
-    transition: border-color .2s;
-}
-
-.res-search__input:focus { border-bottom-color: var(--clay); }
-.res-search__input::placeholder { color: var(--ink-faint); }
-
-.res-search__clear {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--ink-faint);
-    font-size: .85rem;
-    padding: .15rem .3rem;
-    border-radius: 4px;
-    transition: color .15s;
-}
-
-.res-search__clear:hover { color: var(--clay); }
-
-.res-filters {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .4rem;
-}
-
-.res-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: .35rem;
-    padding: .28rem .7rem;
-    border-radius: 999px;
-    border: 1.5px solid var(--line);
-    background: transparent;
-    font-family: var(--font-body);
-    font-size: .78rem;
-    font-weight: 500;
-    color: var(--ink-soft);
-    cursor: pointer;
-    transition: border-color .15s, background .15s, color .15s;
-}
-
-.res-chip:hover {
-    border-color: var(--clay);
-    color: var(--clay);
-}
-
-.res-chip--on {
-    border-color: var(--clay);
-    background: color-mix(in srgb, var(--clay) 10%, transparent);
-    color: var(--clay);
-    font-weight: 600;
-}
-
-.res-sort {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .3rem;
-    border-top: 1px solid var(--line);
-    padding-top: .65rem;
-}
-
-.res-sort__label {
-    font-size: .7rem;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-    font-weight: 600;
-    margin-right: .2rem;
-}
-
-.res-sort__btn {
-    background: none;
-    border: none;
-    font-family: var(--font-body);
-    font-size: .82rem;
-    color: var(--ink-soft);
-    cursor: pointer;
-    padding: .2rem .5rem;
-    border-radius: 6px;
-    transition: color .15s, background .15s;
-    display: flex;
-    align-items: center;
-    gap: .25rem;
-}
-
-.res-sort__btn:hover { color: var(--ink); background: var(--paper-sunk); }
-.res-sort__btn--on { color: var(--clay); font-weight: 600; }
-.res-sort__arrow { font-size: .75rem; opacity: .7; }
-
-.res-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    padding: 5rem 0;
-}
-
-.res-loading__text { color: var(--ink-faint); font-size: .9rem; }
-
-.res-empty {
-    text-align: center;
-    padding: 5rem 1rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: .75rem;
-}
-
-.res-empty__glyph {
-    font-size: 3.5rem;
-    line-height: 1;
-    opacity: .18;
-    color: var(--sage);
-    font-family: var(--font-display);
-}
-
-.res-empty__title {
-    font-family: var(--font-display);
-    font-size: 1.4rem;
-    color: var(--ink);
-    margin: 0;
-    font-weight: 500;
-}
-
-.res-empty__sub {
-    color: var(--ink-faint);
-    font-size: .9rem;
-    margin: 0;
-    max-width: 40ch;
-}
-
-.res-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
-    gap: 1.1rem;
-}
-
-.res-card {
-    position: relative;
-    background: var(--paper-raised);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    overflow: hidden;
-    box-shadow: var(--shadow-sm);
-    transition: box-shadow .2s, transform .2s, border-color .2s;
-    animation: res-rise .4s both ease-out;
-}
-
-.res-card:hover {
-    box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,.1));
-    transform: translateY(-2px);
-    border-color: var(--line-strong);
-}
-
-@@keyframes res-rise {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
-.res-card__inner {
-    padding: 1.1rem 1rem .95rem 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: .55rem;
-    cursor: pointer;
-    min-width: 0;
-    min-height: 100%;
-}
-
-.res-card__badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .35rem;
-}
-
-.res-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: .18rem .6rem;
-    border-radius: 999px;
-    font-size: .72rem;
-    font-weight: 600;
-    letter-spacing: .03em;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.res-badge--archived {
-    background: var(--paper-sunk);
-    color: var(--ink-faint);
-}
-
-.res-card__name {
-    font-family: var(--font-display);
-    font-size: 1.1rem;
-    font-style: italic;
-    font-weight: 500;
-    color: var(--ink);
-    margin: 0;
-    line-height: 1.3;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.res-card:hover .res-card__name { color: var(--clay); }
-
-.res-card__topic {
-    display: inline-flex;
-    align-items: center;
-    gap: .35rem;
-    font-size: .78rem;
-    color: var(--clay-deep);
-    font-weight: 600;
-}
-
-.res-card__desc {
-    font-size: .82rem;
-    color: var(--ink-soft);
-    margin: 0;
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.res-card__tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .35rem;
-}
-
-.res-tag-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: .18rem .55rem;
-    border-radius: 999px;
-    background: var(--paper-sunk);
-    border: 1px solid var(--line);
-    color: var(--ink-soft);
-    font-size: .72rem;
-    line-height: 1;
-}
-
-.res-card__meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .6rem;
-    margin-top: auto;
-    padding-top: .35rem;
-}
-
-.res-meta-item {
-    display: inline-flex;
-    align-items: center;
-    gap: .3rem;
-    font-size: .75rem;
-    color: var(--ink-faint);
-}
-
-.res-meta-icon {
-    width: 12px;
-    height: 12px;
-    flex-shrink: 0;
-    opacity: .5;
-}
-
-.res-card__actions {
-    position: absolute;
-    top: .6rem;
-    right: .6rem;
-    display: flex;
-    gap: .2rem;
-    opacity: 0;
-    transition: opacity .15s;
-    z-index: 1;
-}
-
-.res-card:hover .res-card__actions { opacity: 1; }
-
-.res-action-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    border: 1px solid var(--line);
-    background: var(--paper-raised);
-    cursor: pointer;
-    color: var(--ink-soft);
-    transition: background .15s, color .15s, border-color .15s;
-}
-
-.res-action-btn svg { width: 14px; height: 14px; }
-.res-action-btn:hover { background: var(--paper-sunk); color: var(--ink); border-color: var(--line-strong); }
-.res-action-btn--archive:hover { color: var(--clay); border-color: var(--clay); }
-.res-action-btn--restore:hover { color: var(--sage); border-color: var(--sage); }
-.res-action-btn--delete:hover  { color: #b03a18; border-color: #b03a18; }
-
-@@media (max-width: 640px) {
-    .res-toolbar { padding: .85rem 1rem; }
-    .res-grid { grid-template-columns: 1fr; }
-    .res-card__actions { opacity: 1; }
-}
-</style>
 
 @code {
     private bool _loading = true;
@@ -857,3 +763,4 @@
         }
     }
 }
+

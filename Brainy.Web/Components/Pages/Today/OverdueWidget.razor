@@ -41,6 +41,11 @@
                             }
                         </div>
                     </div>
+                    <MudTooltip Text="Edit task">
+                        <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                       Size="Size.Small" Color="Color.Default"
+                                       OnClick="() => OnEdit.InvokeAsync(t)" />
+                    </MudTooltip>
                     <MudTooltip Text="Mark complete">
                         <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
                                        Size="Size.Small" Color="Color.Success"
@@ -58,6 +63,9 @@
 
     /// <summary>Raised with the task ID when the user marks a task complete.</summary>
     [Parameter] public EventCallback<Guid> OnComplete { get; set; }
+
+    /// <summary>Raised with the selected task when the user wants to edit it.</summary>
+    [Parameter] public EventCallback<TodayTaskItemDto> OnEdit { get; set; }
 
     /// <summary>Initial collapsed state, managed locally after first render.</summary>
     [Parameter] public bool Collapsed { get; set; }

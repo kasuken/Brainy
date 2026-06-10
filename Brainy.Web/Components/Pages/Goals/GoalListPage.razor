@@ -11,464 +11,432 @@
 
 <PageTitle>Goals — Brainy</PageTitle>
 
-<div class="goal-page">
-    <div class="goal-header">
-        <div class="goal-header__text">
-            <h1 class="goal-header__title">Goals</h1>
-            <p class="goal-header__sub">
-                @(_goals.Count) goals · @_filtered.Count shown
-            </p>
-        </div>
-        <div style="display:flex; gap:.65rem; flex-wrap:wrap; justify-content:flex-end;">
-            <MudButton Variant="Variant.Outlined"
-                       Color="Color.Default"
-                       StartIcon="@Icons.Material.Filled.Insights"
-                       OnClick='() => Nav.NavigateTo("/goals/metrics")'>
-                Metrics
-            </MudButton>
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.Add"
-                       Class="goal-header__new"
-                       OnClick="OpenCreateDialogAsync">
-                New Goal
-            </MudButton>
-        </div>
-    </div>
-
-    <div class="goal-toolbar">
-        <div class="goal-search">
-            <MudIcon Icon="@Icons.Material.Outlined.Search" Class="goal-search__icon" />
-            <input class="goal-search__input"
-                   placeholder="Search goals…"
-                   value="@_searchText"
-                   @oninput="OnSearchInput" />
-            @if (!string.IsNullOrWhiteSpace(_searchText))
-            {
-                <button class="goal-search__clear" @onclick="ClearSearch" type="button">✕</button>
-            }
-        </div>
-
-        <div class="goal-filters">
-            <span class="goal-filters__label">Status</span>
-            @foreach (var status in StatusFilters)
-            {
-                <button class="goal-chip @(IsStatusActive(status) ? "goal-chip--on" : null)"
-                        type="button"
-                        @onclick="() => ToggleStatusFilter(status)">
-                    <span class="goal-chip__dot" style="background:@StatusColor(status)"></span>
-                    @StatusLabel(status)
-                </button>
-            }
-        </div>
-    </div>
-
-    @if (_loading)
-    {
-        <div class="goal-loading">
-            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
-            <span class="goal-loading__text">Loading goals…</span>
-        </div>
-    }
-    else if (_filtered.Count == 0)
-    {
-        <div class="goal-empty">
-            <div class="goal-empty__glyph">◎</div>
-            <p class="goal-empty__title">@(_goals.Count == 0 ? "No goals yet" : "Nothing matches")</p>
-            <p class="goal-empty__sub">
-                @(_goals.Count == 0
-                    ? "Create a goal to turn long-range intent into visible progress."
-                    : "Try clearing filters or broadening your search.")
-            </p>
-            @if (_goals.Count == 0)
-            {
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Add"
-                           OnClick="OpenCreateDialogAsync">
-                    Create first goal
-                </MudButton>
-            }
-        </div>
-    }
-    else
-    {
-        <div class="goal-grid">
-            @for (var i = 0; i < _filtered.Count; i++)
-            {
-                var goal = _filtered[i];
-                <button class="goal-card"
-                        type="button"
-                        style="animation-delay:@(i * 40)ms;"
-                        @onclick="() => OpenDetail(goal.Id)">
-                    <div class="goal-card__inner">
-                        <div class="goal-card__topline">
-                            <span class="goal-badge goal-status--@goal.Status.ToString().ToLowerInvariant()">
-                                @StatusLabel(goal.Status)
-                            </span>
-                            @if (!string.IsNullOrWhiteSpace(goal.AreaName))
-                            {
-                                <span class="goal-badge goal-area">@goal.AreaName</span>
-                            }
-                        </div>
-
-                        <h2 class="goal-card__title">@goal.Title</h2>
-
-                        @if (!string.IsNullOrWhiteSpace(goal.Description))
-                        {
-                            <p class="goal-card__description">@goal.Description</p>
-                        }
-
-                        <div class="goal-progress">
-                            <div class="goal-progress__row">
-                                <span class="goal-progress__label">Progress</span>
-                                <span class="goal-progress__pct">@goal.ProgressPercent%</span>
-                            </div>
-                            <div class="goal-progress__track">
-                                <div class="goal-progress__fill" style="width:@goal.ProgressPercent%"></div>
-                            </div>
-                        </div>
-
-                        <div class="goal-card__meta">
-                            <span class="goal-meta">
-                                <MudIcon Icon="@Icons.Material.Outlined.Flag" Class="goal-meta__icon" />
-                                @(goal.TargetDate?.ToString("MMM d, yyyy") ?? "No target date")
-                            </span>
-                            <span class="goal-meta">
-                                <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Class="goal-meta__icon" />
-                                @goal.CompletedMilestones / @goal.TotalMilestones milestones
-                            </span>
-                        </div>
-                    </div>
-                </button>
-            }
-        </div>
-    }
-</div>
-
 <style>
-/* Goals page — "North-Star Ledger" companion to Projects */
-.goal-page {
-    font-family: var(--font-body);
-    padding-bottom: 3rem;
-}
+    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
 
-.goal-header {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
-}
+    .gp-page {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 1.5rem 0;
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
 
-.goal-header__title {
-    font-family: var(--font-display);
-    font-size: clamp(2rem, 4vw, 2.75rem);
-    font-weight: 500;
-    color: var(--ink);
-    margin: 0 0 .15rem;
-    letter-spacing: -.02em;
-    line-height: 1;
-}
+    .gp-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+    }
 
-.goal-header__sub {
-    margin: 0;
-    font-size: .8rem;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-}
+    @@media (min-width: 1024px) {
+        .gp-layout {
+            grid-template-columns: 360px 1fr;
+            align-items: start;
+            gap: 4rem;
+        }
+    }
 
-.goal-toolbar {
-    display: flex;
-    flex-direction: column;
-    gap: .85rem;
-    margin-bottom: 1.75rem;
-    padding: 1rem 1.25rem;
-    background:
-        radial-gradient(circle at top right, rgba(192,86,29,.08), transparent 30%),
-        var(--paper-raised);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    box-shadow: var(--shadow-sm);
-}
+    /* ── Sidebar ── */
+    .gp-sidebar {
+        position: sticky;
+        top: 2rem;
+        display: flex;
+        flex-direction: column;
+        animation: gp-fade-up 0.4s ease both;
+    }
 
-.goal-search {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-}
+    @@keyframes gp-fade-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
 
-.goal-search__icon {
-    color: var(--ink-faint);
-    font-size: 1.1rem !important;
-    flex-shrink: 0;
-}
+    .gp-eyebrow {
+        font-size: 0.75rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 700;
+        margin: 0 0 0.5rem;
+    }
 
-.goal-search__input {
-    flex: 1;
-    border: none;
-    background: transparent;
-    font-family: var(--font-body);
-    font-size: .95rem;
-    color: var(--ink);
-    outline: none;
-    padding: .25rem 0;
-    border-bottom: 1.5px solid var(--line);
-    transition: border-color .2s;
-}
+    .gp-title {
+        font-family: 'Fraunces', serif;
+        font-size: clamp(2.5rem, 6vw, 4rem);
+        font-weight: 600;
+        line-height: 1;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.02em;
+        margin: 0 0 0.5rem;
+    }
 
-.goal-search__input:focus { border-bottom-color: var(--clay); }
-.goal-search__input::placeholder { color: var(--ink-faint); }
+    .gp-meta {
+        font-size: 0.85rem;
+        color: var(--mud-palette-text-secondary);
+        margin: 0 0 2rem;
+        font-weight: 500;
+    }
+    
+    .gp-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        margin-bottom: 2rem;
+    }
 
-.goal-search__clear {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--ink-faint);
-    font-size: .85rem;
-    padding: .15rem .3rem;
-    border-radius: 4px;
-}
+    .gp-widget {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+    }
+    
+    .gp-filter-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 0.5rem;
+    }
 
-.goal-search__clear:hover { color: var(--clay); }
+    .gp-filter-label {
+        width: 100%;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        margin-bottom: 0.5rem;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        padding-bottom: 0.35rem;
+    }
 
-.goal-filters {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .4rem;
-}
+    .gp-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 8px;
+        background: var(--mud-palette-table-lines);
+        border: 1px solid transparent;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-secondary);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
 
-.goal-filters__label {
-    font-size: .7rem;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-    font-weight: 600;
-    margin-right: .1rem;
-}
+    .gp-chip:hover {
+        background: var(--mud-palette-surface);
+        border-color: var(--mud-palette-lines-default);
+    }
 
-.goal-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: .35rem;
-    padding: .28rem .72rem;
-    border-radius: 999px;
-    border: 1.5px solid var(--line);
-    background: transparent;
-    font-family: var(--font-body);
-    font-size: .78rem;
-    font-weight: 500;
-    color: var(--ink-soft);
-    cursor: pointer;
-    transition: border-color .15s, background .15s, color .15s;
-}
+    .gp-chip--on {
+        background: rgba(192, 86, 29, 0.1);
+        border-color: rgba(192, 86, 29, 0.3);
+        color: var(--clay, #c0561d);
+    }
+    
+    .gp-chip-dot {
+        width: 6px; height: 6px; border-radius: 50%;
+    }
 
-.goal-chip:hover {
-    border-color: var(--clay);
-    color: var(--clay);
-}
+    /* ── Main Area ── */
+    .gp-main {
+        animation: gp-fade-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
 
-.goal-chip--on {
-    border-color: var(--clay);
-    background: rgba(192,86,29,.10);
-    color: var(--clay);
-    font-weight: 600;
-}
+    .gp-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.5rem;
+    }
 
-.goal-chip__dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
+    @@keyframes gp-card-in {
+        from { opacity: 0; transform: translateY(15px) scale(0.98); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
 
-.goal-loading,
-.goal-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    padding: 5rem 1rem;
-    text-align: center;
-}
+    /* ── Goal Card ── */
+    .gp-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.15rem 0.5rem;
+        border-radius: 6px;
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
 
-.goal-loading__text,
-.goal-empty__sub {
-    color: var(--ink-faint);
-    font-size: .9rem;
-}
+    .gp-status--planned { background: var(--mud-palette-table-lines); color: var(--mud-palette-text-secondary); }
+    .gp-status--active { background: rgba(111,122,90,.14); color: #4a5c38; border: 1px solid rgba(111,122,90,.3); }
+    .gp-status--achieved { background: rgba(251,192,45,.15); color: #8a6a1c; border: 1px solid rgba(251,192,45,.4); }
+    .gp-status--abandoned { background: rgba(211,47,47,.1); color: #d32f2f; border: 1px solid rgba(211,47,47,.3); }
 
-.goal-empty__glyph {
-    font-size: 3.5rem;
-    line-height: 1;
-    opacity: .18;
-    color: var(--clay);
-    font-family: var(--font-display);
-}
+    .gp-card {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 14px;
+        padding: 1.5rem;
+        text-align: left;
+        display: flex;
+        flex-direction: column;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    }
 
-.goal-empty__title {
-    margin: 0;
-    font-family: var(--font-display);
-    font-size: 1.4rem;
-    color: var(--ink);
-    font-weight: 500;
-}
+    .gp-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.05);
+        border-color: rgba(192, 86, 29, 0.25);
+    }
+    
+    .gp-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--mud-palette-lines-default), var(--mud-palette-lines-default));
+        transition: opacity 0.3s ease;
+        opacity: 0.7;
+    }
+    
+    .gp-card:hover::before {
+        background: linear-gradient(90deg, #ed6c02, #fbc02d);
+        opacity: 1;
+    }
 
-.goal-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
-    gap: 1.1rem;
-}
+    .gp-card-header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.85rem;
+    }
 
-.goal-card {
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    background:
-        linear-gradient(180deg, rgba(255,255,255,.36), transparent 40%),
-        var(--paper-raised);
-    text-align: left;
-    padding: 0;
-    cursor: pointer;
-    box-shadow: var(--shadow-sm);
-    transition: transform .2s, box-shadow .2s, border-color .2s;
-    animation: goal-card-in .35s ease both;
-}
+    .gp-card-title {
+        font-family: 'Fraunces', serif;
+        font-size: 1.45rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        margin: 0 0 0.5rem;
+        line-height: 1.25;
+    }
 
-.goal-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
-    border-color: var(--line-strong);
-}
+    .gp-card-desc {
+        font-size: 0.9rem;
+        color: var(--mud-palette-text-secondary);
+        margin: 0 0 1.5rem;
+        line-height: 1.5;
+        flex: 1;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
 
-.goal-card__inner {
-    display: flex;
-    flex-direction: column;
-    gap: .8rem;
-    min-height: 100%;
-    padding: 1rem;
-}
+    /* Progress */
+    .gp-progress {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        margin-bottom: 1.25rem;
+    }
+    .gp-progress-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+    }
+    .gp-progress-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+    }
+    .gp-progress-pct {
+        font-family: 'Fraunces', serif;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--clay, #c0561d);
+    }
+    .gp-progress-track {
+        height: 6px;
+        background: var(--mud-palette-table-lines);
+        border-radius: 999px;
+        overflow: hidden;
+    }
+    .gp-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #ed6c02, #fbc02d);
+        border-radius: 999px;
+        transition: width 0.5s ease;
+        min-width: 4px;
+    }
 
-.goal-card__topline {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .35rem;
-}
-
-.goal-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: .2rem .6rem;
-    border-radius: 999px;
-    font-size: .72rem;
-    font-weight: 600;
-    letter-spacing: .03em;
-    text-transform: uppercase;
-}
-
-.goal-status--planned { background: var(--paper-sunk); color: var(--ink-soft); }
-.goal-status--active { background: rgba(111,122,90,.14); color: #4a5c38; }
-.goal-status--achieved { background: rgba(60,145,93,.14); color: #2f7247; }
-.goal-status--abandoned { background: rgba(129,118,98,.14); color: #665a49; }
-
-.goal-area {
-    background: rgba(160,120,32,.10);
-    color: #7a5c0e;
-}
-
-.goal-card__title {
-    margin: 0;
-    font-family: var(--font-display);
-    font-size: 1.18rem;
-    font-weight: 500;
-    line-height: 1.3;
-    color: var(--ink);
-}
-
-.goal-card:hover .goal-card__title { color: var(--clay); }
-
-.goal-card__description {
-    margin: 0;
-    color: var(--ink-soft);
-    font-size: .82rem;
-    line-height: 1.55;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    min-height: 3.8em;
-}
-
-.goal-progress {
-    margin-top: auto;
-}
-
-.goal-progress__row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: .5rem;
-    margin-bottom: .35rem;
-}
-
-.goal-progress__label,
-.goal-progress__pct {
-    font-size: .74rem;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-    font-weight: 700;
-}
-
-.goal-progress__track {
-    height: 6px;
-    background: var(--paper-sunk);
-    border-radius: 999px;
-    overflow: hidden;
-}
-
-.goal-progress__fill {
-    height: 100%;
-    border-radius: 999px;
-    background: linear-gradient(90deg, var(--gold), var(--clay));
-    min-width: 3px;
-    transition: width .45s ease;
-}
-
-.goal-card__meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .75rem;
-}
-
-.goal-meta {
-    display: inline-flex;
-    align-items: center;
-    gap: .32rem;
-    color: var(--ink-soft);
-    font-size: .78rem;
-}
-
-.goal-meta__icon {
-    width: 14px;
-    height: 14px;
-    opacity: .6;
-}
-
-@@keyframes goal-card-in {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-@@media (max-width: 640px) {
-    .goal-toolbar { padding: .85rem 1rem; }
-    .goal-grid { grid-template-columns: 1fr; }
-}
+    /* Meta */
+    .gp-card-meta {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-top: auto;
+        padding-top: 1rem;
+        border-top: 1px solid var(--mud-palette-lines-default);
+    }
+    
+    .gp-meta-item {
+        font-size: 0.75rem;
+        color: var(--mud-palette-text-disabled);
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+    }
 </style>
+
+<div class="gp-page">
+    <div class="gp-layout">
+
+        @* ── Sidebar ── *@
+        <aside class="gp-sidebar">
+            <p class="gp-eyebrow">North-Star Ledger</p>
+            <h1 class="gp-title">Goals</h1>
+            <p class="gp-meta">@(_goals.Count) goals total · @(_filtered.Count) shown</p>
+
+            <div class="gp-actions">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           Size="Size.Large"
+                           Style="font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; border-radius: 8px;"
+                           FullWidth="true"
+                           OnClick="OpenCreateDialogAsync">
+                    New Goal
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.Insights"
+                           Size="Size.Large"
+                           Style="font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; border-radius: 8px;"
+                           FullWidth="true"
+                           OnClick="@(() => Nav.NavigateTo("/goals/metrics"))">
+                    Metrics Dashboard
+                </MudButton>
+            </div>
+
+            <div class="gp-widget">
+                <MudTextField @bind-Value="_searchText"
+                              Placeholder="Search goals…"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Outlined.Search"
+                              Clearable="true"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              OnKeyDown="@(() => ApplyFilters())"
+                              OnKeyUp="@(() => ApplyFilters())"    
+                              Class="mb-5" />
+
+                <div class="gp-filter-label">Status</div>
+                <div class="gp-filter-group">
+                    @foreach (var status in StatusFilters)
+                    {
+                        <button class="gp-chip @(IsStatusActive(status) ? "gp-chip--on" : "")"
+                                type="button"
+                                @onclick="() => ToggleStatusFilter(status)">
+                            <span class="gp-chip-dot" style="background:@StatusColor(status)"></span>
+                            @StatusLabel(status)
+                        </button>
+                    }
+                </div>
+            </div>
+        </aside>
+
+        @* ── Main Layout ── *@
+        <main class="gp-main">
+            @if (_loading)
+            {
+                <div style="padding: 5rem 0; text-align: center;">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                    <p style="margin-top: 1rem; color: var(--mud-palette-text-disabled); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem;">Loading goals…</p>
+                </div>
+            }
+            else if (_filtered.Count == 0)
+            {
+                <div style="padding: 5rem 2rem; display: flex; flex-direction: column; align-items: center; text-align: center; border: 1px dashed var(--mud-palette-lines-default); border-radius: 16px; background: var(--mud-palette-table-lines);">
+                    <MudIcon Icon="@Icons.Material.Outlined.Flag" Style="font-size:4rem; color: var(--mud-palette-text-disabled); margin-bottom: 1.5rem;" />
+                    <h2 style="font-family: 'Fraunces', serif; font-size: 1.75rem; margin: 0 0 0.5rem; color: var(--mud-palette-text-primary);">
+                        @(_goals.Count == 0 ? "No goals yet" : "Nothing matches")
+                    </h2>
+                    <p style="color: var(--mud-palette-text-secondary); margin: 0 0 2rem; max-width: 400px;">
+                        @(_goals.Count == 0
+                            ? "Create a goal to turn long-range intent into visible progress."
+                            : "Try clearing filters or broadening your search.")
+                    </p>
+                    @if (_goals.Count == 0)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="OpenCreateDialogAsync">
+                            Create first goal
+                        </MudButton>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="gp-grid">
+                    @for (var i = 0; i < _filtered.Count; i++)
+                    {
+                        var goal = _filtered[i];
+                        <button class="gp-card" type="button" style="animation-delay:@(i * 35)ms; animation: gp-card-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;" @onclick="() => OpenDetail(goal.Id)">
+                            
+                            <div class="gp-card-header">
+                                <span class="gp-badge gp-status--@goal.Status.ToString().ToLowerInvariant()">
+                                    @StatusLabel(goal.Status)
+                                </span>
+                                @if (!string.IsNullOrWhiteSpace(goal.AreaName))
+                                {
+                                    <span class="gp-badge" style="background: var(--mud-palette-table-lines); color: var(--mud-palette-text-secondary); border: 1px solid var(--mud-palette-lines-default);">
+                                        @goal.AreaName
+                                    </span>
+                                }
+                            </div>
+
+                            <h2 class="gp-card-title">@goal.Title</h2>
+
+                            @if (!string.IsNullOrWhiteSpace(goal.Description))
+                            {
+                                <p class="gp-card-desc">@goal.Description</p>
+                            }
+
+                            <div class="gp-progress">
+                                <div class="gp-progress-row">
+                                    <span class="gp-progress-label">Progress</span>
+                                    <span class="gp-progress-pct">@goal.ProgressPercent%</span>
+                                </div>
+                                <div class="gp-progress-track">
+                                    <div class="gp-progress-fill" style="width:@goal.ProgressPercent%"></div>
+                                </div>
+                            </div>
+
+                            <div class="gp-card-meta">
+                                <span class="gp-meta-item">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Flag" Size="Size.Small" />
+                                    @(goal.TargetDate?.ToString("MMM d, yyyy") ?? "No target date")
+                                </span>
+                                <span class="gp-meta-item">
+                                    <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
+                                    @goal.CompletedMilestones / @goal.TotalMilestones milestones
+                                </span>
+                            </div>
+                        </button>
+                    }
+                </div>
+            }
+        </main>
+    </div>
+</div>
 
 @code {
     private static readonly GoalStatus[] StatusFilters =
@@ -579,3 +547,6 @@
         _ => "#9a9180"
     };
 }
+
+
+

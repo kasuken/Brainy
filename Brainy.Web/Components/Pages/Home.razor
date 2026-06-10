@@ -8,58 +8,97 @@
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @using Brainy.Web.Components.Pages.Today
+@using Brainy.Web.Components.Pages.Calendar
+@using Brainy.Web.Components.Pages.Projects
 @inject ITodayService TodayService
 @inject ITaskService TaskService
 @inject ITodayNotificationService NotificationService
 @inject IUserDashboardPreferenceService PreferenceService
 @inject IProjectPrioritizationService ProjectPrioritizationService
+@inject IProjectService ProjectService
 @inject IGoalService GoalService
+@inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 
 <PageTitle>Today · Brainy</PageTitle>
 
 <style>
+    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
+
+    /* ── Page Layout ── */
     .td-page {
-        max-width: 900px;
+        max-width: 1500px;
         margin: 0 auto;
-        padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 3vw, 2rem);
-        font-family: var(--font-body);
-        color: var(--ink);
+        padding: 1rem 0;
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
+
+    .td-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+    }
+
+    @@media (min-width: 1024px) {
+        .td-layout {
+            grid-template-columns: 360px 1fr;
+            align-items: start;
+            gap: 4rem;
+        }
+    }
+
+    @@media (min-width: 1440px) {
+        .td-layout {
+            grid-template-columns: 420px 1fr;
+            gap: 5rem;
+        }
+    }
+
+    /* ── Sidebar & Hero ── */
+    .td-sidebar {
+        position: sticky;
+        top: 2rem;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .td-hero {
+        margin-bottom: 2rem;
     }
 
     .td-eyebrow {
-        font-size: 0.7rem;
+        font-size: 0.75rem;
         letter-spacing: 0.16em;
         text-transform: uppercase;
-        color: var(--ink-faint);
-        margin: 0 0 0.4rem;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 700;
+        margin: 0 0 0.5rem;
     }
 
     .td-greeting {
-        font-family: var(--font-display);
-        font-size: clamp(2rem, 5vw, 3.25rem);
+        font-family: 'Fraunces', serif;
+        font-size: clamp(2.5rem, 6vw, 4rem);
         font-weight: 600;
-        font-style: italic;
-        line-height: 1.1;
-        color: var(--ink);
-        margin: 0 0 0.4rem;
+        line-height: 1;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.02em;
+        margin: 0 0 0.5rem;
     }
 
     .td-date {
-        font-size: 0.82rem;
-        color: var(--ink-soft);
-        letter-spacing: 0.04em;
-        margin-bottom: 2rem;
+        font-size: 0.95rem;
+        color: var(--mud-palette-text-secondary);
+        font-weight: 500;
     }
 
     .td-nav {
         display: flex;
-        gap: 0.6rem;
+        gap: 0.5rem;
         flex-wrap: wrap;
-        margin-bottom: 2.5rem;
+        margin-bottom: 2rem;
         padding-bottom: 2rem;
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--mud-palette-lines-default);
     }
 
     .td-nav-chip {
@@ -67,23 +106,79 @@
         align-items: center;
         gap: 0.35rem;
         padding: 0.4rem 0.85rem;
-        border: 1px solid var(--line-strong);
+        border: 1px solid var(--mud-palette-lines-default);
         border-radius: 999px;
-        background: var(--paper-raised);
+        background: var(--mud-palette-surface);
         font-size: 0.78rem;
-        color: var(--ink-soft);
+        font-weight: 600;
+        color: var(--mud-palette-text-secondary);
         text-decoration: none;
-        transition: border-color 0.15s, color 0.15s, background 0.15s;
+        transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
     }
 
-    .td-nav-chip:hover { border-color: var(--clay); color: var(--clay-deep); background: var(--clay-soft); }
+    .td-nav-chip:hover { 
+        border-color: var(--clay, #c0561d); 
+        color: var(--clay, #c0561d); 
+        background: rgba(192, 86, 29, 0.04); 
+        box-shadow: 0 2px 8px rgba(192, 86, 29, 0.05);
+    }
 
-    .td-sections { display: flex; flex-direction: column; gap: 2rem; }
+    .td-sidebar-widgets {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
 
-    .td-section { animation: td-fade-up 0.4s ease both; }
+    .td-priority-projects {
+        margin-top: 1rem;
+        padding-top: 2rem;
+        border-top: 1px dashed var(--mud-palette-lines-default);
+    }
+
+    .td-projects-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    /* ── Main Area ── */
+    .td-loading-state {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .td-notifications {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .td-quick-actions-wrap {
+        margin-bottom: 2.5rem;
+    }
+
+    /* ── Widget Sections Grid ── */
+    .td-sections { 
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2rem; 
+    }
+
+    @@media (min-width: 1200px) {
+        .td-sections {
+            grid-template-columns: 1fr 1fr;
+            align-items: start;
+        }
+    }
+
+    .td-section { 
+        animation: td-fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; 
+    }
 
     @@keyframes td-fade-up {
-        from { opacity: 0; transform: translateY(10px); }
+        from { opacity: 0; transform: translateY(15px); }
         to   { opacity: 1; transform: translateY(0); }
     }
 
@@ -94,106 +189,133 @@
     .td-section:nth-child(5) { animation-delay: 0.25s; }
     .td-section:nth-child(6) { animation-delay: 0.30s; }
 
+    /* ── Widget Sub-components styling ── */
     .td-section-head {
         display: flex;
         align-items: baseline;
         gap: 0.65rem;
-        margin-bottom: 0.65rem;
+        margin-bottom: 0.85rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
     }
 
     .td-section-label {
-        font-size: 0.68rem;
-        font-weight: 700;
+        font-size: 0.72rem;
+        font-weight: 800;
         letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: var(--ink-faint);
+        color: var(--mud-palette-text-disabled);
     }
 
-    .td-section-label--overdue { color: #b91c1c; }
-    .td-section-label--today   { color: var(--clay); }
-    .td-section-label--focus   { color: var(--espresso); }
-    .td-section-label--week    { color: var(--gold); }
-    .td-section-label--next    { color: var(--sage); }
+    .td-section-label--overdue { color: #d32f2f; }
+    .td-section-label--today   { color: var(--clay, #c0561d); }
+    .td-section-label--focus   { color: #4e342e; }
+    .td-section-label--week    { color: #f57f17; }
+    .td-section-label--next    { color: #388e3c; }
 
-    .td-section-count { font-size: 0.72rem; color: var(--ink-faint); }
+    .td-section-count { 
+        font-size: 0.72rem; 
+        color: var(--mud-palette-text-disabled); 
+        font-weight: 500;
+    }
 
+    /* ── Task Items ── */
     .td-task {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
-        padding: 0.65rem 0.85rem;
-        background: var(--paper-raised);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        margin-bottom: 0.4rem;
+        gap: 1rem;
+        padding: 0.85rem 1rem;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        margin-bottom: 0.65rem;
         position: relative;
         overflow: hidden;
-        transition: border-color 0.15s, box-shadow 0.15s;
+        transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
     }
 
     .td-task::before {
         content: '';
         position: absolute;
         left: 0; top: 0; bottom: 0;
-        width: 3px;
+        width: 4px;
+        opacity: 0.85;
     }
 
-    .td-task--critical::before { background: var(--clay); }
-    .td-task--high::before     { background: #d4722a; }
-    .td-task--medium::before   { background: var(--gold); }
-    .td-task--low::before      { background: var(--sage); }
-    .td-task--overdue { border-color: rgba(185,28,28,0.25); background: rgba(185,28,28,0.03); }
+    .td-task--critical::before { background: #d32f2f; }
+    .td-task--high::before     { background: #ed6c02; }
+    .td-task--medium::before   { background: #fbc02d; }
+    .td-task--low::before      { background: #388e3c; }
+    
+    .td-task--overdue { 
+        border-color: rgba(211, 47, 47, 0.25); 
+        background: rgba(211, 47, 47, 0.02); 
+    }
 
-    .td-task:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+    .td-task:hover { 
+        border-color: rgba(192, 86, 29, 0.35); 
+        box-shadow: 0 4px 12px rgba(192, 86, 29, 0.08); 
+        transform: translateY(-2px);
+    }
 
     .td-task-body { flex: 1; min-width: 0; }
 
     .td-task-title {
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: var(--ink);
+        font-family: 'Fraunces', serif;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         margin: 0;
+        line-height: 1.2;
     }
 
     .td-task-meta {
         display: flex;
         align-items: center;
-        gap: 0.55rem;
-        margin-top: 0.15rem;
+        gap: 0.65rem;
+        margin-top: 0.35rem;
         font-size: 0.72rem;
-        color: var(--ink-faint);
+        color: var(--mud-palette-text-secondary);
+        font-weight: 500;
     }
 
     .td-task-project {
         display: inline-flex;
         align-items: center;
-        padding: 0.1rem 0.45rem;
-        background: var(--paper-sunk);
-        border-radius: 4px;
+        padding: 0.15rem 0.5rem;
+        background: var(--mud-palette-table-lines);
+        border-radius: 6px;
         font-size: 0.68rem;
-        color: var(--ink-soft);
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
     }
 
     .td-task-due { font-variant-numeric: tabular-nums; }
-    .td-task-due--overdue { color: #b91c1c; font-weight: 600; }
+    .td-task-due--overdue { color: #d32f2f; font-weight: 700; }
 
     .td-empty {
-        padding: 0.6rem 0.85rem;
-        font-size: 0.78rem;
-        color: var(--ink-faint);
+        padding: 1rem;
+        font-size: 0.85rem;
+        color: var(--mud-palette-text-disabled);
         font-style: italic;
+        text-align: center;
+        background: rgba(0,0,0,0.02);
+        border-radius: 8px;
+        border: 1px dashed var(--mud-palette-lines-default);
     }
 
     .td-skeleton {
-        height: 52px;
-        border-radius: 8px;
-        background: linear-gradient(90deg, var(--paper-sunk) 25%, var(--line) 50%, var(--paper-sunk) 75%);
+        height: 60px;
+        border-radius: 12px;
+        background: linear-gradient(90deg, var(--mud-palette-surface) 25%, var(--mud-palette-lines-default) 50%, var(--mud-palette-surface) 75%);
         background-size: 200% 100%;
-        animation: td-shimmer 1.4s ease infinite;
-        margin-bottom: 0.4rem;
+        animation: td-shimmer 1.5s ease infinite;
+        margin-bottom: 0.5rem;
     }
 
     @@keyframes td-shimmer {
@@ -201,33 +323,72 @@
         100% { background-position: -200% 0; }
     }
 </style>
+<div class="td-page">
+    <div class="td-layout">
 
-<AuthorizeView>
-    <Authorized>
-        <div class="td-page">
-
-            <p class="td-eyebrow">Daily briefing</p>
-            <h1 class="td-greeting">Today</h1>
-            <p class="td-date">@DateTime.Now.ToString("dddd, MMMM d, yyyy")</p>
+        @* ── Sidebar: Daily Briefing & Priority Context ── *@
+        <aside class="td-sidebar">
+            <div class="td-hero">
+                <p class="td-eyebrow">Daily briefing</p>
+                <h1 class="td-greeting">Today</h1>
+                <p class="td-date">@DateTime.Now.ToString("dddd, MMMM d, yyyy")</p>
+            </div>
 
             <nav class="td-nav">
                 <a class="td-nav-chip" href="/inbox">
-                    <MudIcon Icon="@Icons.Material.Outlined.Inbox" Style="font-size:13px;" /> Inbox
+                    <MudIcon Icon="@Icons.Material.Outlined.Inbox" Size="Size.Small" /> Inbox
                 </a>
                 <a class="td-nav-chip" href="/projects">
-                    <MudIcon Icon="@Icons.Material.Outlined.FolderSpecial" Style="font-size:13px;" /> Projects
+                    <MudIcon Icon="@Icons.Material.Outlined.FolderSpecial" Size="Size.Small" /> Projects
                 </a>
                 <a class="td-nav-chip" href="/notes">
-                    <MudIcon Icon="@Icons.Material.Outlined.Notes" Style="font-size:13px;" /> Notes
+                    <MudIcon Icon="@Icons.Material.Outlined.Notes" Size="Size.Small" /> Notes
                 </a>
                 <a class="td-nav-chip" href="/archives">
-                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Style="font-size:13px;" /> Archives
+                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" /> Archives
                 </a>
             </nav>
 
+            @if (!_loading)
+            {
+                <div class="td-sidebar-widgets">
+                    @* ── Current focus ── *@
+                    <CurrentTaskWidget Task="_aggregate?.CurrentTask"
+                                       OnChanged="LoadAsync" />
+
+                    @* ── Daily snapshot strip ── *@
+                    <DailyFocusSummaryWidget Aggregate="_aggregate" />
+
+                    @* ── Inbox reminder ── *@
+                    <InboxReminderWidget InboxCount="_aggregate?.InboxCount ?? 0"
+                                         WarningThreshold="_aggregate?.InboxWarningThreshold ?? 10"
+                                         ShowWarning="_aggregate?.InboxWarning ?? false" />
+
+                    @* ── Priority projects ── *@
+                    @if (_prioritizedProjects.Count > 0)
+                    {
+                        <div class="td-priority-projects">
+                            <div class="td-section-head" style="margin-bottom:0.75rem;">
+                                <span class="td-section-label" style="color:var(--ink-soft);">Priority Projects</span>
+                                <span class="td-section-count">@_prioritizedProjects.Count project@(_prioritizedProjects.Count == 1 ? "" : "s")</span>
+                            </div>
+                            <div class="td-projects-list">
+                                @foreach (var p in _prioritizedProjects)
+                                {
+                                    <ProjectSummaryCard Project="p" Compact="true" OnNavigate="OpenProject" />
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </aside>
+
+        @* ── Main Content: Execution view ── *@
+        <main class="td-main">
             @if (_loading)
             {
-                <div>
+                <div class="td-loading-state">
                     <div class="td-skeleton"></div>
                     <div class="td-skeleton" style="width:85%;"></div>
                     <div class="td-skeleton" style="width:70%;"></div>
@@ -238,7 +399,7 @@
                 @* ── Notification bar ── *@
                 @if (_notifications.Count > 0)
                 {
-                    <div style="display:flex; flex-direction:column; gap:0.4rem; margin-bottom:1.5rem;">
+                    <div class="td-notifications">
                         @foreach (var n in _notifications)
                         {
                             <MudAlert Severity="@NotificationSeverity(n.Kind)"
@@ -251,39 +412,34 @@
                 }
 
                 @* ── Quick actions toolbar ── *@
-                <TodayQuickActions />
-
-                @* ── Daily snapshot strip ── *@
-                <DailyFocusSummaryWidget Aggregate="_aggregate" />
-
-                @* ── Current focus ── *@
-                <CurrentTaskWidget Task="_aggregate?.CurrentTask"
-                                   OnChanged="LoadAsync" />
-
-                @* ── Inbox reminder ── *@
-                <InboxReminderWidget InboxCount="_aggregate?.InboxCount ?? 0"
-                                     WarningThreshold="_aggregate?.InboxWarningThreshold ?? 10"
-                                     ShowWarning="_aggregate?.InboxWarning ?? false" />
+                <div class="td-quick-actions-wrap">
+                    <TodayQuickActions OnAddTask="OpenAddTaskDialogAsync" />
+                </div>
 
                 @* ── Task sections ── *@
                 <div class="td-sections">
 
                     <OverdueWidget Tasks="_aggregate?.Overdue ?? []"
-                                   OnComplete="HandleCompleted" />
+                                   OnComplete="HandleCompleted"
+                                   OnEdit="OpenEditTaskDialogAsync" />
 
                     <GoalDeadlineWidget OverdueGoals="_overdueGoals"
                                         DueSoonGoals="_dueSoonGoals" />
 
                     <DueTodayWidget Tasks="_aggregate?.DueToday ?? []"
-                                    OnComplete="HandleCompleted" />
+                                    OnComplete="HandleCompleted"
+                                    OnEdit="OpenEditTaskDialogAsync" />
 
                     <HighPriorityProjectWorkWidget Tasks="_aggregate?.HighPriorityWork ?? []"
-                                                   OnComplete="HandleCompleted" />
+                                                   OnComplete="HandleCompleted"
+                                                   OnEdit="OpenEditTaskDialogAsync" />
 
                     <DueThisWeekWidget Tasks="_aggregate?.DueThisWeek ?? []"
-                                       OnComplete="HandleCompleted" />
+                                       OnComplete="HandleCompleted"
+                                       OnEdit="OpenEditTaskDialogAsync" />
 
-                    <NextTasksWidget Tasks="_aggregate?.NextTasks ?? []" />
+                    <NextTasksWidget Tasks="_aggregate?.NextTasks ?? []"
+                                     OnEdit="OpenEditTaskDialogAsync" />
 
                     @* Empty state — only shown when there is truly nothing to act on *@
                     @if ((_aggregate?.CurrentTask == null)
@@ -297,29 +453,10 @@
                     }
 
                 </div>
-
-                @* ── Priority projects ── *@
-                @if (_prioritizedProjects.Count > 0)
-                {
-                    <div style="margin-top:2rem; padding-top:2rem; border-top:1px solid var(--line);">
-                        <div class="td-section-head" style="margin-bottom:0.75rem;">
-                            <span class="td-section-label" style="color:var(--ink-soft);">Priority Projects</span>
-                            <span class="td-section-count">@_prioritizedProjects.Count project@(_prioritizedProjects.Count == 1 ? "" : "s")</span>
-                        </div>
-                        <div style="display:flex; flex-direction:column; gap:0.5rem;">
-                            @foreach (var p in _prioritizedProjects)
-                            {
-                                <ProjectSummaryCard Project="p" Compact="true" OnNavigate="OpenProject" />
-                            }
-                        </div>
-                    </div>
-                }
             }
-
-        </div>
-    </Authorized>
-</AuthorizeView>
-
+        </main>
+    </div>
+</div>
 @code {
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
@@ -384,6 +521,69 @@
         }
     }
 
+    private async Task OpenAddTaskDialogAsync()
+    {
+        try
+        {
+            var projects = await ProjectService.GetAllNonArchivedAsync();
+            if (projects.Count == 0)
+            {
+                Snackbar.Add("Create a project first to add tasks.", Severity.Info);
+                return;
+            }
+
+            var parameters = new DialogParameters<QuickTaskDialog>
+            {
+                { d => d.SelectedDate, DateTime.Today },
+                { d => d.Projects, projects }
+            };
+
+            var dialog = await DialogService.ShowAsync<QuickTaskDialog>(
+                "New Task",
+                parameters,
+                new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+
+            var result = await dialog.Result;
+            if (result is { Canceled: false })
+            {
+                Snackbar.Add("Task created.", Severity.Success);
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not open task dialog: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenEditTaskDialogAsync(TodayTaskItemDto task)
+    {
+        try
+        {
+            var parameters = new DialogParameters<TaskEditorDialog>
+            {
+                { d => d.TaskId, task.Id },
+                { d => d.ProjectId, task.ProjectId }
+            };
+
+            var dialog = await DialogService.ShowAsync<TaskEditorDialog>(
+                "Edit Task",
+                parameters,
+                new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+
+            var result = await dialog.Result;
+            if (result is { Canceled: false })
+            {
+                Snackbar.Add("Task updated.", Severity.Success);
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not open edit dialog: {ex.Message}", Severity.Error);
+        }
+    }
+
     private void OpenProject(Guid id) => Nav.NavigateTo($"/projects/{id}");
 
     private static Severity NotificationSeverity(TodayNotificationKind kind) => kind switch
@@ -393,3 +593,4 @@
         _                                  => Severity.Info,
     };
 }
+

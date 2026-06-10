@@ -12,38 +12,111 @@
 <PageTitle>Tasks Hub · Brainy</PageTitle>
 
 <style>
+    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
+
+    /* ── Page Layout ── */
     .td-page {
-        max-width: 900px;
+        max-width: 1500px;
         margin: 0 auto;
-        padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 3vw, 2rem);
-        font-family: var(--font-body);
-        color: var(--ink);
+        padding: 1rem 0;
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
+
+    .td-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+    }
+
+    @@media (min-width: 1024px) {
+        .td-layout {
+            grid-template-columns: 360px 1fr;
+            align-items: start;
+            gap: 4rem;
+        }
+    }
+
+    @@media (min-width: 1440px) {
+        .td-layout {
+            grid-template-columns: 420px 1fr;
+            gap: 5rem;
+        }
+    }
+
+    /* ── Sidebar & Hero ── */
+    .td-sidebar {
+        position: sticky;
+        top: 2rem;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .td-hero {
+        margin-bottom: 2rem;
     }
 
     .td-eyebrow {
-        font-size: 0.7rem;
+        font-size: 0.75rem;
         letter-spacing: 0.16em;
         text-transform: uppercase;
-        color: var(--ink-faint);
-        margin: 0 0 0.4rem;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 700;
+        margin: 0 0 0.5rem;
     }
 
     .td-greeting {
-        font-family: var(--font-display);
-        font-size: clamp(2rem, 5vw, 3.25rem);
+        font-family: 'Fraunces', serif;
+        font-size: clamp(2.5rem, 6vw, 4rem);
         font-weight: 600;
-        font-style: italic;
-        line-height: 1.1;
-        color: var(--ink);
-        margin: 0 0 2rem;
+        line-height: 1;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.02em;
+        margin: 0 0 1.5rem;
     }
 
-    .td-sections { display: flex; flex-direction: column; gap: 2rem; }
+    .td-sidebar-widgets {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
 
-    .td-section { animation: td-fade-up 0.4s ease both; }
+    /* ── Main Area ── */
+    .td-loading-state {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .th-search-wrap {
+        margin-bottom: 2.5rem;
+    }
+
+    .th-search-results {
+        margin-bottom: 2.5rem;
+        padding-bottom: 2rem;
+        border-bottom: 1px dashed var(--mud-palette-lines-default);
+    }
+
+    /* ── Widget Sections Grid ── */
+    .td-sections { 
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2rem; 
+    }
+
+    @@media (min-width: 1200px) {
+        .td-sections {
+            grid-template-columns: 1fr 1fr;
+            align-items: start;
+        }
+    }
+
+    .td-section { 
+        animation: td-fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; 
+    }
 
     @@keyframes td-fade-up {
-        from { opacity: 0; transform: translateY(10px); }
+        from { opacity: 0; transform: translateY(15px); }
         to   { opacity: 1; transform: translateY(0); }
     }
 
@@ -54,115 +127,136 @@
     .td-section:nth-child(5) { animation-delay: 0.25s; }
     .td-section:nth-child(6) { animation-delay: 0.30s; }
 
+    /* ── Widget Sub-components styling ── */
     .td-section-head {
         display: flex;
         align-items: baseline;
         gap: 0.65rem;
-        margin-bottom: 0.65rem;
+        margin-bottom: 0.85rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
     }
 
     .td-section-label {
-        font-size: 0.68rem;
-        font-weight: 700;
+        font-size: 0.72rem;
+        font-weight: 800;
         letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: var(--ink-faint);
+        color: var(--mud-palette-text-disabled);
     }
 
-    .td-section-label--overdue { color: #b91c1c; }
+    .td-section-label--overdue { color: #d32f2f; }
 
-    .td-section-count { font-size: 0.72rem; color: var(--ink-faint); }
+    .td-section-count { 
+        font-size: 0.72rem; 
+        color: var(--mud-palette-text-disabled); 
+        font-weight: 500;
+    }
 
+    /* ── Task Items ── */
     .td-task {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
-        padding: 0.65rem 0.85rem;
-        background: var(--paper-raised);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        margin-bottom: 0.4rem;
+        gap: 1rem;
+        padding: 0.85rem 1rem;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        margin-bottom: 0.65rem;
         position: relative;
         overflow: hidden;
-        transition: border-color 0.15s, box-shadow 0.15s;
+        transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
     }
 
     .td-task::before {
         content: '';
         position: absolute;
         left: 0; top: 0; bottom: 0;
-        width: 3px;
+        width: 4px;
+        opacity: 0.85;
     }
 
-    .td-task--critical::before { background: var(--clay); }
-    .td-task--high::before     { background: #d4722a; }
-    .td-task--medium::before   { background: var(--gold); }
-    .td-task--low::before      { background: var(--sage); }
-    .td-task--overdue { border-color: rgba(185,28,28,0.25); background: rgba(185,28,28,0.03); }
+    .td-task--critical::before { background: #d32f2f; }
+    .td-task--high::before     { background: #ed6c02; }
+    .td-task--medium::before   { background: #fbc02d; }
+    .td-task--low::before      { background: #388e3c; }
+    
+    .td-task--overdue { 
+        border-color: rgba(211, 47, 47, 0.25); 
+        background: rgba(211, 47, 47, 0.02); 
+    }
 
-    .td-task:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+    .td-task:hover { 
+        border-color: rgba(192, 86, 29, 0.35); 
+        box-shadow: 0 4px 12px rgba(192, 86, 29, 0.08); 
+        transform: translateY(-2px);
+    }
 
     .td-task-body { flex: 1; min-width: 0; }
 
     .td-task-title {
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: var(--ink);
+        font-family: 'Fraunces', serif;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         margin: 0;
+        line-height: 1.2;
     }
 
     .td-task-meta {
         display: flex;
         align-items: center;
-        gap: 0.55rem;
-        margin-top: 0.15rem;
+        gap: 0.65rem;
+        margin-top: 0.35rem;
         font-size: 0.72rem;
-        color: var(--ink-faint);
+        color: var(--mud-palette-text-secondary);
+        font-weight: 500;
     }
 
     .td-task-project {
         display: inline-flex;
         align-items: center;
-        padding: 0.1rem 0.45rem;
-        background: var(--paper-sunk);
-        border-radius: 4px;
+        padding: 0.15rem 0.5rem;
+        background: var(--mud-palette-table-lines);
+        border-radius: 6px;
         font-size: 0.68rem;
-        color: var(--ink-soft);
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
     }
 
     .td-task-due { font-variant-numeric: tabular-nums; }
-    .td-task-due--overdue { color: #b91c1c; font-weight: 600; }
+    .td-task-due--overdue { color: #d32f2f; font-weight: 700; }
 
     .td-widget {
-        background: var(--paper-raised);
-        border: 1px solid var(--line);
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
         border-radius: 12px;
         padding: 1.1rem 1.25rem;
-        box-shadow: var(--shadow-sm);
     }
 
     .td-empty {
-        padding: 0.6rem 0.85rem;
-        font-size: 0.78rem;
-        color: var(--ink-faint);
+        padding: 1.25rem 1rem;
+        font-size: 0.85rem;
+        color: var(--mud-palette-text-disabled);
         font-style: italic;
+        text-align: center;
+        background: var(--mud-palette-table-lines);
+        border-radius: 8px;
+        border: 1px dashed var(--mud-palette-lines-default);
     }
 
     .td-skeleton {
-        height: 52px;
-        border-radius: 8px;
-        background: linear-gradient(90deg, var(--paper-sunk) 25%, var(--line) 50%, var(--paper-sunk) 75%);
+        height: 60px;
+        border-radius: 12px;
+        background: linear-gradient(90deg, var(--mud-palette-surface) 25%, var(--mud-palette-lines-default) 50%, var(--mud-palette-surface) 75%);
         background-size: 200% 100%;
-        animation: td-shimmer 1.4s ease infinite;
-        margin-bottom: 0.4rem;
-    }
-
-    @@keyframes td-shimmer {
-        0%   { background-position: 200% 0; }
-        100% { background-position: -200% 0; }
+        animation: td-shimmer 1.5s ease infinite;
+        margin-bottom: 0.5rem;
     }
 
     /* ── th- classes for the stat cards and health rows ── */
@@ -179,65 +273,100 @@
         flex-direction: column;
         align-items: center;
         padding: 1rem 0.75rem;
-        background: var(--paper-raised);
-        border: 1px solid var(--line);
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
         border-radius: 10px;
         gap: 0.35rem;
-        transition: box-shadow 0.15s;
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
     }
 
-    .th-stat-card:hover { box-shadow: var(--shadow-sm); }
+    .th-stat-card:hover { 
+        box-shadow: 0 4px 12px rgba(192, 86, 29, 0.05);
+        transform: translateY(-2px);
+    }
 
     .th-stat-label {
         font-size: 0.68rem;
         font-weight: 700;
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: var(--ink-faint);
+        color: var(--mud-palette-text-disabled);
     }
 
     .th-stat-value {
-        font-family: var(--font-display);
+        font-family: 'Fraunces', serif;
         font-size: 2rem;
-        font-weight: 600;
+        font-weight: 500;
         line-height: 1;
-        color: var(--ink);
+        color: var(--mud-palette-text-secondary);
     }
 
-    .th-stat--todo       { color: var(--ink-soft); }
-    .th-stat--inprogress { color: var(--clay); }
-    .th-stat--waiting    { color: var(--gold); }
-    .th-stat--done       { color: #16a34a; }
+    .th-stat--todo       { color: var(--mud-palette-text-disabled); }
+    .th-stat--inprogress { color: var(--clay, #c0561d); }
+    .th-stat--waiting    { color: #f57f17; }
+    .th-stat--done       { color: #388e3c; }
 
     .th-health-row {
         display: flex;
         align-items: center;
         gap: 0.6rem;
-        padding: 0.4rem 0.5rem;
-        border-radius: 6px;
-        background: var(--paper-sunk);
+        padding: 0.5rem 0.6rem;
+        border-radius: 8px;
+        background: var(--mud-palette-table-lines);
+        border: 1px solid transparent;
+        transition: border-color 0.2s;
+    }
+    
+    .th-health-row:hover {
+        border-color: var(--mud-palette-lines-default);
     }
 
     .th-health-label {
         flex: 1;
-        font-size: 0.82rem;
-        color: var(--ink-soft);
+        font-size: 0.85rem;
+        color: var(--mud-palette-text-secondary);
+        font-weight: 500;
     }
 </style>
-
 <AuthorizeView>
     <Authorized>
-        <div class="td-page">
-            <p class="td-eyebrow">Task management</p>
-            <h1 class="td-greeting">Tasks Hub</h1>
+<div class="td-page">
+    <div class="td-layout">
 
+        @* ── Sidebar: Title & High-level context ── *@
+        <aside class="td-sidebar">
+            <div class="td-hero">
+                <p class="td-eyebrow">Task management</p>
+                <h1 class="td-greeting">Tasks Hub</h1>
+            </div>
+
+            @if (!_loading && _loadError is null)
+            {
+                <div class="td-sidebar-widgets">
+                    @* ── Status summary strip ── *@
+                    <div style="margin-bottom:1.5rem;">
+                        <div class="td-section-head" style="margin-bottom:0.75rem; border-bottom: none;">
+                            <span class="td-section-label">Status Overview</span>
+                        </div>
+                        <TaskStatusSummaryWidget Summary="_aggregate!.StatusSummary" />
+                    </div>
+
+                    @* ── Task Health ── *@
+                    <TaskHealthWidget OverdueCount="_aggregate!.OverdueTasks.Count"
+                                      StaleCount="_aggregate!.StaleTasks.Count"
+                                      WithoutDueDateCount="_aggregate!.WithoutDueDateTasks.Count" />
+                </div>
+            }
+        </aside>
+
+        @* ── Main Content: Search, Diagnostics & Grouped Tasks ── *@
+        <main class="td-main">
             @if (_loading)
             {
-                <div>
+                <div class="td-loading-state">
                     <div class="td-skeleton"></div>
                     <div class="td-skeleton" style="width:85%;"></div>
                     <div class="td-skeleton" style="width:70%;"></div>
-                    <div class="td-skeleton" style="width:90%;"></div>
                 </div>
             }
             else if (_loadError is not null)
@@ -249,7 +378,7 @@
             else
             {
                 @* ── Search bar ── *@
-                <div style="margin-bottom:1.5rem;">
+                <div class="th-search-wrap">
                     <MudTextField @bind-Value="_searchTerm"
                                   Label="Search tasks"
                                   Variant="Variant.Outlined"
@@ -263,7 +392,7 @@
                 @* ── Search results ── *@
                 @if (_searchResults is not null)
                 {
-                    <div class="td-section" style="margin-bottom:1.5rem;">
+                    <div class="td-section th-search-results">
                         <div class="td-section-head">
                             <span class="td-section-label">Search Results</span>
                             <span class="td-section-count">@_searchResults.TotalCount result@(_searchResults.TotalCount == 1 ? "" : "s")</span>
@@ -305,21 +434,8 @@
                 }
                 else
                 {
-                    @* ── Status summary strip ── *@
-                    <div style="margin-bottom:2rem;">
-                        <div class="td-section-head" style="margin-bottom:0.75rem;">
-                            <span class="td-section-label">Status Overview</span>
-                        </div>
-                        <TaskStatusSummaryWidget Summary="_aggregate!.StatusSummary" />
-                    </div>
-
-                    @* ── Widget sections ── *@
+                    @* ── Widget Sections Grid ── *@
                     <div class="td-sections">
-
-                        <TaskHealthWidget OverdueCount="_aggregate!.OverdueTasks.Count"
-                                          StaleCount="_aggregate!.StaleTasks.Count"
-                                          WithoutDueDateCount="_aggregate!.WithoutDueDateTasks.Count" />
-
                         <TasksNeedingAttentionWidget Tasks="_aggregate!.NeedingAttentionTasks"
                                                      OnComplete="HandleCompleted" />
 
@@ -338,11 +454,12 @@
                         <MyTasksWidget Tasks="_aggregate!.ActiveTasks"
                                        OnComplete="HandleCompleted"
                                        Collapsed="true" />
-
                     </div>
                 }
             }
-        </div>
+        </main>
+    </div>
+</div>
     </Authorized>
 </AuthorizeView>
 
@@ -460,3 +577,4 @@
         _                     => "td-task--low",
     };
 }
+

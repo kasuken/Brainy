@@ -18,236 +18,265 @@
 <PageTitle>Inbox – Brainy</PageTitle>
 
 <div class="inbox-page">
+    <div class="inbox-layout">
 
-    @* ── Hero ── *@
-    <div class="inbox-hero">
-        <div class="inbox-hero__text">
-            <div class="inbox-hero__heading-row">
-                <MudText Typo="Typo.h4" Class="inbox-hero__heading">Inbox</MudText>
-                @if (!_loading && _notes.Count > 0)
-                {
-                    <span class="inbox-hero__badge">@_notes.Count</span>
-                }
-            </div>
-            <MudText Typo="Typo.body1" Class="mud-text-secondary">
-                @if (_loading)
-                {
-                    <span>Loading…</span>
-                }
-                else if (_notes.Count == 0)
-                {
-                    <span>Your inbox is clear — nothing to process.</span>
-                }
-                else
-                {
-                    <span>Decide where each captured note belongs. Process one at a time.</span>
-                }
-            </MudText>
-        </div>
-
-        @if (!_loading && _notes.Count > 0)
-        {
-            <div class="inbox-hero__actions">
-                @if (_selectedIds.Count > 0)
-                {
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.DoneAll"
-                               OnClick="BulkProcessSelectedAsync"
-                               Disabled="_busy"
-                               Class="inbox-hero__cta">
-                        Process @_selectedIds.Count selected
-                    </MudButton>
-                    <MudButton Variant="Variant.Text"
-                               OnClick="ClearSelection"
-                               Disabled="_busy"
-                               Class="inbox-hero__cta-clear">
-                        Clear
-                    </MudButton>
-                }
-                else
-                {
-                    <MudButton Variant="Variant.Outlined"
-                               StartIcon="@Icons.Material.Outlined.DoneAll"
-                               OnClick="ProcessNextAsync"
-                               Disabled="_busy"
-                               Class="inbox-hero__cta">
-                        Process next
-                    </MudButton>
-                    <MudButton Variant="Variant.Text"
-                               StartIcon="@Icons.Material.Outlined.CheckBox"
-                               OnClick="SelectAll"
-                               Class="inbox-hero__cta-clear">
-                        Select all
-                    </MudButton>
-                }
-            </div>
-        }
-    </div>
-
-    @* ── Metrics strip ── *@
-    @if (_metrics is not null)
-    {
-        <div class="inbox-metrics">
-            <div class="inbox-metric-tile">
-                <span class="inbox-metric-tile__value @(_metrics.WaitingCount > 10 ? "inbox-metric--warn" : "")">
-                    @_metrics.WaitingCount
-                </span>
-                <span class="inbox-metric-tile__label">Waiting</span>
-            </div>
-            <div class="inbox-metric-tile">
-                <span class="inbox-metric-tile__value">@_metrics.CapturedTodayCount</span>
-                <span class="inbox-metric-tile__label">Captured Today</span>
-            </div>
-            <div class="inbox-metric-tile">
-                <span class="inbox-metric-tile__value">
-                    @(_metrics.OldestItemAgeInDays.HasValue ? $"{_metrics.OldestItemAgeInDays}d" : "—")
-                </span>
-                <span class="inbox-metric-tile__label">Oldest Item</span>
-            </div>
-            <div class="inbox-metric-tile">
-                <span class="inbox-metric-tile__value">
-                    @(_metrics.AvgProcessingDays.HasValue ? $"{_metrics.AvgProcessingDays:F1}d" : "—")
-                </span>
-                <span class="inbox-metric-tile__label">Avg. Processing</span>
-            </div>
-        </div>
-    }
-
-    @* ── Progress bar when notes exist ── *@
-    @if (!_loading && _totalOnLoad > 0)
-    {
-        var processed = _totalOnLoad - _notes.Count;
-        <div class="inbox-progress" title="@processed of @_totalOnLoad processed">
-            <div class="inbox-progress__track">
-                <div class="inbox-progress__fill"
-                     style="width: @((processed * 100 / _totalOnLoad).ToString())%"></div>
-            </div>
-            <span class="inbox-progress__label">@processed / @_totalOnLoad processed</span>
-        </div>
-    }
-
-    @* ── Loading ── *@
-    @if (_loading)
-    {
-        <div class="inbox-state">
-            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
-            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">Loading inbox…</MudText>
-        </div>
-    }
-
-    @* ── Empty / Zero-inbox ── *@
-    else if (_notes.Count == 0)
-    {
-        <div class="inbox-empty">
-            <div class="inbox-empty__orbit" aria-hidden="true">
-                <MudIcon Icon="@Icons.Material.Outlined.AllInbox" Class="inbox-empty__icon" />
-                <span class="inbox-empty__ring inbox-empty__ring--1"></span>
-                <span class="inbox-empty__ring inbox-empty__ring--2"></span>
-            </div>
-            <MudText Typo="Typo.h6" GutterBottom="true" Class="inbox-empty__headline">
-                All clear
-            </MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-5">
-                Every captured note has been processed. Great work.
-            </MudText>
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.NoteAdd"
-                       Href="/notes">
-                Capture a new note
-            </MudButton>
-        </div>
-    }
-
-    @* ── Note cards ── *@
-    else
-    {
-        <div class="inbox-list">
-            @foreach (var note in _notes)
-            {
-                var isSelected = _selectedIds.Contains(note.Id);
-                <div class="inbox-card @(_busyId == note.Id ? "inbox-card--busy" : "") @(isSelected ? "inbox-card--selected" : "")">
-
-                    @* Checkbox *@
-                    <label class="inbox-card__checkbox-wrap" title="Select for bulk processing">
-                        <input type="checkbox"
-                               class="inbox-card__checkbox"
-                               checked="@isSelected"
-                               disabled="@_busy"
-                               @onchange="() => ToggleSelection(note.Id)" />
-                        <span class="inbox-card__checkbox-box" aria-hidden="true">
-                            @if (isSelected)
-                            {
-                                <MudIcon Icon="@Icons.Material.Filled.Check" Class="inbox-card__checkbox-check" />
-                            }
-                        </span>
-                    </label>
-
-                    <div class="inbox-card__body">
-                        <div class="inbox-card__meta">
-                            <span class="inbox-card__pill">Unprocessed</span>
-                            <span class="inbox-card__date">
-                                @note.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
-                            </span>
-                        </div>
-
-                        <p class="inbox-card__title">@note.Title</p>
-
-                        @if (!string.IsNullOrWhiteSpace(note.Content))
+        @* ── Sidebar ── *@
+        <aside class="inbox-sidebar">
+            @* ── Hero ── *@
+            <div class="inbox-hero">
+                <div class="inbox-hero__text">
+                    <div class="inbox-hero__heading-row">
+                        <MudText Typo="Typo.h4" Class="inbox-hero__heading">Inbox</MudText>
+                        @if (!_loading && _notes.Count > 0)
                         {
-                            <p class="inbox-card__snippet">@TruncateContent(note.Content)</p>
+                            <span class="inbox-hero__badge">@_notes.Count</span>
                         }
                     </div>
+                    <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                        @if (_loading)
+                        {
+                            <span>Loading…</span>
+                        }
+                        else if (_notes.Count == 0)
+                        {
+                            <span>Your inbox is clear — nothing to process.</span>
+                        }
+                        else
+                        {
+                            <span>Decide where each captured note belongs.</span>
+                        }
+                    </MudText>
+                </div>
 
-                    <div class="inbox-card__actions">
-                        <MudButton Variant="Variant.Filled"
-                                   Color="Color.Primary"
-                                   Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.Check"
-                                   Disabled="_busy"
-                                   OnClick="() => ProcessNoteAsync(note)"
-                                   Class="inbox-card__btn-process">
-                            Process
-                        </MudButton>
-
-                        <MudIconButton Icon="@Icons.Material.Outlined.Edit"
-                                       Size="Size.Small"
-                                       title="Edit note"
+                @if (!_loading && _notes.Count > 0)
+                {
+                    <div class="inbox-hero__actions">
+                        @if (_selectedIds.Count > 0)
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.DoneAll"
+                                       OnClick="BulkProcessSelectedAsync"
                                        Disabled="_busy"
-                                       OnClick="() => EditNoteAsync(note)"
-                                       Class="inbox-card__btn-icon" />
-
-                        <MudIconButton Icon="@Icons.Material.Outlined.Archive"
-                                       Size="Size.Small"
-                                       title="Archive without processing"
+                                       Class="inbox-hero__cta">
+                                Process @_selectedIds.Count selected
+                            </MudButton>
+                            <MudButton Variant="Variant.Text"
+                                       OnClick="ClearSelection"
                                        Disabled="_busy"
-                                       OnClick="() => QuickArchiveAsync(note)"
-                                       Class="inbox-card__btn-icon" />
+                                       Class="inbox-hero__cta-clear">
+                                Clear
+                            </MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Outlined"
+                                       StartIcon="@Icons.Material.Outlined.DoneAll"
+                                       OnClick="ProcessNextAsync"
+                                       Disabled="_busy"
+                                       Class="inbox-hero__cta">
+                                Process next
+                            </MudButton>
+                            <MudButton Variant="Variant.Text"
+                                       StartIcon="@Icons.Material.Outlined.CheckBox"
+                                       OnClick="SelectAll"
+                                       Class="inbox-hero__cta-clear">
+                                Select all
+                            </MudButton>
+                        }
                     </div>
+                }
+            </div>
 
+            @* ── Progress bar when notes exist ── *@
+            @if (!_loading && _totalOnLoad > 0)
+            {
+                var processed = _totalOnLoad - _notes.Count;
+                <div class="inbox-progress" title="@processed of @_totalOnLoad processed">
+                    <div class="inbox-progress__track">
+                        <div class="inbox-progress__fill"
+                             style="width: @((processed * 100 / _totalOnLoad).ToString())%"></div>
+                    </div>
+                    <span class="inbox-progress__label">@processed / @_totalOnLoad processed</span>
                 </div>
             }
-        </div>
-    }
 
+            @* ── Metrics strip ── *@
+            @if (_metrics is not null)
+            {
+                <div class="inbox-metrics">
+                    <div class="inbox-metric-tile">
+                        <span class="inbox-metric-tile__value @(_metrics.WaitingCount > 10 ? "inbox-metric--warn" : "")">
+                            @_metrics.WaitingCount
+                        </span>
+                        <span class="inbox-metric-tile__label">Waiting</span>
+                    </div>
+                    <div class="inbox-metric-tile">
+                        <span class="inbox-metric-tile__value">@_metrics.CapturedTodayCount</span>
+                        <span class="inbox-metric-tile__label">Captured Today</span>
+                    </div>
+                    <div class="inbox-metric-tile">
+                        <span class="inbox-metric-tile__value">
+                            @(_metrics.OldestItemAgeInDays.HasValue ? $"{_metrics.OldestItemAgeInDays}d" : "—")
+                        </span>
+                        <span class="inbox-metric-tile__label">Oldest Item</span>
+                    </div>
+                    <div class="inbox-metric-tile">
+                        <span class="inbox-metric-tile__value">
+                            @(_metrics.AvgProcessingDays.HasValue ? $"{_metrics.AvgProcessingDays:F1}d" : "—")
+                        </span>
+                        <span class="inbox-metric-tile__label">Avg. Processing</span>
+                    </div>
+                </div>
+            }
+        </aside>
+
+        @* ── Main Content ── *@
+        <main class="inbox-main">
+            @* ── Loading ── *@
+            @if (_loading)
+            {
+                <div class="inbox-state">
+                    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">Loading inbox…</MudText>
+                </div>
+            }
+
+            @* ── Empty / Zero-inbox ── *@
+            else if (_notes.Count == 0)
+            {
+                <div class="inbox-empty">
+                    <div class="inbox-empty__orbit" aria-hidden="true">
+                        <MudIcon Icon="@Icons.Material.Outlined.AllInbox" Class="inbox-empty__icon" />
+                        <span class="inbox-empty__ring inbox-empty__ring--1"></span>
+                        <span class="inbox-empty__ring inbox-empty__ring--2"></span>
+                    </div>
+                    <MudText Typo="Typo.h6" GutterBottom="true" Class="inbox-empty__headline">
+                        All clear
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-5">
+                        Every captured note has been processed. Great work.
+                    </MudText>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.NoteAdd"
+                               Href="/notes">
+                        Capture a new note
+                    </MudButton>
+                </div>
+            }
+
+            @* ── Note cards ── *@
+            else
+            {
+                <div class="inbox-list">
+                    @foreach (var note in _notes)
+                    {
+                        var isSelected = _selectedIds.Contains(note.Id);
+                        <div class="inbox-card @(_busyId == note.Id ? "inbox-card--busy" : "") @(isSelected ? "inbox-card--selected" : "")">
+
+                            <div class="inbox-card__header-row">
+                                @* Checkbox *@
+                                <label class="inbox-card__checkbox-wrap" title="Select for bulk processing">
+                                    <input type="checkbox"
+                                           class="inbox-card__checkbox"
+                                           checked="@isSelected"
+                                           disabled="@_busy"
+                                           @onchange="() => ToggleSelection(note.Id)" />
+                                    <span class="inbox-card__checkbox-box" aria-hidden="true">
+                                        @if (isSelected)
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Check" Class="inbox-card__checkbox-check" />
+                                        }
+                                    </span>
+                                </label>
+
+                                <div class="inbox-card__meta">
+                                    <span class="inbox-card__pill">Unprocessed</span>
+                                    <span class="inbox-card__date">
+                                        @note.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="inbox-card__body">
+                                <p class="inbox-card__title">@note.Title</p>
+
+                                @if (!string.IsNullOrWhiteSpace(note.Content))
+                                {
+                                    <p class="inbox-card__snippet">@TruncateContent(note.Content)</p>
+                                }
+                            </div>
+
+                            <div class="inbox-card__actions">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Check"
+                                           Disabled="_busy"
+                                           OnClick="() => ProcessNoteAsync(note)"
+                                           Class="inbox-card__btn-process">
+                                    Process
+                                </MudButton>
+
+                                <div class="inbox-card__actions-right">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                                   Size="Size.Small"
+                                                   title="Edit note"
+                                                   Disabled="_busy"
+                                                   OnClick="() => EditNoteAsync(note)"
+                                                   Class="inbox-card__btn-icon" />
+
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Archive"
+                                                   Size="Size.Small"
+                                                   title="Archive without processing"
+                                                   Disabled="_busy"
+                                                   OnClick="() => QuickArchiveAsync(note)"
+                                                   Class="inbox-card__btn-icon" />
+                                </div>
+                            </div>
+
+                        </div>
+                    }
+                </div>
+            }
+        </main>
+    </div>
 </div>
 
 <style>
     /* ── Page ── */
     .inbox-page {
-        max-width: 720px;
+        max-width: 1400px;
         margin: 0 auto;
+        padding: 1rem 0;
+    }
+
+    .inbox-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+
+    @@media (min-width: 960px) {
+        .inbox-layout {
+            grid-template-columns: 340px 1fr;
+            align-items: start;
+            gap: 3rem;
+        }
+    }
+
+    .inbox-sidebar {
+        position: sticky;
+        top: 2rem;
     }
 
     /* ── Hero ── */
     .inbox-hero {
         display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 1rem;
-        padding: 2rem 0 1.5rem;
-        flex-wrap: wrap;
+        flex-direction: column;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
     }
 
     .inbox-hero__heading-row {
@@ -281,17 +310,11 @@
         line-height: 1;
     }
 
-    .inbox-hero__cta {
-        flex-shrink: 0;
-        margin-top: 0.25rem;
-    }
-
     .inbox-hero__actions {
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        flex-shrink: 0;
-        margin-top: 0.25rem;
+        flex-wrap: wrap;
     }
 
     .inbox-hero__cta-clear {
@@ -301,13 +324,13 @@
     /* ── Progress bar ── */
     .inbox-progress {
         display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 1.75rem;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 2rem;
     }
 
     .inbox-progress__track {
-        flex: 1;
+        width: 100%;
         height: 5px;
         border-radius: 99px;
         background: var(--mud-palette-lines-default);
@@ -325,27 +348,52 @@
         font-size: 0.72rem;
         font-weight: 600;
         color: var(--mud-palette-text-secondary);
-        white-space: nowrap;
         font-family: 'Hanken Grotesk', sans-serif;
     }
 
+    /* ── Metrics strip ── */
+    .inbox-metrics {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+    }
+
+    .inbox-metric-tile {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        padding: 0.75rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .inbox-metric-tile__value {
+        font-family: 'Fraunces', serif;
+        font-size: 1.55rem;
+        font-weight: 500;
+        color: var(--mud-palette-text-secondary);
+        line-height: 1;
+    }
+
+    .inbox-metric--warn { color: var(--clay, #c0561d); }
+
+    .inbox-metric-tile__label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+    }
+
     /* ── Loading / empty states ── */
-    .inbox-state {
+    .inbox-state, .inbox-empty {
         display: flex;
         flex-direction: column;
         align-items: center;
         padding: 4rem 1rem;
         text-align: center;
         gap: 0.5rem;
-    }
-
-    .inbox-empty {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 3.5rem 1rem 2rem;
-        text-align: center;
-        gap: 0.25rem;
     }
 
     .inbox-empty__orbit {
@@ -395,27 +443,35 @@
         font-weight: 600 !important;
     }
 
-    /* ── Cards ── */
+        /* ── Cards ── */
     .inbox-list {
-        display: flex;
-        flex-direction: column;
-        gap: 0.65rem;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.5rem;
+        align-items: start;
     }
 
     .inbox-card {
         display: flex;
-        align-items: center;
-        gap: 1.25rem;
+        flex-direction: column;
         background: var(--mud-palette-surface);
         border: 1px solid var(--mud-palette-lines-default);
-        border-radius: 14px;
-        padding: 1rem 1.2rem;
-        transition: border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.2s ease;
+        border-radius: 16px;
+        padding: 1.5rem;
+        transition: border-color 0.25s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.25s cubic-bezier(0.25, 1, 0.5, 1), transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+        height: 100%;
+        animation: card-fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    @@keyframes card-fade-up {
+        0%   { opacity: 0; transform: translateY(20px); }
+        100% { opacity: 1; transform: translateY(0); }
     }
 
     .inbox-card:hover {
         border-color: rgba(192, 86, 29, 0.4);
-        box-shadow: 0 4px 16px rgba(192, 86, 29, 0.08);
+        box-shadow: 0 12px 30px rgba(192, 86, 29, 0.1);
+        transform: translateY(-4px);
     }
 
     .inbox-card--busy {
@@ -428,6 +484,13 @@
         background: rgba(192, 86, 29, 0.04);
     }
 
+    .inbox-card__header-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
     /* ── Checkbox ── */
     .inbox-card__checkbox-wrap {
         display: flex;
@@ -435,6 +498,7 @@
         justify-content: center;
         flex-shrink: 0;
         cursor: pointer;
+        position: relative;
     }
 
     .inbox-card__checkbox {
@@ -473,16 +537,10 @@
         height: 0.8rem !important;
     }
 
-    .inbox-card__body {
-        flex: 1;
-        min-width: 0;
-    }
-
     .inbox-card__meta {
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        margin-bottom: 0.35rem;
         flex-wrap: wrap;
     }
 
@@ -506,26 +564,35 @@
         font-family: 'Hanken Grotesk', sans-serif;
     }
 
+    .inbox-card__body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 1.25rem;
+    }
+
     .inbox-card__title {
         font-family: 'Fraunces', serif;
         font-weight: 600;
-        font-size: 0.975rem;
+        font-size: 1.1rem;
         color: var(--mud-palette-text-primary);
-        margin: 0 0 0.3rem;
+        margin: 0 0 0.5rem;
         line-height: 1.35;
         overflow: hidden;
         text-overflow: ellipsis;
-        white-space: nowrap;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
     }
 
     .inbox-card__snippet {
-        font-size: 0.82rem;
+        font-size: 0.85rem;
         color: var(--mud-palette-text-secondary);
         line-height: 1.55;
         margin: 0;
         overflow: hidden;
         display: -webkit-box;
-        -webkit-line-clamp: 2;
+        -webkit-line-clamp: 3;
         -webkit-box-orient: vertical;
     }
 
@@ -533,8 +600,20 @@
     .inbox-card__actions {
         display: flex;
         align-items: center;
-        gap: 0.3rem;
-        flex-shrink: 0;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-top: auto;
+        padding-top: 1rem;
+        border-top: 1px solid var(--mud-palette-lines-default);
+    }
+    
+    .inbox-card--selected .inbox-card__actions {
+        border-top-color: rgba(192, 86, 29, 0.2);
+    }
+
+    .inbox-card__actions-right {
+        display: flex;
+        gap: 0.25rem;
     }
 
     .inbox-card__btn-process {
@@ -549,61 +628,7 @@
         color: var(--mud-palette-text-primary) !important;
     }
 
-    /* ── Metrics strip ── */
-    .inbox-metrics {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.65rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .inbox-metric-tile {
-        background: var(--mud-palette-surface);
-        border: 1px solid var(--mud-palette-lines-default);
-        border-radius: 12px;
-        padding: 0.75rem 1.1rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.15rem;
-        min-width: 100px;
-    }
-
-    .inbox-metric-tile__value {
-        font-family: 'Fraunces', serif;
-        font-size: 1.55rem;
-        font-weight: 500;
-        color: var(--mud-palette-text-secondary);
-        line-height: 1;
-    }
-
-    .inbox-metric--warn { color: var(--clay, #c0561d); }
-
-    .inbox-metric-tile__label {
-        font-size: 0.68rem;
-        font-weight: 700;
-        letter-spacing: 0.07em;
-        text-transform: uppercase;
-        color: var(--mud-palette-text-disabled);
-    }
-
-    /* ── Responsive ── */
-    @@media (max-width: 540px) {
-        .inbox-card {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .inbox-card__actions {
-            width: 100%;
-            justify-content: flex-end;
-        }
-
-        .inbox-hero {
-            flex-direction: column;
-        }
-    }
 </style>
-
 @code {
     private IReadOnlyList<NoteDto> _notes = [];
     private InboxMetricsDto? _metrics;
@@ -782,3 +807,7 @@
     private static string TruncateContent(string content) =>
         content.Length <= 160 ? content : content[..160] + "…";
 }
+
+
+
+

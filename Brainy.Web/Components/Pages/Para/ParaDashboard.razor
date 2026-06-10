@@ -9,99 +9,280 @@
 
 <PageTitle>PARA Overview – Brainy</PageTitle>
 
-<div class="para-dash">
+<style>
+    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
 
-    <header class="para-dash__header">
-        <p class="para-dash__eyebrow">Second Brain Architecture</p>
-        <h1 class="para-dash__title">Your PARA Overview</h1>
-        <p class="para-dash__lead">
-            Four categories that organize everything you capture into clear, actionable knowledge.
-        </p>
-    </header>
-
-    @if (_loading)
-    {
-        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+    .para-page {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 1.5rem 0;
+        font-family: 'Hanken Grotesk', sans-serif;
     }
-    else if (_summary is not null)
-    {
-        <div class="para-dash__grid">
 
-            @* Projects *@
-            <a href="/projects" class="para-dash__card para-dash__card--project">
-                <div class="para-dash__card-accent"></div>
-                <div class="para-dash__card-body">
-                    <span class="para-dash__card-count">@_summary.ActiveProjectCount</span>
-                    <div class="para-dash__card-info">
-                        <h2 class="para-dash__card-name">Projects</h2>
-                        <p class="para-dash__card-desc">Short-term outcomes with a clear deadline and next action.</p>
+    .para-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+    }
+
+    @@media (min-width: 1024px) {
+        .para-layout {
+            grid-template-columns: 360px 1fr;
+            align-items: start;
+            gap: 4rem;
+        }
+    }
+
+    .para-sidebar {
+        position: sticky;
+        top: 2rem;
+        display: flex;
+        flex-direction: column;
+        animation: pd-fade-up 0.4s ease both;
+    }
+
+    .para-eyebrow {
+        font-size: 0.75rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 700;
+        margin: 0 0 0.5rem;
+    }
+
+    .para-title {
+        font-family: 'Fraunces', serif;
+        font-size: clamp(2.5rem, 6vw, 4.5rem);
+        font-weight: 600;
+        line-height: 1;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.02em;
+        margin: 0 0 1.5rem;
+    }
+
+    .para-lead {
+        font-size: 1.15rem;
+        line-height: 1.5;
+        color: var(--mud-palette-text-secondary);
+        border-left: 2px solid var(--mud-palette-lines-default);
+        padding-left: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .para-main {
+        animation: pd-fade-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    .para-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+
+    @@media (min-width: 1200px) {
+        .para-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+        .para-card:nth-child(2n) {
+            transform: translateY(2rem);
+        }
+        .para-card:nth-child(2n):hover {
+            transform: translateY(calc(2rem - 5px));
+        }
+    }
+
+    @@keyframes pd-fade-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .para-card {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 16px;
+        padding: 2.5rem 2rem 3rem 2rem;
+        text-decoration: none;
+        color: inherit;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    }
+
+    .para-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.05);
+        border-color: rgba(192, 86, 29, 0.25); 
+    }
+
+    .para-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 6px;
+        background: var(--mud-palette-lines-default);
+        transition: background 0.3s ease;
+    }
+
+    .para-card--project:hover::before { background: #d32f2f; }
+    .para-card--area:hover::before { background: #ed6c02; }
+    .para-card--resource:hover::before { background: #fbc02d; }
+    .para-card--archive:hover::before { background: #388e3c; }
+
+    .para-card-count {
+        font-family: 'Fraunces', serif;
+        font-size: 4rem;
+        font-weight: 300;
+        line-height: 1;
+        color: var(--mud-palette-text-disabled);
+        margin-bottom: 1rem;
+        transition: color 0.3s ease;
+    }
+
+    .para-card:hover .para-card-count {
+        color: var(--mud-palette-text-primary);
+    }
+
+    .para-card-name {
+        font-family: 'Fraunces', serif;
+        font-size: 2.25rem;
+        font-weight: 600;
+        margin: 0 0 0.5rem;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .para-card-desc {
+        font-size: 1rem;
+        color: var(--mud-palette-text-secondary);
+        margin: 0 0 1.5rem;
+        line-height: 1.4;
+    }
+
+    .para-card-archived {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        margin-top: auto;
+    }
+
+    .para-card-cta {
+        position: absolute;
+        top: 2rem;
+        right: 2rem;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 1px solid var(--mud-palette-lines-default);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--mud-palette-text-disabled);
+        transition: all 0.3s ease;
+    }
+
+    .para-card:hover .para-card-cta {
+        color: var(--mud-palette-surface);
+        background: var(--mud-palette-text-primary);
+        border-color: var(--mud-palette-text-primary);
+        transform: rotate(-45deg);
+    }
+
+    /* Staggered animation */
+    .para-grid > :nth-child(1) { animation-delay: 0.0s; }
+    .para-grid > :nth-child(2) { animation-delay: 0.1s; }
+    .para-grid > :nth-child(3) { animation-delay: 0.2s; }
+    .para-grid > :nth-child(4) { animation-delay: 0.3s; }
+    
+</style>
+
+<div class="para-page">
+    <div class="para-layout">
+
+        <aside class="para-sidebar">
+            <p class="para-eyebrow">Second Brain Architecture</p>
+            <h1 class="para-title">Your PARA Overview</h1>
+            <p class="para-lead">
+                Four categories that organize everything you capture into clear, actionable knowledge.
+            </p>
+        </aside>
+
+        <main class="para-main">
+            @if (_loading)
+            {
+                <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+            }
+            else if (_summary is not null)
+            {
+                <div class="para-grid">
+
+                    @* Projects *@
+                    <a href="/projects" class="para-card para-card--project">
+                        <span class="para-card-count">@_summary.ActiveProjectCount</span>
+                        <h2 class="para-card-name">Projects</h2>
+                        <p class="para-card-desc">Short-term outcomes with a clear deadline and next action.</p>
                         @if (_summary.ArchivedProjectCount > 0)
                         {
-                            <p class="para-dash__card-archived">@_summary.ArchivedProjectCount archived</p>
+                            <p class="para-card-archived">@_summary.ArchivedProjectCount archived</p>
                         }
-                    </div>
-                </div>
-                <span class="para-dash__card-cta">View projects &rarr;</span>
-            </a>
+                        <div class="para-card-cta">
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                        </div>
+                    </a>
 
-            @* Areas *@
-            <a href="/areas" class="para-dash__card para-dash__card--area">
-                <div class="para-dash__card-accent"></div>
-                <div class="para-dash__card-body">
-                    <span class="para-dash__card-count">@_summary.ActiveAreaCount</span>
-                    <div class="para-dash__card-info">
-                        <h2 class="para-dash__card-name">Areas</h2>
-                        <p class="para-dash__card-desc">Ongoing responsibilities you maintain without a fixed end date.</p>
+                    @* Areas *@
+                    <a href="/areas" class="para-card para-card--area">
+                        <span class="para-card-count">@_summary.ActiveAreaCount</span>
+                        <h2 class="para-card-name">Areas</h2>
+                        <p class="para-card-desc">Ongoing responsibilities you maintain without a fixed end date.</p>
                         @if (_summary.ArchivedAreaCount > 0)
                         {
-                            <p class="para-dash__card-archived">@_summary.ArchivedAreaCount archived</p>
+                            <p class="para-card-archived">@_summary.ArchivedAreaCount archived</p>
                         }
-                    </div>
-                </div>
-                <span class="para-dash__card-cta">View areas &rarr;</span>
-            </a>
+                        <div class="para-card-cta">
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                        </div>
+                    </a>
 
-            @* Resources *@
-            <a href="/resources" class="para-dash__card para-dash__card--resource">
-                <div class="para-dash__card-accent"></div>
-                <div class="para-dash__card-body">
-                    <span class="para-dash__card-count">@_summary.ActiveResourceCount</span>
-                    <div class="para-dash__card-info">
-                        <h2 class="para-dash__card-name">Resources</h2>
-                        <p class="para-dash__card-desc">Reference material and topics of interest for future use.</p>
+                    @* Resources *@
+                    <a href="/resources" class="para-card para-card--resource">
+                        <span class="para-card-count">@_summary.ActiveResourceCount</span>
+                        <h2 class="para-card-name">Resources</h2>
+                        <p class="para-card-desc">Reference material and topics of interest for future use.</p>
                         @if (_summary.ArchivedResourceCount > 0)
                         {
-                            <p class="para-dash__card-archived">@_summary.ArchivedResourceCount archived</p>
+                            <p class="para-card-archived">@_summary.ArchivedResourceCount archived</p>
                         }
-                    </div>
-                </div>
-                <span class="para-dash__card-cta">View resources &rarr;</span>
-            </a>
+                        <div class="para-card-cta">
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                        </div>
+                    </a>
 
-            @* Archives *@
-            <a href="/archives" class="para-dash__card para-dash__card--archive">
-                <div class="para-dash__card-accent"></div>
-                <div class="para-dash__card-body">
-                    <span class="para-dash__card-count">@_summary.TotalArchiveCount</span>
-                    <div class="para-dash__card-info">
-                        <h2 class="para-dash__card-name">Archives</h2>
-                        <p class="para-dash__card-desc">Inactive projects, areas, and resources kept for later reference.</p>
+                    @* Archives *@
+                    <a href="/archives" class="para-card para-card--archive">
+                        <span class="para-card-count">@_summary.TotalArchiveCount</span>
+                        <h2 class="para-card-name">Archives</h2>
+                        <p class="para-card-desc">Inactive projects, areas, and resources kept for later reference.</p>
                         @if (_summary.TotalArchiveCount > 0)
                         {
-                            <p class="para-dash__card-archived">
+                            <p class="para-card-archived">
                                 @_summary.ArchivedProjectCount&nbsp;project@(_summary.ArchivedProjectCount == 1 ? "" : "s"),
                                 @_summary.ArchivedAreaCount&nbsp;area@(_summary.ArchivedAreaCount == 1 ? "" : "s"),
                                 @_summary.ArchivedResourceCount&nbsp;resource@(_summary.ArchivedResourceCount == 1 ? "" : "s")
                             </p>
                         }
-                    </div>
+                        <div class="para-card-cta">
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                        </div>
+                    </a>
+
                 </div>
-                <span class="para-dash__card-cta">Browse archives &rarr;</span>
-            </a>
+            }
+        </main>
 
-        </div>
-    }
-
+    </div>
 </div>
 
 @code {
@@ -114,3 +295,4 @@
         _loading = false;
     }
 }
+

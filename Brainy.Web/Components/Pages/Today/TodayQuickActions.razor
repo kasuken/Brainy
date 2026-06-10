@@ -7,6 +7,13 @@
 <div class="td-section" style="display:flex; gap:0.5rem; flex-wrap:wrap; padding-bottom:0.5rem;">
 
     <MudButton Variant="Variant.Outlined" Size="Size.Small"
+               StartIcon="@Icons.Material.Outlined.AddTask"
+               Style="border-color:var(--line-strong); color:var(--ink-soft); font-size:0.78rem;"
+               OnClick="() => OnAddTask.InvokeAsync()">
+        New Task
+    </MudButton>
+
+    <MudButton Variant="Variant.Outlined" Size="Size.Small"
                StartIcon="@Icons.Material.Outlined.TaskAlt"
                Style="border-color:var(--line-strong); color:var(--ink-soft); font-size:0.78rem;"
                OnClick="@(() => Nav.NavigateTo("/projects"))">
@@ -35,3 +42,7 @@
     </MudButton>
 
 </div>
+
+@code {
+    [Parameter] public EventCallback OnAddTask { get; set; }
+}

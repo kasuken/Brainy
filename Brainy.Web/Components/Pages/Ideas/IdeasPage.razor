@@ -11,525 +11,452 @@
 
 <PageTitle>Ideas — Brainy</PageTitle>
 
-<div class="idea-page">
-
-    <!-- ── Header ──────────────────────────────────────────────────────── -->
-    <div class="idea-header">
-        <div class="idea-header__text">
-            <h1 class="idea-header__title">Ideas</h1>
-            <p class="idea-header__sub">
-                @(_ideas?.Count ?? 0) ideas · @(_filtered?.Count ?? 0) shown
-            </p>
-        </div>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.Add"
-                   Class="idea-header__new"
-                   OnClick="OpenCreateDialog">
-            New Idea
-        </MudButton>
-    </div>
-
-    <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
-    <div class="idea-toolbar">
-        <div class="idea-search">
-            <MudIcon Icon="@Icons.Material.Outlined.Search" Class="idea-search__icon" />
-            <input class="idea-search__input"
-                   placeholder="Search ideas…"
-                   value="@_searchText"
-                   @oninput="OnSearchInput" />
-            @if (!string.IsNullOrEmpty(_searchText))
-            {
-                <button class="idea-search__clear" @onclick="ClearSearch">✕</button>
-            }
-        </div>
-
-        <div class="idea-filters">
-            <span class="idea-filter-label">Priority</span>
-            @foreach (IdeaPriority p in Enum.GetValues<IdeaPriority>())
-            {
-                <button class="idea-chip @(_priorityFilter == p ? "idea-chip--on" : "")"
-                        @onclick="() => SetPriorityFilter(p)">
-                    @p.ToString()
-                </button>
-            }
-
-            @if (!_showArchived)
-            {
-                <span class="idea-filter-sep">|</span>
-                <span class="idea-filter-label">Status</span>
-                @foreach (IdeaStatus s in Enum.GetValues<IdeaStatus>().Where(s => s != IdeaStatus.Archived))
-                {
-                    <button class="idea-chip @(_statusFilter == s ? "idea-chip--on" : "")"
-                            @onclick="() => SetStatusFilter(s)">
-                        @FormatStatus(s)
-                    </button>
-                }
-            }
-        </div>
-
-        <div class="idea-sort-row">
-            <button class="idea-chip @(_showArchived ? "idea-chip--on" : "")"
-                    @onclick="ToggleArchived">
-                <MudIcon Icon="@Icons.Material.Outlined.Archive" Style="font-size:.85rem" />
-                Show Archived
-            </button>
-        </div>
-    </div>
-
-    <!-- ── Content ──────────────────────────────────────────────────────── -->
-    @if (_loading)
-    {
-        <div class="idea-loading">
-            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
-            <span class="idea-loading__text">Loading ideas…</span>
-        </div>
-    }
-    else if (_filtered is { Count: 0 })
-    {
-        <div class="idea-empty">
-            <div class="idea-empty__glyph">✦</div>
-            <p class="idea-empty__title">
-                @(_ideas?.Count == 0 ? "No ideas yet" : "Nothing matches")
-            </p>
-            <p class="idea-empty__sub">
-                @(_ideas?.Count == 0
-                    ? "Capture every spark — great projects start as a single idea."
-                    : "Try broadening your search or clearing filters.")
-            </p>
-            @if (_ideas?.Count == 0)
-            {
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Add"
-                           OnClick="OpenCreateDialog">
-                    Capture your first idea
-                </MudButton>
-            }
-        </div>
-    }
-    else
-    {
-        <div class="idea-table-wrap">
-            <table class="idea-table">
-                <thead>
-                    <tr>
-                        <th>Title</th>
-                        <th>Area</th>
-                        <th>Priority</th>
-                        <th>Status</th>
-                        <th>Updated</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var idea in _filtered ?? [])
-                    {
-                        <tr class="idea-row">
-                            <td>
-                                <div class="idea-row__title">@idea.Title</div>
-                                @if (!string.IsNullOrWhiteSpace(idea.Description))
-                                {
-                                    <div class="idea-row__desc">
-                                        @(idea.Description!.Length > 80
-                                            ? idea.Description[..80] + "…"
-                                            : idea.Description)
-                                    </div>
-                                }
-                            </td>
-                            <td>
-                                <span class="idea-row__area">@(idea.AreaName ?? "—")</span>
-                            </td>
-                            <td>
-                                <span class="idea-badge idea-badge--@idea.Priority.ToString().ToLowerInvariant()">
-                                    @idea.Priority.ToString()
-                                </span>
-                            </td>
-                            <td>
-                                <span class="idea-badge idea-badge--status-@StatusCssKey(idea.Status)">
-                                    @FormatStatus(idea.Status)
-                                </span>
-                            </td>
-                            <td>
-                                <span class="idea-row__date">
-                                    @idea.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
-                                </span>
-                            </td>
-                            <td>
-                                <div class="idea-row__actions">
-                                    <!-- Edit -->
-                                    <button class="idea-action-btn" title="Edit"
-                                            @onclick="() => OpenEditDialog(idea)">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                        </svg>
-                                    </button>
-
-                                    <!-- Convert to Project (only for active, non-converted ideas) -->
-                                    @if (!idea.IsArchived && idea.Status != IdeaStatus.ConvertedToProject)
-                                    {
-                                        <button class="idea-action-btn idea-action-btn--convert" title="Convert to Project"
-                                                @onclick="() => ConfirmConvert(idea)">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                                                <polyline points="22 4 12 14.01 9 11.01"/>
-                                            </svg>
-                                        </button>
-                                    }
-
-                                    <!-- Archive / Restore -->
-                                    @if (idea.IsArchived)
-                                    {
-                                        <button class="idea-action-btn idea-action-btn--restore" title="Restore"
-                                                @onclick="() => ConfirmRestore(idea)">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                <polyline points="1 4 1 10 7 10"/>
-                                                <path d="M3.51 15a9 9 0 1 0 .49-4.5"/>
-                                            </svg>
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <button class="idea-action-btn idea-action-btn--archive" title="Archive"
-                                                @onclick="() => ConfirmArchive(idea)">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                <polyline points="21 8 21 21 3 21 3 8"/>
-                                                <rect x="1" y="3" width="22" height="5"/>
-                                                <line x1="10" y1="12" x2="14" y2="12"/>
-                                            </svg>
-                                        </button>
-                                    }
-
-                                    <!-- Delete -->
-                                    <button class="idea-action-btn idea-action-btn--delete" title="Delete"
-                                            @onclick="() => ConfirmDelete(idea)">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <polyline points="3 6 5 6 21 6"/>
-                                            <path d="M19 6l-1 14H6L5 6"/>
-                                            <path d="M10 11v6M14 11v6"/>
-                                            <path d="M9 6V4h6v2"/>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-</div>
-
 <style>
-/* ═══════════════════════════════════════════════════════════════════════════
-   Ideas page — "Archival Mind" design system
-   ═══════════════════════════════════════════════════════════════════════════ */
+    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
 
-.idea-page {
-    font-family: var(--font-body);
-    padding-bottom: 3rem;
-}
+    .ip-page {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 1.5rem 0;
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
 
-/* Header */
-.idea-header {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
-}
-.idea-header__title {
-    font-family: var(--font-display);
-    font-size: clamp(2rem, 4vw, 2.75rem);
-    font-weight: 500;
-    color: var(--ink);
-    margin: 0 0 .15rem;
-    letter-spacing: -.02em;
-    line-height: 1;
-}
-.idea-header__sub {
-    font-size: .8rem;
-    color: var(--ink-faint);
-    margin: 0;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-}
-.idea-header__new {
-    flex-shrink: 0;
-}
+    .ip-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+    }
 
-/* Toolbar */
-.idea-toolbar {
-    display: flex;
-    flex-direction: column;
-    gap: .75rem;
-    margin-bottom: 1.75rem;
-    padding: 1rem 1.25rem;
-    background: var(--paper-raised);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    box-shadow: var(--shadow-sm);
-}
+    @@media (min-width: 1024px) {
+        .ip-layout {
+            grid-template-columns: 360px 1fr;
+            align-items: start;
+            gap: 4rem;
+        }
+    }
 
-/* Search */
-.idea-search {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-}
-.idea-search__icon {
-    color: var(--ink-faint);
-    font-size: 1.1rem !important;
-    flex-shrink: 0;
-}
-.idea-search__input {
-    flex: 1;
-    border: none;
-    background: transparent;
-    font-family: var(--font-body);
-    font-size: .95rem;
-    color: var(--ink);
-    outline: none;
-    padding: .25rem 0;
-    border-bottom: 1.5px solid var(--line);
-    transition: border-color .2s;
-}
-.idea-search__input:focus { border-bottom-color: var(--clay); }
-.idea-search__input::placeholder { color: var(--ink-faint); }
-.idea-search__clear {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--ink-faint);
-    font-size: .85rem;
-    padding: .15rem .3rem;
-    border-radius: 4px;
-    transition: color .15s;
-}
-.idea-search__clear:hover { color: var(--clay); }
+    /* ── Sidebar ── */
+    .ip-sidebar {
+        position: sticky;
+        top: 2rem;
+        display: flex;
+        flex-direction: column;
+        animation: ip-fade-up 0.4s ease both;
+    }
 
-/* Filter row */
-.idea-filters {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .4rem;
-}
-.idea-filter-label {
-    font-size: .7rem;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-    font-weight: 600;
-    margin-right: .2rem;
-}
-.idea-filter-sep {
-    color: var(--line-strong);
-    margin: 0 .2rem;
-    font-size: .85rem;
-}
+    @@keyframes ip-fade-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
 
-/* Chips */
-.idea-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: .35rem;
-    padding: .28rem .7rem;
-    border-radius: 999px;
-    border: 1.5px solid var(--line);
-    background: transparent;
-    font-family: var(--font-body);
-    font-size: .78rem;
-    font-weight: 500;
-    color: var(--ink-soft);
-    cursor: pointer;
-    transition: border-color .15s, background .15s, color .15s;
-}
-.idea-chip:hover {
-    border-color: var(--clay);
-    color: var(--clay);
-}
-.idea-chip--on {
-    border-color: var(--clay);
-    background: color-mix(in srgb, var(--clay) 10%, transparent);
-    color: var(--clay);
-    font-weight: 600;
-}
+    .ip-eyebrow {
+        font-size: 0.75rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 700;
+        margin: 0 0 0.5rem;
+    }
 
-/* Sort / archive row */
-.idea-sort-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .4rem;
-    border-top: 1px solid var(--line);
-    padding-top: .65rem;
-}
+    .ip-title {
+        font-family: 'Fraunces', serif;
+        font-size: clamp(2.5rem, 6vw, 4rem);
+        font-weight: 600;
+        line-height: 1;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.02em;
+        margin: 0 0 0.5rem;
+    }
 
-/* Loading / empty */
-.idea-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    padding: 5rem 0;
-}
-.idea-loading__text { color: var(--ink-faint); font-size: .9rem; }
+    .ip-meta {
+        font-size: 0.85rem;
+        color: var(--mud-palette-text-secondary);
+        margin: 0 0 2rem;
+        font-weight: 500;
+    }
 
-.idea-empty {
-    text-align: center;
-    padding: 5rem 1rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: .75rem;
-}
-.idea-empty__glyph {
-    font-size: 3.5rem;
-    line-height: 1;
-    opacity: .18;
-    color: var(--clay);
-    font-family: var(--font-display);
-}
-.idea-empty__title {
-    font-family: var(--font-display);
-    font-size: 1.4rem;
-    color: var(--ink);
-    margin: 0;
-    font-weight: 500;
-}
-.idea-empty__sub { color: var(--ink-faint); font-size: .9rem; margin: 0; max-width: 40ch; }
+    .ip-widget {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+    }
+    
+    .ip-filter-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 1.25rem;
+    }
 
-/* Table */
-.idea-table-wrap {
-    background: var(--paper-raised);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    overflow: hidden;
-    box-shadow: var(--shadow-sm);
-}
-.idea-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: var(--font-body);
-}
-.idea-table th {
-    font-size: .7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    color: var(--ink-faint);
-    padding: .75rem 1rem;
-    text-align: left;
-    background: var(--paper-sunk);
-    border-bottom: 1px solid var(--line);
-    white-space: nowrap;
-}
-.idea-table td {
-    padding: .75rem 1rem;
-    border-bottom: 1px solid var(--line);
-    vertical-align: middle;
-}
-.idea-table tbody tr:last-child td { border-bottom: none; }
-.idea-table tbody tr { transition: background .15s; }
-.idea-table tbody tr:hover { background: var(--paper-sunk); }
+    .ip-filter-label {
+        width: 100%;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        margin-bottom: 0.5rem;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        padding-bottom: 0.35rem;
+    }
 
-.idea-row__title {
-    font-family: var(--font-display);
-    font-style: italic;
-    font-size: .95rem;
-    font-weight: 500;
-    color: var(--ink);
-    line-height: 1.3;
-}
-.idea-table tbody tr:hover .idea-row__title { color: var(--clay); }
-.idea-row__desc {
-    font-size: .78rem;
-    color: var(--ink-faint);
-    margin-top: .15rem;
-    line-height: 1.4;
-}
-.idea-row__area {
-    font-size: .82rem;
-    color: var(--ink-soft);
-    white-space: nowrap;
-}
-.idea-row__date {
-    font-size: .8rem;
-    color: var(--ink-faint);
-    white-space: nowrap;
-}
+    .ip-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 8px;
+        background: var(--mud-palette-table-lines);
+        border: 1px solid transparent;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-secondary);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
 
-/* Priority / Status badges */
-.idea-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: .18rem .6rem;
-    border-radius: 999px;
-    font-size: .72rem;
-    font-weight: 600;
-    letter-spacing: .03em;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
+    .ip-chip:hover {
+        background: var(--mud-palette-surface);
+        border-color: var(--mud-palette-lines-default);
+    }
 
-/* Priority */
-.idea-badge--low      { background: var(--paper-sunk); color: var(--ink-soft); }
-.idea-badge--medium   { background: color-mix(in srgb, #0ea5e9 12%, transparent); color: #0369a1; }
-.idea-badge--high     { background: color-mix(in srgb, #f59e0b 12%, transparent); color: #92400e; }
-.idea-badge--critical { background: color-mix(in srgb, #ef4444 12%, transparent); color: #b91c1c; }
+    .ip-chip--on {
+        background: rgba(192, 86, 29, 0.1);
+        border-color: rgba(192, 86, 29, 0.3);
+        color: var(--clay, #c0561d);
+    }
 
-/* Status */
-.idea-badge--status-captured   { background: var(--paper-sunk); color: var(--ink-soft); }
-.idea-badge--status-researching { background: color-mix(in srgb, #0ea5e9 12%, transparent); color: #0369a1; }
-.idea-badge--status-validating  { background: color-mix(in srgb, #f59e0b 12%, transparent); color: #92400e; }
-.idea-badge--status-planned     { background: color-mix(in srgb, var(--clay) 12%, transparent); color: var(--clay); }
-.idea-badge--status-rejected    { background: color-mix(in srgb, #ef4444 12%, transparent); color: #b91c1c; }
-.idea-badge--status-converted   { background: color-mix(in srgb, #22c55e 12%, transparent); color: #15803d; }
-.idea-badge--status-archived    { background: var(--paper-sunk); color: var(--ink-faint); }
+    /* ── Main Area ── */
+    .ip-main {
+        animation: ip-fade-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
 
-/* Row action buttons */
-.idea-row__actions {
-    display: flex;
-    gap: .2rem;
-    opacity: 0;
-    transition: opacity .15s;
-    justify-content: flex-end;
-}
-.idea-table tbody tr:hover .idea-row__actions { opacity: 1; }
+    /* Table styling */
+    .ip-table-wrapper {
+        border-radius: 14px;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.02);
+    }
+    
+    .ip-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+    }
+    
+    .ip-table th {
+        padding: 1rem 1.25rem;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 800;
+        border-bottom: 2px solid var(--mud-palette-lines-default);
+        background: var(--mud-palette-table-lines);
+    }
+    
+    .ip-table td {
+        padding: 1.5rem 1.25rem;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        vertical-align: top;
+    }
+    
+    .ip-row {
+        transition: background 0.2s ease;
+        position: relative;
+    }
+    
+    .ip-row:hover {
+        background: rgba(192, 86, 29, 0.02);
+    }
 
-.idea-action-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    border: 1px solid var(--line);
-    background: var(--paper-raised);
-    cursor: pointer;
-    color: var(--ink-soft);
-    transition: background .15s, color .15s, border-color .15s;
-    flex-shrink: 0;
-}
-.idea-action-btn svg { width: 14px; height: 14px; }
-.idea-action-btn:hover           { background: var(--paper-sunk); color: var(--ink); border-color: var(--line-strong); }
-.idea-action-btn--convert:hover  { color: #15803d; border-color: #15803d; }
-.idea-action-btn--archive:hover  { color: var(--clay); border-color: var(--clay); }
-.idea-action-btn--restore:hover  { color: var(--sage); border-color: var(--sage); }
-.idea-action-btn--delete:hover   { color: #b03a18; border-color: #b03a18; }
+    .ip-row:last-child td {
+        border-bottom: none;
+    }
 
-@@media (max-width: 640px) {
-    .idea-toolbar { padding: .85rem 1rem; }
-    .idea-table th:nth-child(2),
-    .idea-table td:nth-child(2),
-    .idea-table th:nth-child(5),
-    .idea-table td:nth-child(5) { display: none; }
-    .idea-row__actions { opacity: 1; }
-}
+    .ip-row-title {
+        font-family: 'Fraunces', serif;
+        font-size: 1.35rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        margin: 0 0 0.5rem;
+        line-height: 1.2;
+    }
+    
+    .ip-row-desc {
+        color: var(--mud-palette-text-secondary);
+        font-size: 0.95rem;
+        line-height: 1.5;
+        max-width: 50ch;
+        margin: 0;
+    }
+
+    .ip-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        white-space: nowrap;
+    }
+    
+    .ip-badge-area {
+        background: var(--mud-palette-table-lines);
+        color: var(--mud-palette-text-secondary);
+        border: 1px solid var(--mud-palette-lines-default);
+    }
+    
+    .ip-priority--high { color: #d32f2f; background: rgba(211, 47, 47, 0.1); border: 1px solid rgba(211, 47, 47, 0.2); }
+    .ip-priority--medium { color: #ed6c02; background: rgba(237, 108, 2, 0.1); border: 1px solid rgba(237, 108, 2, 0.2); }
+    .ip-priority--low { color: var(--mud-palette-text-secondary); background: var(--mud-palette-table-lines); border: 1px solid var(--mud-palette-lines-default); }
+
+    .ip-status--new { background: var(--mud-palette-table-lines); color: var(--mud-palette-text-secondary); }
+    .ip-status--reviewing { background: rgba(111,122,90,.14); color: #4a5c38; }
+    .ip-status--convertedtoproject { background: rgba(192,86,29,.10); color: var(--clay-deep, #c0561d); }
+    .ip-status--archived { background: var(--mud-palette-table-lines); color: var(--mud-palette-text-disabled); }
+
+    .ip-actions {
+        display: flex;
+        gap: 0.4rem;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+    
+    .ip-row:hover .ip-actions {
+        opacity: 1;
+    }
+    
+    .ip-btn-action {
+        width: 36px; height: 36px;
+        border-radius: 8px;
+        border: 1px solid var(--mud-palette-lines-default);
+        background: var(--mud-palette-surface);
+        display: flex; align-items: center; justify-content: center;
+        color: var(--mud-palette-text-secondary);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .ip-btn-action:hover {
+        color: var(--mud-palette-text-primary);
+        border-color: var(--mud-palette-text-primary);
+    }
+    
+    .ip-btn-action--convert {
+        color: var(--clay, #c0561d);
+        border-color: rgba(192, 86, 29, 0.3);
+    }
+    .ip-btn-action--convert:hover {
+        background: var(--clay, #c0561d);
+        color: white;
+        border-color: var(--clay, #c0561d);
+    }
+    
+    .ip-btn-action--delete:hover {
+        border-color: #d32f2f;
+        color: #d32f2f;
+    }
 </style>
+
+<div class="ip-page">
+    <div class="ip-layout">
+
+        @* ── Sidebar ── *@
+        <aside class="ip-sidebar">
+            <p class="ip-eyebrow">Inspiration</p>
+            <h1 class="ip-title">Ideas</h1>
+            <p class="ip-meta">@(_ideas?.Count ?? 0) ideas total · @(_filtered?.Count ?? 0) shown</p>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Size="Size.Large"
+                       Class="mb-6"
+                       Style="font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; border-radius: 8px;"
+                       FullWidth="true"
+                       OnClick="OpenCreateDialog">
+                New Idea
+            </MudButton>
+
+            <div class="ip-widget">
+                <MudTextField @bind-Value="_searchText"
+                              Placeholder="Search ideas…"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Outlined.Search"
+                              Clearable="true"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              OnKeyDown="@(() => ApplyFilter())"
+                              OnKeyUp="@(() => ApplyFilter())"    
+                              Class="mb-5" />
+
+                <div class="ip-filter-label">Priority</div>
+                <div class="ip-filter-group">
+                    @foreach (IdeaPriority p in Enum.GetValues<IdeaPriority>())
+                    {
+                        <button class="ip-chip @(_priorityFilter == p ? "ip-chip--on" : "")"
+                                @onclick="() => SetPriorityFilter(p)">
+                            @p.ToString()
+                        </button>
+                    }
+                </div>
+
+                @if (!_showArchived)
+                {
+                    <div class="ip-filter-label">Status</div>
+                    <div class="ip-filter-group">
+                        @foreach (IdeaStatus s in Enum.GetValues<IdeaStatus>().Where(s => s != IdeaStatus.Archived))
+                        {
+                            <button class="ip-chip @(_statusFilter == s ? "ip-chip--on" : "")"
+                                    @onclick="() => SetStatusFilter(s)">
+                                @FormatStatus(s)
+                            </button>
+                        }
+                    </div>
+                }
+
+                <div class="ip-filter-label">View</div>
+                <div class="ip-filter-group" style="margin-bottom:0;">
+                    <button class="ip-chip @(_showArchived ? "ip-chip--on" : "")"
+                            @onclick="ToggleArchived">
+                        <MudIcon Icon="@Icons.Material.Outlined.Archive" Style="font-size:.85rem; margin-right:4px;" />
+                        Show Archived
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        @* ── Main Layout ── *@
+        <main class="ip-main">
+            @if (_loading)
+            {
+                <div style="padding: 5rem 0; text-align: center;">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                    <p style="margin-top: 1rem; color: var(--mud-palette-text-disabled); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem;">Loading ideas…</p>
+                </div>
+            }
+            else if (_filtered is { Count: 0 })
+            {
+                <div style="padding: 5rem 2rem; display: flex; flex-direction: column; align-items: center; text-align: center; border: 1px dashed var(--mud-palette-lines-default); border-radius: 16px; background: var(--mud-palette-table-lines);">
+                    <MudIcon Icon="@Icons.Material.Outlined.Lightbulb" Style="font-size:4rem; color: var(--mud-palette-text-disabled); margin-bottom: 1.5rem;" />
+                    <h2 style="font-family: 'Fraunces', serif; font-size: 1.75rem; margin: 0 0 0.5rem; color: var(--mud-palette-text-primary);">
+                        @(_ideas?.Count == 0 ? "No ideas yet" : "Nothing matches")
+                    </h2>
+                    <p style="color: var(--mud-palette-text-secondary); margin: 0 0 2rem; max-width: 400px;">
+                        @(_ideas?.Count == 0
+                            ? "Capture every spark — great projects start as a single idea."
+                            : "Try broadening your search or clearing filters.")
+                    </p>
+                    @if (_ideas?.Count == 0)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="OpenCreateDialog">
+                            Capture your first idea
+                        </MudButton>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="ip-table-wrapper">
+                    <table class="ip-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Area</th>
+                                <th>Priority</th>
+                                <th>Status</th>
+                                <th style="text-align:right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var idea in _filtered ?? [])
+                            {
+                                <tr class="ip-row">
+                                    <td>
+                                        <div class="ip-row-title">@idea.Title</div>
+                                        @if (!string.IsNullOrWhiteSpace(idea.Description))
+                                        {
+                                            <p class="ip-row-desc">
+                                                @(idea.Description!.Length > 100
+                                                    ? idea.Description[..100] + "…"
+                                                    : idea.Description)
+                                            </p>
+                                        }
+                                        <div style="margin-top:0.75rem; color:var(--mud-palette-text-disabled); font-size:0.75rem;">
+                                            @idea.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="ip-badge ip-badge-area">@(idea.AreaName ?? "—")</span>
+                                    </td>
+                                    <td>
+                                        <span class="ip-badge ip-priority--@idea.Priority.ToString().ToLowerInvariant()">
+                                            @idea.Priority.ToString()
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="ip-badge ip-status--@idea.Status.ToString().ToLowerInvariant()">
+                                            @FormatStatus(idea.Status)
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="ip-actions" style="justify-content:flex-end;">
+                                            <!-- Edit -->
+                                            <button class="ip-btn-action" title="Edit" @onclick="() => OpenEditDialog(idea)">
+                                                <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
+                                            </button>
+
+                                            <!-- Convert to Project -->
+                                            @if (!idea.IsArchived && idea.Status != IdeaStatus.ConvertedToProject)
+                                            {
+                                                <button class="ip-btn-action ip-btn-action--convert" title="Convert to Project"
+                                                        @onclick="() => ConfirmConvert(idea)">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.AccountTree" Size="Size.Small" />
+                                                </button>
+                                            }
+
+                                            <!-- Archive / Restore -->
+                                            @if (idea.IsArchived)
+                                            {
+                                                <button class="ip-btn-action" title="Restore"
+                                                        @onclick="() => ConfirmRestore(idea)">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.RestorePage" Size="Size.Small" />
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button class="ip-btn-action" title="Archive"
+                                                        @onclick="() => ConfirmArchive(idea)">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
+                                                </button>
+                                            }
+
+                                            <!-- Delete -->
+                                            <button class="ip-btn-action ip-btn-action--delete" title="Delete"
+                                                    @onclick="() => ConfirmDelete(idea)">
+                                                <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </main>
+    </div>
+</div>
 
 @code {
     private bool _loading = true;
@@ -730,3 +657,4 @@
         _ => status.ToString()
     };
 }
+

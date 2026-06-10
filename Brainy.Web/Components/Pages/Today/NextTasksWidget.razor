@@ -38,6 +38,11 @@
                             }
                         </div>
                     </div>
+                    <MudTooltip Text="Edit task">
+                        <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                       Size="Size.Small" Color="Color.Default"
+                                       OnClick="() => OnEdit.InvokeAsync(t)" />
+                    </MudTooltip>
                 </div>
             }
 
@@ -68,6 +73,9 @@
 
     /// <summary>Tasks due 7–21 days from today.</summary>
     [Parameter] public IReadOnlyList<TodayTaskItemDto> Tasks { get; set; } = [];
+
+    /// <summary>Raised with the selected task when the user wants to edit it.</summary>
+    [Parameter] public EventCallback<TodayTaskItemDto> OnEdit { get; set; }
 
     /// <summary>Initial collapsed state, managed locally after first render.</summary>
     [Parameter] public bool Collapsed { get; set; }

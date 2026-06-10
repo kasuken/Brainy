@@ -1,0 +1,21 @@
+{
+  "name": "brainy",
+  "version": "1.0.0",
+  "description": "A SaaS second-brain app built on .NET 10, Blazor, MudBlazor, and SQL Server.  \r Inspired by Tiago Forte's PARA method and CODE workflow.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kasuken/Brainy.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kasuken/Brainy/issues"
+  },
+  "homepage": "https://github.com/kasuken/Brainy#readme"
+}

@@ -21,813 +21,564 @@
 
 <PageTitle>Archives — Brainy</PageTitle>
 
+<style>
+    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
+
+    .arc-page {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 1.5rem 0;
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
+
+    .arc-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+    }
+
+    @@media (min-width: 1024px) {
+        .arc-layout {
+            grid-template-columns: 360px 1fr;
+            align-items: start;
+            gap: 4rem;
+        }
+    }
+
+    /* ── Sidebar ── */
+    .arc-sidebar {
+        position: sticky;
+        top: 2rem;
+        display: flex;
+        flex-direction: column;
+        animation: arc-fade-up 0.4s ease both;
+    }
+
+    @@keyframes arc-fade-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .arc-eyebrow {
+        font-size: 0.75rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 700;
+        margin: 0 0 0.5rem;
+    }
+
+    .arc-title {
+        font-family: 'Fraunces', serif;
+        font-size: clamp(2.5rem, 6vw, 4rem);
+        font-weight: 400;
+        line-height: 1;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.02em;
+        margin: 0 0 0.5rem;
+    }
+
+    .arc-meta {
+        font-size: 0.85rem;
+        color: var(--mud-palette-text-secondary);
+        margin: 0 0 2rem;
+        font-weight: 500;
+    }
+
+    .arc-widget {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+    }
+    
+    .arc-filter-label {
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        margin-bottom: 0.5rem;
+        margin-top: 1.25rem;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        padding-bottom: 0.35rem;
+    }
+
+    .arc-filter-label:first-of-type {
+        margin-top: 0;
+    }
+
+    .arc-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+
+    .arc-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 8px;
+        background: var(--mud-palette-table-lines);
+        border: 1px solid transparent;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-secondary);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .arc-chip:hover {
+        background: var(--mud-palette-surface);
+        border-color: var(--mud-palette-lines-default);
+    }
+
+    .arc-chip--on {
+        background: var(--mud-palette-text-primary);
+        color: var(--mud-palette-surface);
+        border-color: var(--mud-palette-text-primary);
+    }
+
+    /* ── Main Area ── */
+    .arc-main {
+        animation: arc-fade-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    .arc-section-title {
+        font-family: 'Fraunces', serif;
+        font-size: 2rem;
+        font-weight: 500;
+        margin: 0 0 1rem;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.01em;
+    }
+
+    /* ── Ledger ── */
+    .arc-ledger {
+        display: flex;
+        flex-direction: column;
+        border-top: 3px solid var(--mud-palette-text-primary);
+        margin-bottom: 3rem;
+    }
+
+    .arc-row-in {
+        animation: arc-card-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    @@keyframes arc-card-in {
+        from { opacity: 0; transform: translateY(10px) scale(0.99); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .arc-ledger-item {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        padding: 1.25rem 0;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        transition: background 0.3s ease;
+        position: relative;
+    }
+
+    @@media (min-width: 768px) {
+        .arc-ledger-item {
+            grid-template-columns: 100px 1fr auto;
+            align-items: start;
+        }
+    }
+
+    .arc-ledger-item:hover {
+        background: rgba(0,0,0,0.01);
+    }
+
+    .arc-item-type {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        padding-top: 0.25rem;
+    }
+
+    .arc-item-body {
+        min-width: 0;
+    }
+
+    .arc-item-name {
+        font-family: 'Fraunces', serif;
+        font-size: 1.35rem;
+        font-weight: 500;
+        line-height: 1.2;
+        color: var(--mud-palette-text-primary);
+        margin: 0 0 0.25rem;
+        text-decoration: none;
+    }
+
+    .arc-item-desc {
+        font-size: 0.9rem;
+        color: var(--mud-palette-text-secondary);
+        margin: 0;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .arc-item-meta {
+        font-size: 0.75rem;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 500;
+        margin-top: 0.5rem;
+    }
+
+    .arc-item-actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-start;
+    }
+
+    /* ── Retention Section ── */
+    .arc-retention-box {
+        background: var(--mud-palette-table-lines);
+        border: 1px dashed var(--mud-palette-lines-default);
+        border-radius: 12px;
+        padding: 2rem;
+        margin-top: 4rem;
+        animation: arc-fade-up 0.8s ease both;
+    }
+
+    .arc-retention-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        width: 100%;
+        background: none;
+        border: none;
+        padding: 0;
+        text-align: left;
+    }
+
+    .arc-retention-title {
+        font-family: 'Fraunces', serif;
+        font-size: 1.5rem;
+        font-weight: 500;
+        color: var(--mud-palette-text-primary);
+        margin: 0;
+    }
+
+    .arc-retention-body {
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid var(--mud-palette-lines-default);
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .arc-retention-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .arc-retention-card {
+        background: var(--mud-palette-surface);
+        padding: 1.25rem;
+        border-radius: 10px;
+        border: 1px solid var(--mud-palette-lines-default);
+    }
+    
+    .arc-retention-card-title {
+        font-weight: 700;
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        padding-bottom: 0.5rem;
+    }
+
+</style>
+
 <div class="arc-page">
-    <div class="arc-header">
-        <div class="arc-header__eyebrow">PARA · Archive</div>
-        <h1 class="arc-header__title">Archives</h1>
-        <p class="arc-header__sub">
+    <div class="arc-layout">
+
+        @* ── Sidebar ── *@
+        <aside class="arc-sidebar">
+            <p class="arc-eyebrow">Vault</p>
+            <h1 class="arc-title">Archives</h1>
+            
+            <p class="arc-meta">
+                @if (_loading)
+                {
+                    <span>Loading…</span>
+                }
+                else
+                {
+                    <span>@_allItems.Count total items</span>
+                    @if (_goals.Count > 0)
+                    {
+                        <span> · @_goals.Count goals</span>
+                    }
+                }
+            </p>
+
+            <div class="arc-widget">
+                <MudTextField @bind-Value="_search"
+                              Placeholder="Search archives…"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Outlined.Search"
+                              Clearable="true"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              OnKeyDown="@((e) => ApplyFilter())"
+                              OnKeyUp="@((e) => ApplyFilter())"
+                              OnClearButtonClick="@(() => ClearSearch())"
+                              Class="mb-5" />
+
+                <div class="arc-filter-label">Entity Type</div>
+                <div class="arc-chips">
+                    @foreach (var type in TypeFilters)
+                    {
+                        <button type="button"
+                                class="arc-chip @(type == _typeFilter ? "arc-chip--on" : "")"
+                                @onclick="() => SetTypeFilter(type)">
+                            @type
+                        </button>
+                    }
+                </div>
+
+                <div class="arc-filter-label">Date Range</div>
+                <div style="display:flex; flex-direction:column; gap:0.5rem;">
+                    <MudDatePicker Label="Archived from"
+                                   Date="_dateFrom"
+                                   DateChanged="OnDateFromChanged"
+                                   Clearable="true"
+                                   Editable="false"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense" />
+
+                    <MudDatePicker Label="Archived to"
+                                   Date="_dateTo"
+                                   DateChanged="OnDateToChanged"
+                                   Clearable="true"
+                                   Editable="false"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense" />
+                </div>
+
+                @if (HasActiveFilters)
+                {
+                    <div style="margin-top: 1.5rem; border-top: 1px solid var(--mud-palette-lines-default); padding-top: 1rem;">
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Error"
+                                   FullWidth="true"
+                                   Size="Size.Small"
+                                   OnClick="ClearFilters">
+                            Clear filters
+                        </MudButton>
+                    </div>
+                }
+            </div>
+        </aside>
+
+        @* ── Main Layout ── *@
+        <main class="arc-main">
             @if (_loading)
             {
-                <span>Loading archived items…</span>
+                <div style="padding: 5rem 0; text-align: center;">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                    <p style="margin-top: 1rem; color: var(--mud-palette-text-disabled); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem;">Accessing the vault…</p>
+                </div>
             }
             else
             {
-                <span>@_allItems.Count archived item@(_allItems.Count != 1 ? "s" : "") across your PARA system.</span>
-                @if (_goals.Count > 0)
+                @if (_filtered.Count == 0 && FilteredGoals.Count() == 0)
                 {
-                    <span> · @_goals.Count archived goal@(_goals.Count != 1 ? "s" : "").</span>
-                }
-            }
-        </p>
-    </div>
-
-    @if (_loading)
-    {
-        <div class="arc-loading">
-            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
-        </div>
-    }
-    else
-    {
-        <div class="arc-type-filter" role="tablist" aria-label="Archive type filter">
-            @foreach (var type in TypeFilters)
-            {
-                <button type="button"
-                        class="@GetTypeButtonClass(type)"
-                        @onclick="() => SetTypeFilter(type)">
-                    @type
-                </button>
-            }
-        </div>
-
-        <div class="arc-toolbar">
-            <div class="arc-search">
-                <MudIcon Icon="@Icons.Material.Outlined.Search" Class="arc-search__icon" />
-                <input class="arc-search__input"
-                       placeholder="Search archives…"
-                       value="@_search"
-                       @oninput="OnSearchChanged" />
-                @if (!string.IsNullOrWhiteSpace(_search))
-                {
-                    <button type="button" class="arc-search__clear" @onclick="ClearSearch">✕</button>
-                }
-            </div>
-
-            <MudDatePicker Label="Archived from"
-                           Date="_dateFrom"
-                           DateChanged="OnDateFromChanged"
-                           Clearable="true"
-                           Editable="false"
-                           Variant="Variant.Outlined"
-                           Class="arc-toolbar__picker" />
-
-            <MudDatePicker Label="Archived to"
-                           Date="_dateTo"
-                           DateChanged="OnDateToChanged"
-                           Clearable="true"
-                           Editable="false"
-                           Variant="Variant.Outlined"
-                           Class="arc-toolbar__picker" />
-
-            @if (HasActiveFilters)
-            {
-                <MudButton Variant="Variant.Text"
-                           Color="Color.Default"
-                           Size="Size.Small"
-                           Class="arc-clear-btn"
-                           OnClick="ClearFilters">
-                    Clear filters
-                </MudButton>
-            }
-        </div>
-
-        @if (_filtered.Count == 0)
-        {
-            <div class="arc-empty">
-                <div class="arc-empty__glyph">⬡</div>
-                <p class="arc-empty__title">@GetEmptyTitle()</p>
-                <p class="arc-empty__sub">@GetEmptySubtitle()</p>
-            </div>
-        }
-        else
-        {
-            <div class="arc-list">
-                @foreach (var item in _filtered)
-                {
-                    <div class="arc-row">
-                        <div class="@GetTypeBadgeClass(item.EntityType)">
-                            @item.EntityType
-                        </div>
-
-                        <div class="arc-row__body">
-                            <div class="arc-row__header">
-                                <div class="arc-row__name">@item.Name</div>
-                                <div class="arc-row__meta">@GetArchivedLabel(item)</div>
-                            </div>
-
-                            @if (!string.IsNullOrWhiteSpace(item.Description))
-                            {
-                                <div class="arc-row__desc">@item.Description</div>
-                            }
-                        </div>
-
-                        <div class="arc-row__actions">
-                            <MudButton Variant="Variant.Outlined"
-                                       Color="Color.Default"
-                                       Size="Size.Small"
-                                       StartIcon="@Icons.Material.Filled.Unarchive"
-                                       OnClick="() => ConfirmRestore(item)">
-                                Restore
-                            </MudButton>
-                            <MudButton Variant="Variant.Text"
-                                       Color="Color.Default"
-                                       Size="Size.Small"
-                                       StartIcon="@Icons.Material.Filled.OpenInNew"
-                                       OnClick="() => ViewItem(item)">
-                                View
-                            </MudButton>
-                        </div>
+                    <div style="padding: 5rem 2rem; display: flex; flex-direction: column; align-items: center; text-align: center; border: 1px dashed var(--mud-palette-lines-default); border-radius: 16px; background: var(--mud-palette-table-lines);">
+                        <MudIcon Icon="@Icons.Material.Filled.Inventory2" Style="font-size:4rem; color: var(--mud-palette-text-disabled); margin-bottom: 1.5rem;" />
+                        <h2 style="font-family: 'Fraunces', serif; font-size: 1.75rem; margin: 0 0 0.5rem; color: var(--mud-palette-text-primary);">
+                            @GetEmptyTitle()
+                        </h2>
+                        <p style="color: var(--mud-palette-text-secondary); margin: 0 0 2rem; max-width: 400px;">
+                            @GetEmptySubtitle()
+                        </p>
                     </div>
                 }
-            </div>
-        }
 
-        @if (FilteredGoals.Any())
-        {
-            <div class="arc-section-head arc-section-head--goals">
-                <span class="arc-section-head__label">Goals</span>
-                <span class="arc-section-head__count">@FilteredGoals.Count() shown</span>
-            </div>
-
-            <div class="arc-list">
-                @foreach (var goal in FilteredGoals)
+                @if (_filtered.Count > 0)
                 {
-                    <div class="arc-card arc-card--goal">
-                        <div class="arc-card__ribbon arc-ribbon--goal"></div>
-                        <div class="arc-card__body">
-                            <div class="arc-card__top">
-                                <div class="arc-card__badges">
-                                    <span class="arc-badge arc-badge--goal-status">
-                                        @GoalStatusLabel(goal.Status)
-                                    </span>
-                                    @if (!string.IsNullOrWhiteSpace(goal.AreaName))
+                    <h2 class="arc-section-title">Items</h2>
+                    <div class="arc-ledger">
+                        @for (int i = 0; i < _filtered.Count; i++)
+                        {
+                            var item = _filtered[i];
+                            var idx = i;
+                            <div class="arc-ledger-item arc-row-in" style="animation-delay:@(idx * 25)ms;">
+                                <div class="arc-item-type">@item.EntityType</div>
+                                <div class="arc-item-body">
+                                    <h3 class="arc-item-name">@item.Name</h3>
+                                    @if (!string.IsNullOrWhiteSpace(item.Description))
                                     {
-                                        <span class="arc-badge arc-badge--goal-area">@goal.AreaName</span>
+                                        <p class="arc-item-desc">@item.Description</p>
                                     }
-                                    @if (goal.ArchivedAtUtc.HasValue)
-                                    {
-                                        <span class="arc-badge arc-badge--date">
-                                            Archived @goal.ArchivedAtUtc.Value.ToString("MMM d, yyyy")
-                                        </span>
-                                    }
+                                    <div class="arc-item-meta">@GetArchivedLabel(item)</div>
+                                </div>
+                                <div class="arc-item-actions">
+                                    <MudButton Variant="Variant.Text"
+                                               Color="Color.Default"
+                                               Size="Size.Small"
+                                               OnClick="() => ConfirmRestore(item)">
+                                        Restore
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Outlined"
+                                               Color="Color.Default"
+                                               Size="Size.Small"
+                                               OnClick="() => ViewItem(item)">
+                                        View
+                                    </MudButton>
                                 </div>
                             </div>
-
-                            <h2 class="arc-card__name">@goal.Title</h2>
-
-                            @if (!string.IsNullOrWhiteSpace(goal.Description))
-                            {
-                                <p class="arc-card__outcome">@goal.Description</p>
-                            }
-
-                            <div class="arc-card__meta">
-                                @if (goal.TargetDate.HasValue)
-                                {
-                                    <span class="arc-meta-item">Target @goal.TargetDate.Value.ToString("MMM d, yyyy")</span>
-                                }
-                                <span class="arc-meta-item">@goal.CompletedMilestones/@goal.TotalMilestones milestones</span>
-                            </div>
-                        </div>
-
-                        <div class="arc-card__actions">
-                            <MudButton Variant="Variant.Outlined"
-                                       Color="Color.Default"
-                                       Size="Size.Small"
-                                       StartIcon="@Icons.Material.Filled.Unarchive"
-                                       OnClick="() => RestoreGoalAsync(goal.Id, goal.Title)">
-                                Restore
-                            </MudButton>
-                            <MudButton Variant="Variant.Text"
-                                       Color="Color.Default"
-                                       Size="Size.Small"
-                                       StartIcon="@Icons.Material.Filled.OpenInNew"
-                                       OnClick='() => Nav.NavigateTo($"/goals/{goal.Id}")'>
-                                View
-                            </MudButton>
-                        </div>
+                        }
                     </div>
                 }
-            </div>
-        }
 
-        <section class="arc-retention">
-            <button type="button" class="arc-retention__header" @onclick="ToggleRetention">
-                <div>
-                    <div class="arc-retention__title">⚙ Retention Rules</div>
-                </div>
-                <MudIcon Icon="@(_showRetention ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" />
-            </button>
+                @if (FilteredGoals.Any())
+                {
+                    <h2 class="arc-section-title" style="margin-top: 2rem;">Goals</h2>
+                    <div class="arc-ledger">
+                        @for(int i = 0; i < FilteredGoals.Count(); i++)
+                        {
+                            var goal = FilteredGoals.ElementAt(i);
+                            var idx = i;
+                            <div class="arc-ledger-item arc-row-in" style="animation-delay:@(idx * 25)ms;">
+                                <div class="arc-item-type">
+                                    <span style="color: var(--mud-palette-warning);">@GoalStatusLabel(goal.Status)</span><br/>
+                                    <span style="font-size:0.6rem; opacity:0.6;">GOAL</span>
+                                </div>
+                                <div class="arc-item-body">
+                                    <h3 class="arc-item-name">@goal.Title</h3>
+                                    @if (!string.IsNullOrWhiteSpace(goal.Description))
+                                    {
+                                        <p class="arc-item-desc">@goal.Description</p>
+                                    }
+                                    <div class="arc-item-meta">
+                                        @if (goal.ArchivedAtUtc.HasValue)
+                                        {
+                                            <span>Archived @goal.ArchivedAtUtc.Value.ToString("MMM d, yyyy")</span>
+                                        }
+                                        <span style="margin-left:1rem;">@goal.CompletedMilestones/@goal.TotalMilestones milestones</span>
+                                    </div>
+                                </div>
+                                <div class="arc-item-actions">
+                                    <MudButton Variant="Variant.Text"
+                                               Color="Color.Default"
+                                               Size="Size.Small"
+                                               OnClick="() => RestoreGoalAsync(goal.Id, goal.Title)">
+                                        Restore
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Outlined"
+                                               Color="Color.Default"
+                                               Size="Size.Small"
+                                               OnClick="@(() => Nav.NavigateTo($"/goals/{goal.Id}"))">
+                                        View
+                                    </MudButton>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
 
-            @if (_showRetention)
-            {
-                <div class="arc-retention__body">
-                    <p class="arc-retention__intro">
-                        Set how long archived items are kept before becoming eligible for permanent deletion. Leave blank to keep forever.
-                    </p>
+                @* ── Retention Rules Footer Widget ── *@
+                <section class="arc-retention-box">
+                    <button type="button" class="arc-retention-header" @onclick="ToggleRetention">
+                        <div>
+                            <h2 class="arc-retention-title">Retention Rules</h2>
+                            <p style="margin: 0.25rem 0 0; color: var(--mud-palette-text-secondary); font-size: 0.85rem;">Automate deletion of old items</p>
+                        </div>
+                        <MudIcon Icon="@(_showRetention ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.Add)" Size="Size.Large" />
+                    </button>
 
-                    @foreach (var entityType in EntityTypes)
+                    @if (_showRetention)
                     {
-                        var type = entityType;
-                        var nearExpiryCount = CountNearExpiry(type);
+                        <div class="arc-retention-body">
+                            <p style="margin:0; font-size:0.9rem; color:var(--mud-palette-text-secondary);">
+                                Set how long archived items are kept before becoming eligible for permanent deletion. Leave blank to keep forever.
+                            </p>
 
-                        <div class="arc-retention-row">
-                            <div class="arc-retention-label">@type</div>
-
-                            <MudNumericField T="int?"
-                                             Value="@_retentionDays[type]"
-                                             ValueChanged="value => OnRetentionDaysChanged(type, value)"
-                                             Label="Days"
-                                             Min="1"
-                                             Variant="Variant.Outlined"
-                                             Immediate="true"
-                                             HideSpinButtons="false"
-                                             Class="arc-retention-input" />
-
-                            <MudButton Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       Size="Size.Small"
-                                       Disabled="@IsSavingRetention(type)"
-                                       OnClick="() => SaveRetentionAsync(type)">
-                                @if (IsSavingRetention(type))
+                            <div class="arc-retention-grid">
+                                @foreach (var entityType in EntityTypes)
                                 {
-                                    <span>Saving…</span>
-                                }
-                                else
-                                {
-                                    <span>Save</span>
-                                }
-                            </MudButton>
+                                    var type = entityType;
+                                    var nearExpiryCount = CountNearExpiry(type);
 
-                            <MudButton Variant="Variant.Text"
-                                       Color="Color.Default"
-                                       Size="Size.Small"
-                                       Disabled="@IsSavingRetention(type)"
-                                       OnClick="() => SetNeverExpireAsync(type)">
-                                Never expire
-                            </MudButton>
+                                    <div class="arc-retention-card">
+                                        <div class="arc-retention-card-title">@type Rules</div>
+                                        <MudNumericField T="int?"
+                                                         Value="@_retentionDays[type]"
+                                                         ValueChanged="value => OnRetentionDaysChanged(type, value)"
+                                                         Label="Days to keep"
+                                                         Min="1"
+                                                         Variant="Variant.Outlined"
+                                                         Margin="Margin.Dense"
+                                                         Immediate="true"
+                                                         HideSpinButtons="false"
+                                                         Class="mb-4" />
 
-                            @if (nearExpiryCount > 0)
-                            {
-                                <MudChip T="string"
-                                         Color="Color.Warning"
-                                         Variant="Variant.Outlined"
-                                         Size="Size.Small">
-                                    @nearExpiryCount item@(nearExpiryCount != 1 ? "s" : "") near expiry
-                                </MudChip>
-                            }
+                                        <div style="display:flex; gap:0.5rem;">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Dark"
+                                                       Size="Size.Small"
+                                                       Disabled="@IsSavingRetention(type)"
+                                                       OnClick="() => SaveRetentionAsync(type)">
+                                                @(IsSavingRetention(type) ? "Saving…" : "Save")
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Text"
+                                                       Color="Color.Default"
+                                                       Size="Size.Small"
+                                                       Disabled="@IsSavingRetention(type)"
+                                                       OnClick="() => SetNeverExpireAsync(type)">
+                                                Never expire
+                                            </MudButton>
+                                        </div>
+
+                                        @if (nearExpiryCount > 0)
+                                        {
+                                            <div style="margin-top: 1rem; font-size: 0.75rem; color: var(--mud-palette-warning); display:flex; align-items:center; gap:0.25rem; font-weight: 500;">
+                                                <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" />
+                                                @nearExpiryCount item@(nearExpiryCount != 1 ? "s" : "") near expiry
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+
+                            <div style="margin-top: 1rem; padding-top: 1.5rem; border-top: 1px solid var(--mud-palette-lines-default); display: flex; flex-direction: column; gap: 1rem; align-items: flex-start;">
+                                <div>
+                                    <h4 style="font-family:'Fraunces', serif; margin:0 0 0.25rem; font-size:1.1rem; color:var(--mud-palette-error);">Purge Expired Data</h4>
+                                    <p style="margin:0; font-size:0.85rem; color:var(--mud-palette-text-secondary);">Permanently remove items already past their retention period. This action cannot be undone.</p>
+                                </div>
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Error"
+                                           StartIcon="@Icons.Material.Filled.DeleteForever"
+                                           Disabled="_purging"
+                                           OnClick="PurgeExpiredAsync">
+                                    @(_purging ? "Purging system…" : "Permanently delete expired items")
+                                </MudButton>
+                            </div>
                         </div>
                     }
-
-                    <div class="arc-retention__purge">
-                        <p class="arc-retention__purge-copy">
-                            Permanently remove items already past their retention period.
-                        </p>
-                        <MudButton Variant="Variant.Filled"
-                                   Color="Color.Error"
-                                   StartIcon="@Icons.Material.Filled.DeleteForever"
-                                   Disabled="_purging"
-                                   OnClick="PurgeExpiredAsync">
-                            @if (_purging)
-                            {
-                                <span>Purging…</span>
-                            }
-                            else
-                            {
-                                <span>Permanently delete expired items</span>
-                            }
-                        </MudButton>
-                    </div>
-                </div>
+                </section>
             }
-        </section>
-    }
+        </main>
+    </div>
 </div>
-
-<style>
-.arc-page {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 1.5rem 1rem 4rem;
-}
-
-.arc-header { margin-bottom: 2rem; }
-
-.arc-header__eyebrow {
-    font-size: .68rem;
-    font-weight: 700;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-    margin-bottom: .35rem;
-}
-
-.arc-header__title {
-    font-family: var(--font-display);
-    font-size: clamp(1.8rem, 4vw, 2.8rem);
-    font-weight: 400;
-    color: var(--ink);
-    margin: 0 0 .4rem;
-    letter-spacing: -.025em;
-    line-height: 1.1;
-}
-
-.arc-header__sub {
-    font-size: .9rem;
-    color: var(--ink-soft);
-    margin: 0;
-    line-height: 1.5;
-}
-
-.arc-loading {
-    display: flex;
-    justify-content: center;
-    padding: 5rem;
-}
-
-.arc-type-filter {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .4rem;
-    margin-bottom: 1rem;
-}
-
-.arc-type-btn {
-    border: 1px solid var(--line);
-    background: var(--paper-raised);
-    color: var(--ink-soft);
-    border-radius: 999px;
-    padding: .45rem .85rem;
-    font-size: .78rem;
-    font-weight: 700;
-    letter-spacing: .02em;
-    cursor: pointer;
-    transition: border-color .15s, background .15s, color .15s, transform .15s;
-}
-
-.arc-type-btn:hover {
-    border-color: var(--line-strong);
-    color: var(--ink);
-    transform: translateY(-1px);
-}
-
-.arc-type-btn--on {
-    background: rgba(192,86,29,.10);
-    border-color: rgba(192,86,29,.3);
-    color: var(--clay-deep);
-}
-
-.arc-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .75rem;
-    margin-bottom: 1.25rem;
-}
-
-.arc-search {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    background: var(--paper-raised);
-    border: 1.5px solid var(--line);
-    border-radius: 10px;
-    padding: .5rem .75rem;
-    min-width: min(100%, 340px);
-    flex: 1 1 280px;
-    transition: border-color .15s;
-}
-
-.arc-search:focus-within { border-color: var(--clay); }
-
-.arc-search__icon {
-    color: var(--ink-faint);
-    font-size: 1.1rem;
-    flex-shrink: 0;
-}
-
-.arc-search__input {
-    flex: 1;
-    border: none;
-    background: transparent;
-    font-family: var(--font-body);
-    font-size: .88rem;
-    color: var(--ink);
-    outline: none;
-}
-
-.arc-search__input::placeholder { color: var(--ink-faint); }
-
-.arc-search__clear {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--ink-faint);
-    font-size: .8rem;
-    padding: 0 .1rem;
-    transition: color .15s;
-    flex-shrink: 0;
-}
-
-.arc-search__clear:hover { color: var(--clay); }
-
-.arc-toolbar__picker {
-    min-width: 180px;
-    flex: 0 1 220px;
-}
-
-.arc-clear-btn { margin-left: auto; }
-
-.arc-list {
-    display: flex;
-    flex-direction: column;
-    gap: .75rem;
-}
-
-.arc-row {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: .8rem 1rem;
-    background: var(--paper-raised);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    transition: border-color .15s, box-shadow .15s;
-}
-
-.arc-row:hover {
-    border-color: var(--line-strong);
-    box-shadow: var(--shadow-sm);
-}
-
-.arc-row__body {
-    flex: 1;
-    min-width: 0;
-}
-
-.arc-row__header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: .75rem;
-    margin-bottom: .2rem;
-}
-
-.arc-row__name {
-    font-family: var(--font-display);
-    font-size: 1rem;
-    font-style: italic;
-    color: var(--ink);
-}
-
-.arc-row__desc {
-    font-size: .8rem;
-    color: var(--ink-faint);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.arc-row__meta {
-    font-size: .72rem;
-    color: var(--ink-faint);
-    font-style: italic;
-    flex-shrink: 0;
-}
-
-.arc-row__actions {
-    display: flex;
-    gap: .4rem;
-    flex-shrink: 0;
-}
-
-.arc-type {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    padding: .35rem .6rem;
-    font-size: .68rem;
-    font-weight: 700;
-    letter-spacing: .05em;
-    text-transform: uppercase;
-    flex-shrink: 0;
-}
-
-.arc-type--project  { background: rgba(192,86,29,.12); color: var(--clay-deep); }
-.arc-type--area     { background: rgba(111,122,90,.14); color: #4a5c38; }
-.arc-type--resource { background: rgba(205,154,58,.14); color: #7a5c0e; }
-.arc-type--note     { background: var(--paper-sunk); color: var(--ink-soft); }
-
-.arc-empty {
-    text-align: center;
-    padding: 5rem 1rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: .75rem;
-}
-
-.arc-empty__glyph {
-    font-size: 3.5rem;
-    opacity: .1;
-    font-family: var(--font-display);
-    color: var(--ink);
-}
-
-.arc-empty__title {
-    font-family: var(--font-display);
-    font-size: 1.3rem;
-    font-weight: 500;
-    color: var(--ink);
-    margin: 0;
-}
-
-.arc-empty__sub {
-    font-size: .88rem;
-    color: var(--ink-soft);
-    margin: 0;
-    max-width: 440px;
-    line-height: 1.6;
-}
-
-.arc-retention {
-    margin-top: 2rem;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    overflow: hidden;
-}
-
-.arc-retention__header {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem 1.25rem;
-    cursor: pointer;
-    background: var(--paper-raised);
-    border: none;
-    color: var(--ink);
-}
-
-.arc-retention__title {
-    font-family: var(--font-display);
-    font-size: 1.05rem;
-    color: var(--ink);
-    text-align: left;
-}
-
-.arc-retention__body {
-    padding: 1rem 1.25rem;
-    border-top: 1px solid var(--line);
-    background: var(--paper-sunk);
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.arc-retention__intro,
-.arc-retention__purge-copy {
-    margin: 0;
-    color: var(--ink-soft);
-    font-size: .85rem;
-    line-height: 1.6;
-}
-
-.arc-retention-row {
-    display: flex;
-    align-items: center;
-    gap: .75rem;
-    flex-wrap: wrap;
-}
-
-.arc-retention-label {
-    min-width: 80px;
-    font-weight: 600;
-    font-size: .85rem;
-    color: var(--ink);
-}
-
-.arc-retention-input {
-    width: 150px;
-}
-
-.arc-retention__purge {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding-top: .5rem;
-    border-top: 1px solid var(--line);
-}
-
-/* Preserved project archive styling */
-.arc-card {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    background: var(--paper-raised);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    overflow: hidden;
-    transition: box-shadow .2s, border-color .2s;
-}
-
-.arc-card__ribbon {
-    width: 5px;
-    flex-shrink: 0;
-}
-
-.arc-ribbon--critical { background: var(--clay); }
-.arc-ribbon--high     { background: #d4722a; }
-.arc-ribbon--medium   { background: var(--gold); }
-.arc-ribbon--low      { background: var(--sage); }
-
-@@media (max-width: 720px) {
-    .arc-row {
-        align-items: flex-start;
-        flex-wrap: wrap;
-    }
-
-    .arc-row__header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .arc-row__actions {
-        width: 100%;
-        justify-content: flex-start;
-    }
-
-    .arc-clear-btn { margin-left: 0; }
-}
-
-@@media (max-width: 560px) {
-    .arc-page {
-        padding-inline: .75rem;
-    }
-
-    .arc-toolbar {
-        align-items: stretch;
-    }
-
-    .arc-search,
-    .arc-toolbar__picker,
-    .arc-retention-input {
-        min-width: 100%;
-        width: 100%;
-    }
-}
-
-/* Goals section */
-.arc-section-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: .75rem;
-    margin: 1.5rem 0 .7rem;
-}
-.arc-section-head--goals { margin-top: 2rem; }
-.arc-section-head__label {
-    font-size: .7rem;
-    font-weight: 700;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-}
-.arc-section-head__count {
-    font-size: .75rem;
-    color: var(--ink-faint);
-}
-
-.arc-card {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    background: var(--paper-raised);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    overflow: hidden;
-    transition: box-shadow .2s, border-color .2s;
-    animation: arc-card-in .25s ease backwards;
-}
-.arc-card:hover {
-    box-shadow: 0 2px 12px rgba(33,29,23,.08);
-    border-color: var(--line-strong);
-}
-
-@@keyframes arc-card-in {
-    from { opacity: 0; transform: translateY(6px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
-.arc-card__ribbon {
-    width: 5px;
-    flex-shrink: 0;
-}
-.arc-ribbon--goal { background: linear-gradient(180deg, var(--gold), var(--clay)); }
-
-.arc-card__body {
-    flex: 1;
-    padding: .9rem 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: .4rem;
-    min-width: 0;
-}
-.arc-card__top {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    flex-wrap: wrap;
-}
-.arc-card__badges { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
-
-.arc-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: .15rem .5rem;
-    border-radius: 999px;
-    font-size: .65rem;
-    font-weight: 700;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-}
-.arc-badge--date {
-    background: var(--paper-sunk);
-    color: var(--ink-faint);
-    font-weight: 500;
-    text-transform: none;
-    font-size: .68rem;
-    letter-spacing: 0;
-}
-.arc-badge--goal-status { color: #2f6f61; background: rgba(47,111,97,.10); }
-.arc-badge--goal-area { color: #7a5c0e; background: rgba(160,120,32,.10); }
-
-.arc-card__name {
-    font-family: var(--font-display);
-    font-size: 1.15rem;
-    font-weight: 500;
-    color: var(--ink-soft);
-    margin: 0;
-    line-height: 1.3;
-    letter-spacing: -.01em;
-}
-.arc-card:hover .arc-card__name { color: var(--ink); }
-.arc-card__outcome {
-    font-size: .82rem;
-    color: var(--ink-faint);
-    margin: 0;
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-.arc-card__meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .75rem;
-    margin-top: .15rem;
-}
-.arc-meta-item {
-    font-size: .72rem;
-    color: var(--ink-faint);
-    font-style: italic;
-}
-
-.arc-card__actions {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: .4rem;
-    padding: .75rem .9rem;
-    flex-shrink: 0;
-    border-left: 1px solid var(--line);
-    background: var(--paper-sunk);
-}
-
-@@media (max-width: 560px) {
-    .arc-card { flex-direction: column; }
-    .arc-card__ribbon { width: 100%; height: 4px; }
-    .arc-card__actions {
-        flex-direction: row;
-        border-left: none;
-        border-top: 1px solid var(--line);
-        justify-content: flex-start;
-    }
-}
-</style>
 
 @code {
     private static readonly string[] EntityTypes = ["Project", "Area", "Resource", "Note"];
@@ -1368,3 +1119,4 @@
         DateTime? ArchivedAtUtc,
         DateTime UpdatedAtUtc);
 }
+
