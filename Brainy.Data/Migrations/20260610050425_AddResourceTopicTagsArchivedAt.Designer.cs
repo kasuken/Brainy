@@ -4,6 +4,7 @@ using Brainy.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Brainy.Data.Migrations
 {
     [DbContext(typeof(BrainyDbContext))]
-    partial class BrainyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260610050425_AddResourceTopicTagsArchivedAt")]
+    partial class AddResourceTopicTagsArchivedAt
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -131,41 +134,6 @@ namespace Brainy.Data.Migrations
                     b.ToTable("ActionItem", (string)null);
                 });
 
-            modelBuilder.Entity("Brainy.Domain.Entities.ArchiveRetentionRule", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("EntityType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int?>("RetentionDays")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("UserId", "EntityType")
-                        .IsUnique();
-
-                    b.ToTable("ArchiveRetentionRule", (string)null);
-                });
-
             modelBuilder.Entity("Brainy.Domain.Entities.Area", b =>
                 {
                     b.Property<Guid>("Id")
@@ -260,9 +228,6 @@ namespace Brainy.Data.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
-                    b.Property<DateTime?>("ArchivedAtUtc")
-                        .HasColumnType("datetime2");
-
                     b.Property<Guid?>("AreaId")
                         .HasColumnType("uniqueidentifier");
 
@@ -273,16 +238,10 @@ namespace Brainy.Data.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
-                    b.Property<bool>("IsArchived")
-                        .HasColumnType("bit");
-
                     b.Property<string>("ParaCategory")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime?>("ProcessedAtUtc")
-                        .HasColumnType("datetime2");
 
                     b.Property<Guid?>("ProjectId")
                         .HasColumnType("uniqueidentifier");
@@ -326,10 +285,6 @@ namespace Brainy.Data.Migrations
                     b.HasIndex("Status");
 
                     b.HasIndex("UserId");
-
-                    b.HasIndex("UserId", "IsArchived");
-
-                    b.HasIndex("UserId", "Status");
 
                     b.HasIndex("UserId", "Title");
 
@@ -979,15 +934,6 @@ namespace Brainy.Data.Migrations
                     b.Navigation("Note");
 
                     b.Navigation("TaskItem");
-                });
-
-            modelBuilder.Entity("Brainy.Domain.Entities.ArchiveRetentionRule", b =>
-                {
-                    b.HasOne("Brainy.Data.Identity.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("Brainy.Domain.Entities.Area", b =>

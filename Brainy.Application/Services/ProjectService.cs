@@ -157,7 +157,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             .Where(n => n.ParaCategory != ParaCategory.Resource)
             .OrderByDescending(n => n.UpdatedAtUtc)
             .Select(n => new NoteDto(n.Id, n.Title, n.Content, n.AiSummary,
-                n.Status, n.ParaCategory, n.SourceId, n.ProjectId, n.AreaId, n.ResourceId,
+                n.Status, n.IsArchived, n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId, n.ProjectId, n.AreaId, n.ResourceId,
                 n.CreatedAtUtc, n.UpdatedAtUtc))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -168,7 +168,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             .Where(n => n.ParaCategory == ParaCategory.Resource)
             .OrderByDescending(n => n.UpdatedAtUtc)
             .Select(n => new NoteDto(n.Id, n.Title, n.Content, n.AiSummary,
-                n.Status, n.ParaCategory, n.SourceId, n.ProjectId, n.AreaId, n.ResourceId,
+                n.Status, n.IsArchived, n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId, n.ProjectId, n.AreaId, n.ResourceId,
                 n.CreatedAtUtc, n.UpdatedAtUtc))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);

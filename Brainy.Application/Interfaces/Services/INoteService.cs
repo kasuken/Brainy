@@ -58,4 +58,13 @@ public interface INoteService
     /// The note and its content are preserved; only the project link is cleared.
     /// </summary>
     Task<NoteDto> UnlinkFromProjectAsync(Guid noteId, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns all archived notes owned by the current user, ordered by archive date descending.</summary>
+    Task<IReadOnlyList<NoteDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Marks a note as archived and records the archive timestamp.</summary>
+    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Restores an archived note, clearing the archive flag and timestamp.</summary>
+    Task RestoreAsync(Guid id, CancellationToken cancellationToken = default);
 }

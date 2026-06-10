@@ -51,6 +51,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             UserId = userId,
             Title = dto.Title,
             Content = dto.Content,
+            Status = dto.Status,
             ParaCategory = dto.ParaCategory,
             ProjectId = dto.ProjectId,
             AreaId = dto.AreaId,
@@ -112,11 +113,12 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{dto.Id}' was not found.");
 
-        note.Status       = dto.Status;
-        note.ParaCategory = dto.ParaCategory;
-        note.ProjectId    = dto.ProjectId;
-        note.AreaId       = dto.AreaId;
-        note.ResourceId   = dto.ResourceId;
+        note.Status          = dto.Status;
+        note.ParaCategory    = dto.ParaCategory;
+        note.ProjectId       = dto.ProjectId;
+        note.AreaId          = dto.AreaId;
+        note.ResourceId      = dto.ResourceId;
+        note.ProcessedAtUtc  = DateTime.UtcNow;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -148,6 +150,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
                     .SetProperty(n => n.ProjectId, projectId)
                     .SetProperty(n => n.AreaId, areaId)
                     .SetProperty(n => n.ResourceId, resourceId)
+                    .SetProperty(n => n.ProcessedAtUtc, DateTime.UtcNow)
                     .SetProperty(n => n.UpdatedAtUtc, DateTime.UtcNow),
                 cancellationToken)
             .ConfigureAwait(false);
@@ -236,12 +239,51 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<NoteDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        return await context.Notes
+            .AsNoTracking()
+            .Where(n => n.UserId == userId && n.IsArchived)
+            .OrderByDescending(n => n.ArchivedAtUtc)
+            .Select(n => ToDto(n))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var note = await context.Notes
+            .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Note '{id}' was not found.");
+        note.IsArchived = true;
+        note.ArchivedAtUtc = DateTime.UtcNow;
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task RestoreAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var note = await context.Notes
+            .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Note '{id}' was not found.");
+        note.IsArchived = false;
+        note.ArchivedAtUtc = null;
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     private static NoteDto ToDto(Note n) => new(
         n.Id,
         n.Title,
         n.Content,
         n.AiSummary,
         n.Status,
+        n.IsArchived,
+        n.ArchivedAtUtc,
+        n.ProcessedAtUtc,
         n.ParaCategory,
         n.SourceId,
         n.ProjectId,

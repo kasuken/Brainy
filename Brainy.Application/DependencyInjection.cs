@@ -28,6 +28,9 @@ public static class DependencyInjection
         services.AddScoped<ICurrentTaskRecommendationService, CurrentTaskRecommendationService>();
         services.AddScoped<ITodayNotificationService, TodayNotificationService>();
         services.AddScoped<IUserDashboardPreferenceService, UserDashboardPreferenceService>();
+        services.AddScoped<IArchiveRetentionService, ArchiveRetentionService>();
+        services.AddScoped<IInboxMetricsService, InboxMetricsService>();
+        services.AddScoped<IInboxSuggestionsService, InboxSuggestionsService>();
         return services;
     }
 }

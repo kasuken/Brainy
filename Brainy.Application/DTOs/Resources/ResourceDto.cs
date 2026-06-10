@@ -5,7 +5,10 @@ public record ResourceDto(
     Guid Id,
     string Name,
     string? Description,
+    string? Topic,
     bool IsArchived,
+    DateTime? ArchivedAtUtc,
     Guid? AreaId,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    IReadOnlyList<string> Tags);

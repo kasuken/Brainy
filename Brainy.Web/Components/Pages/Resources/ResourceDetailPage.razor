@@ -1,0 +1,673 @@
+@page "/resources/{ResourceId:guid}"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Resources
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.Interfaces.Services
+@inject IResourceService ResourceService
+@inject INoteService NoteService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>@(_detail?.Name ?? "Resource") — Brainy</PageTitle>
+
+@if (_loading)
+{
+    <div class="rd-loading">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+    </div>
+}
+else if (_detail is null)
+{
+    <div class="rd-notfound">
+        <span class="rd-notfound__glyph">◈</span>
+        <p class="rd-notfound__title">Resource not found</p>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                   OnClick='() => Nav.NavigateTo("/resources")'>
+            Back to Resources
+        </MudButton>
+    </div>
+}
+else
+{
+    <div class="rd-header">
+        <div class="rd-breadcrumb">
+            <button class="rd-back" @onclick='() => Nav.NavigateTo("/resources")'>
+                <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+                    <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z" />
+                </svg>
+                Resources
+            </button>
+            <span class="rd-breadcrumb__sep">›</span>
+            <span class="rd-breadcrumb__current">@_detail.Name</span>
+        </div>
+
+        <div class="rd-title-row">
+            <div class="rd-title-block">
+                <div class="rd-title-top">
+                    <h1 class="rd-title">@_detail.Name</h1>
+                    @if (_detail.IsArchived)
+                    {
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Class="rd-archived-chip">
+                            Archived
+                        </MudChip>
+                    }
+                </div>
+            </div>
+            <div class="rd-actions">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.Edit"
+                           Size="Size.Small" OnClick="OpenEditDialogAsync">
+                    Edit
+                </MudButton>
+                @if (_detail.IsArchived)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Success"
+                               StartIcon="@Icons.Material.Filled.Unarchive"
+                               Size="Size.Small" OnClick="ConfirmRestoreAsync">
+                        Restore
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.Archive"
+                               Size="Size.Small" OnClick="ConfirmArchiveAsync">
+                        Archive
+                    </MudButton>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="rd-stats">
+        <div class="rd-stat-tile">
+            <span class="rd-stat-tile__value rd-stat-tile__value--clay">@_detail.NoteCount</span>
+            <span class="rd-stat-tile__label">Notes</span>
+        </div>
+        <div class="rd-stat-tile">
+            <span class="rd-stat-tile__value rd-stat-tile__value--sage">@FormatDate(_detail.UpdatedAtUtc)</span>
+            <span class="rd-stat-tile__label">Last Updated</span>
+        </div>
+        <div class="rd-stat-tile">
+            <span class="rd-stat-tile__value">@_detail.Tags.Count</span>
+            <span class="rd-stat-tile__label">Tags</span>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_detail.Topic) || !string.IsNullOrWhiteSpace(_detail.Description))
+    {
+        <div class="rd-section rd-section--meta">
+            @if (!string.IsNullOrWhiteSpace(_detail.Topic))
+            {
+                <div class="rd-meta-block">
+                    <span class="rd-meta-label">Topic</span>
+                    <p class="rd-meta-text">@_detail.Topic</p>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_detail.Description))
+            {
+                <div class="rd-meta-block">
+                    <span class="rd-meta-label">Description</span>
+                    <p class="rd-description">@_detail.Description</p>
+                </div>
+            }
+        </div>
+    }
+
+    @if (_detail.Tags.Count > 0)
+    {
+        <div class="rd-section">
+            <div class="rd-section-head">
+                <div class="rd-section-head__left">
+                    <h2 class="rd-section-title">Tags</h2>
+                    <span class="rd-count-badge">@_detail.Tags.Count</span>
+                </div>
+            </div>
+
+            <div class="rd-tags">
+                @foreach (var tag in _detail.Tags)
+                {
+                    <span class="rd-tag">@tag</span>
+                }
+            </div>
+        </div>
+    }
+
+    <div class="rd-section">
+        <div class="rd-section-head">
+            <div class="rd-section-head__left">
+                <h2 class="rd-section-title">Notes</h2>
+                @if (_detail.Notes.Count > 0)
+                {
+                    <span class="rd-count-badge">@_detail.Notes.Count</span>
+                }
+            </div>
+            <MudButton Variant="Variant.Text" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Link"
+                       Size="Size.Small"
+                       OnClick="ToggleLinkNotePicker"
+                       Disabled="_savingNoteLink">
+                Link Note
+            </MudButton>
+        </div>
+
+        @if (_showLinkNotePicker)
+        {
+            <div class="rd-picker-panel">
+                <MudSelect T="Guid?" @bind-Value="_selectedNoteId"
+                           Label="Select a note"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           AnchorOrigin="Origin.BottomLeft"
+                           Placeholder="Choose note to link…">
+                    @foreach (var note in _availableNotes)
+                    {
+                        <MudSelectItem T="Guid?" Value="note.Id">@note.Title</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <div class="rd-picker-panel__actions">
+                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ToggleLinkNotePicker">
+                        Cancel
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Size="Size.Small"
+                               Disabled="@(_selectedNoteId is null || _savingNoteLink)"
+                               OnClick="LinkNoteAsync">
+                        @if (_savingNoteLink)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        }
+                        Link
+                    </MudButton>
+                </div>
+
+                @if (_availableNotes.Count == 0)
+                {
+                    <p class="rd-picker-empty">No unlinked notes available to add.</p>
+                }
+            </div>
+        }
+
+        @if (_detail.Notes.Count == 0)
+        {
+            <div class="rd-empty">
+                <span class="rd-empty__icon">📝</span>
+                <p>No notes linked to this resource yet.</p>
+            </div>
+        }
+        else
+        {
+            <div class="rd-list">
+                @foreach (var note in _detail.Notes)
+                {
+                    <div class="rd-row">
+                        <div class="rd-row__info">
+                            <a class="rd-row__name" href="/notes/@note.Id">@note.Title</a>
+                            <span class="rd-row__meta">Updated @FormatDate(note.UpdatedAtUtc)</span>
+                        </div>
+                        <MudIconButton Icon="@Icons.Material.Filled.LinkOff"
+                                       Size="Size.Small"
+                                       title="Unlink note"
+                                       Color="Color.Default"
+                                       Class="rd-row__unlink"
+                                       OnClick="() => UnlinkNoteAsync(note.Id, note.Title)" />
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+<MudMessageBox @ref="_archiveMsgBox" Title="Archive Resource?" CancelText="Cancel">
+    <MessageContent>
+        Archiving <strong>@_detail?.Name</strong> will hide it from active views. You can restore it at any time.
+    </MessageContent>
+    <YesButton>
+        <MudButton Color="Color.Warning" Variant="Variant.Filled">Archive</MudButton>
+    </YesButton>
+</MudMessageBox>
+
+<MudMessageBox @ref="_restoreMsgBox" Title="Restore Resource?" CancelText="Cancel">
+    <MessageContent>
+        Restore <strong>@_detail?.Name</strong> back to active resources?
+    </MessageContent>
+    <YesButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled">Restore</MudButton>
+    </YesButton>
+</MudMessageBox>
+
+<style>
+.rd-loading, .rd-notfound {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 6rem 1rem;
+}
+
+.rd-notfound__glyph {
+    font-size: 3rem;
+    opacity: .15;
+    font-family: var(--font-display);
+    color: var(--clay);
+}
+
+.rd-notfound__title {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    color: var(--ink);
+    margin: 0;
+}
+
+.rd-header { margin-bottom: 1.5rem; }
+
+.rd-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    margin-bottom: 1rem;
+    font-size: .8rem;
+    color: var(--ink-faint);
+}
+
+.rd-back {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    color: var(--clay);
+    font-family: var(--font-body);
+    font-size: .8rem;
+    font-weight: 600;
+    padding: 0;
+    transition: opacity .15s;
+}
+
+.rd-back:hover { opacity: .7; }
+.rd-breadcrumb__sep { color: var(--line-strong); }
+.rd-breadcrumb__current { color: var(--ink-soft); }
+
+.rd-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.rd-title-block { flex: 1; min-width: 0; }
+
+.rd-title-top {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+}
+
+.rd-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+    font-weight: 500;
+    font-style: italic;
+    color: var(--ink);
+    margin: 0;
+    letter-spacing: -.02em;
+    line-height: 1.15;
+}
+
+.rd-archived-chip { flex-shrink: 0; }
+
+.rd-actions {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    flex-shrink: 0;
+}
+
+.rd-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-bottom: 1.75rem;
+}
+
+.rd-stat-tile {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: .9rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+    min-width: 110px;
+    box-shadow: var(--shadow-sm);
+}
+
+.rd-stat-tile__value {
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    line-height: 1;
+}
+
+.rd-stat-tile__value--clay { color: var(--clay); }
+.rd-stat-tile__value--sage { color: var(--sage); font-size: 1.25rem; line-height: 1.2; }
+
+.rd-stat-tile__label {
+    font-size: .7rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+}
+
+.rd-section {
+    margin-bottom: 2rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.25rem 1.4rem;
+    background: var(--paper-raised);
+}
+
+.rd-section--meta {
+    background: var(--clay-soft);
+    border-color: rgba(192, 86, 29, .18);
+}
+
+.rd-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.rd-section-head__left {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.rd-section-title {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0;
+}
+
+.rd-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 .4rem;
+    border-radius: 999px;
+    background: var(--clay-soft);
+    color: var(--clay-deep);
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+}
+
+.rd-meta-block + .rd-meta-block {
+    margin-top: .9rem;
+}
+
+.rd-meta-label {
+    display: block;
+    font-size: .68rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--clay);
+    margin-bottom: .3rem;
+}
+
+.rd-meta-text,
+.rd-description {
+    font-size: .9rem;
+    color: var(--ink);
+    margin: 0;
+    line-height: 1.6;
+}
+
+.rd-description { color: var(--ink-soft); }
+
+.rd-tags { display: flex; flex-wrap: wrap; gap: .4rem; }
+
+.rd-tag {
+    padding: .2rem .65rem;
+    border-radius: 999px;
+    background: var(--clay-soft);
+    color: var(--clay-deep);
+    font-size: .75rem;
+    font-weight: 600;
+}
+
+.rd-list { display: flex; flex-direction: column; gap: .4rem; }
+
+.rd-row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .65rem .85rem;
+    background: var(--paper-sunk);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    transition: border-color .15s, box-shadow .15s;
+}
+
+.rd-row:hover {
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-sm);
+}
+
+.rd-row__info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+}
+
+.rd-row__name {
+    font-size: .9rem;
+    font-weight: 600;
+    color: var(--ink);
+    text-decoration: none;
+    transition: color .15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 320px;
+}
+
+.rd-row__name:hover {
+    color: var(--clay);
+    text-decoration: underline;
+}
+
+.rd-row__meta {
+    font-size: .78rem;
+    color: var(--ink-faint);
+}
+
+.rd-row__unlink {
+    flex-shrink: 0;
+    opacity: .35;
+    transition: opacity .15s;
+}
+
+.rd-row:hover .rd-row__unlink { opacity: 1; }
+
+.rd-empty {
+    padding: 2.5rem 1rem;
+    text-align: center;
+    color: var(--ink-faint);
+    font-size: .9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .5rem;
+}
+
+.rd-empty__icon { font-size: 2rem; opacity: .4; }
+.rd-empty p { margin: 0; }
+
+.rd-picker-panel {
+    background: var(--paper-sunk);
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    padding: .9rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .65rem;
+}
+
+.rd-picker-panel__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: .5rem;
+}
+
+.rd-picker-empty {
+    font-size: .8rem;
+    color: var(--ink-faint);
+    margin: 0;
+    font-style: italic;
+}
+</style>
+
+@code {
+    [Parameter] public Guid ResourceId { get; set; }
+
+    private bool _loading = true;
+    private ResourceDetailDto? _detail;
+    private List<NoteDto> _availableNotes = [];
+    private bool _showLinkNotePicker;
+    private Guid? _selectedNoteId;
+    private bool _savingNoteLink;
+    private MudMessageBox _archiveMsgBox = null!;
+    private MudMessageBox _restoreMsgBox = null!;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        _detail = await ResourceService.GetDetailAsync(ResourceId);
+
+        if (_detail is not null)
+        {
+            var allNotes = await NoteService.GetAllAsync();
+            _availableNotes = [.. allNotes.Where(n => n.ResourceId is null)];
+        }
+
+        _loading = false;
+    }
+
+    private async Task OpenEditDialogAsync()
+    {
+        var parameters = new DialogParameters<ResourceEditorDialog>
+        {
+            { x => x.ResourceId, ResourceId }
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<ResourceEditorDialog>("Edit Resource", parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await LoadAsync();
+    }
+
+    private async Task ConfirmArchiveAsync()
+    {
+        bool? confirmed = await _archiveMsgBox.ShowAsync();
+        if (confirmed is not true) return;
+
+        try
+        {
+            await ResourceService.ArchiveAsync(ResourceId);
+            Snackbar.Add("Resource archived.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task ConfirmRestoreAsync()
+    {
+        bool? confirmed = await _restoreMsgBox.ShowAsync();
+        if (confirmed is not true) return;
+
+        try
+        {
+            await ResourceService.RestoreAsync(ResourceId);
+            Snackbar.Add("Resource restored.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private void ToggleLinkNotePicker()
+    {
+        _showLinkNotePicker = !_showLinkNotePicker;
+        _selectedNoteId = null;
+    }
+
+    private async Task LinkNoteAsync()
+    {
+        if (_selectedNoteId is null) return;
+
+        _savingNoteLink = true;
+        try
+        {
+            await ResourceService.LinkNoteAsync(ResourceId, _selectedNoteId.Value);
+            Snackbar.Add("Note linked.", Severity.Success);
+            _showLinkNotePicker = false;
+            _selectedNoteId = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingNoteLink = false;
+        }
+    }
+
+    private async Task UnlinkNoteAsync(Guid noteId, string noteTitle)
+    {
+        try
+        {
+            await ResourceService.UnlinkNoteAsync(noteId);
+            Snackbar.Add($"Unlinked \"{noteTitle}\" from resource.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private static string FormatDate(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy");
+}

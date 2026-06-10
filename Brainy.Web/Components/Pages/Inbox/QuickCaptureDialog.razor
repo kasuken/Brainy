@@ -1,0 +1,215 @@
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+
+@inject INoteService NoteService
+@inject ISnackbar Snackbar
+
+<MudDialog Class="qcd">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-family:var(--font-display)">
+            Quick Capture
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="qcd__body">
+            <div class="qcd__types" role="group" aria-label="Capture type">
+                @foreach (var option in _captureTypes)
+                {
+                    var active = option.Type == _captureType;
+                    <button type="button"
+                            class="qcd__type @(active ? "qcd__type--active" : "")"
+                            @onclick="() => _captureType = option.Type">
+                        <span class="qcd__type-icon" aria-hidden="true">@option.Icon</span>
+                        <span class="qcd__type-label">@option.Label</span>
+                    </button>
+                }
+            </div>
+
+            <MudTextField T="string"
+                          Value="_title"
+                          ValueChanged="OnTitleChanged"
+                          Label="Title"
+                          Placeholder="What did you capture?"
+                          Variant="Variant.Outlined"
+                          Required="true"
+                          Immediate="true"
+                          Class="qcd__field" />
+
+            @if (_captureType == CaptureType.Url)
+            {
+                <MudTextField T="string"
+                              @bind-Value="_url"
+                              Label="URL"
+                              Placeholder="https://…"
+                              Variant="Variant.Outlined"
+                              Immediate="true"
+                              Class="qcd__field" />
+            }
+
+            <MudTextField T="string"
+                          @bind-Value="_content"
+                          Label="@ContentLabel"
+                          Placeholder="Add details…"
+                          Variant="Variant.Outlined"
+                          Lines="3"
+                          AutoGrow="true"
+                          Immediate="true"
+                          Class="qcd__field" />
+
+            <MudText Typo="Typo.caption" Class="qcd__note">
+                This will land in your Inbox for processing later.
+            </MudText>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!_valid || _saving)">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Save to Inbox
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .qcd .mud-dialog-title {
+        padding-bottom: 0;
+    }
+
+    .qcd__body {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        padding-top: 0.25rem;
+    }
+
+    .qcd__types {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .qcd__type {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.55rem 0.85rem;
+        border: 1.5px solid var(--line);
+        border-radius: 999px;
+        background: var(--paper-raised);
+        color: var(--ink-soft);
+        cursor: pointer;
+        font-family: var(--font-body);
+        font-size: 0.83rem;
+        font-weight: 600;
+        transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+    }
+
+    .qcd__type:hover {
+        border-color: var(--clay-ring);
+        background: var(--paper);
+        color: var(--ink);
+    }
+
+    .qcd__type--active {
+        border-color: var(--clay);
+        background: var(--clay-soft);
+        box-shadow: 0 0 0 3px var(--clay-ring);
+        color: var(--clay-deep);
+    }
+
+    .qcd__type-icon {
+        font-size: 1rem;
+        line-height: 1;
+    }
+
+    .qcd__field .mud-input-label {
+        font-weight: 600;
+    }
+
+    .qcd__note {
+        color: var(--ink-faint);
+        line-height: 1.5;
+    }
+
+    @@media (max-width: 600px) {
+        .qcd__types {
+            gap: 0.4rem;
+        }
+
+        .qcd__type {
+            padding: 0.5rem 0.75rem;
+        }
+    }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private enum CaptureType
+    {
+        Note,
+        Url,
+        Document,
+        Snippet
+    }
+
+    private readonly IReadOnlyList<CaptureOption> _captureTypes =
+    [
+        new(CaptureType.Note, "📝", "Note"),
+        new(CaptureType.Url, "🔗", "URL"),
+        new(CaptureType.Document, "📄", "Document"),
+        new(CaptureType.Snippet, "✂️", "Snippet")
+    ];
+
+    private CaptureType _captureType = CaptureType.Note;
+    private string _title = "";
+    private string _content = "";
+    private string _url = "";
+    private bool _saving;
+    private bool _valid => !string.IsNullOrWhiteSpace(_title);
+    private string ContentLabel => _captureType == CaptureType.Url ? "Notes" : "Content / Notes";
+
+    private void OnTitleChanged(string value) => _title = value;
+
+    private async Task Submit()
+    {
+        if (!_valid)
+        {
+            return;
+        }
+
+        _saving = true;
+
+        try
+        {
+            var content = _captureType == CaptureType.Url && !string.IsNullOrWhiteSpace(_url)
+                ? $"Source: {_url.Trim()}\n\n{_content}".Trim()
+                : _content;
+
+            await NoteService.CreateAsync(new CreateNoteDto(
+                _title.Trim(),
+                content,
+                ParaCategory.Project,
+                Status: NoteStatus.Inbox));
+
+            Snackbar.Add("Captured to Inbox.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private sealed record CaptureOption(CaptureType Type, string Icon, string Label);
+}

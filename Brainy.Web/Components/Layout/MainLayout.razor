@@ -1,4 +1,8 @@
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Web.Components.Pages.Inbox
 @inherits LayoutComponentBase
+
+@inject IDialogService DialogService
 
 <MudThemeProvider Theme="_theme" />
 <MudPopoverProvider />
@@ -50,13 +54,53 @@
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-8">
             @Body
         </MudContainer>
+
+        <div class="layout-fab">
+            <MudFab Color="Color.Primary"
+                    StartIcon="@Icons.Material.Filled.Add"
+                    Label="Capture"
+                    Size="Size.Medium"
+                    OnClick="OpenQuickCaptureAsync" />
+        </div>
     </MudMainContent>
 </MudLayout>
+
+<style>
+    .layout-fab {
+        position: fixed;
+        right: 2rem;
+        bottom: 2rem;
+        z-index: 1000;
+    }
+
+    .layout-fab .mud-fab {
+        box-shadow: var(--shadow-md);
+    }
+
+    @@media (max-width: 600px) {
+        .layout-fab {
+            right: 1rem;
+            bottom: 1rem;
+        }
+    }
+</style>
 
 @code {
     private bool _drawerOpen = true;
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private async Task OpenQuickCaptureAsync()
+    {
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseOnEscapeKey = true
+        };
+
+        await DialogService.ShowAsync<QuickCaptureDialog>("Quick Capture", options);
+    }
 
     private static string GetInitials(string? name)
     {

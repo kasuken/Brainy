@@ -4,12 +4,14 @@
 @namespace Brainy.Web.Components.Pages.InboxPage
 
 @using Brainy.Application.DTOs.Notes
+@using Brainy.Application.DTOs.Inbox
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @using Brainy.Web.Components.Pages.Inbox
 @using Brainy.Web.Components.Pages.Notes
 
 @inject INoteService NoteService
+@inject IInboxMetricsService MetricsService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -82,6 +84,35 @@
             </div>
         }
     </div>
+
+    @* ── Metrics strip ── *@
+    @if (_metrics is not null)
+    {
+        <div class="inbox-metrics">
+            <div class="inbox-metric-tile">
+                <span class="inbox-metric-tile__value @(_metrics.WaitingCount > 10 ? "inbox-metric--warn" : "")">
+                    @_metrics.WaitingCount
+                </span>
+                <span class="inbox-metric-tile__label">Waiting</span>
+            </div>
+            <div class="inbox-metric-tile">
+                <span class="inbox-metric-tile__value">@_metrics.CapturedTodayCount</span>
+                <span class="inbox-metric-tile__label">Captured Today</span>
+            </div>
+            <div class="inbox-metric-tile">
+                <span class="inbox-metric-tile__value">
+                    @(_metrics.OldestItemAgeInDays.HasValue ? $"{_metrics.OldestItemAgeInDays}d" : "—")
+                </span>
+                <span class="inbox-metric-tile__label">Oldest Item</span>
+            </div>
+            <div class="inbox-metric-tile">
+                <span class="inbox-metric-tile__value">
+                    @(_metrics.AvgProcessingDays.HasValue ? $"{_metrics.AvgProcessingDays:F1}d" : "—")
+                </span>
+                <span class="inbox-metric-tile__label">Avg. Processing</span>
+            </div>
+        </div>
+    }
 
     @* ── Progress bar when notes exist ── *@
     @if (!_loading && _totalOnLoad > 0)
@@ -518,6 +549,43 @@
         color: var(--mud-palette-text-primary) !important;
     }
 
+    /* ── Metrics strip ── */
+    .inbox-metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .inbox-metric-tile {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        padding: 0.75rem 1.1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+        min-width: 100px;
+    }
+
+    .inbox-metric-tile__value {
+        font-family: 'Fraunces', serif;
+        font-size: 1.55rem;
+        font-weight: 500;
+        color: var(--mud-palette-text-secondary);
+        line-height: 1;
+    }
+
+    .inbox-metric--warn { color: var(--clay, #c0561d); }
+
+    .inbox-metric-tile__label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+    }
+
     /* ── Responsive ── */
     @@media (max-width: 540px) {
         .inbox-card {
@@ -538,6 +606,7 @@
 
 @code {
     private IReadOnlyList<NoteDto> _notes = [];
+    private InboxMetricsDto? _metrics;
     private bool _loading = true;
     private bool _busy;
     private Guid? _busyId;
@@ -575,6 +644,7 @@
     {
         _loading = true;
         _notes   = await NoteService.GetInboxAsync();
+        _metrics = await MetricsService.GetMetricsAsync();
         if (_totalOnLoad == 0)
             _totalOnLoad = _notes.Count;
         // Remove any selections for notes no longer in inbox

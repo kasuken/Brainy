@@ -4,4 +4,6 @@ namespace Brainy.Application.DTOs.Resources;
 public record CreateResourceDto(
     string Name,
     string? Description = null,
-    Guid? AreaId = null);
+    string? Topic = null,
+    Guid? AreaId = null,
+    IReadOnlyList<string>? Tags = null);

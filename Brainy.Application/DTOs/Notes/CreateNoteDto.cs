@@ -9,4 +9,5 @@ public record CreateNoteDto(
     ParaCategory ParaCategory = ParaCategory.Project,
     Guid? ProjectId = null,
     Guid? AreaId = null,
-    Guid? ResourceId = null);
+    Guid? ResourceId = null,
+    NoteStatus Status = NoteStatus.Inbox);
