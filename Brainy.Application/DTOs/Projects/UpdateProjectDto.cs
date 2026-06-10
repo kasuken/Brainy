@@ -6,10 +6,10 @@ namespace Brainy.Application.DTOs.Projects;
 public record UpdateProjectDto(
     Guid Id,
     string Name,
+    Guid AreaId,
     string? Description,
     string? DesiredOutcome,
     ProjectStatus Status,
     ProjectPriority Priority,
     DateTime? StartDate,
-    DateTime? DueDate,
-    Guid? AreaId);
+    DateTime? DueDate);

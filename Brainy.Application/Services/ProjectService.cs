@@ -245,6 +245,12 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        var areaExists = await context.Areas
+            .AnyAsync(a => a.Id == dto.AreaId && a.UserId == userId, cancellationToken)
+            .ConfigureAwait(false);
+        if (!areaExists)
+            throw new KeyNotFoundException($"Area '{dto.AreaId}' was not found.");
+
         var project = new Project
         {
             Id = Guid.NewGuid(),
@@ -270,6 +276,12 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         ArgumentNullException.ThrowIfNull(dto);
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var areaExists = await context.Areas
+            .AnyAsync(a => a.Id == dto.AreaId && a.UserId == userId, cancellationToken)
+            .ConfigureAwait(false);
+        if (!areaExists)
+            throw new KeyNotFoundException($"Area '{dto.AreaId}' was not found.");
 
         var project = await context.Projects
             .FirstOrDefaultAsync(p => p.Id == dto.Id && p.UserId == userId, cancellationToken)

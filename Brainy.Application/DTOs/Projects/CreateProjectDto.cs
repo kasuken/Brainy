@@ -5,10 +5,10 @@ namespace Brainy.Application.DTOs.Projects;
 /// <summary>Payload for creating a new project.</summary>
 public record CreateProjectDto(
     string Name,
+    Guid AreaId,
     string? Description = null,
     string? DesiredOutcome = null,
     ProjectStatus Status = ProjectStatus.NotStarted,
     ProjectPriority Priority = ProjectPriority.Medium,
     DateTime? StartDate = null,
-    DateTime? DueDate = null,
-    Guid? AreaId = null);
+    DateTime? DueDate = null);

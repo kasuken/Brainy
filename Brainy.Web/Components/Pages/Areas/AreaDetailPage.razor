@@ -138,11 +138,11 @@ else
                 }
             </div>
             <MudButton Variant="Variant.Text" Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.Link"
+                       StartIcon="@Icons.Material.Filled.DriveFileMove"
                        Size="Size.Small"
                        OnClick="ToggleLinkProjectPicker"
                        Disabled="_savingProjectLink">
-                Link Project
+                Assign Project
             </MudButton>
         </div>
 
@@ -153,7 +153,7 @@ else
                            Label="Select a project"
                            Variant="Variant.Outlined" Margin="Margin.Dense"
                            AnchorOrigin="Origin.BottomLeft"
-                           Placeholder="Choose project to link…">
+                           Placeholder="Choose project to assign…">
                     @foreach (var p in _availableProjects)
                     {
                         <MudSelectItem T="Guid?" Value="p.Id">@p.Name</MudSelectItem>
@@ -170,12 +170,12 @@ else
                         {
                             <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
                         }
-                        Link
+                        Assign
                     </MudButton>
                 </div>
                 @if (_availableProjects.Count == 0)
                 {
-                    <p class="ad-picker-empty">All non-archived projects are already linked to an area.</p>
+                    <p class="ad-picker-empty">No other non-archived projects are available to assign to this area.</p>
                 }
             </div>
         }
@@ -184,7 +184,7 @@ else
         {
             <div class="ad-empty">
                 <span class="ad-empty__icon">📂</span>
-                <p>No projects linked to this area yet.</p>
+                <p>No projects assigned to this area yet.</p>
             </div>
         }
         else
@@ -204,12 +204,6 @@ else
                                 </span>
                             </div>
                         </div>
-                        <MudIconButton Icon="@Icons.Material.Filled.LinkOff"
-                                       Size="Size.Small"
-                                       title="Unlink project"
-                                       Color="Color.Default"
-                                       Class="ad-row__unlink"
-                                       OnClick="() => UnlinkProjectAsync(project.Id, project.Name)" />
                     </div>
                 }
             </div>
@@ -674,7 +668,7 @@ else
         {
             var allProjects = await ProjectService.GetProjectSummariesAsync();
             _linkedProjects    = [.. allProjects.Where(p => p.AreaId == AreaId)];
-            _availableProjects = [.. allProjects.Where(p => p.AreaId is null && !p.IsArchived)];
+            _availableProjects = [.. allProjects.Where(p => p.AreaId != AreaId && !p.IsArchived)];
 
             var allNotes = await NoteService.GetAllAsync();
             _linkedNotes    = [.. allNotes.Where(n => n.AreaId == AreaId)];
@@ -752,7 +746,7 @@ else
         try
         {
             await AreaService.LinkProjectAsync(AreaId, _selectedProjectId.Value);
-            Snackbar.Add("Project linked.", Severity.Success);
+            Snackbar.Add("Project assigned to this area.", Severity.Success);
             _showLinkProjectPicker = false;
             _selectedProjectId = null;
             await LoadAsync();
@@ -764,20 +758,6 @@ else
         finally
         {
             _savingProjectLink = false;
-        }
-    }
-
-    private async Task UnlinkProjectAsync(Guid projectId, string projectName)
-    {
-        try
-        {
-            await AreaService.UnlinkProjectAsync(projectId);
-            Snackbar.Add($"Unlinked \"{projectName}\" from area.", Severity.Info);
-            await LoadAsync();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
         }
     }
 
