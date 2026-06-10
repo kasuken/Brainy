@@ -39,6 +39,10 @@ public class Project : BaseEntity, IUserOwnedEntity
 
     public Area? Area { get; set; }
 
+    public Guid? GoalId { get; set; }
+
+    public Goal? Goal { get; set; }
+
     public ICollection<TaskItem> Tasks { get; set; } = new List<TaskItem>();
 
     public ICollection<Note> Notes { get; set; } = new List<Note>();

@@ -19,43 +19,49 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Projects
+        var projects = await context.Projects
             .AsNoTracking()
+            .Include(p => p.Goal)
             .Where(p => p.UserId == userId && p.Status == ProjectStatus.Active)
             .OrderByDescending(p => p.Priority)
             .ThenBy(p => p.Name)
-            .Select(p => ToDto(p))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        return projects.Select(ToDto).ToList();
     }
 
     public async Task<IReadOnlyList<ProjectDto>> GetAllNonArchivedAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Projects
+        var projects = await context.Projects
             .AsNoTracking()
+            .Include(p => p.Goal)
             .Where(p => p.UserId == userId && p.Status != ProjectStatus.Archived && !p.IsArchived)
             .OrderByDescending(p => p.Priority)
             .ThenBy(p => p.Status)
             .ThenBy(p => p.Name)
-            .Select(p => ToDto(p))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        return projects.Select(ToDto).ToList();
     }
 
     public async Task<IReadOnlyList<ProjectDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Projects
+        var projects = await context.Projects
             .AsNoTracking()
+            .Include(p => p.Goal)
             .Where(p => p.UserId == userId && (p.IsArchived || p.Status == ProjectStatus.Archived))
             .OrderByDescending(p => p.ArchivedAtUtc)
             .ThenBy(p => p.Name)
-            .Select(p => ToDto(p))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        return projects.Select(ToDto).ToList();
     }
 
     public async Task<IReadOnlyList<ProjectSummaryDto>> GetProjectSummariesAsync(CancellationToken cancellationToken = default)
@@ -101,6 +107,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
 
         var project = await context.Projects
             .AsNoTracking()
+            .Include(p => p.Goal)
             .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -191,7 +198,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         return new ProjectDetailDto(
             project.Id, project.Name, project.Description, project.DesiredOutcome,
             project.Status, project.Priority, project.StartDate, project.DueDate,
-            project.CompletedDate, project.IsArchived, project.AreaId,
+            project.CompletedDate, project.IsArchived, project.AreaId, project.GoalId, project.Goal?.Title,
             project.CreatedAtUtc, project.UpdatedAtUtc, project.ArchivedAtUtc,
             totalTasks, openTasks, doneTasks,
             totalTasks > 0 ? Math.Round((double)doneTasks / totalTasks * 100, 1) : 0,
@@ -233,6 +240,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
 
         var project = await context.Projects
             .AsNoTracking()
+            .Include(p => p.Goal)
             .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -251,6 +259,16 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         if (!areaExists)
             throw new KeyNotFoundException($"Area '{dto.AreaId}' was not found.");
 
+        if (dto.GoalId.HasValue)
+        {
+            var goalExists = await context.Goals
+                .AnyAsync(g => g.Id == dto.GoalId.Value && g.UserId == userId && !g.IsArchived && g.Status != GoalStatus.Archived, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!goalExists)
+                throw new KeyNotFoundException($"Goal '{dto.GoalId}' was not found.");
+        }
+
         var project = new Project
         {
             Id = Guid.NewGuid(),
@@ -262,7 +280,8 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             Priority = dto.Priority,
             StartDate = dto.StartDate,
             DueDate = dto.DueDate,
-            AreaId = dto.AreaId
+            AreaId = dto.AreaId,
+            GoalId = dto.GoalId
         };
 
         context.Projects.Add(project);
@@ -283,6 +302,16 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         if (!areaExists)
             throw new KeyNotFoundException($"Area '{dto.AreaId}' was not found.");
 
+        if (dto.GoalId.HasValue)
+        {
+            var goalExists = await context.Goals
+                .AnyAsync(g => g.Id == dto.GoalId.Value && g.UserId == userId && !g.IsArchived && g.Status != GoalStatus.Archived, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!goalExists)
+                throw new KeyNotFoundException($"Goal '{dto.GoalId}' was not found.");
+        }
+
         var project = await context.Projects
             .FirstOrDefaultAsync(p => p.Id == dto.Id && p.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
@@ -296,6 +325,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         project.StartDate = dto.StartDate;
         project.DueDate = dto.DueDate;
         project.AreaId = dto.AreaId;
+        project.GoalId = dto.GoalId;
 
         if (dto.Status == ProjectStatus.Completed && project.CompletedDate is null)
             project.CompletedDate = DateTime.UtcNow;
@@ -443,7 +473,9 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         p.AreaId,
         p.CreatedAtUtc,
         p.UpdatedAtUtc,
-        p.ArchivedAtUtc);
+        p.ArchivedAtUtc,
+        p.GoalId,
+        p.Goal?.Title);
 
     // ── Deadline monitoring ──────────────────────────────────────────────────
 

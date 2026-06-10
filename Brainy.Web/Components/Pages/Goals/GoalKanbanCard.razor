@@ -1,0 +1,159 @@
+@using Brainy.Application.DTOs.Goals
+@using Brainy.Domain.Enums
+
+<MudPaper Class="goal-kanban-card"
+          Elevation="0"
+          role="button"
+          tabindex="0"
+          Style="@($"--goal-accent:{GetStatusColor(Goal.Status)}")"
+          @onclick="HandleClick">
+    <div class="goal-kanban-card__rail"></div>
+
+    <div class="goal-kanban-card__header">
+        <MudChip T="string"
+                 Class="goal-kanban-card__status"
+                 Color="@GetMudColor(Goal.Status)"
+                 Variant="Variant.Filled"
+                 Size="Size.Small">
+            @Goal.Status
+        </MudChip>
+
+        @if (Goal.TargetDate.HasValue)
+        {
+            <span class="goal-kanban-card__date @(IsTargetDateUrgent() ? "goal-kanban-card__date--urgent" : string.Empty)">
+                @Goal.TargetDate.Value.ToString("MMM d")
+            </span>
+        }
+    </div>
+
+    <MudText Typo="Typo.h6" Class="goal-kanban-card__title">
+        @Goal.Title
+    </MudText>
+
+    <div class="goal-kanban-card__meta">
+        <span>@Goal.CompletedMilestones/@Goal.TotalMilestones milestones</span>
+        <span>@Goal.ProgressPercent%</span>
+    </div>
+
+    <MudProgressLinear Class="goal-kanban-card__progress"
+                       Color="@GetMudColor(Goal.Status)"
+                       Rounded="true"
+                       Size="Size.Small"
+                       Value="@Goal.ProgressPercent" />
+</MudPaper>
+
+@code {
+    [Parameter] public GoalDto Goal { get; set; } = default!;
+    [Parameter] public EventCallback<GoalDto> OnCardClicked { get; set; }
+
+    private Task HandleClick() => OnCardClicked.InvokeAsync(Goal);
+
+    private bool IsTargetDateUrgent()
+        => Goal.TargetDate.HasValue
+           && Goal.TargetDate.Value.Date <= DateTime.Today.AddDays(7)
+           && Goal.Status is not GoalStatus.Achieved and not GoalStatus.Archived;
+
+    private static string GetStatusColor(GoalStatus status) => status switch
+    {
+        GoalStatus.Planned => "#9c7a35",
+        GoalStatus.Active => "#2f6f61",
+        GoalStatus.Achieved => "#5f7d3f",
+        GoalStatus.Abandoned => "#9f4f40",
+        GoalStatus.Archived => "#7d7466",
+        _ => "#c0561d"
+    };
+
+    private static Color GetMudColor(GoalStatus status) => status switch
+    {
+        GoalStatus.Planned => Color.Warning,
+        GoalStatus.Active => Color.Info,
+        GoalStatus.Achieved => Color.Success,
+        GoalStatus.Abandoned => Color.Error,
+        GoalStatus.Archived => Color.Dark,
+        _ => Color.Primary
+    };
+}
+
+<style>
+    .goal-kanban-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: .9rem;
+        padding: 1rem;
+        border-radius: 18px;
+        border: 1px solid color-mix(in srgb, var(--goal-accent) 22%, var(--line));
+        background:
+            linear-gradient(180deg, rgba(252, 250, 244, 0.96) 0%, rgba(244, 237, 225, 0.9) 100%);
+        box-shadow: var(--shadow-sm);
+        cursor: pointer;
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        overflow: hidden;
+    }
+
+    .goal-kanban-card:hover {
+        transform: translateY(-2px);
+        border-color: color-mix(in srgb, var(--goal-accent) 40%, var(--line));
+        box-shadow: var(--shadow-md);
+    }
+
+    .goal-kanban-card__rail {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        background: linear-gradient(180deg, var(--goal-accent) 0%, color-mix(in srgb, var(--goal-accent) 65%, white) 100%);
+    }
+
+    .goal-kanban-card__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        margin-left: .2rem;
+    }
+
+    .goal-kanban-card__status {
+        font-weight: 700;
+        letter-spacing: .03em;
+    }
+
+    .goal-kanban-card__date {
+        font-family: var(--font-body);
+        font-size: .78rem;
+        font-weight: 700;
+        color: var(--ink-soft);
+        background: rgba(33, 29, 23, 0.06);
+        border-radius: 999px;
+        padding: .22rem .55rem;
+    }
+
+    .goal-kanban-card__date--urgent {
+        color: #8f3125;
+        background: rgba(188, 71, 54, 0.12);
+    }
+
+    .goal-kanban-card__title {
+        margin: 0;
+        margin-left: .2rem;
+        font-family: var(--font-display);
+        font-size: 1.12rem;
+        line-height: 1.2;
+        color: var(--ink);
+    }
+
+    .goal-kanban-card__meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        margin-left: .2rem;
+        font-family: var(--font-body);
+        font-size: .82rem;
+        color: var(--ink-soft);
+    }
+
+    .goal-kanban-card__progress {
+        --mud-palette-primary: var(--goal-accent);
+        margin-left: .2rem;
+    }
+</style>

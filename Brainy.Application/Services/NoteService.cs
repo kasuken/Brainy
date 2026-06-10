@@ -248,5 +248,21 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         n.AreaId,
         n.ResourceId,
         n.CreatedAtUtc,
-        n.UpdatedAtUtc);
+        n.UpdatedAtUtc,
+        n.IsFavorite);
+
+    public async Task<NoteDto> ToggleFavoriteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var note = await context.Notes
+            .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Note '{id}' was not found.");
+
+        note.IsFavorite = !note.IsFavorite;
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return ToDto(note);
+    }
 }

@@ -1,0 +1,462 @@
+@page "/tasks-hub"
+@attribute [Authorize]
+@using Brainy.Application.DTOs
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@using Brainy.Web.Components.Pages.Tasks
+@inject ITasksHubService TasksHubService
+@inject ITaskService TaskService
+@inject ISnackbar Snackbar
+
+<PageTitle>Tasks Hub · Brainy</PageTitle>
+
+<style>
+    .td-page {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 3vw, 2rem);
+        font-family: var(--font-body);
+        color: var(--ink);
+    }
+
+    .td-eyebrow {
+        font-size: 0.7rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin: 0 0 0.4rem;
+    }
+
+    .td-greeting {
+        font-family: var(--font-display);
+        font-size: clamp(2rem, 5vw, 3.25rem);
+        font-weight: 600;
+        font-style: italic;
+        line-height: 1.1;
+        color: var(--ink);
+        margin: 0 0 2rem;
+    }
+
+    .td-sections { display: flex; flex-direction: column; gap: 2rem; }
+
+    .td-section { animation: td-fade-up 0.4s ease both; }
+
+    @@keyframes td-fade-up {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .td-section:nth-child(1) { animation-delay: 0.05s; }
+    .td-section:nth-child(2) { animation-delay: 0.10s; }
+    .td-section:nth-child(3) { animation-delay: 0.15s; }
+    .td-section:nth-child(4) { animation-delay: 0.20s; }
+    .td-section:nth-child(5) { animation-delay: 0.25s; }
+    .td-section:nth-child(6) { animation-delay: 0.30s; }
+
+    .td-section-head {
+        display: flex;
+        align-items: baseline;
+        gap: 0.65rem;
+        margin-bottom: 0.65rem;
+    }
+
+    .td-section-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+    }
+
+    .td-section-label--overdue { color: #b91c1c; }
+
+    .td-section-count { font-size: 0.72rem; color: var(--ink-faint); }
+
+    .td-task {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.65rem 0.85rem;
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-bottom: 0.4rem;
+        position: relative;
+        overflow: hidden;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .td-task::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 3px;
+    }
+
+    .td-task--critical::before { background: var(--clay); }
+    .td-task--high::before     { background: #d4722a; }
+    .td-task--medium::before   { background: var(--gold); }
+    .td-task--low::before      { background: var(--sage); }
+    .td-task--overdue { border-color: rgba(185,28,28,0.25); background: rgba(185,28,28,0.03); }
+
+    .td-task:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+
+    .td-task-body { flex: 1; min-width: 0; }
+
+    .td-task-title {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin: 0;
+    }
+
+    .td-task-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        margin-top: 0.15rem;
+        font-size: 0.72rem;
+        color: var(--ink-faint);
+    }
+
+    .td-task-project {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.1rem 0.45rem;
+        background: var(--paper-sunk);
+        border-radius: 4px;
+        font-size: 0.68rem;
+        color: var(--ink-soft);
+    }
+
+    .td-task-due { font-variant-numeric: tabular-nums; }
+    .td-task-due--overdue { color: #b91c1c; font-weight: 600; }
+
+    .td-widget {
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 1.1rem 1.25rem;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .td-empty {
+        padding: 0.6rem 0.85rem;
+        font-size: 0.78rem;
+        color: var(--ink-faint);
+        font-style: italic;
+    }
+
+    .td-skeleton {
+        height: 52px;
+        border-radius: 8px;
+        background: linear-gradient(90deg, var(--paper-sunk) 25%, var(--line) 50%, var(--paper-sunk) 75%);
+        background-size: 200% 100%;
+        animation: td-shimmer 1.4s ease infinite;
+        margin-bottom: 0.4rem;
+    }
+
+    @@keyframes td-shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    /* ── th- classes for the stat cards and health rows ── */
+
+    .th-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .th-stat-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 1rem 0.75rem;
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        gap: 0.35rem;
+        transition: box-shadow 0.15s;
+    }
+
+    .th-stat-card:hover { box-shadow: var(--shadow-sm); }
+
+    .th-stat-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+    }
+
+    .th-stat-value {
+        font-family: var(--font-display);
+        font-size: 2rem;
+        font-weight: 600;
+        line-height: 1;
+        color: var(--ink);
+    }
+
+    .th-stat--todo       { color: var(--ink-soft); }
+    .th-stat--inprogress { color: var(--clay); }
+    .th-stat--waiting    { color: var(--gold); }
+    .th-stat--done       { color: #16a34a; }
+
+    .th-health-row {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.4rem 0.5rem;
+        border-radius: 6px;
+        background: var(--paper-sunk);
+    }
+
+    .th-health-label {
+        flex: 1;
+        font-size: 0.82rem;
+        color: var(--ink-soft);
+    }
+</style>
+
+<AuthorizeView>
+    <Authorized>
+        <div class="td-page">
+            <p class="td-eyebrow">Task management</p>
+            <h1 class="td-greeting">Tasks Hub</h1>
+
+            @if (_loading)
+            {
+                <div>
+                    <div class="td-skeleton"></div>
+                    <div class="td-skeleton" style="width:85%;"></div>
+                    <div class="td-skeleton" style="width:70%;"></div>
+                    <div class="td-skeleton" style="width:90%;"></div>
+                </div>
+            }
+            else if (_loadError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                    Could not load Tasks Hub: @_loadError
+                </MudAlert>
+            }
+            else
+            {
+                @* ── Search bar ── *@
+                <div style="margin-bottom:1.5rem;">
+                    <MudTextField @bind-Value="_searchTerm"
+                                  Label="Search tasks"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  Clearable="true"
+                                  DebounceInterval="350"
+                                  OnDebounceIntervalElapsed="HandleSearch" />
+                </div>
+
+                @* ── Search results ── *@
+                @if (_searchResults is not null)
+                {
+                    <div class="td-section" style="margin-bottom:1.5rem;">
+                        <div class="td-section-head">
+                            <span class="td-section-label">Search Results</span>
+                            <span class="td-section-count">@_searchResults.TotalCount result@(_searchResults.TotalCount == 1 ? "" : "s")</span>
+                            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                           Size="Size.Small" Style="margin-left:auto;"
+                                           OnClick="ClearSearch" />
+                        </div>
+                        @if (_searchResults.Items.Count == 0)
+                        {
+                            <p class="td-empty">No tasks match your search.</p>
+                        }
+                        else
+                        {
+                            @foreach (var t in _searchResults.Items)
+                            {
+                                <div class="td-task @PriorityClass(t.Priority)">
+                                    <div class="td-task-body">
+                                        <p class="td-task-title">@t.Title</p>
+                                        <div class="td-task-meta">
+                                            <span class="td-task-project">@t.ProjectName</span>
+                                            <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
+                                                @t.Priority.ToString()
+                                            </MudChip>
+                                            @if (t.DueDate.HasValue)
+                                            {
+                                                <span class="td-task-due">Due @t.DueDate.Value.ToString("MMM d")</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <MudTooltip Text="Mark complete">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                                                       Size="Size.Small" Color="Color.Success"
+                                                       OnClick="() => HandleCompleted(t.Id)" />
+                                    </MudTooltip>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+                else
+                {
+                    @* ── Status summary strip ── *@
+                    <div style="margin-bottom:2rem;">
+                        <div class="td-section-head" style="margin-bottom:0.75rem;">
+                            <span class="td-section-label">Status Overview</span>
+                        </div>
+                        <TaskStatusSummaryWidget Summary="_aggregate!.StatusSummary" />
+                    </div>
+
+                    @* ── Widget sections ── *@
+                    <div class="td-sections">
+
+                        <TaskHealthWidget OverdueCount="_aggregate!.OverdueTasks.Count"
+                                          StaleCount="_aggregate!.StaleTasks.Count"
+                                          WithoutDueDateCount="_aggregate!.WithoutDueDateTasks.Count" />
+
+                        <TasksNeedingAttentionWidget Tasks="_aggregate!.NeedingAttentionTasks"
+                                                     OnComplete="HandleCompleted" />
+
+                        <OverdueTasksWidget Tasks="_aggregate!.OverdueTasks"
+                                            OnComplete="HandleCompleted" />
+
+                        <HighPriorityTasksWidget Tasks="_aggregate!.HighPriorityTasks"
+                                                 OnComplete="HandleCompleted" />
+
+                        <TasksOnHoldWidget Tasks="_aggregate!.OnHoldTasks"
+                                           OnResume="HandleResume" />
+
+                        <TasksWithoutDueDateWidget Tasks="_aggregate!.WithoutDueDateTasks"
+                                                   OnSetDueDate="HandleSetDueDateRequest" />
+
+                        <MyTasksWidget Tasks="_aggregate!.ActiveTasks"
+                                       OnComplete="HandleCompleted"
+                                       Collapsed="true" />
+
+                    </div>
+                }
+            }
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private bool _loading = true;
+    private string? _loadError;
+    private TasksHubAggregateDto? _aggregate;
+    private string _searchTerm = string.Empty;
+    private PagedResult<TasksHubTaskDto>? _searchResults;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loadError = null;
+        StateHasChanged();
+
+        try
+        {
+            _aggregate = await TasksHubService.GetHubAggregateAsync();
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleSearch()
+    {
+        if (string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _searchResults = null;
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            _searchResults = await TasksHubService.SearchTasksAsync(_searchTerm.Trim());
+        }
+        catch
+        {
+            Snackbar.Add("Search failed.", Severity.Error);
+        }
+
+        StateHasChanged();
+    }
+
+    private void ClearSearch()
+    {
+        _searchTerm = string.Empty;
+        _searchResults = null;
+        StateHasChanged();
+    }
+
+    private async Task HandleCompleted(Guid taskId)
+    {
+        try
+        {
+            await TaskService.CompleteAsync(taskId);
+            Snackbar.Add("Task completed.", Severity.Success);
+            await LoadAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not complete task.", Severity.Error);
+        }
+    }
+
+    private async Task HandleResume(Guid taskId)
+    {
+        try
+        {
+            var task = _aggregate!.OnHoldTasks.First(t => t.Id == taskId);
+            await TaskService.UpdateAsync(new UpdateTaskDto(
+                task.Id,
+                task.Title,
+                task.Description,
+                TaskItemStatus.InProgress,
+                task.Priority,
+                task.DueDate));
+            Snackbar.Add("Task resumed.", Severity.Success);
+            await LoadAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not resume task.", Severity.Error);
+        }
+    }
+
+    private Task HandleSetDueDateRequest(Guid taskId)
+    {
+        // Navigate to the project to set a due date — due date editing is out of scope for the hub page.
+        Snackbar.Add("Open the task in its project to set a due date.", Severity.Info);
+        return Task.CompletedTask;
+    }
+
+    private static Color PriorityColor(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => Color.Error,
+        TaskPriority.High     => Color.Warning,
+        TaskPriority.Medium   => Color.Info,
+        _                     => Color.Default,
+    };
+
+    private static string PriorityClass(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => "td-task--critical",
+        TaskPriority.High     => "td-task--high",
+        TaskPriority.Medium   => "td-task--medium",
+        _                     => "td-task--low",
+    };
+}

@@ -20,6 +20,8 @@ public record ProjectDetailDto(
     DateTime? CompletedDate,
     bool IsArchived,
     Guid? AreaId,
+    Guid? GoalId,
+    string? GoalTitle,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     DateTime? ArchivedAtUtc,

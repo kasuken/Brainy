@@ -58,4 +58,7 @@ public class Note : BaseEntity, IUserOwnedEntity
     public ICollection<NoteRelationship> IncomingRelationships { get; set; } = new List<NoteRelationship>();
 
     public ICollection<Output> Outputs { get; set; } = new List<Output>();
+
+    /// <summary>When true, the note is pinned to the Favorites section on the Notes page.</summary>
+    public bool IsFavorite { get; set; }
 }

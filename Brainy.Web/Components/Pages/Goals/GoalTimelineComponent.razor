@@ -1,0 +1,160 @@
+@using Brainy.Application.DTOs.Goals
+
+@if (OrderedMilestones.Count == 0)
+{
+    <div class="goal-timeline goal-timeline--empty">
+        <span class="goal-timeline__empty-icon">⋯</span>
+        <span>No milestones to map yet.</span>
+    </div>
+}
+else
+{
+    <div class="goal-timeline">
+        @foreach (var milestone in OrderedMilestones)
+        {
+            <div class="goal-timeline__item @(milestone.IsCompleted ? "goal-timeline__item--done" : null)">
+                <div class="goal-timeline__rail">
+                    <span class="goal-timeline__node"></span>
+                </div>
+                <div class="goal-timeline__content">
+                    <div class="goal-timeline__topline">
+                        <h4 class="goal-timeline__title">@milestone.Title</h4>
+                        <span class="goal-timeline__state">@(milestone.IsCompleted ? "Completed" : "Pending")</span>
+                    </div>
+                    <p class="goal-timeline__date">
+                        @if (milestone.IsCompleted && milestone.CompletedAtUtc.HasValue)
+                        {
+                            <span>Completed @milestone.CompletedAtUtc.Value.ToLocalTime().ToString("MMMM d, yyyy")</span>
+                        }
+                        else
+                        {
+                            <span>Added @milestone.CreatedAtUtc.ToLocalTime().ToString("MMMM d, yyyy")</span>
+                        }
+                    </p>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<style>
+.goal-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: .9rem;
+}
+
+.goal-timeline--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    min-height: 120px;
+    border-radius: 16px;
+    border: 1px dashed var(--line);
+    color: var(--ink-faint);
+    background: rgba(255,255,255,.28);
+}
+
+.goal-timeline__empty-icon {
+    color: var(--clay);
+    font-size: 1.2rem;
+}
+
+.goal-timeline__item {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: .85rem;
+}
+
+.goal-timeline__rail {
+    position: relative;
+    display: flex;
+    justify-content: center;
+}
+
+.goal-timeline__rail::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: -1.1rem;
+    width: 2px;
+    background: var(--line);
+}
+
+.goal-timeline__item:last-child .goal-timeline__rail::before {
+    bottom: .2rem;
+}
+
+.goal-timeline__node {
+    position: relative;
+    z-index: 1;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    margin-top: .25rem;
+    border: 2px solid var(--line-strong);
+    background: var(--paper-raised);
+    box-shadow: 0 0 0 4px rgba(255,255,255,.65);
+}
+
+.goal-timeline__content {
+    padding: .9rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--paper-raised);
+}
+
+.goal-timeline__topline {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .75rem;
+    flex-wrap: wrap;
+}
+
+.goal-timeline__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.02rem;
+    color: var(--ink);
+}
+
+.goal-timeline__state {
+    font-size: .7rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 700;
+}
+
+.goal-timeline__date {
+    margin: .35rem 0 0;
+    color: var(--ink-soft);
+    font-size: .84rem;
+}
+
+.goal-timeline__item--done .goal-timeline__node {
+    border-color: #2f7247;
+    background: #3c915d;
+    box-shadow: 0 0 0 4px rgba(60,145,93,.16);
+}
+
+.goal-timeline__item--done .goal-timeline__content {
+    border-color: rgba(60,145,93,.26);
+    background: linear-gradient(180deg, rgba(60,145,93,.08), transparent), var(--paper-raised);
+}
+
+.goal-timeline__item--done .goal-timeline__state {
+    color: #2f7247;
+}
+</style>
+
+@code {
+    [Parameter] public IReadOnlyList<GoalMilestoneDto> Milestones { get; set; } = [];
+
+    private IReadOnlyList<GoalMilestoneDto> OrderedMilestones => Milestones
+        .OrderBy(m => m.CompletedAtUtc ?? m.CreatedAtUtc)
+        .ThenBy(m => m.CreatedAtUtc)
+        .ToList();
+}

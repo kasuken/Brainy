@@ -17,4 +17,6 @@ public record ProjectDto(
     Guid? AreaId,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
-    DateTime? ArchivedAtUtc);
+    DateTime? ArchivedAtUtc,
+    Guid? GoalId = null,
+    string? GoalTitle = null);

@@ -1,0 +1,735 @@
+@page "/ideas/{Id:guid}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Ideas
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IIdeaService IdeaService
+@inject IAreaService AreaService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>@(_detail?.Title ?? "Idea") — Brainy</PageTitle>
+
+@if (_loading)
+{
+    <div class="id-loading">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+    </div>
+}
+else if (_detail is null)
+{
+    <div class="id-notfound">
+        <span class="id-notfound__glyph">◈</span>
+        <p class="id-notfound__title">Idea not found</p>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                   OnClick='() => Nav.NavigateTo("/ideas")'>
+            Back to Ideas
+        </MudButton>
+    </div>
+}
+else
+{
+    <!-- ── Header ──────────────────────────────────────────────────── -->
+    <div class="id-header">
+        <div class="id-breadcrumb">
+            <button class="id-back" @onclick='() => Nav.NavigateTo("/ideas")'>
+                <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+                    <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                </svg>
+                Ideas
+            </button>
+            <span class="id-breadcrumb__sep">›</span>
+            <span class="id-breadcrumb__current">@_detail.Title</span>
+        </div>
+
+        <div class="id-title-row">
+            <div class="id-title-block">
+                <div class="id-title-top">
+                    <h1 class="id-title">@_detail.Title</h1>
+                    <MudChip T="string" Size="Size.Small" Class=@($"id-status-chip id-status--{_detail.Status.ToString().ToLower()}")>
+                        @StatusLabel(_detail.Status)
+                    </MudChip>
+                    <MudChip T="string" Size="Size.Small" Class=@($"id-priority-chip id-priority--{_detail.Priority.ToString().ToLower()}")>
+                        @PriorityLabel(_detail.Priority)
+                    </MudChip>
+                    @if (_detail.IsArchived)
+                    {
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small">Archived</MudChip>
+                    }
+                </div>
+                <div class="id-meta-row">
+                    @if (!string.IsNullOrWhiteSpace(_detail.AreaName))
+                    {
+                        <span class="id-meta-item">
+                            <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12" style="opacity:.5"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8z"/><path d="m9.25 6.825-2.578 5.156-.172.344-.688-.344.172-.344 2.25-4.5H5.75V6h4v.825z"/></svg>
+                            @_detail.AreaName
+                        </span>
+                    }
+                    <span class="id-meta-item">Created @_detail.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+                    <span class="id-meta-item">Updated @_detail.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+                    @if (_detail.IsArchived && _detail.ArchivedAtUtc.HasValue)
+                    {
+                        <span class="id-meta-item id-meta-item--warn">
+                            Archived @_detail.ArchivedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy")
+                        </span>
+                    }
+                </div>
+            </div>
+            <div class="id-actions">
+                @if (_detail.Status != IdeaStatus.ConvertedToProject && !_detail.IsArchived)
+                {
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Transform"
+                               Size="Size.Small"
+                               Disabled="_converting"
+                               OnClick="ConfirmConvertAsync">
+                        @if (_converting)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        }
+                        Convert to Project
+                    </MudButton>
+                }
+                @if (_detail.IsArchived)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Success"
+                               StartIcon="@Icons.Material.Filled.Unarchive"
+                               Size="Size.Small" OnClick="ConfirmRestoreAsync"
+                               Disabled="_saving">
+                        Restore
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.Archive"
+                               Size="Size.Small" OnClick="ConfirmArchiveAsync"
+                               Disabled="_saving">
+                        Archive
+                    </MudButton>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Details (collapsible) ─────────────────────────────────── -->
+    <MudExpansionPanels Class="id-details-panel" Elevation="0">
+        <MudExpansionPanel Text="Details">
+            <div class="id-details-grid">
+                <MudTextField @bind-Value="_editTitle"
+                              Label="Title"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Required="true"
+                              Class="id-field" />
+                <MudTextField @bind-Value="_editDescription"
+                              Label="Description"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Lines="3"
+                              Class="id-field" />
+                <div class="id-field-row">
+                    <MudSelect T="IdeaPriority" @bind-Value="_editPriority"
+                               Label="Priority"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Class="id-field">
+                        @foreach (IdeaPriority p in Enum.GetValues<IdeaPriority>())
+                        {
+                            <MudSelectItem T="IdeaPriority" Value="p">@PriorityLabel(p)</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="IdeaStatus" @bind-Value="_editStatus"
+                               Label="Status"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Class="id-field">
+                        @foreach (IdeaStatus s in Enum.GetValues<IdeaStatus>())
+                        {
+                            <MudSelectItem T="IdeaStatus" Value="s">@StatusLabel(s)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+                <MudSelect T="Guid?" @bind-Value="_editAreaId"
+                           Label="Area"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Clearable="true"
+                           Placeholder="No area"
+                           Class="id-field">
+                    @foreach (var area in _areas)
+                    {
+                        <MudSelectItem T="Guid?" Value="(Guid?)area.Id">@area.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            <div class="id-details-footer">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           Size="Size.Small"
+                           Disabled="_savingDetails"
+                           OnClick="SaveDetailsAsync">
+                    @if (_savingDetails)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                    }
+                    Save Details
+                </MudButton>
+            </div>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+
+    <!-- ── Tabs: Research / Competitors / Notes ─────────────────── -->
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" Class="id-tabs">
+
+        <!-- Tab 1: Research -->
+        <MudTabPanel Text="Research" Icon="@Icons.Material.Outlined.Science">
+            <div class="id-tab-content">
+                <MudTextField @bind-Value="_editResearch"
+                              Label="Research Notes"
+                              HelperText="Document links, references, and research findings"
+                              Variant="Variant.Outlined"
+                              Lines="16"
+                              Class="id-textarea" />
+                <div class="id-tab-footer">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Size="Size.Small"
+                               Disabled="_savingResearch"
+                               OnClick="SaveResearchAsync">
+                        @if (_savingResearch)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        }
+                        Save Research
+                    </MudButton>
+                </div>
+            </div>
+        </MudTabPanel>
+
+        <!-- Tab 2: Competitors -->
+        <MudTabPanel Text="Competitors" Icon="@Icons.Material.Outlined.CompareArrows">
+            <div class="id-tab-content">
+                <MudTextField @bind-Value="_editCompetitors"
+                              Label="Competitor Analysis"
+                              HelperText="Document competitor names, strengths, weaknesses, and notes"
+                              Variant="Variant.Outlined"
+                              Lines="16"
+                              Class="id-textarea" />
+                <div class="id-tab-footer">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Size="Size.Small"
+                               Disabled="_savingCompetitors"
+                               OnClick="SaveCompetitorsAsync">
+                        @if (_savingCompetitors)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        }
+                        Save Competitors
+                    </MudButton>
+                </div>
+            </div>
+        </MudTabPanel>
+
+        <!-- Tab 3: Notes -->
+        <MudTabPanel Text="Notes" Icon="@Icons.Material.Outlined.EditNote">
+            <div class="id-tab-content">
+                <MudTextField @bind-Value="_editNotes"
+                              Label="Notes &amp; Observations"
+                              HelperText="Miscellaneous thoughts, observations, and ideas (supports markdown)"
+                              Variant="Variant.Outlined"
+                              Lines="16"
+                              Class="id-textarea" />
+                <div class="id-tab-footer">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Size="Size.Small"
+                               Disabled="_savingNotes"
+                               OnClick="SaveNotesAsync">
+                        @if (_savingNotes)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        }
+                        Save Notes
+                    </MudButton>
+                </div>
+            </div>
+        </MudTabPanel>
+
+    </MudTabs>
+}
+
+<!-- Archive confirmation -->
+<MudMessageBox @ref="_archiveMsgBox" Title="Archive Idea?" CancelText="Cancel">
+    <MessageContent>
+        Archiving <strong>@_detail?.Title</strong> will hide it from active views. You can restore it at any time.
+    </MessageContent>
+    <YesButton>
+        <MudButton Color="Color.Warning" Variant="Variant.Filled">Archive</MudButton>
+    </YesButton>
+</MudMessageBox>
+
+<!-- Restore confirmation -->
+<MudMessageBox @ref="_restoreMsgBox" Title="Restore Idea?" CancelText="Cancel">
+    <MessageContent>
+        Restore <strong>@_detail?.Title</strong> back to active ideas?
+    </MessageContent>
+    <YesButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled">Restore</MudButton>
+    </YesButton>
+</MudMessageBox>
+
+<!-- Convert-to-Project confirmation -->
+<MudMessageBox @ref="_convertMsgBox" Title="Convert to Project?" CancelText="Cancel">
+    <MessageContent>
+        Convert this idea to a project? A new project will be created with the idea's title, description, and area.
+    </MessageContent>
+    <YesButton>
+        <MudButton Color="Color.Secondary" Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.Transform">
+            Convert
+        </MudButton>
+    </YesButton>
+</MudMessageBox>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Idea Detail page — "Archival Mind" workspace style
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Loading / not-found */
+.id-loading, .id-notfound {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 6rem 1rem;
+}
+.id-notfound__glyph {
+    font-size: 3rem;
+    opacity: .15;
+    font-family: var(--font-display);
+    color: var(--clay);
+}
+.id-notfound__title {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    color: var(--ink);
+    margin: 0;
+}
+
+/* Breadcrumb */
+.id-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    margin-bottom: 1rem;
+    font-size: .8rem;
+    color: var(--ink-faint);
+}
+.id-back {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    color: var(--clay);
+    font-family: var(--font-body);
+    font-size: .8rem;
+    font-weight: 600;
+    padding: 0;
+    transition: opacity .15s;
+}
+.id-back:hover { opacity: .7; }
+.id-breadcrumb__sep { color: var(--line-strong); }
+.id-breadcrumb__current {
+    color: var(--ink-soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 320px;
+}
+
+/* Header */
+.id-header { margin-bottom: 1.5rem; }
+
+.id-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+.id-title-block { flex: 1; min-width: 0; }
+.id-title-top {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    flex-wrap: wrap;
+    margin-bottom: .5rem;
+}
+.id-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+    font-weight: 500;
+    font-style: italic;
+    color: var(--ink);
+    margin: 0;
+    letter-spacing: -.02em;
+    line-height: 1.15;
+}
+
+/* Meta row */
+.id-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .6rem;
+    margin-top: .3rem;
+}
+.id-meta-item {
+    font-size: .75rem;
+    color: var(--ink-faint);
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+}
+.id-meta-item--warn { color: #9c4416; }
+
+/* Status chips (inline, frameless) */
+.id-status-chip, .id-priority-chip {
+    font-size: .68rem !important;
+    font-weight: 700 !important;
+    letter-spacing: .04em !important;
+    text-transform: uppercase;
+    border-radius: 999px !important;
+    height: 22px !important;
+    padding: 0 .55rem !important;
+}
+
+/* Status colors */
+.id-status--captured           { background: var(--paper-sunk) !important; color: var(--ink-soft) !important; }
+.id-status--researching        { background: rgba(205,154,58,.18) !important; color: #7a5c0e !important; }
+.id-status--validating         { background: rgba(111,122,90,.18) !important; color: #4a5c38 !important; }
+.id-status--planned            { background: rgba(192,86,29,.12) !important; color: var(--clay-deep) !important; }
+.id-status--rejected           { background: rgba(176,58,24,.10) !important; color: #b03a18 !important; }
+.id-status--convertedtoproject { background: rgba(111,122,90,.25) !important; color: #354a28 !important; }
+.id-status--archived           { background: var(--paper-sunk) !important; color: var(--ink-faint) !important; }
+
+/* Priority colors */
+.id-priority--critical { background: rgba(176,58,24,.12) !important; color: #b03a18 !important; }
+.id-priority--high     { background: rgba(212,114,42,.12) !important; color: #d4722a !important; }
+.id-priority--medium   { background: rgba(160,120,32,.12) !important; color: #a07820 !important; }
+.id-priority--low      { background: rgba(111,122,90,.12) !important; color: var(--sage) !important; }
+
+/* Actions column */
+.id-actions {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    flex-shrink: 0;
+}
+
+/* Details expansion panel */
+.id-details-panel {
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--line) !important;
+    border-radius: 14px !important;
+    background: var(--paper-raised) !important;
+}
+.id-details-grid {
+    display: flex;
+    flex-direction: column;
+    gap: .85rem;
+    padding: .25rem 0 .5rem;
+}
+.id-field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .85rem;
+}
+.id-field { width: 100%; }
+.id-details-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: .75rem;
+}
+
+/* Tabs */
+.id-tabs {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper-raised);
+    overflow: hidden;
+}
+.id-tab-content {
+    padding: 1.25rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+}
+.id-textarea { width: 100%; }
+.id-tab-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+@@media (max-width: 640px) {
+    .id-title-row  { flex-direction: column; }
+    .id-actions    { flex-direction: row; flex-wrap: wrap; }
+    .id-field-row  { grid-template-columns: 1fr; }
+    .id-breadcrumb__current { max-width: 160px; }
+}
+</style>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool _loading = true;
+    private bool _saving  = false;
+    private IdeaDetailDto? _detail;
+    private IReadOnlyList<AreaDto> _areas = [];
+
+    // Details form state
+    private string      _editTitle       = string.Empty;
+    private string?     _editDescription;
+    private IdeaPriority _editPriority   = IdeaPriority.Medium;
+    private IdeaStatus   _editStatus     = IdeaStatus.Captured;
+    private Guid?        _editAreaId;
+    private bool         _savingDetails;
+
+    // Tab save state
+    private string? _editResearch;
+    private string? _editCompetitors;
+    private string? _editNotes;
+    private bool    _savingResearch;
+    private bool    _savingCompetitors;
+    private bool    _savingNotes;
+
+    // Confirmation dialogs
+    private MudMessageBox _archiveMsgBox  = null!;
+    private MudMessageBox _restoreMsgBox  = null!;
+    private MudMessageBox _convertMsgBox  = null!;
+
+    private bool _converting;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var detailTask = IdeaService.GetDetailAsync(Id);
+        var areasTask  = AreaService.GetAllActiveAsync();
+
+        await Task.WhenAll(detailTask, areasTask);
+
+        _detail = detailTask.Result;
+        _areas  = areasTask.Result;
+
+        if (_detail is not null)
+            PopulateEditForm(_detail);
+
+        _loading = false;
+    }
+
+    private void PopulateEditForm(IdeaDetailDto d)
+    {
+        _editTitle       = d.Title;
+        _editDescription = d.Description;
+        _editPriority    = d.Priority;
+        _editStatus      = d.Status;
+        _editAreaId      = d.AreaId;
+        _editResearch    = d.Research;
+        _editCompetitors = d.Competitors;
+        _editNotes       = d.Notes;
+    }
+
+    // ── Save helpers ───────────────────────────────────────────────────────
+
+    private UpdateIdeaDto BuildUpdateDto() => new(
+        Id:          _detail!.Id,
+        Title:       _editTitle,
+        Description: _editDescription,
+        AreaId:      _editAreaId,
+        Priority:    _editPriority,
+        Status:      _editStatus,
+        Research:    _editResearch,
+        Competitors: _editCompetitors,
+        Notes:       _editNotes);
+
+    private async Task SaveDetailsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editTitle)) return;
+
+        _savingDetails = true;
+        try
+        {
+            await IdeaService.UpdateAsync(BuildUpdateDto());
+            Snackbar.Add("Details saved.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingDetails = false;
+        }
+    }
+
+    private async Task SaveResearchAsync()
+    {
+        _savingResearch = true;
+        try
+        {
+            await IdeaService.UpdateAsync(BuildUpdateDto());
+            Snackbar.Add("Research saved.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingResearch = false;
+        }
+    }
+
+    private async Task SaveCompetitorsAsync()
+    {
+        _savingCompetitors = true;
+        try
+        {
+            await IdeaService.UpdateAsync(BuildUpdateDto());
+            Snackbar.Add("Competitor analysis saved.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingCompetitors = false;
+        }
+    }
+
+    private async Task SaveNotesAsync()
+    {
+        _savingNotes = true;
+        try
+        {
+            await IdeaService.UpdateAsync(BuildUpdateDto());
+            Snackbar.Add("Notes saved.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingNotes = false;
+        }
+    }
+
+    // ── Archive / Restore ──────────────────────────────────────────────────
+
+    private async Task ConfirmArchiveAsync()
+    {
+        bool? confirmed = await _archiveMsgBox.ShowAsync();
+        if (confirmed is not true) return;
+
+        _saving = true;
+        try
+        {
+            await IdeaService.ArchiveAsync(Id);
+            Snackbar.Add("Idea archived.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ConfirmRestoreAsync()
+    {
+        bool? confirmed = await _restoreMsgBox.ShowAsync();
+        if (confirmed is not true) return;
+
+        _saving = true;
+        try
+        {
+            await IdeaService.RestoreAsync(Id);
+            Snackbar.Add("Idea restored.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // ── Convert to Project ─────────────────────────────────────────────────
+
+    private async Task ConfirmConvertAsync()
+    {
+        bool? confirmed = await _convertMsgBox.ShowAsync();
+        if (confirmed is not true) return;
+
+        _converting = true;
+        try
+        {
+            await IdeaService.ConvertToProjectAsync(Id);
+            Snackbar.Add("Idea converted to project!", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _converting = false;
+        }
+    }
+
+    // ── Label helpers ──────────────────────────────────────────────────────
+
+    private static string StatusLabel(IdeaStatus s) => s switch
+    {
+        IdeaStatus.Captured            => "Captured",
+        IdeaStatus.Researching         => "Researching",
+        IdeaStatus.Validating          => "Validating",
+        IdeaStatus.Planned             => "Planned",
+        IdeaStatus.Rejected            => "Rejected",
+        IdeaStatus.ConvertedToProject  => "Converted",
+        IdeaStatus.Archived            => "Archived",
+        _                              => s.ToString()
+    };
+
+    private static string PriorityLabel(IdeaPriority p) => p switch
+    {
+        IdeaPriority.Low      => "Low",
+        IdeaPriority.Medium   => "Medium",
+        IdeaPriority.High     => "High",
+        IdeaPriority.Critical => "Critical",
+        _                     => p.ToString()
+    };
+}

@@ -28,6 +28,11 @@ public static class DependencyInjection
         services.AddScoped<ICurrentTaskRecommendationService, CurrentTaskRecommendationService>();
         services.AddScoped<ITodayNotificationService, TodayNotificationService>();
         services.AddScoped<IUserDashboardPreferenceService, UserDashboardPreferenceService>();
+        services.AddScoped<IIdeaService, IdeaService>();
+        services.AddScoped<ITasksHubService, TasksHubService>();
+        services.AddScoped<ICalendarService, CalendarService>();
+        services.AddScoped<IGoalService, GoalService>();
+        services.AddScoped<IGoalMilestoneService, GoalMilestoneService>();
         return services;
     }
 }

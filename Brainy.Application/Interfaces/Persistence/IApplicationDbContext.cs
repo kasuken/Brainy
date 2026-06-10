@@ -24,6 +24,9 @@ public interface IApplicationDbContext
     DbSet<TaskItem> Tasks { get; }
     DbSet<Output> Outputs { get; }
     DbSet<UserDashboardPreference> DashboardPreferences { get; }
+    DbSet<Idea> Ideas { get; }
+    DbSet<Goal> Goals { get; }
+    DbSet<GoalMilestone> GoalMilestones { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

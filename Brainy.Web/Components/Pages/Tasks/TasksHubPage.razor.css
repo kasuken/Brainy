@@ -1,0 +1,54 @@
+/* Tasks Hub page — styles are defined inline in TasksHubPage.razor */
+
+
+.th-stat-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem 0.75rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    gap: 0.35rem;
+    transition: box-shadow 0.15s;
+}
+
+.th-stat-card:hover {
+    box-shadow: var(--shadow-sm);
+}
+
+.th-stat-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+}
+
+.th-stat-value {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--ink);
+}
+
+.th-stat--todo       { color: var(--ink-soft); }
+.th-stat--inprogress { color: var(--clay); }
+.th-stat--waiting    { color: var(--gold, #B8860B); }
+.th-stat--done       { color: #16a34a; }
+
+.th-health-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 6px;
+    background: var(--paper-sunk);
+}
+
+.th-health-label {
+    flex: 1;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+}

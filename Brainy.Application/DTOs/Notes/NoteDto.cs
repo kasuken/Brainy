@@ -15,4 +15,5 @@ public record NoteDto(
     Guid? AreaId,
     Guid? ResourceId,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    bool IsFavorite = false);

@@ -73,6 +73,15 @@ else
                 {
                     <p class="pd-description">@_detail.Description</p>
                 }
+                @if (_detail.GoalId.HasValue && !string.IsNullOrWhiteSpace(_detail.GoalTitle))
+                {
+                    <div class="pd-goal-link">
+                        <span class="pd-goal-link__label">Goal</span>
+                        <a class="pd-goal-link__anchor" href="@($"/goals/{_detail.GoalId.Value}")">
+                            @_detail.GoalTitle
+                        </a>
+                    </div>
+                }
             </div>
             <div class="pd-actions">
                 <MudButton Variant="Variant.Outlined" Color="Color.Default"
@@ -439,6 +448,30 @@ else
     margin: .4rem 0 0;
     line-height: 1.6;
 }
+.pd-goal-link {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+    margin-top: .8rem;
+    padding: .5rem .75rem;
+    border-radius: 12px;
+    border: 1px solid rgba(160,120,32,.18);
+    background: rgba(160,120,32,.07);
+}
+.pd-goal-link__label {
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+}
+.pd-goal-link__anchor {
+    color: var(--clay-deep);
+    font-weight: 600;
+    text-decoration: none;
+}
+.pd-goal-link__anchor:hover { text-decoration: underline; }
 .pd-actions {
     display: flex;
     flex-direction: column;

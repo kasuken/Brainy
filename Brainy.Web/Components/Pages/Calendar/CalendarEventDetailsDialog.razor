@@ -1,0 +1,227 @@
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+
+@inject ITaskService TaskService
+@inject ISnackbar Snackbar
+
+<MudDialog Class="ced-dialog">
+    <TitleContent>
+        <div class="ced-header">
+            <span class="ced-priority-dot @PriorityDotClass"></span>
+            <span class="ced-title">@Item.Text</span>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div class="ced-body">
+            @* Project / Area *@
+            <div class="ced-meta-row">
+                <MudIcon Icon="@Icons.Material.Filled.FolderSpecial" Size="Size.Small" Class="ced-meta-icon" />
+                <span class="ced-meta-value">@Item.ProjectName</span>
+                @if (!string.IsNullOrWhiteSpace(Item.AreaName))
+                {
+                    <span class="ced-meta-sep">·</span>
+                    <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" Class="ced-meta-icon" />
+                    <span class="ced-meta-value">@Item.AreaName</span>
+                }
+            </div>
+
+            @* Due date *@
+            <div class="ced-meta-row">
+                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="@DueDateIconClass" />
+                <span class="@DueDateValueClass">
+                    @Item.Start.ToString("dddd, MMMM d, yyyy")
+                    @if (Item.IsOverdue)
+                    {
+                        <span class="ced-overdue-badge">overdue</span>
+                    }
+                </span>
+            </div>
+
+            @* Status *@
+            <div class="ced-meta-row">
+                <MudIcon Icon="@StatusIcon" Size="Size.Small" Class="ced-meta-icon" />
+                <MudChip T="string" Size="Size.Small" Color="@StatusColor" Variant="Variant.Outlined">
+                    @StatusLabel
+                </MudChip>
+            </div>
+
+            @* Priority *@
+            <div class="ced-meta-row">
+                <MudIcon Icon="@Icons.Material.Filled.Flag" Size="Size.Small" Class="ced-meta-icon" />
+                <MudChip T="string" Size="Size.Small" Color="@PriorityColor" Variant="Variant.Filled">
+                    @Item.Priority.ToString()
+                </MudChip>
+            </div>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="Cancel">Close</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Warning"
+                   StartIcon="@Icons.Material.Filled.Archive"
+                   Disabled="_busy"
+                   OnClick="ArchiveAsync">Archive</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                   StartIcon="@Icons.Material.Filled.CheckCircle"
+                   Disabled="_busy || Item.Status == TaskItemStatus.Done"
+                   OnClick="CompleteAsync">Complete</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+.ced-dialog .mud-dialog { border-radius: 16px; }
+
+.ced-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.ced-priority-dot {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.ced-dot--critical { background: var(--clay); }
+.ced-dot--high     { background: #d4722a; }
+.ced-dot--medium   { background: var(--gold); }
+.ced-dot--low      { background: var(--sage); }
+
+.ced-title {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.3;
+}
+
+.ced-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 0.25rem 0 0.5rem;
+}
+
+.ced-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+}
+
+.ced-meta-icon {
+    color: var(--ink-faint);
+}
+
+.ced-meta-icon--overdue { color: #b91c1c; }
+
+.ced-meta-value { color: var(--ink-soft); }
+
+.ced-meta-value--overdue { color: #b91c1c; font-weight: 600; }
+
+.ced-meta-sep { color: var(--ink-faint); }
+
+.ced-overdue-badge {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.4rem;
+    background: rgba(185,28,28,0.1);
+    color: #b91c1c;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public TaskCalendarItem Item { get; set; } = null!;
+
+    private bool _busy;
+
+    private string PriorityDotClass => Item.Priority switch
+    {
+        TaskPriority.Critical => "ced-priority-dot ced-dot--critical",
+        TaskPriority.High     => "ced-priority-dot ced-dot--high",
+        TaskPriority.Medium   => "ced-priority-dot ced-dot--medium",
+        _                     => "ced-priority-dot ced-dot--low",
+    };
+
+    private string DueDateIconClass  => Item.IsOverdue ? "ced-meta-icon ced-meta-icon--overdue" : "ced-meta-icon";
+    private string DueDateValueClass => Item.IsOverdue ? "ced-meta-value ced-meta-value--overdue" : "ced-meta-value";
+
+    private Color PriorityColor => Item.Priority switch
+    {
+        TaskPriority.Critical => Color.Error,
+        TaskPriority.High     => Color.Warning,
+        TaskPriority.Medium   => Color.Info,
+        _                     => Color.Default,
+    };
+
+    private string StatusLabel => Item.Status switch
+    {
+        TaskItemStatus.Todo       => "To Do",
+        TaskItemStatus.InProgress => "In Progress",
+        TaskItemStatus.Waiting    => "Waiting",
+        TaskItemStatus.Done       => "Done",
+        _                         => Item.Status.ToString(),
+    };
+
+    private Color StatusColor => Item.Status switch
+    {
+        TaskItemStatus.InProgress => Color.Primary,
+        TaskItemStatus.Done       => Color.Success,
+        TaskItemStatus.Waiting    => Color.Warning,
+        _                         => Color.Default,
+    };
+
+    private string StatusIcon => Item.Status switch
+    {
+        TaskItemStatus.InProgress => Icons.Material.Filled.PlayArrow,
+        TaskItemStatus.Done       => Icons.Material.Filled.CheckCircle,
+        TaskItemStatus.Waiting    => Icons.Material.Filled.Pause,
+        _                         => Icons.Material.Outlined.RadioButtonUnchecked,
+    };
+
+    private async Task CompleteAsync()
+    {
+        _busy = true;
+        try
+        {
+            await TaskService.CompleteAsync(Item.TaskId);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not complete task: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ArchiveAsync()
+    {
+        _busy = true;
+        try
+        {
+            await TaskService.ArchiveAsync(Item.TaskId);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not archive task: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

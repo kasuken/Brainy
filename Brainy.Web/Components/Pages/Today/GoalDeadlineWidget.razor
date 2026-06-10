@@ -1,0 +1,125 @@
+@using Brainy.Application.DTOs.Goals
+
+@* Shows overdue and due-soon goals on the Today dashboard *@
+
+@if (OverdueGoals.Count > 0 || DueSoonGoals.Count > 0)
+{
+    <div class="td-widget td-section">
+        <div class="td-section-head">
+            <span class="td-section-label">Goal deadlines</span>
+            <span class="td-section-count">@(OverdueGoals.Count + DueSoonGoals.Count) goal@((OverdueGoals.Count + DueSoonGoals.Count) == 1 ? "" : "s")</span>
+        </div>
+
+        @if (OverdueGoals.Count > 0)
+        {
+            <div class="td-goal-group">
+                <div class="td-section-head">
+                    <span class="td-section-label td-section-label--overdue">Overdue Goals</span>
+                    <span class="td-section-count">@OverdueGoals.Count</span>
+                </div>
+
+                @foreach (var goal in OverdueGoals)
+                {
+                    <a class="td-goal td-goal--overdue" href="@($"/goals/{goal.Id}")">
+                        <div class="td-task-body">
+                            <p class="td-task-title">@goal.Title</p>
+                            <div class="td-task-meta">
+                                @if (!string.IsNullOrWhiteSpace(goal.AreaName))
+                                {
+                                    <span class="td-task-project">@goal.AreaName</span>
+                                }
+                                @if (goal.TargetDate.HasValue)
+                                {
+                                    <span class="td-task-due td-task-due--overdue">@goal.TargetDate.Value.ToString("MMM d, yyyy")</span>
+                                }
+                            </div>
+                        </div>
+                    </a>
+                }
+            </div>
+        }
+
+        @if (DueSoonGoals.Count > 0)
+        {
+            <div class="td-goal-group">
+                <div class="td-section-head">
+                    <span class="td-section-label td-section-label--week">Due Soon</span>
+                    <span class="td-section-count">@DueSoonGoals.Count</span>
+                </div>
+
+                @foreach (var goal in DueSoonGoals)
+                {
+                    <a class="td-goal td-goal--soon" href="@($"/goals/{goal.Id}")">
+                        <div class="td-task-body">
+                            <p class="td-task-title">@goal.Title</p>
+                            <div class="td-task-meta">
+                                @if (!string.IsNullOrWhiteSpace(goal.AreaName))
+                                {
+                                    <span class="td-task-project">@goal.AreaName</span>
+                                }
+                                @if (goal.TargetDate.HasValue)
+                                {
+                                    <span class="td-task-due">@goal.TargetDate.Value.ToString("MMM d, yyyy")</span>
+                                }
+                            </div>
+                        </div>
+                    </a>
+                }
+            </div>
+        }
+    </div>
+}
+
+<style>
+    .td-goal-group + .td-goal-group {
+        margin-top: 1rem;
+    }
+
+    .td-goal {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.65rem 0.85rem;
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-bottom: 0.4rem;
+        position: relative;
+        overflow: hidden;
+        text-decoration: none;
+        transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+    }
+
+    .td-goal::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+    }
+
+    .td-goal:hover {
+        border-color: var(--line-strong);
+        box-shadow: var(--shadow-sm);
+        transform: translateY(-1px);
+    }
+
+    .td-goal--overdue {
+        background: rgba(185,28,28,0.03);
+        border-color: rgba(185,28,28,0.24);
+    }
+
+    .td-goal--overdue::before {
+        background: #b91c1c;
+    }
+
+    .td-goal--soon::before {
+        background: var(--gold);
+    }
+</style>
+
+@code {
+    [Parameter] public IReadOnlyList<GoalDto> OverdueGoals { get; set; } = [];
+    [Parameter] public IReadOnlyList<GoalDto> DueSoonGoals { get; set; } = [];
+}

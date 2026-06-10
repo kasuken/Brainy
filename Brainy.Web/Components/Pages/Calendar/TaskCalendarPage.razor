@@ -1,0 +1,503 @@
+@page "/tasks-calendar"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using Brainy.Application.DTOs.Calendar
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.DTOs.Projects
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@using Heron.MudCalendar
+
+@inject ICalendarService CalendarService
+@inject ITaskService TaskService
+@inject IProjectService ProjectService
+@inject IAreaService AreaService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Tasks Calendar · Brainy</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        <div class="cal-page">
+            <div class="cal-header">
+                <p class="cal-eyebrow">Schedule</p>
+                <h1 class="cal-title">Tasks Calendar</h1>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="cal-skeleton-wrap">
+                    <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+                </div>
+            }
+            else if (_loadError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-4">
+                    Could not load calendar: @_loadError
+                </MudAlert>
+            }
+            else
+            {
+                <div class="cal-layout">
+                    @* ── Left sidebar ── *@
+                    <aside class="cal-sidebar">
+                        @* Filters panel *@
+                        <div class="cal-widget">
+                            <div class="cal-widget-header">
+                                <MudIcon Icon="@Icons.Material.Filled.FilterList" Size="Size.Small" Class="cal-widget-icon" />
+                                <span class="cal-widget-title">Filters</span>
+                                @if (_hasActiveFilters)
+                                {
+                                    <MudButton Variant="Variant.Text" Size="Size.Small"
+                                               Style="margin-left:auto;font-size:0.7rem;"
+                                               OnClick="ClearFilters">Clear</MudButton>
+                                }
+                            </div>
+
+                            <MudTextField @bind-Value="_filter.SearchTerm"
+                                          Label="Search tasks"
+                                          Variant="Variant.Outlined"
+                                          Adornment="Adornment.Start"
+                                          AdornmentIcon="@Icons.Material.Filled.Search"
+                                          Clearable="true"
+                                          Margin="Margin.Dense"
+                                          DebounceInterval="400"
+                                          OnDebounceIntervalElapsed="ApplyFiltersAsync"
+                                          Class="mb-3" />
+
+                            <MudSelect T="Guid?" Value="@_filter.ProjectId"
+                                       Label="Project" Variant="Variant.Outlined"
+                                       Margin="Margin.Dense" Clearable="true"
+                                       ValueChanged="@OnProjectFilterChangedAsync"
+                                       Class="mb-3">
+                                @foreach (var p in _projects)
+                                {
+                                    <MudSelectItem T="Guid?" Value="@((Guid?)p.Id)">@p.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+
+                            <MudSelect T="Guid?" Value="@_filter.AreaId"
+                                       Label="Area" Variant="Variant.Outlined"
+                                       Margin="Margin.Dense" Clearable="true"
+                                       ValueChanged="@OnAreaFilterChangedAsync"
+                                       Class="mb-3">
+                                @foreach (var a in _areas)
+                                {
+                                    <MudSelectItem T="Guid?" Value="@((Guid?)a.Id)">@a.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+
+                            <MudSelect T="TaskPriority?" Value="@_filter.Priority"
+                                       Label="Priority" Variant="Variant.Outlined"
+                                       Margin="Margin.Dense" Clearable="true"
+                                       ValueChanged="@OnPriorityFilterChangedAsync"
+                                       Class="mb-3">
+                                <MudSelectItem T="TaskPriority?" Value="@((TaskPriority?)TaskPriority.Critical)">⚑ Critical</MudSelectItem>
+                                <MudSelectItem T="TaskPriority?" Value="@((TaskPriority?)TaskPriority.High)">↑ High</MudSelectItem>
+                                <MudSelectItem T="TaskPriority?" Value="@((TaskPriority?)TaskPriority.Medium)">— Medium</MudSelectItem>
+                                <MudSelectItem T="TaskPriority?" Value="@((TaskPriority?)TaskPriority.Low)">↓ Low</MudSelectItem>
+                            </MudSelect>
+
+                            <MudSelect T="TaskItemStatus?" Value="@_filter.Status"
+                                       Label="Status" Variant="Variant.Outlined"
+                                       Margin="Margin.Dense" Clearable="true"
+                                       ValueChanged="@OnStatusFilterChangedAsync">
+                                <MudSelectItem T="TaskItemStatus?" Value="@((TaskItemStatus?)TaskItemStatus.Todo)">To Do</MudSelectItem>
+                                <MudSelectItem T="TaskItemStatus?" Value="@((TaskItemStatus?)TaskItemStatus.InProgress)">In Progress</MudSelectItem>
+                                <MudSelectItem T="TaskItemStatus?" Value="@((TaskItemStatus?)TaskItemStatus.Waiting)">Waiting</MudSelectItem>
+                            </MudSelect>
+                        </div>
+
+                        @* Upcoming deadlines widget *@
+                        @if (_deadlines is not null)
+                        {
+                            <div class="cal-widget cal-deadlines">
+                                <div class="cal-widget-header">
+                                    <MudIcon Icon="@Icons.Material.Filled.AccessAlarm" Size="Size.Small" Class="cal-widget-icon cal-widget-icon--warn" />
+                                    <span class="cal-widget-title">Upcoming Deadlines</span>
+                                </div>
+
+                                @if (_deadlines.Overdue.Count > 0)
+                                {
+                                    <p class="cal-deadline-group cal-deadline-group--overdue">
+                                        Overdue · @_deadlines.Overdue.Count
+                                    </p>
+                                    @foreach (var t in _deadlines.Overdue.Take(4))
+                                    {
+                                        <div class="cal-deadline-item cal-deadline-item--overdue">
+                                            <span class="cal-deadline-dot cal-dot--critical"></span>
+                                            <span class="cal-deadline-title">@t.Title</span>
+                                            <span class="cal-deadline-date">@t.DueDate!.Value.ToString("MMM d")</span>
+                                        </div>
+                                    }
+                                    @if (_deadlines.Overdue.Count > 4)
+                                    {
+                                        <p class="cal-deadline-more">+@(_deadlines.Overdue.Count - 4) more</p>
+                                    }
+                                }
+
+                                @if (_deadlines.DueToday.Count > 0)
+                                {
+                                    <p class="cal-deadline-group">Today · @_deadlines.DueToday.Count</p>
+                                    @foreach (var t in _deadlines.DueToday.Take(4))
+                                    {
+                                        <div class="cal-deadline-item">
+                                            <span class="cal-deadline-dot @DotClass(t.Priority)"></span>
+                                            <span class="cal-deadline-title">@t.Title</span>
+                                            <span class="cal-deadline-date">Today</span>
+                                        </div>
+                                    }
+                                }
+
+                                @if (_deadlines.DueThisWeek.Count > 0)
+                                {
+                                    <p class="cal-deadline-group">This week · @_deadlines.DueThisWeek.Count</p>
+                                    @foreach (var t in _deadlines.DueThisWeek.Take(4))
+                                    {
+                                        <div class="cal-deadline-item">
+                                            <span class="cal-deadline-dot @DotClass(t.Priority)"></span>
+                                            <span class="cal-deadline-title">@t.Title</span>
+                                            <span class="cal-deadline-date">@t.DueDate!.Value.ToString("MMM d")</span>
+                                        </div>
+                                    }
+                                }
+
+                                @if (_deadlines.Overdue.Count == 0 && _deadlines.DueToday.Count == 0 && _deadlines.DueThisWeek.Count == 0)
+                                {
+                                    <p class="cal-empty">No upcoming deadlines.</p>
+                                }
+                            </div>
+                        }
+
+                        @* Workload summary *@
+                        @if (_workload.Count > 0)
+                        {
+                            <div class="cal-widget">
+                                <div class="cal-widget-header">
+                                    <MudIcon Icon="@Icons.Material.Filled.BarChart" Size="Size.Small" Class="cal-widget-icon" />
+                                    <span class="cal-widget-title">Workload (next 14 days)</span>
+                                </div>
+                                <div class="cal-workload-bars">
+                                    @foreach (var (date, count) in _workload.OrderBy(x => x.Key).Take(14))
+                                    {
+                                        <div class="cal-workload-day" title="@date.ToString("MMM d"): @count task@(count == 1 ? "" : "s")">
+                                            <div class="cal-workload-bar" style="height:@Math.Min(count * 8, 40)px"></div>
+                                            <span class="cal-workload-label">@date.ToString("d")</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </aside>
+
+                    @* ── Calendar main area ── *@
+                    <main class="cal-main">
+                        <MudCalendar TItem="TaskCalendarItem"
+                                     Items="@_calendarItems"
+                                     ShowDay="@_showDay"
+                                     ShowWeek="@_showWeek"
+                                     ShowWorkWeek="@_showWorkWeek"
+                                     ShowMonth="@_showMonth"
+                                     EnableDragItems="true"
+                                     ItemClicked="@(EventCallback.Factory.Create<TaskCalendarItem>(this, HandleItemClick))"
+                                     ItemChanged="@(EventCallback.Factory.Create<TaskCalendarItem>(this, HandleItemChanged))"
+                                     CellClicked="HandleDateClick"
+                                     DayTimeInterval="CalendarTimeInterval.Minutes60">
+
+                            @* ── Month view card (compact) ── *@
+                            <MonthTemplate Context="item">
+                                <div class="ev ev-month @item.CssClass @(item.IsOverdue ? "ev--overdue" : "")">
+                                    <div class="ev-bar ev-bar--@PriorityKey(item.Priority)"></div>
+                                    <div class="ev-month__body">
+                                        <span class="ev-month__title">@item.Text</span>
+                                        @if (!string.IsNullOrEmpty(item.ProjectName))
+                                        {
+                                            <span class="ev-month__project">@item.ProjectName</span>
+                                        }
+                                    </div>
+                                    @if (item.IsOverdue)
+                                    {
+                                        <span class="ev-overdue-dot" title="Overdue"></span>
+                                    }
+                                </div>
+                            </MonthTemplate>
+
+                            @* ── Week view card (medium) ── *@
+                            <WeekTemplate Context="item">
+                                <div class="ev ev-week @item.CssClass @(item.IsOverdue ? "ev--overdue" : "")">
+                                    <div class="ev-bar ev-bar--@PriorityKey(item.Priority)"></div>
+                                    <div class="ev-week__body">
+                                        <div class="ev-week__title">@item.Text</div>
+                                        <div class="ev-week__meta">
+                                            @if (!string.IsNullOrEmpty(item.ProjectName))
+                                            {
+                                                <span class="ev-tag ev-tag--project">@item.ProjectName</span>
+                                            }
+                                            <span class="ev-status-icon ev-status--@StatusKey(item.Status)" title="@item.Status"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </WeekTemplate>
+
+                            @* ── Day view card (expanded) ── *@
+                            <DayTemplate Context="item">
+                                <div class="ev ev-day @item.CssClass @(item.IsOverdue ? "ev--overdue" : "")">
+                                    <div class="ev-bar ev-bar--@PriorityKey(item.Priority)"></div>
+                                    <div class="ev-day__body">
+                                        <div class="ev-day__title">@item.Text</div>
+                                        <div class="ev-day__tags">
+                                            @if (!string.IsNullOrEmpty(item.ProjectName))
+                                            {
+                                                <span class="ev-tag ev-tag--project">@item.ProjectName</span>
+                                            }
+                                            @if (!string.IsNullOrEmpty(item.AreaName))
+                                            {
+                                                <span class="ev-tag ev-tag--area">@item.AreaName</span>
+                                            }
+                                        </div>
+                                        <div class="ev-day__pills">
+                                            <span class="ev-pill ev-pill--@PriorityKey(item.Priority)">@item.Priority</span>
+                                            <span class="ev-pill ev-pill--status ev-pill--@StatusKey(item.Status)">@StatusLabel(item.Status)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </DayTemplate>
+
+                        </MudCalendar>
+                    </main>
+                </div>
+            }
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    // ── State ────────────────────────────────────────────────────────────────────
+    private bool _loading = true;
+    private string? _loadError;
+
+    // Calendar view availability (mirrors the views shown in the toolbar switcher).
+    private bool _showDay = true;
+    private bool _showWeek = true;
+    private bool _showWorkWeek = true;
+    private bool _showMonth = true;
+
+    private List<TaskCalendarItem> _calendarItems = [];
+    private UpcomingDeadlinesDto? _deadlines;
+    private IReadOnlyDictionary<DateOnly, int> _workload = new Dictionary<DateOnly, int>();
+
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<AreaDto>    _areas    = [];
+
+    // Mutable filter state (not record so we can patch individual props)
+    private MutableFilter _filter = new();
+
+    private bool _hasActiveFilters =>
+        _filter.ProjectId.HasValue || _filter.AreaId.HasValue ||
+        _filter.Priority.HasValue  || _filter.Status.HasValue ||
+        !string.IsNullOrWhiteSpace(_filter.SearchTerm);
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReferenceDataAsync();
+        await LoadCalendarDataAsync();
+    }
+
+    private async Task LoadReferenceDataAsync()
+    {
+        try
+        {
+            _projects = await ProjectService.GetAllNonArchivedAsync();
+            _areas    = await AreaService.GetAllActiveAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not load reference data: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async Task LoadCalendarDataAsync()
+    {
+        _loading    = true;
+        _loadError  = null;
+
+        try
+        {
+            var filter = _filter.ToDto();
+            var tasks  = await CalendarService.GetCalendarTasksAsync(filter);
+
+            _calendarItems = tasks.Select(ToCalendarItem).ToList();
+            _deadlines     = await CalendarService.GetUpcomingDeadlinesAsync();
+
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            _workload = await CalendarService.GetWorkloadAsync(today, today.AddDays(13));
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ── Event handlers ────────────────────────────────────────────────────────────
+
+    private async Task HandleItemClick(TaskCalendarItem item)
+    {
+        var parameters = new DialogParameters<CalendarEventDetailsDialog>
+        {
+            { d => d.Item, item }
+        };
+        var dialog = await DialogService.ShowAsync<CalendarEventDetailsDialog>(
+            string.Empty,
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await LoadCalendarDataAsync();
+    }
+
+    private async Task HandleItemChanged(TaskCalendarItem item)
+    {
+        // MudCalendar updates item.Start when dragged; use it as the new due date
+        try
+        {
+            await CalendarService.RescheduleDueDateAsync(item.TaskId, item.Start.Date);
+            Snackbar.Add($"Rescheduled to {item.Start:MMM d}.", Severity.Success);
+            await LoadCalendarDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not reschedule: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task HandleDateClick(DateTime date)
+    {
+        var parameters = new DialogParameters<QuickTaskDialog>
+        {
+            { d => d.SelectedDate, date },
+            { d => d.Projects,     _projects }
+        };
+        var dialog = await DialogService.ShowAsync<QuickTaskDialog>(
+            "New Task",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("Task created.", Severity.Success);
+            await LoadCalendarDataAsync();
+        }
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        await LoadCalendarDataAsync();
+    }
+
+    private async Task OnProjectFilterChangedAsync(Guid? value)
+    {
+        _filter.ProjectId = value;
+        await LoadCalendarDataAsync();
+    }
+
+    private async Task OnAreaFilterChangedAsync(Guid? value)
+    {
+        _filter.AreaId = value;
+        await LoadCalendarDataAsync();
+    }
+
+    private async Task OnPriorityFilterChangedAsync(TaskPriority? value)
+    {
+        _filter.Priority = value;
+        await LoadCalendarDataAsync();
+    }
+
+    private async Task OnStatusFilterChangedAsync(TaskItemStatus? value)
+    {
+        _filter.Status = value;
+        await LoadCalendarDataAsync();
+    }
+
+    private async Task ClearFilters()
+    {
+        _filter = new MutableFilter();
+        await LoadCalendarDataAsync();
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    private static TaskCalendarItem ToCalendarItem(CalendarTaskDto t) => new()
+    {
+        TaskId      = t.Id,
+        Text        = t.Title,
+        Start       = t.DueDate!.Value.Date,
+        End         = t.DueDate!.Value.Date,
+        AllDay      = true,
+        Priority    = t.Priority,
+        Status      = t.Status,
+        ProjectId   = t.ProjectId,
+        ProjectName = t.ProjectName,
+        AreaId      = t.AreaId,
+        AreaName    = t.AreaName,
+        IsOverdue   = t.IsOverdue,
+    };
+
+    private static string DotClass(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => "cal-dot--critical",
+        TaskPriority.High     => "cal-dot--high",
+        TaskPriority.Medium   => "cal-dot--medium",
+        _                     => "cal-dot--low",
+    };
+
+    private static string PriorityKey(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => "critical",
+        TaskPriority.High     => "high",
+        TaskPriority.Medium   => "medium",
+        _                     => "low",
+    };
+
+    private static string StatusKey(TaskItemStatus s) => s switch
+    {
+        TaskItemStatus.InProgress => "inprogress",
+        TaskItemStatus.Waiting    => "waiting",
+        TaskItemStatus.Done       => "done",
+        _                         => "todo",
+    };
+
+    private static string StatusLabel(TaskItemStatus s) => s switch
+    {
+        TaskItemStatus.InProgress => "In Progress",
+        TaskItemStatus.Waiting    => "Waiting",
+        TaskItemStatus.Done       => "Done",
+        _                         => "To Do",
+    };
+
+    // ── Nested types ──────────────────────────────────────────────────────────────
+
+    /// <summary>Mutable bag for filter state so individual properties can be patched.</summary>
+    private sealed class MutableFilter
+    {
+        public Guid?          ProjectId  { get; set; }
+        public Guid?          AreaId     { get; set; }
+        public TaskPriority?  Priority   { get; set; }
+        public TaskItemStatus? Status    { get; set; }
+        public string?        SearchTerm { get; set; }
+
+        public CalendarFilterDto ToDto() =>
+            new(ProjectId, AreaId, Priority, Status, SearchTerm);
+    }
+}

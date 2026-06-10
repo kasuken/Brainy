@@ -1,0 +1,572 @@
+@page "/goals/{GoalId:guid}"
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Goals
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@attribute [Authorize]
+@inject IGoalService GoalService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>@(_detail?.Title ?? "Goal") — Brainy</PageTitle>
+
+@if (_loading)
+{
+    <div class="god-loading">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+    </div>
+}
+else if (_detail is null)
+{
+    <div class="god-notfound">
+        <span class="god-notfound__glyph">◎</span>
+        <p class="god-notfound__title">Goal not found</p>
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                   OnClick='() => Nav.NavigateTo("/goals")'>
+            Back to Goals
+        </MudButton>
+    </div>
+}
+else
+{
+    <div class="god-page">
+        <div class="god-breadcrumb">
+            <button class="god-back" @onclick='() => Nav.NavigateTo("/goals")' type="button">
+                <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+                    <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z" />
+                </svg>
+                Goals
+            </button>
+            <span class="god-breadcrumb__sep">›</span>
+            <span class="god-breadcrumb__current">@_detail.Title</span>
+        </div>
+
+        <section class="god-hero">
+            <div class="god-hero__content">
+                <div class="god-hero__badges">
+                    <span class="god-badge god-status--@_detail.Status.ToString().ToLowerInvariant()">
+                        @StatusLabel(_detail.Status)
+                    </span>
+                    @if (!string.IsNullOrWhiteSpace(_detail.AreaName))
+                    {
+                        <span class="god-badge god-area">@_detail.AreaName</span>
+                    }
+                    @if (_detail.TargetDate.HasValue)
+                    {
+                        <span class="god-badge god-target">Target @_detail.TargetDate.Value.ToString("MMM d, yyyy")</span>
+                    }
+                </div>
+
+                <h1 class="god-title">@_detail.Title</h1>
+
+                @if (!string.IsNullOrWhiteSpace(_detail.Description))
+                {
+                    <p class="god-description">@_detail.Description</p>
+                }
+
+                <div class="god-progress">
+                    <div class="god-progress__header">
+                        <span>Milestone progress</span>
+                        <strong>@_detail.ProgressPercent%</strong>
+                    </div>
+                    <div class="god-progress__track">
+                        <div class="god-progress__fill" style="width:@_detail.ProgressPercent%"></div>
+                    </div>
+                    <div class="god-progress__meta">
+                        <span>@_detail.CompletedMilestones of @_detail.TotalMilestones milestones completed</span>
+                        @if (_detail.AchievedDate.HasValue)
+                        {
+                            <span>Achieved @_detail.AchievedDate.Value.ToString("MMMM d, yyyy")</span>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="god-actions">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.Edit"
+                           Size="Size.Small"
+                           OnClick="OpenEditDialogAsync">
+                    Edit
+                </MudButton>
+                @if (!_detail.IsArchived)
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Default"
+                               StartIcon="@Icons.Material.Filled.Archive"
+                               Size="Size.Small"
+                               OnClick="ConfirmArchiveAsync">
+                        Archive
+                    </MudButton>
+                }
+            </div>
+        </section>
+
+        <section class="god-stats">
+            <div class="god-stat">
+                <span class="god-stat__label">Created</span>
+                <strong>@_detail.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</strong>
+            </div>
+            <div class="god-stat">
+                <span class="god-stat__label">Updated</span>
+                <strong>@_detail.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</strong>
+            </div>
+            <div class="god-stat">
+                <span class="god-stat__label">Status</span>
+                <strong>@StatusLabel(_detail.Status)</strong>
+            </div>
+            <div class="god-stat">
+                <span class="god-stat__label">Linked projects</span>
+                <strong>@_detail.Projects.Count</strong>
+            </div>
+        </section>
+
+        <div class="god-grid">
+            <section class="god-panel">
+                <GoalMilestoneListComponent GoalId="GoalId" OnMilestonesChanged="HandleMilestonesChangedAsync" />
+            </section>
+
+            <section class="god-panel">
+                <div class="god-section__header">
+                    <h2 class="god-section__title">Timeline</h2>
+                    <p class="god-section__sub">Chronological pulse of the goal.</p>
+                </div>
+                <GoalTimelineComponent Milestones="_detail.Milestones" />
+            </section>
+        </div>
+
+        <section class="god-panel">
+            <div class="god-section__header">
+                <h2 class="god-section__title">Linked Projects</h2>
+                <p class="god-section__sub">Projects already aligned to this longer horizon.</p>
+            </div>
+
+            @if (_detail.Projects.Count == 0)
+            {
+                <div class="god-empty">
+                    <span class="god-empty__icon">⊕</span>
+                    <span>No linked projects yet.</span>
+                </div>
+            }
+            else
+            {
+                <div class="god-projects">
+                    @foreach (var project in _detail.Projects)
+                    {
+                        <button class="god-project-card" type="button" @onclick="() => OpenProject(project.Id)">
+                            <div>
+                                <span class="god-project-card__eyebrow">Project</span>
+                                <h3 class="god-project-card__title">@project.Name</h3>
+                            </div>
+                            <span class="god-badge god-project-status">@ProjectStatusLabel(project.Status)</span>
+                        </button>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+}
+
+<style>
+/* Goal detail — "Compass Room" */
+.god-loading,
+.god-notfound {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 6rem 1rem;
+}
+
+.god-notfound__glyph {
+    font-size: 3rem;
+    opacity: .15;
+    color: var(--clay);
+    font-family: var(--font-display);
+}
+
+.god-notfound__title {
+    margin: 0;
+    color: var(--ink);
+    font-size: 1.4rem;
+    font-family: var(--font-display);
+}
+
+.god-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding-bottom: 3rem;
+}
+
+.god-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    margin-bottom: .25rem;
+    font-size: .8rem;
+    color: var(--ink-faint);
+}
+
+.god-back {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    color: var(--clay);
+    font-family: var(--font-body);
+    font-size: .8rem;
+    font-weight: 600;
+    padding: 0;
+}
+
+.god-back:hover { opacity: .75; }
+.god-breadcrumb__sep { color: var(--line-strong); }
+.god-breadcrumb__current { color: var(--ink-soft); }
+
+.god-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    padding: 1.4rem;
+    border-radius: 24px;
+    border: 1px solid var(--line);
+    background:
+        radial-gradient(circle at top right, rgba(160,120,32,.16), transparent 26%),
+        radial-gradient(circle at left center, rgba(192,86,29,.10), transparent 34%),
+        var(--paper-raised);
+    box-shadow: var(--shadow-md);
+}
+
+.god-hero__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    margin-bottom: .8rem;
+}
+
+.god-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: .22rem .65rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.god-status--planned { background: var(--paper-sunk); color: var(--ink-soft); }
+.god-status--active { background: rgba(111,122,90,.14); color: #4a5c38; }
+.god-status--achieved { background: rgba(60,145,93,.14); color: #2f7247; }
+.god-status--abandoned { background: rgba(129,118,98,.14); color: #665a49; }
+.god-status--archived { background: var(--paper-sunk); color: var(--ink-faint); }
+.god-area { background: rgba(160,120,32,.10); color: #7a5c0e; }
+.god-target { background: rgba(192,86,29,.08); color: var(--clay); }
+.god-project-status { background: rgba(111,122,90,.10); color: var(--ink-soft); }
+
+.god-title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    font-weight: 500;
+    line-height: 1.08;
+    color: var(--ink);
+}
+
+.god-description {
+    margin: .7rem 0 0;
+    color: var(--ink-soft);
+    max-width: 70ch;
+    line-height: 1.7;
+}
+
+.god-progress {
+    margin-top: 1.1rem;
+    padding: .95rem 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(160,120,32,.18);
+    background: rgba(255,255,255,.45);
+}
+
+.god-progress__header,
+.god-progress__meta {
+    display: flex;
+    justify-content: space-between;
+    gap: .75rem;
+    flex-wrap: wrap;
+}
+
+.god-progress__header {
+    margin-bottom: .5rem;
+    color: var(--ink-soft);
+    font-size: .82rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.god-progress__track {
+    height: 8px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--paper-sunk);
+}
+
+.god-progress__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--gold), var(--clay));
+    transition: width .45s ease;
+}
+
+.god-progress__meta {
+    margin-top: .55rem;
+    color: var(--ink-faint);
+    font-size: .78rem;
+}
+
+.god-actions {
+    display: flex;
+    align-items: flex-start;
+    gap: .6rem;
+    flex-wrap: wrap;
+}
+
+.god-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: .8rem;
+}
+
+.god-stat,
+.god-panel {
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--paper-raised);
+    box-shadow: var(--shadow-sm);
+}
+
+.god-stat {
+    padding: .95rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+}
+
+.god-stat__label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--ink-faint);
+    font-weight: 700;
+}
+
+.god-stat strong {
+    color: var(--ink);
+    font-size: .96rem;
+}
+
+.god-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, .95fr);
+    gap: 1rem;
+}
+
+.god-panel {
+    padding: 1.1rem;
+}
+
+.god-section__header {
+    margin-bottom: 1rem;
+}
+
+.god-section__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    color: var(--ink);
+}
+
+.god-section__sub {
+    margin: .2rem 0 0;
+    color: var(--ink-faint);
+    font-size: .84rem;
+}
+
+.god-empty {
+    min-height: 110px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .55rem;
+    border-radius: 16px;
+    border: 1px dashed var(--line);
+    color: var(--ink-faint);
+    background: rgba(255,255,255,.3);
+}
+
+.god-empty__icon {
+    color: var(--clay);
+    font-size: 1.15rem;
+}
+
+.god-projects {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: .85rem;
+}
+
+.god-project-card {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    padding: 1rem;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255,255,255,.38), transparent), var(--paper);
+    text-align: left;
+    cursor: pointer;
+    transition: transform .18s, box-shadow .18s, border-color .18s;
+}
+
+.god-project-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+    border-color: var(--line-strong);
+}
+
+.god-project-card__eyebrow {
+    display: block;
+    margin-bottom: .3rem;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--ink-faint);
+    font-weight: 700;
+}
+
+.god-project-card__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.02rem;
+    color: var(--ink);
+}
+
+@@media (max-width: 900px) {
+    .god-grid,
+    .god-hero {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+@code {
+    [Parameter] public Guid GoalId { get; set; }
+
+    private bool _loading = true;
+    private GoalDetailDto? _detail;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            _detail = await GoalService.GetDetailAsync(GoalId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            _detail = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenEditDialogAsync()
+    {
+        var parameters = new DialogParameters<GoalEditorDialog>();
+        parameters.Add(x => x.GoalId, GoalId);
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<GoalEditorDialog>("Edit Goal", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled)
+            return;
+
+        if (result.Data is GoalDto goal)
+        {
+            Snackbar.Add($"\"{goal.Title}\" updated.", Severity.Success);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task ConfirmArchiveAsync()
+    {
+        var title = _detail?.Title ?? "this goal";
+        var confirmed = await DialogService.ShowMessageBox(
+            "Archive goal",
+            $"Archive \"{title}\"? It will be moved out of active views.",
+            yesText: "Archive",
+            cancelText: "Cancel");
+
+        if (confirmed != true)
+            return;
+
+        try
+        {
+            await GoalService.ArchiveAsync(GoalId);
+            Snackbar.Add($"\"{title}\" archived.", Severity.Success);
+            Nav.NavigateTo("/goals");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task HandleMilestonesChangedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private void OpenProject(Guid projectId) => Nav.NavigateTo($"/projects/{projectId}");
+
+    private static string StatusLabel(GoalStatus status) => status switch
+    {
+        GoalStatus.Planned => "Planned",
+        GoalStatus.Active => "Active",
+        GoalStatus.Achieved => "Achieved",
+        GoalStatus.Abandoned => "Abandoned",
+        GoalStatus.Archived => "Archived",
+        _ => status.ToString()
+    };
+
+    private static string ProjectStatusLabel(ProjectStatus status) => status switch
+    {
+        ProjectStatus.NotStarted => "Not Started",
+        ProjectStatus.Active => "Active",
+        ProjectStatus.Waiting => "Waiting",
+        ProjectStatus.Completed => "Completed",
+        ProjectStatus.Archived => "Archived",
+        _ => status.ToString()
+    };
+}

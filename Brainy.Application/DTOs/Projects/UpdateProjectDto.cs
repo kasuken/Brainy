@@ -12,4 +12,5 @@ public record UpdateProjectDto(
     ProjectStatus Status,
     ProjectPriority Priority,
     DateTime? StartDate,
-    DateTime? DueDate);
+    DateTime? DueDate,
+    Guid? GoalId = null);

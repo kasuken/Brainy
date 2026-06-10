@@ -1,0 +1,194 @@
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.DTOs.Goals
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IGoalService GoalService
+@inject IAreaService AreaService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-family:var(--font-display)">
+            @(GoalId.HasValue ? "Edit Goal" : "New Goal")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <div class="ged-fields">
+                <MudTextField @bind-Value="_title"
+                              Label="Title"
+                              Required="true"
+                              RequiredError="Title is required"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense" />
+
+                <MudSelect T="Guid?"
+                           @bind-Value="_areaId"
+                           Label="Area"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           AnchorOrigin="Origin.BottomLeft">
+                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">No area</MudSelectItem>
+                    @foreach (var area in _areas)
+                    {
+                        <MudSelectItem T="Guid?" Value="@area.Id">@area.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudTextField @bind-Value="_description"
+                              Label="Description"
+                              Lines="4"
+                              AutoGrow="true"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense" />
+
+                <div class="ged-row">
+                    <MudDatePicker @bind-Date="_targetDate"
+                                   Label="Target Date"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Editable="true" />
+
+                    <MudSelect T="GoalStatus"
+                               @bind-Value="_status"
+                               Label="Status"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense">
+                        @foreach (var status in EditableStatuses)
+                        {
+                            <MudSelectItem T="GoalStatus" Value="@status">@StatusLabel(status)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+            </div>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton OnClick="SubmitAsync"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Disabled="@(!_valid || _saving)">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @(GoalId.HasValue ? "Save changes" : "Create goal")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+.ged-fields { display: flex; flex-direction: column; gap: .85rem; padding-top: .25rem; }
+.ged-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+@@media (max-width: 480px) { .ged-row { grid-template-columns: 1fr; } }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Guid? GoalId { get; set; }
+
+    private static readonly GoalStatus[] EditableStatuses =
+        [GoalStatus.Planned, GoalStatus.Active, GoalStatus.Achieved, GoalStatus.Abandoned];
+
+    private MudForm _form = null!;
+    private bool _valid;
+    private bool _saving;
+    private string _title = "";
+    private Guid? _areaId;
+    private string? _description;
+    private DateTime? _targetDate;
+    private GoalStatus _status = GoalStatus.Planned;
+    private IReadOnlyList<AreaDto> _areas = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _areas = await AreaService.GetAllActiveAsync();
+
+        if (!GoalId.HasValue)
+            return;
+
+        var dto = await GoalService.GetByIdAsync(GoalId.Value);
+        if (dto is null)
+        {
+            Snackbar.Add("Goal not found.", Severity.Error);
+            MudDialog.Cancel();
+            return;
+        }
+
+        _title = dto.Title;
+        _areaId = dto.AreaId;
+        _description = dto.Description;
+        _targetDate = dto.TargetDate;
+        _status = dto.Status == GoalStatus.Archived ? GoalStatus.Planned : dto.Status;
+    }
+
+    private async Task SubmitAsync()
+    {
+        await _form.Validate();
+        if (!_valid)
+            return;
+
+        _saving = true;
+
+        try
+        {
+            GoalDto goal;
+
+            if (GoalId.HasValue)
+            {
+                goal = await GoalService.UpdateAsync(new UpdateGoalDto(
+                    GoalId.Value,
+                    _title.Trim(),
+                    _areaId,
+                    NormalizeText(_description),
+                    _targetDate,
+                    _status));
+            }
+            else
+            {
+                goal = await GoalService.CreateAsync(new CreateGoalDto(
+                    _title.Trim(),
+                    _areaId,
+                    NormalizeText(_description),
+                    _targetDate));
+
+                if (_status != GoalStatus.Planned)
+                {
+                    goal = await GoalService.UpdateAsync(new UpdateGoalDto(
+                        goal.Id,
+                        goal.Title,
+                        goal.AreaId,
+                        goal.Description,
+                        goal.TargetDate,
+                        _status));
+                }
+            }
+
+            MudDialog.Close(DialogResult.Ok(goal));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private static string? NormalizeText(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string StatusLabel(GoalStatus status) => status switch
+    {
+        GoalStatus.Planned => "Planned",
+        GoalStatus.Active => "Active",
+        GoalStatus.Achieved => "Achieved",
+        GoalStatus.Abandoned => "Abandoned",
+        _ => status.ToString()
+    };
+}

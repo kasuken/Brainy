@@ -11,4 +11,5 @@ public record CreateProjectDto(
     ProjectStatus Status = ProjectStatus.NotStarted,
     ProjectPriority Priority = ProjectPriority.Medium,
     DateTime? StartDate = null,
-    DateTime? DueDate = null);
+    DateTime? DueDate = null,
+    Guid? GoalId = null);

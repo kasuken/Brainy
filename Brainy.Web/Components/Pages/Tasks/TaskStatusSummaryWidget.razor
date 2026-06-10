@@ -1,0 +1,29 @@
+@using Brainy.Application.DTOs.Tasks
+
+@* ─────────────────────────────────────────────────────────────────────────────
+   TaskStatusSummaryWidget — 4-stat-card overview of task status distribution.
+───────────────────────────────────────────────────────────────────────────── *@
+
+<div class="th-summary-grid">
+    <div class="th-stat-card">
+        <span class="th-stat-label">To Do</span>
+        <span class="th-stat-value th-stat--todo">@Summary.TodoCount</span>
+    </div>
+    <div class="th-stat-card">
+        <span class="th-stat-label">In Progress</span>
+        <span class="th-stat-value th-stat--inprogress">@Summary.InProgressCount</span>
+    </div>
+    <div class="th-stat-card">
+        <span class="th-stat-label">Waiting</span>
+        <span class="th-stat-value th-stat--waiting">@Summary.WaitingCount</span>
+    </div>
+    <div class="th-stat-card">
+        <span class="th-stat-label">Done</span>
+        <span class="th-stat-value th-stat--done">@Summary.DoneCount</span>
+    </div>
+</div>
+
+@code {
+    /// <summary>Status counts to display.</summary>
+    [Parameter] public TaskStatusSummaryDto Summary { get; set; } = new(0, 0, 0, 0);
+}

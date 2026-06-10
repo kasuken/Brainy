@@ -27,4 +27,8 @@ public class Area : BaseEntity, IUserOwnedEntity
     public ICollection<Resource> Resources { get; set; } = new List<Resource>();
 
     public ICollection<Note> Notes { get; set; } = new List<Note>();
+
+    public ICollection<Idea> Ideas { get; set; } = new List<Idea>();
+
+    public ICollection<Goal> Goals { get; set; } = new List<Goal>();
 }

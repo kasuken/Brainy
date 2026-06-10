@@ -4,11 +4,13 @@
 @using Brainy.Application.DTOs.Areas
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.DTOs.Notes
+@using Brainy.Application.DTOs.Ideas
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @inject IAreaService AreaService
 @inject IProjectService ProjectService
 @inject INoteService NoteService
+@inject IIdeaService IdeaService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
@@ -204,6 +206,54 @@ else
                                 </span>
                             </div>
                         </div>
+                    </div>
+                }
+            </div>
+
+            <!-- ── Related Ideas ────────────────────────────────────────── -->
+            <div class="ad-section">
+                <div class="ad-section-head">
+                    <div class="ad-section-head__left">
+                        <h2 class="ad-section-title">Ideas</h2>
+                        @if (_areaIdeas.Count > 0)
+                        {
+                            <span class="ad-count-badge">@_areaIdeas.Count</span>
+                        }
+                    </div>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.EmojiObjects"
+                               Size="Size.Small"
+                               OnClick='() => Nav.NavigateTo("/ideas")'>
+                        View All Ideas
+                    </MudButton>
+                </div>
+
+                @if (_areaIdeas.Count == 0)
+                {
+                    <div class="ad-empty">
+                        <span class="ad-empty__icon">💡</span>
+                        <p>No ideas linked to this area yet.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="ad-list">
+                        @foreach (var idea in _areaIdeas)
+                        {
+                            <div class="ad-row">
+                                <div class="ad-row__info">
+                                    <a class="ad-row__name" href="/ideas/@idea.Id">@idea.Title</a>
+                                    <div class="ad-row__badges">
+                                        <span class="ad-badge ad-badge--status ad-status--@idea.Status.ToString().ToLower()">
+                                            @idea.Status.ToString()
+                                        </span>
+                                        <span class="ad-badge ad-badge--priority ad-priority--@idea.Priority.ToString().ToLower()">
+                                            @idea.Priority.ToString()
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
                     </div>
                 }
             </div>
@@ -636,10 +686,11 @@ else
     private bool _loading = true;
     private AreaDetailDto? _detail;
 
-    private List<ProjectSummaryDto> _linkedProjects    = [];
-    private List<ProjectSummaryDto> _availableProjects = [];
-    private List<NoteDto>           _linkedNotes       = [];
-    private List<NoteDto>           _availableNotes    = [];
+    private List<ProjectSummaryDto>  _linkedProjects    = [];
+    private List<ProjectSummaryDto>  _availableProjects = [];
+    private List<NoteDto>            _linkedNotes       = [];
+    private List<NoteDto>            _availableNotes    = [];
+    private IReadOnlyList<IdeaDto>   _areaIdeas         = [];
 
     // Link project picker state
     private bool   _showLinkProjectPicker;
@@ -673,6 +724,8 @@ else
             var allNotes = await NoteService.GetAllAsync();
             _linkedNotes    = [.. allNotes.Where(n => n.AreaId == AreaId)];
             _availableNotes = [.. allNotes.Where(n => n.AreaId is null)];
+
+            _areaIdeas = await IdeaService.GetByAreaAsync(AreaId);
         }
 
         _loading = false;

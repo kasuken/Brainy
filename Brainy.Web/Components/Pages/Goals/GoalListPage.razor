@@ -1,0 +1,581 @@
+@page "/goals"
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Goals
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@attribute [Authorize]
+@inject IGoalService GoalService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Goals — Brainy</PageTitle>
+
+<div class="goal-page">
+    <div class="goal-header">
+        <div class="goal-header__text">
+            <h1 class="goal-header__title">Goals</h1>
+            <p class="goal-header__sub">
+                @(_goals.Count) goals · @_filtered.Count shown
+            </p>
+        </div>
+        <div style="display:flex; gap:.65rem; flex-wrap:wrap; justify-content:flex-end;">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       StartIcon="@Icons.Material.Filled.Insights"
+                       OnClick='() => Nav.NavigateTo("/goals/metrics")'>
+                Metrics
+            </MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Class="goal-header__new"
+                       OnClick="OpenCreateDialogAsync">
+                New Goal
+            </MudButton>
+        </div>
+    </div>
+
+    <div class="goal-toolbar">
+        <div class="goal-search">
+            <MudIcon Icon="@Icons.Material.Outlined.Search" Class="goal-search__icon" />
+            <input class="goal-search__input"
+                   placeholder="Search goals…"
+                   value="@_searchText"
+                   @oninput="OnSearchInput" />
+            @if (!string.IsNullOrWhiteSpace(_searchText))
+            {
+                <button class="goal-search__clear" @onclick="ClearSearch" type="button">✕</button>
+            }
+        </div>
+
+        <div class="goal-filters">
+            <span class="goal-filters__label">Status</span>
+            @foreach (var status in StatusFilters)
+            {
+                <button class="goal-chip @(IsStatusActive(status) ? "goal-chip--on" : null)"
+                        type="button"
+                        @onclick="() => ToggleStatusFilter(status)">
+                    <span class="goal-chip__dot" style="background:@StatusColor(status)"></span>
+                    @StatusLabel(status)
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="goal-loading">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+            <span class="goal-loading__text">Loading goals…</span>
+        </div>
+    }
+    else if (_filtered.Count == 0)
+    {
+        <div class="goal-empty">
+            <div class="goal-empty__glyph">◎</div>
+            <p class="goal-empty__title">@(_goals.Count == 0 ? "No goals yet" : "Nothing matches")</p>
+            <p class="goal-empty__sub">
+                @(_goals.Count == 0
+                    ? "Create a goal to turn long-range intent into visible progress."
+                    : "Try clearing filters or broadening your search.")
+            </p>
+            @if (_goals.Count == 0)
+            {
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="OpenCreateDialogAsync">
+                    Create first goal
+                </MudButton>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="goal-grid">
+            @for (var i = 0; i < _filtered.Count; i++)
+            {
+                var goal = _filtered[i];
+                <button class="goal-card"
+                        type="button"
+                        style="animation-delay:@(i * 40)ms;"
+                        @onclick="() => OpenDetail(goal.Id)">
+                    <div class="goal-card__inner">
+                        <div class="goal-card__topline">
+                            <span class="goal-badge goal-status--@goal.Status.ToString().ToLowerInvariant()">
+                                @StatusLabel(goal.Status)
+                            </span>
+                            @if (!string.IsNullOrWhiteSpace(goal.AreaName))
+                            {
+                                <span class="goal-badge goal-area">@goal.AreaName</span>
+                            }
+                        </div>
+
+                        <h2 class="goal-card__title">@goal.Title</h2>
+
+                        @if (!string.IsNullOrWhiteSpace(goal.Description))
+                        {
+                            <p class="goal-card__description">@goal.Description</p>
+                        }
+
+                        <div class="goal-progress">
+                            <div class="goal-progress__row">
+                                <span class="goal-progress__label">Progress</span>
+                                <span class="goal-progress__pct">@goal.ProgressPercent%</span>
+                            </div>
+                            <div class="goal-progress__track">
+                                <div class="goal-progress__fill" style="width:@goal.ProgressPercent%"></div>
+                            </div>
+                        </div>
+
+                        <div class="goal-card__meta">
+                            <span class="goal-meta">
+                                <MudIcon Icon="@Icons.Material.Outlined.Flag" Class="goal-meta__icon" />
+                                @(goal.TargetDate?.ToString("MMM d, yyyy") ?? "No target date")
+                            </span>
+                            <span class="goal-meta">
+                                <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Class="goal-meta__icon" />
+                                @goal.CompletedMilestones / @goal.TotalMilestones milestones
+                            </span>
+                        </div>
+                    </div>
+                </button>
+            }
+        </div>
+    }
+</div>
+
+<style>
+/* Goals page — "North-Star Ledger" companion to Projects */
+.goal-page {
+    font-family: var(--font-body);
+    padding-bottom: 3rem;
+}
+
+.goal-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.goal-header__title {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0 0 .15rem;
+    letter-spacing: -.02em;
+    line-height: 1;
+}
+
+.goal-header__sub {
+    margin: 0;
+    font-size: .8rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+}
+
+.goal-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: .85rem;
+    margin-bottom: 1.75rem;
+    padding: 1rem 1.25rem;
+    background:
+        radial-gradient(circle at top right, rgba(192,86,29,.08), transparent 30%),
+        var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+}
+
+.goal-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.goal-search__icon {
+    color: var(--ink-faint);
+    font-size: 1.1rem !important;
+    flex-shrink: 0;
+}
+
+.goal-search__input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: .95rem;
+    color: var(--ink);
+    outline: none;
+    padding: .25rem 0;
+    border-bottom: 1.5px solid var(--line);
+    transition: border-color .2s;
+}
+
+.goal-search__input:focus { border-bottom-color: var(--clay); }
+.goal-search__input::placeholder { color: var(--ink-faint); }
+
+.goal-search__clear {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ink-faint);
+    font-size: .85rem;
+    padding: .15rem .3rem;
+    border-radius: 4px;
+}
+
+.goal-search__clear:hover { color: var(--clay); }
+
+.goal-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+}
+
+.goal-filters__label {
+    font-size: .7rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin-right: .1rem;
+}
+
+.goal-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .28rem .72rem;
+    border-radius: 999px;
+    border: 1.5px solid var(--line);
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: .78rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s;
+}
+
+.goal-chip:hover {
+    border-color: var(--clay);
+    color: var(--clay);
+}
+
+.goal-chip--on {
+    border-color: var(--clay);
+    background: rgba(192,86,29,.10);
+    color: var(--clay);
+    font-weight: 600;
+}
+
+.goal-chip__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.goal-loading,
+.goal-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 5rem 1rem;
+    text-align: center;
+}
+
+.goal-loading__text,
+.goal-empty__sub {
+    color: var(--ink-faint);
+    font-size: .9rem;
+}
+
+.goal-empty__glyph {
+    font-size: 3.5rem;
+    line-height: 1;
+    opacity: .18;
+    color: var(--clay);
+    font-family: var(--font-display);
+}
+
+.goal-empty__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    color: var(--ink);
+    font-weight: 500;
+}
+
+.goal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+    gap: 1.1rem;
+}
+
+.goal-card {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,.36), transparent 40%),
+        var(--paper-raised);
+    text-align: left;
+    padding: 0;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: transform .2s, box-shadow .2s, border-color .2s;
+    animation: goal-card-in .35s ease both;
+}
+
+.goal-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--line-strong);
+}
+
+.goal-card__inner {
+    display: flex;
+    flex-direction: column;
+    gap: .8rem;
+    min-height: 100%;
+    padding: 1rem;
+}
+
+.goal-card__topline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+
+.goal-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: .2rem .6rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+}
+
+.goal-status--planned { background: var(--paper-sunk); color: var(--ink-soft); }
+.goal-status--active { background: rgba(111,122,90,.14); color: #4a5c38; }
+.goal-status--achieved { background: rgba(60,145,93,.14); color: #2f7247; }
+.goal-status--abandoned { background: rgba(129,118,98,.14); color: #665a49; }
+
+.goal-area {
+    background: rgba(160,120,32,.10);
+    color: #7a5c0e;
+}
+
+.goal-card__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.18rem;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--ink);
+}
+
+.goal-card:hover .goal-card__title { color: var(--clay); }
+
+.goal-card__description {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: .82rem;
+    line-height: 1.55;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 3.8em;
+}
+
+.goal-progress {
+    margin-top: auto;
+}
+
+.goal-progress__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    margin-bottom: .35rem;
+}
+
+.goal-progress__label,
+.goal-progress__pct {
+    font-size: .74rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 700;
+}
+
+.goal-progress__track {
+    height: 6px;
+    background: var(--paper-sunk);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.goal-progress__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--gold), var(--clay));
+    min-width: 3px;
+    transition: width .45s ease;
+}
+
+.goal-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+}
+
+.goal-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: .32rem;
+    color: var(--ink-soft);
+    font-size: .78rem;
+}
+
+.goal-meta__icon {
+    width: 14px;
+    height: 14px;
+    opacity: .6;
+}
+
+@@keyframes goal-card-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@@media (max-width: 640px) {
+    .goal-toolbar { padding: .85rem 1rem; }
+    .goal-grid { grid-template-columns: 1fr; }
+}
+</style>
+
+@code {
+    private static readonly GoalStatus[] StatusFilters =
+        [GoalStatus.Planned, GoalStatus.Active, GoalStatus.Achieved, GoalStatus.Abandoned];
+
+    private bool _loading = true;
+    private string _searchText = "";
+    private List<GoalDto> _goals = [];
+    private List<GoalDto> _filtered = [];
+    private readonly HashSet<GoalStatus> _activeStatusFilters = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var result = await GoalService.GetAllNonArchivedAsync();
+        _goals = result.Where(goal => !goal.IsArchived && goal.Status != GoalStatus.Archived).ToList();
+        ApplyFilters();
+        _loading = false;
+    }
+
+    private void OnSearchInput(ChangeEventArgs args)
+    {
+        _searchText = args.Value?.ToString() ?? "";
+        ApplyFilters();
+    }
+
+    private void ClearSearch()
+    {
+        _searchText = "";
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        IEnumerable<GoalDto> query = _goals;
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            query = query.Where(goal => goal.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (_activeStatusFilters.Count > 0)
+        {
+            query = query.Where(goal => _activeStatusFilters.Contains(goal.Status));
+        }
+
+        _filtered = query
+            .OrderBy(goal => goal.Status)
+            .ThenBy(goal => goal.TargetDate ?? DateTime.MaxValue)
+            .ThenBy(goal => goal.Title)
+            .ToList();
+    }
+
+    private void ToggleStatusFilter(GoalStatus status)
+    {
+        if (!_activeStatusFilters.Remove(status))
+        {
+            _activeStatusFilters.Add(status);
+        }
+
+        ApplyFilters();
+    }
+
+    private bool IsStatusActive(GoalStatus status) => _activeStatusFilters.Contains(status);
+
+    private void OpenDetail(Guid id) => Nav.NavigateTo($"/goals/{id}");
+
+    private async Task OpenCreateDialogAsync()
+    {
+        var parameters = new DialogParameters<GoalEditorDialog>();
+        parameters.Add(x => x.GoalId, null);
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<GoalEditorDialog>("New Goal", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled)
+            return;
+
+        if (result.Data is GoalDto goal)
+        {
+            Snackbar.Add($"\"{goal.Title}\" created.", Severity.Success);
+        }
+
+        await LoadAsync();
+    }
+
+    private static string StatusLabel(GoalStatus status) => status switch
+    {
+        GoalStatus.Planned => "Planned",
+        GoalStatus.Active => "Active",
+        GoalStatus.Achieved => "Achieved",
+        GoalStatus.Abandoned => "Abandoned",
+        GoalStatus.Archived => "Archived",
+        _ => status.ToString()
+    };
+
+    private static string StatusColor(GoalStatus status) => status switch
+    {
+        GoalStatus.Active => "#4a5c38",
+        GoalStatus.Achieved => "#2f7247",
+        GoalStatus.Abandoned => "#665a49",
+        _ => "#9a9180"
+    };
+}

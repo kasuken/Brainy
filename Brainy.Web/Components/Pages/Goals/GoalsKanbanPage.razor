@@ -1,0 +1,542 @@
+@page "/goals/kanban"
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.DTOs.Goals
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IGoalService GoalService
+@inject IAreaService AreaService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Goals Kanban — Brainy</PageTitle>
+
+<div class="goals-kanban-page">
+    <div class="goals-kanban-header">
+        <div>
+            <MudText Typo="Typo.h3" Class="goals-kanban-header__title">Goals Kanban</MudText>
+            <MudText Typo="Typo.body1" Class="goals-kanban-header__subtitle">
+                @_filteredGoals.Count goals across @_lanes.Count lanes
+            </MudText>
+        </div>
+
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.ViewList"
+                   OnClick="NavigateToListView">
+            List View
+        </MudButton>
+    </div>
+
+    <MudPaper Class="goals-kanban-toolbar" Elevation="0">
+        <div class="goals-kanban-toolbar__group">
+            <MudText Typo="Typo.overline" Class="goals-kanban-toolbar__label">Status</MudText>
+            <MudChipSet T="string"
+                        SelectionMode="SelectionMode.SingleSelection"
+                        SelectedValue="@_selectedStatusFilter"
+                        SelectedValueChanged="OnStatusFilterChanged"
+                        Class="goals-kanban-toolbar__chips">
+                @foreach (var filter in _statusFilters)
+                {
+                    <MudChip T="string"
+                             Value="@filter.Key"
+                             Color="@filter.Color"
+                             Variant="Variant.Outlined"
+                             Class="goals-kanban-toolbar__chip">
+                        @filter.Label
+                    </MudChip>
+                }
+            </MudChipSet>
+        </div>
+
+        <div class="goals-kanban-toolbar__group goals-kanban-toolbar__group--search">
+            <MudTextField T="string"
+                          Value="@_searchText"
+                          ValueChanged="OnSearchChanged"
+                          Immediate="true"
+                          Placeholder="Search goals..."
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Outlined.Search"
+                          Clearable="true"
+                          Class="goals-kanban-toolbar__search" />
+        </div>
+
+        <div class="goals-kanban-toolbar__group goals-kanban-toolbar__group--toggle">
+            <MudSwitch T="bool"
+                       Value="@_showArchived"
+                       ValueChanged="OnShowArchivedChanged"
+                       Color="Color.Primary"
+                       Label="Show Archived" />
+        </div>
+    </MudPaper>
+
+    @if (_loading)
+    {
+        <MudPaper Class="goals-kanban-state" Elevation="0">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.body1">Loading goals board...</MudText>
+        </MudPaper>
+    }
+    else if (_filteredGoals.Count == 0)
+    {
+        <MudPaper Class="goals-kanban-state" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Outlined.TrackChanges" Size="Size.Large" />
+            <MudText Typo="Typo.h6">No goals match the current filters.</MudText>
+            <MudText Typo="Typo.body2">Try another status, search term, or include archived goals.</MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudDropContainer T="GoalDto"
+                          Items="@_filteredGoals"
+                          Class="kanban-board"
+                          ItemsSelector="@((goal, zone) => GetGoalZone(goal) == zone)"
+                          ItemDropped="OnGoalDropped">
+            <ChildContent>
+                @foreach (var lane in _lanes)
+                {
+                    <MudPaper Class="@GetLaneClass(lane)" Elevation="0">
+                        <div class="kanban-lane__header">
+                            <div>
+                                <div class="kanban-lane__title">@lane.Name</div>
+                                @if (lane.IsArchived)
+                                {
+                                    <div class="kanban-lane__sub">Archived area</div>
+                                }
+                            </div>
+                            <MudChip T="string"
+                                     Color="Color.Primary"
+                                     Variant="Variant.Outlined"
+                                     Size="Size.Small">
+                                @GetGoalCount(lane.Identifier)
+                            </MudChip>
+                        </div>
+
+                        <MudDropZone T="GoalDto"
+                                     Identifier="@lane.Identifier"
+                                     Class="kanban-dropzone"
+                                     AllowReorder="false" />
+                    </MudPaper>
+                }
+            </ChildContent>
+            <ItemRenderer>
+                <GoalKanbanCard Goal="context" OnCardClicked="NavigateToGoal" />
+            </ItemRenderer>
+        </MudDropContainer>
+    }
+</div>
+
+@code {
+    private const string NoAreaIdentifier = "no-area";
+
+    private readonly List<StatusFilterOption> _statusFilters =
+    [
+        new("all", "All", Color.Default),
+        new("planned", "Planned", Color.Warning),
+        new("active", "Active", Color.Info),
+        new("achieved", "Achieved", Color.Success),
+        new("abandoned", "Abandoned", Color.Error)
+    ];
+
+    private List<GoalDto> _activeGoals = [];
+    private List<GoalDto> _archivedGoals = [];
+    private List<GoalDto> _filteredGoals = [];
+    private List<KanbanLane> _lanes = [];
+    private bool _loading = true;
+    private bool _showArchived;
+    private bool _archivedLoaded;
+    private string _searchText = string.Empty;
+    private string _selectedStatusFilter = "all";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            var activeGoalsTask = GoalService.GetAllNonArchivedAsync();
+            var activeAreasTask = AreaService.GetAllActiveAsync();
+            var archivedAreasTask = AreaService.GetAllArchivedAsync();
+
+            await Task.WhenAll(activeGoalsTask, activeAreasTask, archivedAreasTask);
+
+            _activeGoals = activeGoalsTask.Result.OrderBy(goal => goal.TargetDate ?? DateTime.MaxValue)
+                                               .ThenBy(goal => goal.Title)
+                                               .ToList();
+
+            _lanes = BuildLanes(activeAreasTask.Result, archivedAreasTask.Result);
+            RefreshFilteredGoals();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Unable to load goals board: {ex.Message}", Severity.Error);
+            _filteredGoals = [];
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task EnsureArchivedGoalsLoadedAsync()
+    {
+        if (_archivedLoaded)
+        {
+            return;
+        }
+
+        try
+        {
+            _archivedGoals = (await GoalService.GetAllArchivedAsync())
+                .OrderBy(goal => goal.TargetDate ?? DateTime.MaxValue)
+                .ThenBy(goal => goal.Title)
+                .ToList();
+
+            _archivedLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Unable to load archived goals: {ex.Message}", Severity.Error);
+            _showArchived = false;
+        }
+    }
+
+    private List<KanbanLane> BuildLanes(IReadOnlyList<AreaDto> activeAreas, IReadOnlyList<AreaDto> archivedAreas)
+    {
+        var lanes = activeAreas
+            .Select(area => new KanbanLane(area.Id.ToString(), area.Name, area.IsArchived))
+            .Concat(archivedAreas
+                .Where(area => activeAreas.All(active => active.Id != area.Id))
+                .Select(area => new KanbanLane(area.Id.ToString(), area.Name, area.IsArchived)))
+            .OrderBy(lane => lane.IsArchived)
+            .ThenBy(lane => lane.Name)
+            .ToList();
+
+        lanes.Insert(0, new KanbanLane(NoAreaIdentifier, "No Area", false));
+
+        return lanes;
+    }
+
+    private void RefreshFilteredGoals()
+    {
+        IEnumerable<GoalDto> query = _activeGoals;
+
+        if (_showArchived)
+        {
+            query = query.Concat(_archivedGoals);
+        }
+
+        if (_selectedStatusFilter != "all" && TryParseStatus(_selectedStatusFilter, out var selectedStatus))
+        {
+            query = query.Where(goal => goal.Status == selectedStatus);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            query = query.Where(goal =>
+                goal.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+                || (!string.IsNullOrWhiteSpace(goal.Description)
+                    && goal.Description.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                || (!string.IsNullOrWhiteSpace(goal.AreaName)
+                    && goal.AreaName.Contains(_searchText, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        _filteredGoals = query
+            .OrderBy(goal => GetGoalZone(goal) == NoAreaIdentifier ? 0 : 1)
+            .ThenBy(goal => goal.TargetDate ?? DateTime.MaxValue)
+            .ThenBy(goal => goal.Title)
+            .ToList();
+    }
+
+    private static bool TryParseStatus(string filter, out GoalStatus status)
+        => Enum.TryParse(filter, true, out status);
+
+    private string GetGoalZone(GoalDto goal)
+        => goal.AreaId?.ToString() ?? NoAreaIdentifier;
+
+    private int GetGoalCount(string identifier)
+        => _filteredGoals.Count(goal => GetGoalZone(goal) == identifier);
+
+    private async Task OnGoalDropped(MudItemDropInfo<GoalDto> dropInfo)
+    {
+        if (dropInfo.Item is null)
+        {
+            return;
+        }
+
+        var newAreaId = dropInfo.DropzoneIdentifier == NoAreaIdentifier
+            ? (Guid?)null
+            : Guid.TryParse(dropInfo.DropzoneIdentifier, out var parsedAreaId)
+                ? parsedAreaId
+                : null;
+
+        if (dropInfo.Item.AreaId == newAreaId)
+        {
+            return;
+        }
+
+        try
+        {
+            var updatedGoal = await GoalService.UpdateAsync(new UpdateGoalDto(
+                dropInfo.Item.Id,
+                dropInfo.Item.Title,
+                newAreaId,
+                dropInfo.Item.Description,
+                dropInfo.Item.TargetDate,
+                dropInfo.Item.Status));
+
+            ReplaceGoal(updatedGoal);
+            RefreshFilteredGoals();
+            Snackbar.Add($"Moved '{updatedGoal.Title}' to {GetLaneName(newAreaId)}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Unable to move goal: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ReplaceGoal(GoalDto updatedGoal)
+    {
+        var collection = updatedGoal.IsArchived ? _archivedGoals : _activeGoals;
+        var index = collection.FindIndex(goal => goal.Id == updatedGoal.Id);
+
+        if (index >= 0)
+        {
+            collection[index] = updatedGoal;
+            return;
+        }
+
+        _activeGoals.RemoveAll(goal => goal.Id == updatedGoal.Id);
+        _archivedGoals.RemoveAll(goal => goal.Id == updatedGoal.Id);
+
+        if (updatedGoal.IsArchived)
+        {
+            _archivedGoals.Add(updatedGoal);
+        }
+        else
+        {
+            _activeGoals.Add(updatedGoal);
+        }
+    }
+
+    private string GetLaneName(Guid? areaId)
+        => areaId.HasValue
+            ? _lanes.FirstOrDefault(lane => lane.Identifier == areaId.Value.ToString())?.Name ?? "area"
+            : "No Area";
+
+    private static string GetLaneClass(KanbanLane lane)
+        => lane.IsArchived ? "kanban-lane kanban-lane--archived" : "kanban-lane";
+
+    private void NavigateToListView()
+        => NavigationManager.NavigateTo("/goals");
+
+    private void NavigateToGoal(GoalDto goal)
+        => NavigationManager.NavigateTo($"/goals/{goal.Id}");
+
+    private Task OnSearchChanged(string? value)
+    {
+        _searchText = value ?? string.Empty;
+        RefreshFilteredGoals();
+        return Task.CompletedTask;
+    }
+
+    private Task OnStatusFilterChanged(string value)
+    {
+        _selectedStatusFilter = string.IsNullOrWhiteSpace(value) ? "all" : value;
+        RefreshFilteredGoals();
+        return Task.CompletedTask;
+    }
+
+    private async Task OnShowArchivedChanged(bool value)
+    {
+        _showArchived = value;
+
+        if (_showArchived)
+        {
+            await EnsureArchivedGoalsLoadedAsync();
+        }
+
+        RefreshFilteredGoals();
+    }
+
+    private sealed record KanbanLane(string Identifier, string Name, bool IsArchived);
+    private sealed record StatusFilterOption(string Key, string Label, Color Color);
+}
+
+<style>
+    .goals-kanban-page {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        padding: 1rem 0 1.5rem;
+    }
+
+    .goals-kanban-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .goals-kanban-header__title {
+        margin: 0;
+        font-family: var(--font-display);
+        color: var(--ink);
+    }
+
+    .goals-kanban-header__subtitle {
+        color: var(--ink-soft);
+    }
+
+    .goals-kanban-toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(240px, 1fr) auto;
+        gap: 1rem;
+        padding: 1rem;
+        border-radius: 22px;
+        border: 1px solid var(--line);
+        background:
+            linear-gradient(135deg, rgba(252, 250, 244, 0.96) 0%, rgba(236, 227, 211, 0.88) 100%);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .goals-kanban-toolbar__group {
+        display: flex;
+        flex-direction: column;
+        gap: .55rem;
+        min-width: 0;
+    }
+
+    .goals-kanban-toolbar__group--search {
+        justify-content: flex-end;
+    }
+
+    .goals-kanban-toolbar__group--toggle {
+        justify-content: center;
+        align-items: flex-end;
+    }
+
+    .goals-kanban-toolbar__label {
+        color: var(--ink-faint);
+        letter-spacing: .08em;
+    }
+
+    .goals-kanban-toolbar__chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+    }
+
+    .goals-kanban-toolbar__chip {
+        font-weight: 700;
+        letter-spacing: .02em;
+    }
+
+    .goals-kanban-toolbar__search {
+        max-width: 420px;
+    }
+
+    .goals-kanban-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .75rem;
+        min-height: 260px;
+        padding: 2rem;
+        border-radius: 24px;
+        border: 1px dashed var(--line-strong);
+        background: rgba(252, 250, 244, 0.78);
+        color: var(--ink-soft);
+        text-align: center;
+    }
+
+    .kanban-board {
+        display: flex;
+        gap: 1rem;
+        align-items: flex-start;
+        overflow-x: auto;
+        padding-bottom: .5rem;
+    }
+
+    .kanban-lane {
+        display: flex;
+        flex-direction: column;
+        min-width: 280px;
+        width: 280px;
+        border-radius: 24px;
+        border: 1px solid var(--line);
+        background:
+            linear-gradient(180deg, rgba(236, 227, 211, 0.9) 0%, rgba(252, 250, 244, 0.92) 100%);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+    }
+
+    .kanban-lane--archived {
+        opacity: .86;
+    }
+
+    .kanban-lane__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        padding: .95rem 1rem;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.3);
+    }
+
+    .kanban-lane__title {
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--ink);
+    }
+
+    .kanban-lane__sub {
+        margin-top: .15rem;
+        font-size: .74rem;
+        color: var(--ink-faint);
+        text-transform: uppercase;
+        letter-spacing: .08em;
+    }
+
+    .kanban-dropzone {
+        display: flex;
+        flex-direction: column;
+        gap: .75rem;
+        min-height: 200px;
+        padding: 1rem;
+        background-image: linear-gradient(180deg, rgba(192, 86, 29, 0.03) 0%, rgba(192, 86, 29, 0) 35%);
+    }
+
+    @@media (max-width: 960px) {
+        .goals-kanban-toolbar {
+            grid-template-columns: 1fr;
+        }
+
+        .goals-kanban-toolbar__group--toggle {
+            align-items: flex-start;
+        }
+    }
+
+    @@media (max-width: 720px) {
+        .goals-kanban-header {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .kanban-lane {
+            min-width: min(86vw, 320px);
+            width: min(86vw, 320px);
+        }
+    }
+</style>

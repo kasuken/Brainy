@@ -1,9 +1,11 @@
 @using Brainy.Application.DTOs.Areas
+@using Brainy.Application.DTOs.Goals
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @inject IProjectService ProjectService
 @inject IAreaService AreaService
+@inject IGoalService GoalService
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -27,6 +29,17 @@
                     @foreach (var area in _areas)
                     {
                         <MudSelectItem Value="area.Id">@area.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudSelect T="Guid?" @bind-Value="_goalId" Label="Goal (optional)"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           AnchorOrigin="Origin.BottomLeft"
+                           Placeholder="Select a goal…">
+                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">(none)</MudSelectItem>
+                    @foreach (var goal in _goals)
+                    {
+                        <MudSelectItem T="Guid?" Value="@goal.Id">@goal.Title</MudSelectItem>
                     }
                 </MudSelect>
 
@@ -93,6 +106,7 @@
 
     private string _name = "";
     private Guid _areaId;
+    private Guid? _goalId;
     private string? _desiredOutcome;
     private string? _description;
     private ProjectStatus _status = ProjectStatus.NotStarted;
@@ -101,10 +115,12 @@
     private DateTime? _dueDate;
 
     private IReadOnlyList<AreaDto> _areas = [];
+    private IReadOnlyList<GoalDto> _goals = [];
 
     protected override async Task OnInitializedAsync()
     {
         _areas = await AreaService.GetAllActiveAsync();
+        _goals = await GoalService.GetAllNonArchivedAsync();
 
         if (ProjectId.HasValue)
         {
@@ -115,6 +131,7 @@
                 _areaId         = dto.AreaId ?? Guid.Empty;
                 if (_areaId == Guid.Empty)
                     Snackbar.Add("This project has no area assigned. Please select an area before saving.", Severity.Warning);
+                _goalId         = dto.GoalId;
                 _desiredOutcome = dto.DesiredOutcome;
                 _description    = dto.Description;
                 _status         = dto.Status;
@@ -143,12 +160,12 @@
             {
                 await ProjectService.UpdateAsync(new UpdateProjectDto(
                     ProjectId.Value, _name, _areaId, _description, _desiredOutcome,
-                    _status, _priority, _startDate, _dueDate));
+                    _status, _priority, _startDate, _dueDate, _goalId));
             }
             else
             {
                 await ProjectService.CreateAsync(new CreateProjectDto(
-                    _name, _areaId, _description, _desiredOutcome, _status, _priority, _startDate, _dueDate));
+                    _name, _areaId, _description, _desiredOutcome, _status, _priority, _startDate, _dueDate, _goalId));
             }
             MudDialog.Close(DialogResult.Ok(true));
         }

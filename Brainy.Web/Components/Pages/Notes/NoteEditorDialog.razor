@@ -22,6 +22,15 @@
             <MudIcon Icon="@(NoteId.HasValue ? Icons.Material.Filled.Edit : Icons.Material.Filled.NoteAdd)"
                      Color="Color.Primary" />
             <MudText Typo="Typo.h6">@(NoteId.HasValue ? "Edit Note" : "New Note")</MudText>
+            @if (NoteId.HasValue && _originalNote is not null)
+            {
+                <MudTooltip Text="@(_originalNote.IsFavorite ? "Remove from favorites" : "Add to favorites")">
+                    <MudIconButton Icon="@(_originalNote.IsFavorite ? Icons.Material.Filled.Star : Icons.Material.Outlined.StarBorder)"
+                                   Color="@(_originalNote.IsFavorite ? Color.Warning : Color.Default)"
+                                   Size="Size.Small"
+                                   OnClick="ToggleFavoriteAsync" />
+                </MudTooltip>
+            }
         </div>
     </TitleContent>
 
@@ -454,6 +463,20 @@
         if (_isDirty) return;
         _isDirty = true;
         _ = JS.InvokeVoidAsync("brainyNoteEditor.addBeforeunloadWarning");
+    }
+
+    private async Task ToggleFavoriteAsync()
+    {
+        if (_originalNote is null) return;
+        try
+        {
+            _originalNote = await NoteService.ToggleFavoriteAsync(_originalNote.Id);
+            StateHasChanged();
+        }
+        catch
+        {
+            Snackbar.Add("Could not update favorite.", Severity.Error);
+        }
     }
 
     private void OnTitleInput(ChangeEventArgs e)

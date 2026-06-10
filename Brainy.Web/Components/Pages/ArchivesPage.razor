@@ -1,10 +1,12 @@
 @page "/archives"
 @using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Goals
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @attribute [Authorize]
 @inject IProjectService ProjectService
+@inject IGoalService GoalService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
@@ -18,10 +20,13 @@
         <div class="arc-header__eyebrow">PARA · Archive</div>
         <h1 class="arc-header__title">Archives</h1>
         <p class="arc-header__sub">
-            Completed and inactive projects preserved for reference.
-            @if (_projects is not null)
+            Completed and inactive work preserved for reference.
+            @if (_projects is not null || _goals is not null)
             {
-                <span>@_projects.Count archived project@(_projects.Count != 1 ? "s" : "").</span>
+                <span>
+                    @(_projects?.Count ?? 0) archived project@((_projects?.Count ?? 0) != 1 ? "s" : "")
+                    · @(_goals?.Count ?? 0) archived goal@((_goals?.Count ?? 0) != 1 ? "s" : "")
+                </span>
             }
         </p>
     </div>
@@ -32,13 +37,13 @@
             <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
         </div>
     }
-    else if (_projects is null || !_projects.Any())
+    else if ((_projects is null || !_projects.Any()) && (_goals is null || !_goals.Any()))
     {
         <div class="arc-empty">
             <div class="arc-empty__glyph">⬡</div>
-            <p class="arc-empty__title">No archived projects yet</p>
+            <p class="arc-empty__title">No archived items yet</p>
             <p class="arc-empty__sub">
-                When you archive a completed project, it will appear here for future reference.
+                When you archive goals or completed projects, they will appear here for future reference.
             </p>
         </div>
     }
@@ -59,72 +64,157 @@
             </div>
         </div>
 
-        <div class="arc-list">
-            @foreach (var project in Filtered)
-            {
-                <div class="arc-card">
-                    <div class="arc-card__ribbon arc-ribbon--@project.Priority.ToString().ToLower()"></div>
-                    <div class="arc-card__body">
-                        <div class="arc-card__top">
-                            <div class="arc-card__badges">
-                                <span class="arc-badge arc-badge--priority arc-pri--@project.Priority.ToString().ToLower()">
-                                    @PriorityLabel(project.Priority)
-                                </span>
-                                @if (project.ArchivedAtUtc.HasValue)
+        @if (FilteredProjects.Any())
+        {
+            <div class="arc-section-head">
+                <span class="arc-section-head__label">Projects</span>
+                <span class="arc-section-head__count">@FilteredProjects.Count() shown</span>
+            </div>
+
+            <div class="arc-list">
+                @foreach (var project in FilteredProjects)
+                {
+                    <div class="arc-card">
+                        <div class="arc-card__ribbon arc-ribbon--@project.Priority.ToString().ToLower()"></div>
+                        <div class="arc-card__body">
+                            <div class="arc-card__top">
+                                <div class="arc-card__badges">
+                                    <span class="arc-badge arc-badge--priority arc-pri--@project.Priority.ToString().ToLower()">
+                                        @PriorityLabel(project.Priority)
+                                    </span>
+                                    @if (project.ArchivedAtUtc.HasValue)
+                                    {
+                                        <span class="arc-badge arc-badge--date">
+                                            Archived @project.ArchivedAtUtc.Value.ToString("MMM d, yyyy")
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+
+                            <h2 class="arc-card__name">@project.Name</h2>
+
+                            @if (!string.IsNullOrWhiteSpace(project.DesiredOutcome))
+                            {
+                                <p class="arc-card__outcome">@project.DesiredOutcome</p>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(project.Description))
+                            {
+                                <p class="arc-card__outcome">@project.Description</p>
+                            }
+
+                            <div class="arc-card__meta">
+                                @if (project.StartDate.HasValue)
                                 {
-                                    <span class="arc-badge arc-badge--date">
-                                        Archived @project.ArchivedAtUtc.Value.ToString("MMM d, yyyy")
+                                    <span class="arc-meta-item">
+                                        Started @project.StartDate.Value.ToString("MMM d, yyyy")
+                                    </span>
+                                }
+                                @if (project.CompletedDate.HasValue)
+                                {
+                                    <span class="arc-meta-item arc-meta-item--completed">
+                                        ✓ Completed @project.CompletedDate.Value.ToString("MMM d, yyyy")
                                     </span>
                                 }
                             </div>
                         </div>
 
-                        <h2 class="arc-card__name">@project.Name</h2>
-
-                        @if (!string.IsNullOrWhiteSpace(project.DesiredOutcome))
-                        {
-                            <p class="arc-card__outcome">@project.DesiredOutcome</p>
-                        }
-                        else if (!string.IsNullOrWhiteSpace(project.Description))
-                        {
-                            <p class="arc-card__outcome">@project.Description</p>
-                        }
-
-                        <div class="arc-card__meta">
-                            @if (project.StartDate.HasValue)
-                            {
-                                <span class="arc-meta-item">
-                                    Started @project.StartDate.Value.ToString("MMM d, yyyy")
-                                </span>
-                            }
-                            @if (project.CompletedDate.HasValue)
-                            {
-                                <span class="arc-meta-item arc-meta-item--completed">
-                                    ✓ Completed @project.CompletedDate.Value.ToString("MMM d, yyyy")
-                                </span>
-                            }
+                        <div class="arc-card__actions">
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Default"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Unarchive"
+                                       OnClick="() => ConfirmRestore(project)">
+                                Restore
+                            </MudButton>
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Default"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.OpenInNew"
+                                       OnClick="() => OpenProject(project.Id)">
+                                View
+                            </MudButton>
                         </div>
                     </div>
+                }
+            </div>
+        }
 
-                    <div class="arc-card__actions">
-                        <MudButton Variant="Variant.Outlined"
-                                   Color="Color.Default"
-                                   Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.Unarchive"
-                                   OnClick="() => ConfirmRestore(project)">
-                            Restore
-                        </MudButton>
-                        <MudButton Variant="Variant.Text"
-                                   Color="Color.Default"
-                                   Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.OpenInNew"
-                                   OnClick="() => OpenProject(project.Id)">
-                            View
-                        </MudButton>
+        @if (FilteredGoals.Any())
+        {
+            <div class="arc-section-head arc-section-head--goals">
+                <span class="arc-section-head__label">Goals</span>
+                <span class="arc-section-head__count">@FilteredGoals.Count() shown</span>
+            </div>
+
+            <div class="arc-list">
+                @foreach (var goal in FilteredGoals)
+                {
+                    <div class="arc-card arc-card--goal">
+                        <div class="arc-card__ribbon arc-ribbon--goal"></div>
+                        <div class="arc-card__body">
+                            <div class="arc-card__top">
+                                <div class="arc-card__badges">
+                                    <span class="arc-badge arc-badge--goal-status">
+                                        @GoalStatusLabel(goal.Status)
+                                    </span>
+                                    @if (!string.IsNullOrWhiteSpace(goal.AreaName))
+                                    {
+                                        <span class="arc-badge arc-badge--goal-area">@goal.AreaName</span>
+                                    }
+                                    @if (goal.ArchivedAtUtc.HasValue)
+                                    {
+                                        <span class="arc-badge arc-badge--date">
+                                            Archived @goal.ArchivedAtUtc.Value.ToString("MMM d, yyyy")
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+
+                            <h2 class="arc-card__name">@goal.Title</h2>
+
+                            @if (!string.IsNullOrWhiteSpace(goal.Description))
+                            {
+                                <p class="arc-card__outcome">@goal.Description</p>
+                            }
+
+                            <div class="arc-card__meta">
+                                @if (goal.TargetDate.HasValue)
+                                {
+                                    <span class="arc-meta-item">Target @goal.TargetDate.Value.ToString("MMM d, yyyy")</span>
+                                }
+                                <span class="arc-meta-item">@goal.CompletedMilestones/@goal.TotalMilestones milestones</span>
+                            </div>
+                        </div>
+
+                        <div class="arc-card__actions">
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Default"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Unarchive"
+                                       OnClick="() => RestoreGoalAsync(goal.Id, goal.Title)">
+                                Restore
+                            </MudButton>
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Default"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.OpenInNew"
+                                       OnClick='() => Nav.NavigateTo($"/goals/{goal.Id}")'>
+                                View
+                            </MudButton>
+                        </div>
                     </div>
-                </div>
-            }
-        </div>
+                }
+            </div>
+        }
+
+        @if (!FilteredProjects.Any() && !FilteredGoals.Any())
+        {
+            <div class="arc-empty arc-empty--filtered">
+                <div class="arc-empty__glyph">⌕</div>
+                <p class="arc-empty__title">No archived items match</p>
+                <p class="arc-empty__sub">Try a broader search term.</p>
+            </div>
+        }
     }
 </div>
 
@@ -205,6 +295,25 @@
 
 /* Search */
 .arc-search-row { margin-bottom: 1.25rem; }
+.arc-section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .75rem;
+    margin: 1.5rem 0 .7rem;
+}
+.arc-section-head--goals { margin-top: 2rem; }
+.arc-section-head__label {
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+}
+.arc-section-head__count {
+    font-size: .75rem;
+    color: var(--ink-faint);
+}
 .arc-search {
     display: flex;
     align-items: center;
@@ -278,6 +387,7 @@
 .arc-ribbon--high     { background: #d4722a; }
 .arc-ribbon--medium   { background: var(--gold); }
 .arc-ribbon--low      { background: var(--sage); }
+.arc-ribbon--goal     { background: linear-gradient(180deg, var(--gold), var(--clay)); }
 
 /* Card body */
 .arc-card__body {
@@ -318,6 +428,8 @@
 .arc-pri--high     { color: #d4722a; background: rgba(212,114,42,.10); }
 .arc-pri--medium   { color: #a07820; background: rgba(160,120,32,.10); }
 .arc-pri--low      { color: var(--sage); background: rgba(111,122,90,.10); }
+.arc-badge--goal-status { color: #2f6f61; background: rgba(47,111,97,.10); }
+.arc-badge--goal-area { color: #7a5c0e; background: rgba(160,120,32,.10); }
 
 .arc-card__name {
     font-family: var(--font-display);
@@ -378,10 +490,11 @@
 
 @code {
     private IReadOnlyList<ProjectDto>? _projects;
+    private IReadOnlyList<GoalDto>? _goals;
     private bool _loading = true;
     private string _search = string.Empty;
 
-    private IEnumerable<ProjectDto> Filtered =>
+    private IEnumerable<ProjectDto> FilteredProjects =>
         _projects is null
             ? []
             : string.IsNullOrWhiteSpace(_search)
@@ -391,6 +504,16 @@
                     (p.Description?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true) ||
                     (p.DesiredOutcome?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true));
 
+    private IEnumerable<GoalDto> FilteredGoals =>
+        _goals is null
+            ? []
+            : string.IsNullOrWhiteSpace(_search)
+                ? _goals
+                : _goals.Where(g =>
+                    g.Title.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    (g.Description?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (g.AreaName?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true));
+
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
@@ -399,7 +522,13 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        _projects = await ProjectService.GetAllArchivedAsync();
+        var projectsTask = ProjectService.GetAllArchivedAsync();
+        var goalsTask = GoalService.GetAllArchivedAsync();
+
+        await Task.WhenAll(projectsTask, goalsTask);
+
+        _projects = await projectsTask;
+        _goals = await goalsTask;
         _loading = false;
     }
 
@@ -420,6 +549,13 @@
 
     private void OpenProject(Guid id) => Nav.NavigateTo($"/projects/{id}");
 
+    private async Task RestoreGoalAsync(Guid id, string title)
+    {
+        await GoalService.RestoreAsync(id);
+        Snackbar.Add($"\"{title}\" restored to active goals.", Severity.Success);
+        await LoadAsync();
+    }
+
     private static string PriorityLabel(ProjectPriority p) => p switch
     {
         ProjectPriority.Critical => "⚑ Critical",
@@ -427,5 +563,15 @@
         ProjectPriority.Medium   => "— Medium",
         ProjectPriority.Low      => "↓ Low",
         _                        => p.ToString()
+    };
+
+    private static string GoalStatusLabel(GoalStatus status) => status switch
+    {
+        GoalStatus.Planned => "Planned",
+        GoalStatus.Active => "Active",
+        GoalStatus.Achieved => "Achieved",
+        GoalStatus.Abandoned => "Abandoned",
+        GoalStatus.Archived => "Archived",
+        _ => status.ToString()
     };
 }

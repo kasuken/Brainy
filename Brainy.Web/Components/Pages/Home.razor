@@ -4,6 +4,7 @@
 @using Brainy.Application.DTOs.Today
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.DTOs.Dashboard
+@using Brainy.Application.DTOs.Goals
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @using Brainy.Web.Components.Pages.Today
@@ -12,6 +13,7 @@
 @inject ITodayNotificationService NotificationService
 @inject IUserDashboardPreferenceService PreferenceService
 @inject IProjectPrioritizationService ProjectPrioritizationService
+@inject IGoalService GoalService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 
@@ -269,6 +271,9 @@
                     <OverdueWidget Tasks="_aggregate?.Overdue ?? []"
                                    OnComplete="HandleCompleted" />
 
+                    <GoalDeadlineWidget OverdueGoals="_overdueGoals"
+                                        DueSoonGoals="_dueSoonGoals" />
+
                     <DueTodayWidget Tasks="_aggregate?.DueToday ?? []"
                                     OnComplete="HandleCompleted" />
 
@@ -325,6 +330,8 @@
     private TodayAggregateDto? _aggregate;
     private IReadOnlyList<TodayNotificationDto> _notifications = [];
     private IReadOnlyList<ProjectSummaryDto> _prioritizedProjects = [];
+    private IReadOnlyList<GoalDto> _overdueGoals = [];
+    private IReadOnlyList<GoalDto> _dueSoonGoals = [];
 
     private string Greeting => DateTime.Now.Hour switch
     {
@@ -353,9 +360,19 @@
         _loading = true;
         StateHasChanged();
 
-        _aggregate           = await TodayService.GetTodayAggregateAsync();
-        _notifications       = await NotificationService.GetNotificationsAsync();
-        _prioritizedProjects = await ProjectPrioritizationService.GetPrioritizedProjectsAsync(5);
+        var aggregateTask = TodayService.GetTodayAggregateAsync();
+        var notificationsTask = NotificationService.GetNotificationsAsync();
+        var prioritizedProjectsTask = ProjectPrioritizationService.GetPrioritizedProjectsAsync(5);
+        var overdueGoalsTask = GoalService.GetOverdueAsync();
+        var dueSoonGoalsTask = GoalService.GetDueSoonAsync();
+
+        await Task.WhenAll(aggregateTask, notificationsTask, prioritizedProjectsTask, overdueGoalsTask, dueSoonGoalsTask);
+
+        _aggregate = await aggregateTask;
+        _notifications = await notificationsTask;
+        _prioritizedProjects = await prioritizedProjectsTask;
+        _overdueGoals = await overdueGoalsTask;
+        _dueSoonGoals = await dueSoonGoalsTask;
 
         _loading = false;
         StateHasChanged();

@@ -43,7 +43,45 @@
     {
         <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
     }
-    else if (_notes.Count == 0)
+    else if (FavoriteNotes.Any())
+    {
+        @* ── Favorites section ── *@
+        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mb-2">
+            <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Warning" Size="Size.Small" Class="mr-1" />
+            Favorites
+        </MudText>
+        <MudGrid Spacing="2" Class="mb-4">
+            @foreach (var note in FavoriteNotes)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudPaper Class="pa-3 d-flex flex-column gap-1" Elevation="1" Style="cursor:pointer;"
+                              @onclick="() => OpenEditDialogAsync(note.Id)">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body1"><strong>@note.Title</strong></MudText>
+                            <span @onclick:stopPropagation="true">
+                                <MudIconButton Icon="@Icons.Material.Filled.Star"
+                                               Color="Color.Warning"
+                                               Size="Size.Small"
+                                               Title="Remove from favorites"
+                                               OnClick="@(() => ToggleFavoriteAsync(note.Id))" />
+                            </span>
+                        </MudStack>
+                        @if (!string.IsNullOrWhiteSpace(note.AiSummary))
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@TruncateSummary(note.AiSummary)</MudText>
+                        }
+                        <MudStack Row="true" Spacing="1">
+                            <MudChip T="string" Size="Size.Small" Color="CategoryColor(note.ParaCategory)" Variant="Variant.Outlined">@note.ParaCategory</MudChip>
+                            <MudChip T="string" Size="Size.Small" Color="StatusColor(note.Status)" Variant="Variant.Filled">@note.Status</MudChip>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+        <MudDivider Class="mb-4" />
+    }
+
+    @if (!_loading && _notes.Count == 0)
     {
         @* Empty state: no notes exist yet *@
         <MudPaper Class="pa-8 d-flex flex-column align-center" Elevation="0" Outlined="true">
@@ -100,6 +138,7 @@
             </ToolBarContent>
 
             <HeaderContent>
+                <MudTh Style="width:48px"></MudTh>
                 <MudTh>Title</MudTh>
                 <MudTh>Category</MudTh>
                 <MudTh>Status</MudTh>
@@ -107,6 +146,15 @@
             </HeaderContent>
 
             <RowTemplate>
+                <MudTd>
+                    <span @onclick:stopPropagation="true">
+                        <MudIconButton Icon="@(context.IsFavorite ? Icons.Material.Filled.Star : Icons.Material.Outlined.StarBorder)"
+                                       Color="@(context.IsFavorite ? Color.Warning : Color.Default)"
+                                       Size="Size.Small"
+                                       Title="@(context.IsFavorite ? "Remove from favorites" : "Add to favorites")"
+                                       OnClick="@(() => ToggleFavoriteAsync(context.Id))" />
+                    </span>
+                </MudTd>
                 <MudTd DataLabel="Title">
                     <MudText Typo="Typo.body1"><strong>@context.Title</strong></MudText>
                     @if (!string.IsNullOrWhiteSpace(context.AiSummary))
@@ -156,6 +204,14 @@
     private bool _loading = true;
     private HashSet<NoteDto> _selectedNotes = [];
 
+    private IEnumerable<NoteDto> FavoriteNotes =>
+        _notes.Where(n => n.IsFavorite);
+
+    private IEnumerable<NoteDto> FilteredNotes =>
+        string.IsNullOrWhiteSpace(_searchText)
+            ? _notes
+            : _notes.Where(n => n.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+
     private static readonly DialogOptions _dialogOptions = new()
     {
         MaxWidth        = MaxWidth.Large,
@@ -183,16 +239,36 @@
             await LoadNotesAsync();
     }
 
-    private async Task OnRowClick(TableRowClickEventArgs<NoteDto> args)
+    private async Task OpenEditDialogAsync(Guid noteId)
     {
         var parameters = new DialogParameters<NoteEditorDialog>
         {
-            { x => x.NoteId, args.Item!.Id }
+            { x => x.NoteId, noteId }
         };
         var dialog = await DialogService.ShowAsync<NoteEditorDialog>("", parameters, _dialogOptions);
         var result = await dialog.Result;
         if (result is { Canceled: false })
             await LoadNotesAsync();
+    }
+
+    private async Task ToggleFavoriteAsync(Guid noteId)
+    {
+        try
+        {
+            var updated = await NoteService.ToggleFavoriteAsync(noteId);
+            // Update in place to avoid a full reload
+            _notes = _notes.Select(n => n.Id == noteId ? updated : n).ToList();
+            StateHasChanged();
+        }
+        catch
+        {
+            Snackbar.Add("Could not update favorite.", Severity.Error);
+        }
+    }
+
+    private async Task OnRowClick(TableRowClickEventArgs<NoteDto> args)
+    {
+        await OpenEditDialogAsync(args.Item!.Id);
     }
 
     private async Task BulkMoveCategoryAsync()
@@ -222,11 +298,6 @@
             await LoadNotesAsync();
         }
     }
-
-    private IEnumerable<NoteDto> FilteredNotes =>
-        string.IsNullOrWhiteSpace(_searchText)
-            ? _notes
-            : _notes.Where(n => n.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
 
     private void ClearSearch() => _searchText = string.Empty;
 

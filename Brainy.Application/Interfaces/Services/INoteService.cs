@@ -58,4 +58,10 @@ public interface INoteService
     /// The note and its content are preserved; only the project link is cleared.
     /// </summary>
     Task<NoteDto> UnlinkFromProjectAsync(Guid noteId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Toggles the <c>IsFavorite</c> flag on a note.
+    /// Returns the updated <see cref="NoteDto"/> with the new flag value.
+    /// </summary>
+    Task<NoteDto> ToggleFavoriteAsync(Guid id, CancellationToken cancellationToken = default);
 }

@@ -1,0 +1,148 @@
+@using Brainy.Application.DTOs.Projects
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+
+@inject ITaskService TaskService
+@inject ISnackbar Snackbar
+
+<MudDialog Class="qtd-dialog">
+    <TitleContent>
+        <div class="qtd-header">
+            <span class="qtd-header-glyph">+</span>
+            <span class="qtd-header-title">New Task</span>
+            @if (SelectedDate != default)
+            {
+                <span class="qtd-header-date">· @SelectedDate.ToString("MMM d")</span>
+            }
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3" Class="qtd-form">
+            <MudTextField @bind-Value="_title"
+                          Label="Title"
+                          Required="true"
+                          Variant="Variant.Outlined"
+                          Immediate="true"
+                          AutoFocus="true"
+                          FullWidth="true"
+                          Placeholder="What needs to be done?" />
+
+            <MudSelect @bind-Value="_projectId"
+                       T="Guid"
+                       Label="Project"
+                       Required="true"
+                       Variant="Variant.Outlined"
+                       FullWidth="true">
+                @foreach (var p in Projects)
+                {
+                    <MudSelectItem T="Guid" Value="@p.Id">@p.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect @bind-Value="_priority"
+                       T="TaskPriority"
+                       Label="Priority"
+                       Variant="Variant.Outlined"
+                       FullWidth="true">
+                <MudSelectItem T="TaskPriority" Value="TaskPriority.Low">↓ Low</MudSelectItem>
+                <MudSelectItem T="TaskPriority" Value="TaskPriority.Medium">— Medium</MudSelectItem>
+                <MudSelectItem T="TaskPriority" Value="TaskPriority.High">↑ High</MudSelectItem>
+                <MudSelectItem T="TaskPriority" Value="TaskPriority.Critical">⚑ Critical</MudSelectItem>
+            </MudSelect>
+
+            <MudTextField @bind-Value="_description"
+                          Label="Description"
+                          Lines="2"
+                          Variant="Variant.Outlined"
+                          FullWidth="true" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="SubmitAsync"
+                   Disabled="_saving || string.IsNullOrWhiteSpace(_title) || _projectId == Guid.Empty">
+            @(_saving ? "Creating…" : "Create Task")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+.qtd-dialog .mud-dialog { border-radius: 16px; }
+
+.qtd-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.qtd-header-glyph {
+    font-size: 1.4rem;
+    color: var(--clay);
+    line-height: 1;
+    font-weight: 300;
+}
+
+.qtd-header-title {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--ink);
+}
+
+.qtd-header-date {
+    font-size: 0.9rem;
+    color: var(--ink-faint);
+}
+
+.qtd-form { padding: 0.25rem 0 0.5rem; }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public DateTime SelectedDate { get; set; }
+    [Parameter] public IReadOnlyList<ProjectDto> Projects { get; set; } = [];
+
+    private string _title = string.Empty;
+    private string? _description;
+    private Guid _projectId;
+    private TaskPriority _priority = TaskPriority.Medium;
+    private bool _saving;
+
+    protected override void OnParametersSet()
+    {
+        if (_projectId == Guid.Empty && Projects.Count > 0)
+            _projectId = Projects[0].Id;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_title) || _projectId == Guid.Empty) return;
+
+        _saving = true;
+        try
+        {
+            var dto = new CreateTaskDto(
+                _projectId,
+                _title.Trim(),
+                string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
+                _priority,
+                SelectedDate != default ? SelectedDate.Date : null);
+
+            var created = await TaskService.CreateAsync(dto);
+            MudDialog.Close(DialogResult.Ok(created));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not create task: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

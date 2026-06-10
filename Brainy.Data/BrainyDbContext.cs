@@ -41,6 +41,12 @@ public class BrainyDbContext(DbContextOptions<BrainyDbContext> options)
 
     public DbSet<UserDashboardPreference> DashboardPreferences => Set<UserDashboardPreference>();
 
+    public DbSet<Idea> Ideas => Set<Idea>();
+
+    public DbSet<Goal> Goals => Set<Goal>();
+
+    public DbSet<GoalMilestone> GoalMilestones => Set<GoalMilestone>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Configure Identity schema first, then apply Brainy entity configurations.

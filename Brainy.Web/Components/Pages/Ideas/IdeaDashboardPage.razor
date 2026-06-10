@@ -1,0 +1,767 @@
+@page "/ideas/dashboard"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Ideas
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IIdeaService IdeaService
+@inject NavigationManager Nav
+
+<PageTitle>Idea Dashboard — Brainy</PageTitle>
+
+<div class="idash-page">
+
+    <!-- ── Header ──────────────────────────────────────────────────────────── -->
+    <div class="idash-header">
+        <div class="idash-header__text">
+            <h1 class="idash-header__title">Idea Dashboard</h1>
+            <p class="idash-header__sub">Overview &amp; review of your idea pipeline</p>
+        </div>
+        <MudButton Variant="Variant.Outlined"
+                   StartIcon="@Icons.Material.Outlined.List"
+                   OnClick='() => Nav.NavigateTo("/ideas")'>
+            All Ideas
+        </MudButton>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="idash-loading">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+            <span class="idash-loading__text">Loading dashboard…</span>
+        </div>
+    }
+    else
+    {
+        <!-- ── Section 1: Metrics Overview ──────────────────────────────────── -->
+        <section class="idash-section">
+            <h2 class="idash-section__title">
+                <MudIcon Icon="@Icons.Material.Outlined.Insights" Class="idash-section__icon" />
+                Metrics Overview
+            </h2>
+            <div class="idash-kpi-row">
+
+                <!-- Total -->
+                <div class="idash-kpi-card idash-kpi-card--neutral">
+                    <div class="idash-kpi-card__icon">
+                        <MudIcon Icon="@Icons.Material.Outlined.Lightbulb" />
+                    </div>
+                    <div class="idash-kpi-card__body">
+                        <span class="idash-kpi-card__value">@(_metrics?.TotalIdeas ?? 0)</span>
+                        <span class="idash-kpi-card__label">Total Ideas</span>
+                    </div>
+                </div>
+
+                <!-- Active -->
+                <div class="idash-kpi-card idash-kpi-card--active">
+                    <div class="idash-kpi-card__icon">
+                        <MudIcon Icon="@Icons.Material.Outlined.FlashOn" />
+                    </div>
+                    <div class="idash-kpi-card__body">
+                        <span class="idash-kpi-card__value">@(_metrics?.ActiveIdeas ?? 0)</span>
+                        <span class="idash-kpi-card__label">Active Ideas</span>
+                    </div>
+                </div>
+
+                <!-- Archived -->
+                <div class="idash-kpi-card idash-kpi-card--archived">
+                    <div class="idash-kpi-card__icon">
+                        <MudIcon Icon="@Icons.Material.Outlined.Archive" />
+                    </div>
+                    <div class="idash-kpi-card__body">
+                        <span class="idash-kpi-card__value">@(_metrics?.ArchivedIdeas ?? 0)</span>
+                        <span class="idash-kpi-card__label">Archived</span>
+                    </div>
+                </div>
+
+                <!-- Converted -->
+                <div class="idash-kpi-card idash-kpi-card--converted">
+                    <div class="idash-kpi-card__icon">
+                        <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" />
+                    </div>
+                    <div class="idash-kpi-card__body">
+                        <span class="idash-kpi-card__value">@(_metrics?.ConvertedIdeas ?? 0)</span>
+                        <span class="idash-kpi-card__label">Converted to Project</span>
+                    </div>
+                </div>
+
+                <!-- Rejected -->
+                <div class="idash-kpi-card idash-kpi-card--rejected">
+                    <div class="idash-kpi-card__icon">
+                        <MudIcon Icon="@Icons.Material.Outlined.Cancel" />
+                    </div>
+                    <div class="idash-kpi-card__body">
+                        <span class="idash-kpi-card__value">@(_metrics?.RejectedIdeas ?? 0)</span>
+                        <span class="idash-kpi-card__label">Rejected</span>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ── Section 2 + 3: By Area & By Status ────────────────────────── -->
+        <div class="idash-two-col">
+
+            <!-- Ideas by Area -->
+            <section class="idash-section">
+                <h2 class="idash-section__title">
+                    <MudIcon Icon="@Icons.Material.Outlined.Category" Class="idash-section__icon" />
+                    Ideas by Area
+                </h2>
+                <div class="idash-table-wrap">
+                    <MudSimpleTable Dense="true" Hover="true" Class="idash-table">
+                        <thead>
+                            <tr>
+                                <th>Area</th>
+                                <th class="idash-table__num">Ideas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_metrics?.ByArea is { Count: > 0 })
+                            {
+                                @foreach (var row in _metrics.ByArea.OrderByDescending(r => r.Count))
+                                {
+                                    <tr>
+                                        <td>
+                                            @if (row.AreaId is null)
+                                            {
+                                                <span class="idash-no-area">No area assigned</span>
+                                            }
+                                            else
+                                            {
+                                                <span>@row.AreaName</span>
+                                            }
+                                        </td>
+                                        <td class="idash-table__num">
+                                            <span class="idash-count-badge">@row.Count</span>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="2" class="idash-table__empty">No area data available</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </div>
+            </section>
+
+            <!-- Ideas by Status -->
+            <section class="idash-section">
+                <h2 class="idash-section__title">
+                    <MudIcon Icon="@Icons.Material.Outlined.Timeline" Class="idash-section__icon" />
+                    Ideas by Status
+                </h2>
+                <div class="idash-table-wrap">
+                    <MudSimpleTable Dense="true" Hover="true" Class="idash-table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th class="idash-table__num">Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _statusBreakdown)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="idash-status-dot" style="background:@StatusColor(row.Status)"></span>
+                                        @StatusLabel(row.Status)
+                                    </td>
+                                    <td class="idash-table__num">
+                                        <span class="idash-count-badge">@row.Count</span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- ── Section 4: Recently Updated ──────────────────────────────────── -->
+        <section class="idash-section">
+            <h2 class="idash-section__title">
+                <MudIcon Icon="@Icons.Material.Outlined.Update" Class="idash-section__icon" />
+                Recently Updated Ideas
+            </h2>
+            @if (_recentIdeas.Count == 0)
+            {
+                <p class="idash-empty-note">No ideas yet. Start capturing your first idea!</p>
+            }
+            else
+            {
+                <div class="idash-table-wrap">
+                    <MudSimpleTable Dense="true" Hover="true" Class="idash-table idash-table--recent">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Area</th>
+                                <th>Status</th>
+                                <th>Priority</th>
+                                <th>Last Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var idea in _recentIdeas)
+                            {
+                                <tr class="idash-row--clickable" @onclick='() => Nav.NavigateTo($"/ideas/{idea.Id}")'>
+                                    <td>
+                                        <span class="idash-idea-link">@idea.Title</span>
+                                    </td>
+                                    <td class="idash-muted">
+                                        @(idea.AreaName ?? "—")
+                                    </td>
+                                    <td>
+                                        <span class="idash-status-pill" style="--pill-color:@StatusColor(idea.Status)">
+                                            @StatusLabel(idea.Status)
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="idash-priority-pill" style="--pri-color:@PriorityColor(idea.Priority)">
+                                            @idea.Priority
+                                        </span>
+                                    </td>
+                                    <td class="idash-muted idash-nowrap">
+                                        @idea.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </div>
+            }
+        </section>
+
+        <!-- ── Section 5: Review Panel ───────────────────────────────────────── -->
+        <section class="idash-section">
+            <h2 class="idash-section__title">
+                <MudIcon Icon="@Icons.Material.Outlined.RateReview" Class="idash-section__icon" />
+                Review Panel
+            </h2>
+            <MudExpansionPanels Class="idash-expansion">
+
+                <!-- Stale Ideas -->
+                <MudExpansionPanel>
+                    <TitleContent>
+                        <div class="idash-panel-title">
+                            <MudIcon Icon="@Icons.Material.Outlined.HourglassEmpty" Class="idash-panel-title__icon idash-panel-title__icon--stale" />
+                            <span>Stale Ideas</span>
+                            <span class="idash-panel-badge idash-panel-badge--stale">
+                                @(_reviewData?.StaleIdeas.Count ?? 0)
+                            </span>
+                            <span class="idash-panel-title__hint">not updated in 30+ days</span>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        @if (_reviewData?.StaleIdeas is { Count: > 0 })
+                        {
+                            <div class="idash-chip-list">
+                                @foreach (var idea in _reviewData.StaleIdeas)
+                                {
+                                    <MudChip T="string"
+                                             Icon="@Icons.Material.Outlined.Lightbulb"
+                                             OnClick='() => Nav.NavigateTo($"/ideas/{idea.Id}")'
+                                             Class="idash-idea-chip">
+                                        @idea.Title
+                                    </MudChip>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="idash-panel-empty">No stale ideas — great job keeping things fresh!</p>
+                        }
+                    </ChildContent>
+                </MudExpansionPanel>
+
+                <!-- Recently Active -->
+                <MudExpansionPanel>
+                    <TitleContent>
+                        <div class="idash-panel-title">
+                            <MudIcon Icon="@Icons.Material.Outlined.Bolt" Class="idash-panel-title__icon idash-panel-title__icon--active" />
+                            <span>Recently Active</span>
+                            <span class="idash-panel-badge idash-panel-badge--active">
+                                @(_reviewData?.RecentlyUpdatedIdeas.Count ?? 0)
+                            </span>
+                            <span class="idash-panel-title__hint">updated in the last 7 days</span>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        @if (_reviewData?.RecentlyUpdatedIdeas is { Count: > 0 })
+                        {
+                            <div class="idash-chip-list">
+                                @foreach (var idea in _reviewData.RecentlyUpdatedIdeas)
+                                {
+                                    <MudChip T="string"
+                                             Icon="@Icons.Material.Outlined.Lightbulb"
+                                             Color="Color.Primary"
+                                             OnClick='() => Nav.NavigateTo($"/ideas/{idea.Id}")'
+                                             Class="idash-idea-chip">
+                                        @idea.Title
+                                    </MudChip>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="idash-panel-empty">No recently active ideas.</p>
+                        }
+                    </ChildContent>
+                </MudExpansionPanel>
+
+                <!-- High Priority — No Recent Activity -->
+                <MudExpansionPanel>
+                    <TitleContent>
+                        <div class="idash-panel-title">
+                            <MudIcon Icon="@Icons.Material.Outlined.Warning" Class="idash-panel-title__icon idash-panel-title__icon--warn" />
+                            <span>High Priority — No Recent Activity</span>
+                            <span class="idash-panel-badge idash-panel-badge--warn">
+                                @(_reviewData?.HighPriorityWithoutRecentActivity.Count ?? 0)
+                            </span>
+                            <span class="idash-panel-title__hint">High/Critical, no activity in 14+ days</span>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        @if (_reviewData?.HighPriorityWithoutRecentActivity is { Count: > 0 })
+                        {
+                            <div class="idash-chip-list">
+                                @foreach (var idea in _reviewData.HighPriorityWithoutRecentActivity)
+                                {
+                                    <MudChip T="string"
+                                             Icon="@Icons.Material.Outlined.PriorityHigh"
+                                             Color="Color.Warning"
+                                             OnClick='() => Nav.NavigateTo($"/ideas/{idea.Id}")'
+                                             Class="idash-idea-chip">
+                                        @idea.Title
+                                        <span class="idash-chip-priority">[@idea.Priority]</span>
+                                    </MudChip>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="idash-panel-empty">No high-priority ideas are waiting for attention.</p>
+                        }
+                    </ChildContent>
+                </MudExpansionPanel>
+
+            </MudExpansionPanels>
+        </section>
+    }
+
+</div>
+
+@code {
+    bool _loading = true;
+    IdeaMetricsDto? _metrics;
+    IdeaReviewDto? _reviewData;
+    List<IdeaDto> _recentIdeas = [];
+    List<(IdeaStatus Status, int Count)> _statusBreakdown = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var metricsTask = IdeaService.GetMetricsAsync();
+        var reviewTask  = IdeaService.GetReviewDataAsync();
+        var activeTask  = IdeaService.GetAllActiveAsync();
+        var archivedTask = IdeaService.GetAllArchivedAsync();
+
+        await Task.WhenAll(metricsTask, reviewTask, activeTask, archivedTask);
+
+        _metrics    = await metricsTask;
+        _reviewData = await reviewTask;
+
+        var allIdeas = (await activeTask).Concat(await archivedTask).ToList();
+
+        // Top 10 most recently updated
+        _recentIdeas = allIdeas
+            .OrderByDescending(i => i.UpdatedAtUtc)
+            .Take(10)
+            .ToList();
+
+        // Status breakdown across all ideas
+        _statusBreakdown = allIdeas
+            .GroupBy(i => i.Status)
+            .Select(g => (Status: g.Key, Count: g.Count()))
+            .OrderBy(r => (int)r.Status)
+            .ToList();
+
+        _loading = false;
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    static string StatusLabel(IdeaStatus s) => s switch
+    {
+        IdeaStatus.Captured           => "Captured",
+        IdeaStatus.Researching        => "Researching",
+        IdeaStatus.Validating         => "Validating",
+        IdeaStatus.Planned            => "Planned",
+        IdeaStatus.Rejected           => "Rejected",
+        IdeaStatus.ConvertedToProject => "Converted",
+        IdeaStatus.Archived           => "Archived",
+        _                             => s.ToString()
+    };
+
+    static string StatusColor(IdeaStatus s) => s switch
+    {
+        IdeaStatus.Captured           => "var(--ink-soft)",
+        IdeaStatus.Researching        => "var(--gold)",
+        IdeaStatus.Validating         => "#5c9bd6",
+        IdeaStatus.Planned            => "var(--sage)",
+        IdeaStatus.Rejected           => "#c94040",
+        IdeaStatus.ConvertedToProject => "#3d9c6b",
+        IdeaStatus.Archived           => "var(--ink-faint)",
+        _                             => "var(--ink-soft)"
+    };
+
+    static string PriorityColor(IdeaPriority p) => p switch
+    {
+        IdeaPriority.Low      => "var(--ink-faint)",
+        IdeaPriority.Medium   => "var(--gold)",
+        IdeaPriority.High     => "var(--clay)",
+        IdeaPriority.Critical => "#c94040",
+        _                     => "var(--ink-soft)"
+    };
+}
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Idea Dashboard — "Archival Mind" design system
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.idash-page {
+    font-family: var(--font-body);
+    padding-bottom: 3rem;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.idash-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 2.25rem;
+    flex-wrap: wrap;
+}
+
+.idash-header__title {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0 0 .15rem;
+    letter-spacing: -.02em;
+    line-height: 1;
+}
+
+.idash-header__sub {
+    font-size: .8rem;
+    color: var(--ink-faint);
+    margin: 0;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+/* ── Loading ─────────────────────────────────────────────────────────────── */
+.idash-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 4rem 0;
+    color: var(--ink-soft);
+}
+
+.idash-loading__text {
+    font-size: .875rem;
+    letter-spacing: .04em;
+}
+
+/* ── Section ─────────────────────────────────────────────────────────────── */
+.idash-section {
+    margin-bottom: 2.5rem;
+}
+
+.idash-section__title {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0 0 1rem;
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    letter-spacing: -.01em;
+}
+
+.idash-section__icon {
+    font-size: 1.1rem !important;
+    color: var(--clay);
+    opacity: .85;
+}
+
+/* ── KPI Cards ───────────────────────────────────────────────────────────── */
+.idash-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+}
+
+.idash-kpi-card {
+    display: flex;
+    align-items: center;
+    gap: .875rem;
+    padding: 1.25rem 1.125rem;
+    border-radius: 8px;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow .15s ease, transform .15s ease;
+}
+
+.idash-kpi-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+.idash-kpi-card__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    font-size: 1.25rem;
+}
+
+.idash-kpi-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    min-width: 0;
+}
+
+.idash-kpi-card__value {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--ink);
+}
+
+.idash-kpi-card__label {
+    font-size: .72rem;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Color variants */
+.idash-kpi-card--neutral .idash-kpi-card__icon { background: var(--paper-sunk); color: var(--ink-soft); }
+.idash-kpi-card--active  .idash-kpi-card__icon { background: rgba(92,155,214,.12); color: #5c9bd6; }
+.idash-kpi-card--archived .idash-kpi-card__icon { background: rgba(107,98,83,.12); color: var(--ink-soft); }
+.idash-kpi-card--converted .idash-kpi-card__icon { background: rgba(61,156,107,.12); color: #3d9c6b; }
+.idash-kpi-card--rejected  .idash-kpi-card__icon { background: rgba(201,64,64,.10); color: #c94040; }
+
+/* ── Two column layout ───────────────────────────────────────────────────── */
+.idash-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+}
+
+@@media (max-width: 720px) {
+    .idash-two-col { grid-template-columns: 1fr; }
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+.idash-table-wrap {
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+}
+
+.idash-table {
+    width: 100%;
+    font-size: .875rem;
+}
+
+.idash-table__num {
+    text-align: right;
+    width: 5rem;
+}
+
+.idash-table__empty {
+    color: var(--ink-faint);
+    font-style: italic;
+    text-align: center;
+    padding: .75rem 0 !important;
+}
+
+.idash-count-badge {
+    display: inline-block;
+    background: var(--clay-soft);
+    color: var(--clay-deep);
+    border-radius: 999px;
+    padding: .05rem .55rem;
+    font-size: .78rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+}
+
+.idash-no-area {
+    color: var(--ink-faint);
+    font-style: italic;
+}
+
+/* Status dot (table) */
+.idash-status-dot {
+    display: inline-block;
+    width: .55rem;
+    height: .55rem;
+    border-radius: 50%;
+    margin-right: .45rem;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+/* ── Recent ideas table ──────────────────────────────────────────────────── */
+.idash-row--clickable {
+    cursor: pointer;
+    transition: background .1s ease;
+}
+
+.idash-row--clickable:hover {
+    background: var(--clay-soft) !important;
+}
+
+.idash-idea-link {
+    color: var(--ink);
+    font-weight: 500;
+}
+
+.idash-row--clickable:hover .idash-idea-link {
+    color: var(--clay);
+    text-decoration: underline;
+}
+
+.idash-muted {
+    color: var(--ink-soft);
+    font-size: .82rem;
+}
+
+.idash-nowrap {
+    white-space: nowrap;
+}
+
+/* Status pill */
+.idash-status-pill {
+    display: inline-block;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--pill-color, var(--ink-soft));
+    border: 1px solid var(--pill-color, var(--line));
+    border-radius: 4px;
+    padding: .1rem .45rem;
+    white-space: nowrap;
+}
+
+/* Priority pill */
+.idash-priority-pill {
+    display: inline-block;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    color: var(--pri-color, var(--ink-soft));
+    white-space: nowrap;
+}
+
+.idash-empty-note {
+    color: var(--ink-faint);
+    font-style: italic;
+    font-size: .875rem;
+    padding: .5rem 0;
+}
+
+/* ── Expansion panels ────────────────────────────────────────────────────── */
+.idash-expansion {
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+}
+
+.idash-panel-title {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    font-family: var(--font-body);
+    font-size: .9rem;
+    font-weight: 500;
+    color: var(--ink);
+}
+
+.idash-panel-title__icon { font-size: 1rem !important; }
+.idash-panel-title__icon--stale  { color: var(--ink-soft); }
+.idash-panel-title__icon--active { color: #5c9bd6; }
+.idash-panel-title__icon--warn   { color: var(--clay); }
+
+.idash-panel-badge {
+    display: inline-block;
+    min-width: 1.4rem;
+    text-align: center;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 700;
+    padding: .1rem .45rem;
+    letter-spacing: .02em;
+}
+
+.idash-panel-badge--stale  { background: var(--paper-sunk); color: var(--ink-soft); }
+.idash-panel-badge--active { background: rgba(92,155,214,.15); color: #3a7ab8; }
+.idash-panel-badge--warn   { background: var(--clay-soft); color: var(--clay-deep); }
+
+.idash-panel-title__hint {
+    font-size: .75rem;
+    color: var(--ink-faint);
+    font-weight: 400;
+    margin-left: .15rem;
+}
+
+.idash-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    padding: .25rem .25rem .5rem;
+}
+
+.idash-idea-chip {
+    cursor: pointer;
+}
+
+.idash-chip-priority {
+    margin-left: .35rem;
+    font-size: .7rem;
+    opacity: .75;
+}
+
+.idash-panel-empty {
+    color: var(--ink-faint);
+    font-style: italic;
+    font-size: .875rem;
+    padding: .25rem .25rem .5rem;
+    margin: 0;
+}
+</style>

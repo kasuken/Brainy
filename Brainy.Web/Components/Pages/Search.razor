@@ -4,10 +4,12 @@
 @namespace Brainy.Web.Components.Pages
 
 @using Brainy.Application.DTOs.Search
+@using Brainy.Application.DTOs.Goals
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 
 @inject ISearchService SearchService
+@inject IGoalService GoalService
 @inject NavigationManager Nav
 
 <PageTitle>Search – Brainy</PageTitle>
@@ -20,7 +22,7 @@
             Search your knowledge
         </MudText>
         <MudText Typo="Typo.body1" Class="mud-text-secondary mb-5">
-            Find notes by title or content — results ordered by relevance.
+            Find notes and goals by title or content — results ordered by relevance.
         </MudText>
 
         <div class="search-input-wrap">
@@ -48,7 +50,7 @@
                 <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">Searching…</MudText>
             </div>
         }
-        else if (!string.IsNullOrWhiteSpace(_query) && _results.Count == 0 && _hasSearched)
+        else if (!string.IsNullOrWhiteSpace(_query) && TotalResults == 0 && _hasSearched)
         {
             <div class="search-state">
                 <MudIcon Icon="@Icons.Material.Outlined.SearchOff"
@@ -65,61 +67,120 @@
                 <MudIcon Icon="@Icons.Material.Outlined.AutoStories"
                          Class="search-state__icon mud-secondary-text" />
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                    Start typing to search across all your notes.
+                    Start typing to search across your notes and goals.
                 </MudText>
             </div>
         }
-        else if (_results.Count > 0)
+        else if (TotalResults > 0)
         {
             <div class="search-meta mb-4">
                 <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
-                    <strong>@_results.Count</strong> result@(_results.Count == 1 ? "" : "s")
+                    <strong>@TotalResults</strong> result@(TotalResults == 1 ? "" : "s")
                     for <em>"@_lastQuery"</em>
                 </MudText>
             </div>
 
-            <div class="search-results-list">
-                @foreach (var result in _results)
-                {
-                    <div class="search-card" @onclick="() => OpenNote(result.Id)">
-
-                        <div class="search-card__header">
-                            @* PARA badge *@
-                            <MudChip T="string"
-                                     Size="Size.Small"
-                                     Color="CategoryColor(result.ParaCategory)"
-                                     Variant="Variant.Outlined"
-                                     Class="search-card__badge">
-                                @result.ParaCategory
-                            </MudChip>
-
-                            @* Relevance pill *@
-                            @if (result.Relevance == 2)
-                            {
-                                <span class="search-card__relevance-pill">Title match</span>
-                            }
-
-                            <MudSpacer />
-
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                @result.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
-                            </MudText>
-                        </div>
-
-                        <MudText Typo="Typo.subtitle1" Class="search-card__title">
-                            @HighlightTitle(result.Title, _lastQuery)
-                        </MudText>
-
-                        @if (!string.IsNullOrWhiteSpace(result.ContentSnippet))
-                        {
-                            <p class="search-card__snippet">
-                                @HighlightSnippet(result.ContentSnippet, _lastQuery)
-                            </p>
-                        }
-
+            @if (_results.Count > 0)
+            {
+                <div class="search-results-section">
+                    <div class="search-results-section__head">
+                        <span class="search-results-section__title">Notes</span>
+                        <span class="search-results-section__count">@_results.Count</span>
                     </div>
-                }
-            </div>
+
+                    <div class="search-results-list">
+                        @foreach (var result in _results)
+                        {
+                            <div class="search-card" @onclick="() => OpenNote(result.Id)">
+
+                                <div class="search-card__header">
+                                    <MudChip T="string"
+                                             Size="Size.Small"
+                                             Color="CategoryColor(result.ParaCategory)"
+                                             Variant="Variant.Outlined"
+                                             Class="search-card__badge">
+                                        @result.ParaCategory
+                                    </MudChip>
+
+                                    @if (result.Relevance == 2)
+                                    {
+                                        <span class="search-card__relevance-pill">Title match</span>
+                                    }
+
+                                    <MudSpacer />
+
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @result.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                    </MudText>
+                                </div>
+
+                                <MudText Typo="Typo.subtitle1" Class="search-card__title">
+                                    @HighlightTitle(result.Title, _lastQuery)
+                                </MudText>
+
+                                @if (!string.IsNullOrWhiteSpace(result.ContentSnippet))
+                                {
+                                    <p class="search-card__snippet">
+                                        @HighlightSnippet(result.ContentSnippet, _lastQuery)
+                                    </p>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (_goalResults.Count > 0)
+            {
+                <div class="search-results-section">
+                    <div class="search-results-section__head">
+                        <span class="search-results-section__title">Goals</span>
+                        <span class="search-results-section__count">@_goalResults.Count</span>
+                    </div>
+
+                    <div class="search-results-list">
+                        @foreach (var goal in _goalResults)
+                        {
+                            <a class="search-card search-card--link" href="@($"/goals/{goal.Id}")">
+                                <div class="search-card__header">
+                                    <MudChip T="string"
+                                             Size="Size.Small"
+                                             Color="@GoalStatusColor(goal.Status)"
+                                             Variant="Variant.Outlined"
+                                             Class="search-card__badge">
+                                        @goal.Status
+                                    </MudChip>
+
+                                    @if (!string.IsNullOrWhiteSpace(goal.AreaName))
+                                    {
+                                        <span class="search-card__goal-area">@goal.AreaName</span>
+                                    }
+
+                                    <MudSpacer />
+
+                                    @if (goal.TargetDate.HasValue)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @goal.TargetDate.Value.ToString("MMM d, yyyy")
+                                        </MudText>
+                                    }
+                                </div>
+
+                                <MudText Typo="Typo.subtitle1" Class="search-card__title">
+                                    @HighlightTitle(goal.Title, _lastQuery)
+                                </MudText>
+
+                                @if (!string.IsNullOrWhiteSpace(goal.Description))
+                                {
+                                    <p class="search-card__snippet">
+                                        @HighlightSnippet(goal.Description, _lastQuery)
+                                    </p>
+                                }
+                            </a>
+                        }
+                    </div>
+                </div>
+            }
         }
 
     </div>
@@ -192,6 +253,32 @@
         padding: 0 0.25rem;
     }
 
+    .search-results-section + .search-results-section {
+        margin-top: 1.5rem;
+    }
+
+    .search-results-section__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: .75rem;
+    }
+
+    .search-results-section__title {
+        font-size: .76rem;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: var(--ink-faint);
+    }
+
+    .search-results-section__count,
+    .search-card__goal-area {
+        font-size: .72rem;
+        color: var(--ink-faint);
+    }
+
     /* ── Result cards ── */
     .search-results-list {
         display: flex;
@@ -206,6 +293,12 @@
         padding: 1.1rem 1.3rem;
         cursor: pointer;
         transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.15s ease;
+    }
+
+    .search-card--link {
+        display: block;
+        text-decoration: none;
+        color: inherit;
     }
 
     .search-card:hover {
@@ -271,17 +364,22 @@
     private string _query = string.Empty;
     private string _lastQuery = string.Empty;
     private IReadOnlyList<SearchResultDto> _results = [];
+    private IReadOnlyList<GoalDto> _goalResults = [];
     private bool _searching;
     private bool _hasSearched;
+    private int TotalResults => _results.Count + _goalResults.Count;
 
-    private async Task OnTextChanged(string value)
+    private Task OnTextChanged(string value)
     {
         _query = value;
         if (string.IsNullOrWhiteSpace(value))
         {
             _results = [];
+            _goalResults = [];
             _hasSearched = false;
         }
+
+        return Task.CompletedTask;
     }
 
     private async Task RunSearchAsync()
@@ -290,6 +388,7 @@
         if (string.IsNullOrWhiteSpace(term))
         {
             _results = [];
+            _goalResults = [];
             _hasSearched = false;
             return;
         }
@@ -300,7 +399,20 @@
 
         try
         {
-            _results = await SearchService.SearchAsync(term);
+            var noteSearchTask = SearchService.SearchAsync(term);
+            var goalsTask = GoalService.GetAllNonArchivedAsync();
+
+            await Task.WhenAll(noteSearchTask, goalsTask);
+
+            _results = await noteSearchTask;
+            _goalResults = (await goalsTask)
+                .Where(goal =>
+                    goal.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    (goal.Description?.Contains(term, StringComparison.OrdinalIgnoreCase) == true))
+                .OrderBy(goal => goal.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                .ThenBy(goal => goal.TargetDate ?? DateTime.MaxValue)
+                .ThenBy(goal => goal.Title)
+                .ToList();
             _lastQuery = term;
         }
         finally
@@ -319,6 +431,16 @@
         ParaCategory.Resource => Color.Info,
         ParaCategory.Archive  => Color.Default,
         _                     => Color.Default
+    };
+
+    private static Color GoalStatusColor(GoalStatus status) => status switch
+    {
+        GoalStatus.Planned => Color.Warning,
+        GoalStatus.Active => Color.Info,
+        GoalStatus.Achieved => Color.Success,
+        GoalStatus.Abandoned => Color.Error,
+        GoalStatus.Archived => Color.Dark,
+        _ => Color.Default
     };
 
     /// <summary>Returns a RenderFragment that wraps matched text in a highlight span.</summary>

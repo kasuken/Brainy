@@ -1,0 +1,391 @@
+@using Brainy.Application.DTOs.Goals
+@using Brainy.Application.Interfaces.Services
+@inject IGoalMilestoneService GoalMilestoneService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<div class="goal-milestones">
+    <div class="goal-milestones__header">
+        <div>
+            <h3 class="goal-milestones__title">Milestones</h3>
+            <p class="goal-milestones__sub">@_milestones.Count total · @_milestones.Count(m => m.IsCompleted) completed</p>
+        </div>
+        <MudButton Variant="Variant.Text"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   Size="Size.Small"
+                   OnClick="ToggleAddForm">
+            Add Milestone
+        </MudButton>
+    </div>
+
+    @if (_showAddForm)
+    {
+        <MudPaper Class="goal-milestones__composer" Elevation="0">
+            <MudTextField @bind-Value="_newMilestoneTitle"
+                          Label="Milestone title"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Immediate="true" />
+            <div class="goal-milestones__composer-actions">
+                <MudButton Variant="Variant.Text" OnClick="CancelAdd">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@(_saving || string.IsNullOrWhiteSpace(_newMilestoneTitle))"
+                           OnClick="AddMilestoneAsync">
+                    Add
+                </MudButton>
+            </div>
+        </MudPaper>
+    }
+
+    @if (_loading)
+    {
+        <div class="goal-milestones__loading">
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+        </div>
+    }
+    else if (_milestones.Count == 0)
+    {
+        <div class="goal-milestones__empty">
+            <span class="goal-milestones__empty-icon">◌</span>
+            <span>No milestones yet. Add the first visible step.</span>
+        </div>
+    }
+    else
+    {
+        <MudList T="GoalMilestoneDto" Dense="true" Class="goal-milestones__list">
+            @foreach (var milestone in _milestones)
+            {
+                <MudListItem T="GoalMilestoneDto" Class="goal-milestones__item">
+                    <div class="goal-milestones__row">
+                        <MudCheckBox T="bool"
+                                     Value="@milestone.IsCompleted"
+                                     ValueChanged="@(value => ToggleCompletionAsync(milestone, value))"
+                                     Color="Color.Success" />
+
+                        @if (_editingMilestoneId == milestone.Id)
+                        {
+                            <MudTextField @bind-Value="_editingTitle"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Immediate="true"
+                                          Class="goal-milestones__edit-field" />
+                            <div class="goal-milestones__item-actions">
+                                <MudIconButton Icon="@Icons.Material.Filled.Check"
+                                               Color="Color.Success"
+                                               Size="Size.Small"
+                                               OnClick="SaveEditAsync" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                               Size="Size.Small"
+                                               OnClick="CancelEdit" />
+                            </div>
+                        }
+                        else
+                        {
+                            <button class="goal-milestones__title-btn"
+                                    type="button"
+                                    @ondblclick="() => BeginEdit(milestone)">
+                                <span class="goal-milestones__title @(milestone.IsCompleted ? "goal-milestones__title--done" : null)">
+                                    @milestone.Title
+                                </span>
+                                <span class="goal-milestones__meta">
+                                    @(milestone.CompletedAtUtc?.ToLocalTime().ToString("MMM d, yyyy") ?? "Pending")
+                                </span>
+                            </button>
+                            <div class="goal-milestones__item-actions">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                               Size="Size.Small"
+                                               OnClick="() => BeginEdit(milestone)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               OnClick="() => DeleteAsync(milestone)" />
+                            </div>
+                        }
+                    </div>
+                </MudListItem>
+            }
+        </MudList>
+    }
+</div>
+
+<style>
+.goal-milestones {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.goal-milestones__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.goal-milestones__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    color: var(--ink);
+}
+
+.goal-milestones__sub {
+    margin: .2rem 0 0;
+    color: var(--ink-faint);
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.goal-milestones__composer {
+    padding: 1rem;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--paper-raised);
+}
+
+.goal-milestones__composer-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: .5rem;
+    margin-top: .75rem;
+}
+
+.goal-milestones__loading,
+.goal-milestones__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .6rem;
+    padding: 1.5rem 1rem;
+    border-radius: 14px;
+    border: 1px dashed var(--line);
+    color: var(--ink-faint);
+    background: rgba(255,255,255,.3);
+}
+
+.goal-milestones__empty-icon {
+    font-size: 1.2rem;
+    color: var(--clay);
+}
+
+.goal-milestones__list {
+    padding: 0;
+    background: transparent;
+}
+
+.goal-milestones__item {
+    margin-bottom: .55rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper-raised);
+}
+
+.goal-milestones__row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: .75rem;
+    width: 100%;
+    padding: .3rem .35rem .3rem .15rem;
+}
+
+.goal-milestones__title-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .15rem;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: .2rem 0;
+    text-align: left;
+    cursor: pointer;
+}
+
+.goal-milestones__title {
+    font-size: .95rem;
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.goal-milestones__title--done {
+    text-decoration: line-through;
+    color: var(--ink-faint);
+}
+
+.goal-milestones__meta {
+    font-size: .76rem;
+    color: var(--ink-faint);
+}
+
+.goal-milestones__item-actions {
+    display: flex;
+    align-items: center;
+    gap: .15rem;
+}
+
+.goal-milestones__edit-field {
+    width: 100%;
+}
+
+@@media (max-width: 640px) {
+    .goal-milestones__row {
+        grid-template-columns: auto 1fr;
+    }
+
+    .goal-milestones__item-actions {
+        grid-column: 2;
+        justify-content: flex-end;
+    }
+}
+</style>
+
+@code {
+    [Parameter] public Guid GoalId { get; set; }
+    [Parameter] public EventCallback OnMilestonesChanged { get; set; }
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _showAddForm;
+    private Guid _loadedGoalId;
+    private string _newMilestoneTitle = "";
+    private string _editingTitle = "";
+    private Guid? _editingMilestoneId;
+    private List<GoalMilestoneDto> _milestones = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (GoalId == Guid.Empty)
+            return;
+
+        if (_loadedGoalId != GoalId)
+        {
+            _loadedGoalId = GoalId;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _milestones = (await GoalMilestoneService.GetByGoalAsync(GoalId)).ToList();
+        _loading = false;
+    }
+
+    private void ToggleAddForm() => _showAddForm = !_showAddForm;
+
+    private void CancelAdd()
+    {
+        _showAddForm = false;
+        _newMilestoneTitle = "";
+    }
+
+    private async Task AddMilestoneAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newMilestoneTitle))
+            return;
+
+        _saving = true;
+
+        try
+        {
+            await GoalMilestoneService.CreateAsync(new CreateGoalMilestoneDto(GoalId, _newMilestoneTitle.Trim()));
+            _newMilestoneTitle = "";
+            _showAddForm = false;
+            Snackbar.Add("Milestone added.", Severity.Success);
+            await NotifyChangedAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ToggleCompletionAsync(GoalMilestoneDto milestone, bool isCompleted)
+    {
+        try
+        {
+            if (isCompleted)
+            {
+                await GoalMilestoneService.CompleteAsync(milestone.Id);
+            }
+            else
+            {
+                await GoalMilestoneService.UncompleteAsync(milestone.Id);
+            }
+
+            await NotifyChangedAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private void BeginEdit(GoalMilestoneDto milestone)
+    {
+        _editingMilestoneId = milestone.Id;
+        _editingTitle = milestone.Title;
+    }
+
+    private void CancelEdit()
+    {
+        _editingMilestoneId = null;
+        _editingTitle = "";
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (!_editingMilestoneId.HasValue || string.IsNullOrWhiteSpace(_editingTitle))
+            return;
+
+        try
+        {
+            await GoalMilestoneService.UpdateAsync(new UpdateGoalMilestoneDto(_editingMilestoneId.Value, _editingTitle.Trim()));
+            CancelEdit();
+            Snackbar.Add("Milestone updated.", Severity.Success);
+            await NotifyChangedAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(GoalMilestoneDto milestone)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Delete milestone",
+            $"Delete \"{milestone.Title}\"? This cannot be undone.",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (confirmed != true)
+            return;
+
+        try
+        {
+            await GoalMilestoneService.DeleteAsync(milestone.Id);
+            Snackbar.Add("Milestone deleted.", Severity.Success);
+            await NotifyChangedAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task NotifyChangedAsync()
+    {
+        await LoadAsync();
+        await OnMilestonesChanged.InvokeAsync();
+    }
+}

@@ -1,0 +1,349 @@
+@page "/goals/metrics"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Goals
+@using Brainy.Application.Interfaces.Services
+@inject IGoalService GoalService
+@inject NavigationManager Nav
+
+<PageTitle>Goal Metrics — Brainy</PageTitle>
+
+<div class="gmd-page">
+    <div class="gmd-header">
+        <div>
+            <p class="gmd-header__eyebrow">Strategic overview</p>
+            <h1 class="gmd-header__title">Goal Metrics</h1>
+            <p class="gmd-header__sub">A calm command board for long-range progress across your active horizons.</p>
+        </div>
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.ArrowBack"
+                   OnClick='() => Nav.NavigateTo("/goals")'>
+            Back to Goals
+        </MudButton>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="gmd-loading">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+            <span>Loading metrics…</span>
+        </div>
+    }
+    else if (_metrics is not null)
+    {
+        <div class="gmd-kpis">
+            <section class="gmd-kpi gmd-kpi--active">
+                <span class="gmd-kpi__label">Active Goals</span>
+                <strong class="gmd-kpi__value">@_metrics.ActiveGoals</strong>
+            </section>
+            <section class="gmd-kpi gmd-kpi--achieved">
+                <span class="gmd-kpi__label">Achieved Goals</span>
+                <strong class="gmd-kpi__value">@_metrics.AchievedGoals</strong>
+            </section>
+            <section class="gmd-kpi gmd-kpi--abandoned">
+                <span class="gmd-kpi__label">Abandoned Goals</span>
+                <strong class="gmd-kpi__value">@_metrics.AbandonedGoals</strong>
+            </section>
+            <section class="gmd-kpi gmd-kpi--rate">
+                <span class="gmd-kpi__label">Average Completion Rate</span>
+                <strong class="gmd-kpi__value">@_metrics.AverageCompletionRate.ToString("0.0")%</strong>
+            </section>
+        </div>
+
+        <div class="gmd-grid">
+            <section class="gmd-panel">
+                <div class="gmd-panel__header">
+                    <h2>Goals by Area</h2>
+                    <span>@_metrics.GoalsByArea.Count area@(_metrics.GoalsByArea.Count == 1 ? "" : "s")</span>
+                </div>
+
+                @if (_metrics.GoalsByArea.Count == 0)
+                {
+                    <div class="gmd-empty">No active area-linked goals yet.</div>
+                }
+                else
+                {
+                    <div class="gmd-area-list">
+                        @foreach (var row in _metrics.GoalsByArea.OrderByDescending(x => x.GoalCount).ThenBy(x => x.AreaName))
+                        {
+                            <div class="gmd-area-row">
+                                <div>
+                                    <div class="gmd-area-row__name">@row.AreaName</div>
+                                    <div class="gmd-area-row__bar">
+                                        <div class="gmd-area-row__fill" style="width:@WidthFor(row.GoalCount)%"></div>
+                                    </div>
+                                </div>
+                                <span class="gmd-area-row__count">@row.GoalCount</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+
+            <section class="gmd-panel gmd-panel--summary">
+                <div class="gmd-panel__header">
+                    <h2>Snapshot</h2>
+                    <span>Live view</span>
+                </div>
+                <div class="gmd-summary">
+                    <div class="gmd-summary__item">
+                        <span>Goal portfolio</span>
+                        <strong>@(_metrics.ActiveGoals + _metrics.AchievedGoals + _metrics.AbandonedGoals)</strong>
+                    </div>
+                    <div class="gmd-summary__item">
+                        <span>Achievement ratio</span>
+                        <strong>@AchievementRatio.ToString("0.0")%</strong>
+                    </div>
+                    <div class="gmd-summary__item">
+                        <span>Most loaded area</span>
+                        <strong>@TopAreaLabel</strong>
+                    </div>
+                </div>
+            </section>
+        </div>
+    }
+</div>
+
+<style>
+    .gmd-page {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 1.5rem 1rem 3rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.2rem;
+    }
+
+    .gmd-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        padding: 1.35rem 1.4rem;
+        border-radius: 24px;
+        border: 1px solid var(--line);
+        background:
+            radial-gradient(circle at top right, rgba(160,120,32,.16), transparent 24%),
+            radial-gradient(circle at left center, rgba(47,111,97,.10), transparent 30%),
+            var(--paper-raised);
+        box-shadow: var(--shadow-md);
+    }
+
+    .gmd-header__eyebrow,
+    .gmd-kpi__label,
+    .gmd-panel__header span {
+        text-transform: uppercase;
+        letter-spacing: .12em;
+        font-size: .68rem;
+        font-weight: 700;
+        color: var(--ink-faint);
+    }
+
+    .gmd-header__title {
+        margin: .2rem 0 .35rem;
+        font-family: var(--font-display);
+        font-size: clamp(1.9rem, 4vw, 2.8rem);
+        color: var(--ink);
+    }
+
+    .gmd-header__sub {
+        margin: 0;
+        max-width: 56ch;
+        color: var(--ink-soft);
+        line-height: 1.6;
+    }
+
+    .gmd-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: .75rem;
+        padding: 5rem 1rem;
+        color: var(--ink-soft);
+    }
+
+    .gmd-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .9rem;
+    }
+
+    .gmd-kpi,
+    .gmd-panel {
+        border-radius: 20px;
+        border: 1px solid var(--line);
+        background: var(--paper-raised);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .gmd-kpi {
+        padding: 1rem 1.05rem;
+        display: flex;
+        flex-direction: column;
+        gap: .4rem;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .gmd-kpi::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 4px;
+    }
+
+    .gmd-kpi__value {
+        font-family: var(--font-display);
+        font-size: 2rem;
+        color: var(--ink);
+        line-height: 1;
+    }
+
+    .gmd-kpi--active::before { background: #2f6f61; }
+    .gmd-kpi--achieved::before { background: #5f7d3f; }
+    .gmd-kpi--abandoned::before { background: #9f4f40; }
+    .gmd-kpi--rate::before { background: #a07820; }
+
+    .gmd-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(280px, .9fr);
+        gap: 1rem;
+    }
+
+    .gmd-panel {
+        padding: 1.15rem;
+    }
+
+    .gmd-panel__header {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .gmd-panel__header h2 {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: 1.3rem;
+        color: var(--ink);
+    }
+
+    .gmd-area-list,
+    .gmd-summary {
+        display: flex;
+        flex-direction: column;
+        gap: .8rem;
+    }
+
+    .gmd-area-row,
+    .gmd-summary__item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        padding: .85rem .9rem;
+        border-radius: 16px;
+        background: linear-gradient(180deg, rgba(255,255,255,.4), transparent), var(--paper);
+        border: 1px solid var(--line);
+    }
+
+    .gmd-area-row > div {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .gmd-area-row__name {
+        margin-bottom: .45rem;
+        color: var(--ink);
+        font-weight: 600;
+    }
+
+    .gmd-area-row__bar {
+        height: 8px;
+        border-radius: 999px;
+        background: var(--paper-sunk);
+        overflow: hidden;
+    }
+
+    .gmd-area-row__fill {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--gold), var(--clay));
+    }
+
+    .gmd-area-row__count {
+        min-width: 2.5rem;
+        text-align: center;
+        padding: .3rem .55rem;
+        border-radius: 999px;
+        background: rgba(160,120,32,.10);
+        color: #7a5c0e;
+        font-weight: 700;
+    }
+
+    .gmd-summary__item span {
+        color: var(--ink-soft);
+    }
+
+    .gmd-summary__item strong {
+        font-family: var(--font-display);
+        font-size: 1.1rem;
+        color: var(--ink);
+    }
+
+    .gmd-empty {
+        padding: 1rem;
+        border-radius: 16px;
+        border: 1px dashed var(--line);
+        color: var(--ink-faint);
+        text-align: center;
+    }
+
+    @@media (max-width: 900px) {
+        .gmd-kpis,
+        .gmd-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .gmd-header {
+            flex-direction: column;
+        }
+    }
+</style>
+
+@code {
+    private bool _loading = true;
+    private GoalMetricsDto? _metrics;
+
+    private double AchievementRatio
+    {
+        get
+        {
+            if (_metrics is null)
+                return 0;
+
+            var total = _metrics.ActiveGoals + _metrics.AchievedGoals + _metrics.AbandonedGoals;
+            return total == 0 ? 0 : _metrics.AchievedGoals * 100d / total;
+        }
+    }
+
+    private string TopAreaLabel
+        => _metrics?.GoalsByArea.OrderByDescending(x => x.GoalCount).FirstOrDefault()?.AreaName ?? "No area data";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _metrics = await GoalService.GetMetricsAsync();
+        _loading = false;
+    }
+
+    private double WidthFor(int goalCount)
+    {
+        if (_metrics is null || _metrics.GoalsByArea.Count == 0)
+            return 0;
+
+        var max = _metrics.GoalsByArea.Max(x => x.GoalCount);
+        return max == 0 ? 0 : goalCount * 100d / max;
+    }
+}

@@ -1,0 +1,84 @@
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Domain.Enums
+
+@* ─────────────────────────────────────────────────────────────────────────────
+   OverdueTasksWidget (Tasks Hub) — lists overdue tasks oldest-first with
+   days overdue indicator.
+───────────────────────────────────────────────────────────────────────────── *@
+
+<div class="td-widget td-section">
+    <div class="td-section-head">
+        <span class="td-section-label td-section-label--overdue">Overdue</span>
+        <span class="td-section-count">@Tasks.Count task@(Tasks.Count == 1 ? "" : "s")</span>
+        <MudIconButton Icon="@(_collapsed ? Icons.Material.Outlined.ExpandMore : Icons.Material.Outlined.ExpandLess)"
+                       Size="Size.Small" Style="margin-left:auto; color:var(--ink-faint);"
+                       OnClick="() => _collapsed = !_collapsed" />
+    </div>
+
+    @if (!_collapsed)
+    {
+        @if (Tasks.Count == 0)
+        {
+            <p class="td-empty">No overdue tasks — great work!</p>
+        }
+        else
+        {
+            @foreach (var t in Tasks)
+            {
+                <div class="td-task @PriorityClass(t.Priority) td-task--overdue">
+                    <div class="td-task-body">
+                        <p class="td-task-title">@t.Title</p>
+                        <div class="td-task-meta">
+                            <span class="td-task-project">@t.ProjectName</span>
+                            <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
+                                @t.Priority.ToString()
+                            </MudChip>
+                            @if (t.DueDate.HasValue)
+                            {
+                                var days = (int)(DateTime.Today - t.DueDate.Value.Date).TotalDays;
+                                <span class="td-task-due td-task-due--overdue">
+                                    @days day@(days == 1 ? "" : "s") overdue
+                                </span>
+                            }
+                        </div>
+                    </div>
+                    <MudTooltip Text="Mark complete">
+                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                                       Size="Size.Small" Color="Color.Success"
+                                       OnClick="() => OnComplete.InvokeAsync(t.Id)" />
+                    </MudTooltip>
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    /// <summary>Overdue tasks to display (oldest first).</summary>
+    [Parameter] public IReadOnlyList<TasksHubTaskDto> Tasks { get; set; } = [];
+
+    /// <summary>Raised with the task ID when the user marks a task complete.</summary>
+    [Parameter] public EventCallback<Guid> OnComplete { get; set; }
+
+    [Parameter] public bool Collapsed { get; set; }
+
+    private bool _collapsed;
+
+    protected override void OnInitialized() => _collapsed = Collapsed;
+
+    private static Color PriorityColor(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => Color.Error,
+        TaskPriority.High     => Color.Warning,
+        TaskPriority.Medium   => Color.Info,
+        _                     => Color.Default,
+    };
+
+    private static string PriorityClass(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => "td-task--critical",
+        TaskPriority.High     => "td-task--high",
+        TaskPriority.Medium   => "td-task--medium",
+        _                     => "td-task--low",
+    };
+}
