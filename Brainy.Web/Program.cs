@@ -51,7 +51,7 @@ builder.Services.AddBrainyApplication();
 var app = builder.Build();
 
 // Apply any pending EF Core migrations on startup.
-await DatabaseInitializer.MigrateAsync(app.Services);
+await DatabaseInitializer.MigrateAsync(app.Services, app.Environment.IsDevelopment());
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

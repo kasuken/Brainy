@@ -10,7 +10,7 @@ namespace Brainy.Data;
 /// </summary>
 public static class DatabaseInitializer
 {
-    public static async Task MigrateAsync(IServiceProvider services)
+    public static async Task MigrateAsync(IServiceProvider services, bool seedDevelopmentData = false)
     {
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BrainyDbContext>();
@@ -28,6 +28,11 @@ public static class DatabaseInitializer
             else
             {
                 logger.LogDebug("Database schema is up to date — no migrations needed.");
+            }
+
+            if (seedDevelopmentData)
+            {
+                await DevelopmentDataSeeder.SeedAsync(scope.ServiceProvider);
             }
         }
         catch (Exception ex)
