@@ -5,4 +5,6 @@ public record UpdateResourceDto(
     Guid Id,
     string Name,
     string? Description,
-    Guid? AreaId);
+    string? Topic,
+    Guid? AreaId,
+    IReadOnlyList<string>? Tags);

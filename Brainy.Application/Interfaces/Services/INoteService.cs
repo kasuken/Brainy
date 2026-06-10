@@ -59,9 +59,12 @@ public interface INoteService
     /// </summary>
     Task<NoteDto> UnlinkFromProjectAsync(Guid noteId, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Toggles the <c>IsFavorite</c> flag on a note.
-    /// Returns the updated <see cref="NoteDto"/> with the new flag value.
-    /// </summary>
-    Task<NoteDto> ToggleFavoriteAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>Returns all archived notes owned by the current user, ordered by archive date descending.</summary>
+    Task<IReadOnlyList<NoteDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Marks a note as archived and records the archive timestamp.</summary>
+    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Restores an archived note, clearing the archive flag and timestamp.</summary>
+    Task RestoreAsync(Guid id, CancellationToken cancellationToken = default);
 }

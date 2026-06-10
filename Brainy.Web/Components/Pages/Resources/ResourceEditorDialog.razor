@@ -1,0 +1,211 @@
+@using Brainy.Application.DTOs.Resources
+@using Brainy.Application.Interfaces.Services
+@inject IResourceService ResourceService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-family:var(--font-display)">
+            @(ResourceId.HasValue ? "Edit Resource" : "New Resource")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_loading)
+        {
+            <div class="red-loading">
+                <MudProgressCircular Size="Size.Medium" Color="Color.Primary" Indeterminate="true" />
+                <span>Loading resource…</span>
+            </div>
+        }
+        else
+        {
+            <MudForm @ref="_form" @bind-IsValid="_valid">
+                <div class="red-fields">
+                    <MudTextField @bind-Value="_name" Label="Name" Required="true"
+                                  RequiredError="Name is required"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                    <MudTextField @bind-Value="_topic" Label="Topic"
+                                  HelperText="The domain or subject area"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                    <MudTextField @bind-Value="_description" Label="Description"
+                                  Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                    <MudTextField @bind-Value="_tagsInput" Label="Tags"
+                                  HelperText="Comma-separated, for example: writing, design, research"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                    @if (ParsedTags.Count > 0)
+                    {
+                        <div class="red-tags">
+                            @foreach (var tag in ParsedTags)
+                            {
+                                <span class="red-tag">@tag</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </MudForm>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Disabled="_saving">Cancel</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="_loading || _saving || !_valid">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @(ResourceId.HasValue ? "Save changes" : "Create resource")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+.red-fields {
+    display: flex;
+    flex-direction: column;
+    gap: .85rem;
+    padding-top: .25rem;
+}
+
+.red-loading {
+    min-height: 10rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    color: var(--ink-faint);
+}
+
+.red-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem;
+}
+
+.red-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: .25rem .65rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--clay) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--clay) 22%, var(--line));
+    color: var(--clay-deep);
+    font-size: .75rem;
+    line-height: 1;
+}
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Guid? ResourceId { get; set; }
+
+    private MudForm _form = null!;
+    private bool _valid;
+    private bool _loading;
+    private bool _saving;
+
+    private string _name = "";
+    private string? _topic;
+    private string? _description;
+    private string _tagsInput = "";
+
+    private IReadOnlyList<string> ParsedTags =>
+        _tagsInput
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static tag => !string.IsNullOrWhiteSpace(tag))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!ResourceId.HasValue)
+        {
+            return;
+        }
+
+        _loading = true;
+
+        try
+        {
+            var dto = await ResourceService.GetByIdAsync(ResourceId.Value);
+            if (dto is null)
+            {
+                Snackbar.Add("The selected resource could not be found.", Severity.Error);
+                MudDialog.Cancel();
+                return;
+            }
+
+            _name = dto.Name;
+            _topic = dto.Topic;
+            _description = dto.Description;
+            _tagsInput = string.Join(", ", dto.Tags);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            MudDialog.Cancel();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_valid)
+        {
+            return;
+        }
+
+        _saving = true;
+
+        try
+        {
+            if (ResourceId.HasValue)
+            {
+                await ResourceService.UpdateAsync(new UpdateResourceDto(
+                    ResourceId.Value,
+                    _name.Trim(),
+                    NullIfWhiteSpace(_description),
+                    NullIfWhiteSpace(_topic),
+                    null,
+                    ParsedTags));
+
+                Snackbar.Add($"\"{_name}\" updated.", Severity.Success);
+            }
+            else
+            {
+                await ResourceService.CreateAsync(new CreateResourceDto(
+                    _name.Trim(),
+                    NullIfWhiteSpace(_description),
+                    NullIfWhiteSpace(_topic),
+                    null,
+                    ParsedTags));
+
+                Snackbar.Add($"\"{_name}\" created.", Severity.Success);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private static string? NullIfWhiteSpace(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}

@@ -15,4 +15,6 @@ public class Tag : BaseEntity, IUserOwnedEntity
     public string? Color { get; set; }
 
     public ICollection<Note> Notes { get; set; } = new List<Note>();
+
+    public ICollection<Resource> Resources { get; set; } = new List<Resource>();
 }

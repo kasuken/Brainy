@@ -2,10 +2,18 @@
 @using Microsoft.AspNetCore.Authorization
 @using Brainy.Application.DTOs.Goals
 @using Brainy.Application.DTOs.Projects
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.DTOs.Resources
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.DTOs.Archives
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @attribute [Authorize]
 @inject IProjectService ProjectService
+@inject IAreaService AreaService
+@inject IResourceService ResourceService
+@inject INoteService NoteService
+@inject IArchiveRetentionService RetentionService
 @inject IGoalService GoalService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -14,15 +22,19 @@
 <PageTitle>Archives — Brainy</PageTitle>
 
 <div class="arc-page">
-
-    <!-- ── Header ─────────────────────────────────────────────────────── -->
     <div class="arc-header">
         <div class="arc-header__eyebrow">PARA · Archive</div>
         <h1 class="arc-header__title">Archives</h1>
         <p class="arc-header__sub">
+            @if (_loading)
+            {
+                <span>Loading archived items…</span>
+            }
+            else
             Completed and inactive work preserved for reference.
             @if (_projects is not null || _goals is not null)
             {
+                <span>@_allItems.Count archived item@(_allItems.Count != 1 ? "s" : "") across your PARA system.</span>
                 <span>
                     @(_projects?.Count ?? 0) archived project@((_projects?.Count ?? 0) != 1 ? "s" : "")
                     · @(_goals?.Count ?? 0) archived goal@((_goals?.Count ?? 0) != 1 ? "s" : "")
@@ -49,19 +61,57 @@
     }
     else
     {
-        <!-- Search -->
-        <div class="arc-search-row">
+        <div class="arc-type-filter" role="tablist" aria-label="Archive type filter">
+            @foreach (var type in TypeFilters)
+            {
+                <button type="button"
+                        class="@GetTypeButtonClass(type)"
+                        @onclick="() => SetTypeFilter(type)">
+                    @type
+                </button>
+            }
+        </div>
+
+        <div class="arc-toolbar">
             <div class="arc-search">
                 <MudIcon Icon="@Icons.Material.Outlined.Search" Class="arc-search__icon" />
                 <input class="arc-search__input"
                        placeholder="Search archives…"
                        value="@_search"
-                       @oninput="e => _search = e.Value?.ToString() ?? string.Empty" />
-                @if (!string.IsNullOrEmpty(_search))
+                       @oninput="OnSearchChanged" />
+                @if (!string.IsNullOrWhiteSpace(_search))
                 {
-                    <button class="arc-search__clear" @onclick="() => _search = string.Empty">✕</button>
+                    <button type="button" class="arc-search__clear" @onclick="ClearSearch">✕</button>
                 }
             </div>
+
+            <MudDatePicker Label="Archived from"
+                           Date="_dateFrom"
+                           DateChanged="OnDateFromChanged"
+                           Clearable="true"
+                           Editable="false"
+                           Variant="Variant.Outlined"
+                           Class="arc-toolbar__picker" />
+
+            <MudDatePicker Label="Archived to"
+                           Date="_dateTo"
+                           DateChanged="OnDateToChanged"
+                           Clearable="true"
+                           Editable="false"
+                           Variant="Variant.Outlined"
+                           Class="arc-toolbar__picker" />
+
+            @if (HasActiveFilters)
+            {
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           Size="Size.Small"
+                           Class="arc-clear-btn"
+                           OnClick="ClearFilters">
+                    Clear filters
+                </MudButton>
+            }
+        </div>
         </div>
 
         @if (FilteredProjects.Any())
@@ -71,6 +121,23 @@
                 <span class="arc-section-head__count">@FilteredProjects.Count() shown</span>
             </div>
 
+        @if (_filtered.Count == 0)
+        {
+            <div class="arc-empty">
+                <div class="arc-empty__glyph">⬡</div>
+                <p class="arc-empty__title">@GetEmptyTitle()</p>
+                <p class="arc-empty__sub">@GetEmptySubtitle()</p>
+            </div>
+        }
+        else
+        {
+            <div class="arc-list">
+                @foreach (var item in _filtered)
+                {
+                    <div class="arc-row">
+                        <div class="@GetTypeBadgeClass(item.EntityType)">
+                            @item.EntityType
+                        </div>
             <div class="arc-list">
                 @foreach (var project in FilteredProjects)
                 {
@@ -91,6 +158,17 @@
                                 </div>
                             </div>
 
+                        <div class="arc-row__body">
+                            <div class="arc-row__header">
+                                <div class="arc-row__name">@item.Name</div>
+                                <div class="arc-row__meta">@GetArchivedLabel(item)</div>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(item.Description))
+                            {
+                                <div class="arc-row__desc">@item.Description</div>
+                            }
+                        </div>
                             <h2 class="arc-card__name">@project.Name</h2>
 
                             @if (!string.IsNullOrWhiteSpace(project.DesiredOutcome))
@@ -118,6 +196,117 @@
                             </div>
                         </div>
 
+                        <div class="arc-row__actions">
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Default"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Unarchive"
+                                       OnClick="() => ConfirmRestore(item)">
+                                Restore
+                            </MudButton>
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Default"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.OpenInNew"
+                                       OnClick="() => ViewItem(item)">
+                                View
+                            </MudButton>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <section class="arc-retention">
+            <button type="button" class="arc-retention__header" @onclick="ToggleRetention">
+                <div>
+                    <div class="arc-retention__title">⚙ Retention Rules</div>
+                </div>
+                <MudIcon Icon="@(_showRetention ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" />
+            </button>
+
+            @if (_showRetention)
+            {
+                <div class="arc-retention__body">
+                    <p class="arc-retention__intro">
+                        Set how long archived items are kept before becoming eligible for permanent deletion. Leave blank to keep forever.
+                    </p>
+
+                    @foreach (var entityType in EntityTypes)
+                    {
+                        var type = entityType;
+                        var nearExpiryCount = CountNearExpiry(type);
+
+                        <div class="arc-retention-row">
+                            <div class="arc-retention-label">@type</div>
+
+                            <MudNumericField T="int?"
+                                             Value="@_retentionDays[type]"
+                                             ValueChanged="value => OnRetentionDaysChanged(type, value)"
+                                             Label="Days"
+                                             Min="1"
+                                             Variant="Variant.Outlined"
+                                             Immediate="true"
+                                             HideSpinButtons="false"
+                                             Class="arc-retention-input" />
+
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       Disabled="@IsSavingRetention(type)"
+                                       OnClick="() => SaveRetentionAsync(type)">
+                                @if (IsSavingRetention(type))
+                                {
+                                    <span>Saving…</span>
+                                }
+                                else
+                                {
+                                    <span>Save</span>
+                                }
+                            </MudButton>
+
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Default"
+                                       Size="Size.Small"
+                                       Disabled="@IsSavingRetention(type)"
+                                       OnClick="() => SetNeverExpireAsync(type)">
+                                Never expire
+                            </MudButton>
+
+                            @if (nearExpiryCount > 0)
+                            {
+                                <MudChip T="string"
+                                         Color="Color.Warning"
+                                         Variant="Variant.Outlined"
+                                         Size="Size.Small">
+                                    @nearExpiryCount item@(nearExpiryCount != 1 ? "s" : "") near expiry
+                                </MudChip>
+                            }
+                        </div>
+                    }
+
+                    <div class="arc-retention__purge">
+                        <p class="arc-retention__purge-copy">
+                            Permanently remove items already past their retention period.
+                        </p>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.DeleteForever"
+                                   Disabled="_purging"
+                                   OnClick="PurgeExpiredAsync">
+                            @if (_purging)
+                            {
+                                <span>Purging…</span>
+                            }
+                            else
+                            {
+                                <span>Permanently delete expired items</span>
+                            }
+                        </MudButton>
+                    </div>
+                </div>
+            }
+        </section>
                         <div class="arc-card__actions">
                             <MudButton Variant="Variant.Outlined"
                                        Color="Color.Default"
@@ -219,18 +408,14 @@
 </div>
 
 <style>
-/* ═══════════════════════════════════════════════════════════════════════════
-   Archives page — preserved records, quiet and deliberate aesthetic
-   ═══════════════════════════════════════════════════════════════════════════ */
-
 .arc-page {
-    max-width: 860px;
+    max-width: 960px;
     margin: 0 auto;
     padding: 1.5rem 1rem 4rem;
 }
 
-/* Header */
 .arc-header { margin-bottom: 2rem; }
+
 .arc-header__eyebrow {
     font-size: .68rem;
     font-weight: 700;
@@ -239,6 +424,7 @@
     color: var(--ink-faint);
     margin-bottom: .35rem;
 }
+
 .arc-header__title {
     font-family: var(--font-display);
     font-size: clamp(1.8rem, 4vw, 2.8rem);
@@ -248,35 +434,60 @@
     letter-spacing: -.025em;
     line-height: 1.1;
 }
+
 .arc-header__sub {
     font-size: .9rem;
     color: var(--ink-soft);
     margin: 0;
     line-height: 1.5;
 }
-.arc-header__sub span { margin-left: .4rem; }
 
-/* Loading */
 .arc-loading {
     display: flex;
     justify-content: center;
     padding: 5rem;
 }
 
-/* Empty state */
-.arc-empty {
-    text-align: center;
-    padding: 5rem 1rem;
+.arc-type-filter {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
+    gap: .4rem;
+    margin-bottom: 1rem;
+}
+
+.arc-type-btn {
+    border: 1px solid var(--line);
+    background: var(--paper-raised);
+    color: var(--ink-soft);
+    border-radius: 999px;
+    padding: .45rem .85rem;
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s, transform .15s;
+}
+
+.arc-type-btn:hover {
+    border-color: var(--line-strong);
+    color: var(--ink);
+    transform: translateY(-1px);
+}
+
+.arc-type-btn--on {
+    background: rgba(192,86,29,.10);
+    border-color: rgba(192,86,29,.3);
+    color: var(--clay-deep);
+}
+
+.arc-toolbar {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: .75rem;
+    margin-bottom: 1.25rem;
 }
-.arc-empty__glyph {
-    font-size: 3.5rem;
-    opacity: .1;
-    font-family: var(--font-display);
-    color: var(--ink);
+
 }
 .arc-empty__title {
     font-family: var(--font-display);
@@ -322,11 +533,19 @@
     border: 1.5px solid var(--line);
     border-radius: 10px;
     padding: .5rem .75rem;
-    max-width: 400px;
+    min-width: min(100%, 340px);
+    flex: 1 1 280px;
     transition: border-color .15s;
 }
+
 .arc-search:focus-within { border-color: var(--clay); }
-.arc-search__icon { color: var(--ink-faint); font-size: 1.1rem; flex-shrink: 0; }
+
+.arc-search__icon {
+    color: var(--ink-faint);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
 .arc-search__input {
     flex: 1;
     border: none;
@@ -336,7 +555,9 @@
     color: var(--ink);
     outline: none;
 }
+
 .arc-search__input::placeholder { color: var(--ink-faint); }
+
 .arc-search__clear {
     background: none;
     border: none;
@@ -347,16 +568,201 @@
     transition: color .15s;
     flex-shrink: 0;
 }
+
 .arc-search__clear:hover { color: var(--clay); }
 
-/* Archive list */
+.arc-toolbar__picker {
+    min-width: 180px;
+    flex: 0 1 220px;
+}
+
+.arc-clear-btn { margin-left: auto; }
+
 .arc-list {
     display: flex;
     flex-direction: column;
     gap: .75rem;
 }
 
-/* Archive card */
+.arc-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: .8rem 1rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    transition: border-color .15s, box-shadow .15s;
+}
+
+.arc-row:hover {
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-sm);
+}
+
+.arc-row__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.arc-row__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .75rem;
+    margin-bottom: .2rem;
+}
+
+.arc-row__name {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-style: italic;
+    color: var(--ink);
+}
+
+.arc-row__desc {
+    font-size: .8rem;
+    color: var(--ink-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.arc-row__meta {
+    font-size: .72rem;
+    color: var(--ink-faint);
+    font-style: italic;
+    flex-shrink: 0;
+}
+
+.arc-row__actions {
+    display: flex;
+    gap: .4rem;
+    flex-shrink: 0;
+}
+
+.arc-type {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: .35rem .6rem;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.arc-type--project  { background: rgba(192,86,29,.12); color: var(--clay-deep); }
+.arc-type--area     { background: rgba(111,122,90,.14); color: #4a5c38; }
+.arc-type--resource { background: rgba(205,154,58,.14); color: #7a5c0e; }
+.arc-type--note     { background: var(--paper-sunk); color: var(--ink-soft); }
+
+.arc-empty {
+    text-align: center;
+    padding: 5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .75rem;
+}
+
+.arc-empty__glyph {
+    font-size: 3.5rem;
+    opacity: .1;
+    font-family: var(--font-display);
+    color: var(--ink);
+}
+
+.arc-empty__title {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0;
+}
+
+.arc-empty__sub {
+    font-size: .88rem;
+    color: var(--ink-soft);
+    margin: 0;
+    max-width: 440px;
+    line-height: 1.6;
+}
+
+.arc-retention {
+    margin-top: 2rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.arc-retention__header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    background: var(--paper-raised);
+    border: none;
+    color: var(--ink);
+}
+
+.arc-retention__title {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    color: var(--ink);
+    text-align: left;
+}
+
+.arc-retention__body {
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--line);
+    background: var(--paper-sunk);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.arc-retention__intro,
+.arc-retention__purge-copy {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: .85rem;
+    line-height: 1.6;
+}
+
+.arc-retention-row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+}
+
+.arc-retention-label {
+    min-width: 80px;
+    font-weight: 600;
+    font-size: .85rem;
+    color: var(--ink);
+}
+
+.arc-retention-input {
+    width: 150px;
+}
+
+.arc-retention__purge {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-top: .5rem;
+    border-top: 1px solid var(--line);
+}
+
+/* Preserved project archive styling */
 .arc-card {
     display: flex;
     align-items: stretch;
@@ -366,29 +772,36 @@
     border-radius: 12px;
     overflow: hidden;
     transition: box-shadow .2s, border-color .2s;
-    animation: arc-card-in .25s ease backwards;
-}
-.arc-card:hover {
-    box-shadow: 0 2px 12px rgba(33,29,23,.08);
-    border-color: var(--line-strong);
 }
 
-@@keyframes arc-card-in {
-    from { opacity: 0; transform: translateY(6px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
-/* Priority ribbon (left edge) */
 .arc-card__ribbon {
     width: 5px;
     flex-shrink: 0;
 }
+
 .arc-ribbon--critical { background: var(--clay); }
 .arc-ribbon--high     { background: #d4722a; }
 .arc-ribbon--medium   { background: var(--gold); }
 .arc-ribbon--low      { background: var(--sage); }
 .arc-ribbon--goal     { background: linear-gradient(180deg, var(--gold), var(--clay)); }
 
+@@media (max-width: 720px) {
+    .arc-row {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .arc-row__header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .arc-row__actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .arc-clear-btn { margin-left: 0; }
 /* Card body */
 .arc-card__body {
     flex: 1;
@@ -477,22 +890,48 @@
 }
 
 @@media (max-width: 560px) {
-    .arc-card { flex-direction: column; }
-    .arc-card__ribbon { width: 100%; height: 4px; }
-    .arc-card__actions {
-        flex-direction: row;
-        border-left: none;
-        border-top: 1px solid var(--line);
-        justify-content: flex-start;
+    .arc-page {
+        padding-inline: .75rem;
+    }
+
+    .arc-toolbar {
+        align-items: stretch;
+    }
+
+    .arc-search,
+    .arc-toolbar__picker,
+    .arc-retention-input {
+        min-width: 100%;
+        width: 100%;
     }
 }
 </style>
 
 @code {
+    private static readonly string[] EntityTypes = ["Project", "Area", "Resource", "Note"];
+    private static readonly string[] TypeFilters = ["All", "Project", "Area", "Resource", "Note"];
+
     private IReadOnlyList<ProjectDto>? _projects;
     private IReadOnlyList<GoalDto>? _goals;
     private bool _loading = true;
+    private bool _showRetention;
+    private bool _purging;
+
+    private List<ArchiveItem> _allItems = [];
+    private List<ArchiveItem> _filtered = [];
+
     private string _search = string.Empty;
+    private string _typeFilter = "All";
+    private DateTime? _dateFrom;
+    private DateTime? _dateTo;
+
+    private Dictionary<string, int?> _retentionDays = new();
+    private Dictionary<string, bool> _savingRetention = new();
+
+    private List<ProjectDto> _archivedProjects = [];
+    private List<AreaDto> _archivedAreas = [];
+    private List<ResourceDto> _archivedResources = [];
+    private List<NoteDto> _archivedNotes = [];
 
     private IEnumerable<ProjectDto> FilteredProjects =>
         _projects is null
@@ -504,6 +943,13 @@
                     (p.Description?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true) ||
                     (p.DesiredOutcome?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true));
 
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(_search) ||
+        _dateFrom.HasValue ||
+        _dateTo.HasValue ||
+        _typeFilter != "All";
     private IEnumerable<GoalDto> FilteredGoals =>
         _goals is null
             ? []
@@ -522,6 +968,79 @@
     private async Task LoadAsync()
     {
         _loading = true;
+
+        try
+        {
+            var projects = await ProjectService.GetAllArchivedAsync();
+            var areas = await AreaService.GetAllArchivedAsync();
+            var resources = await ResourceService.GetAllArchivedAsync();
+            var notes = await NoteService.GetAllArchivedAsync();
+            var rules = await RetentionService.GetRulesAsync();
+
+            _archivedProjects = [.. projects];
+            _archivedAreas = [.. areas];
+            _archivedResources = [.. resources];
+            _archivedNotes = [.. notes];
+
+            _retentionDays = EntityTypes.ToDictionary(type => type, _ => (int?)null);
+            _savingRetention = EntityTypes.ToDictionary(type => type, _ => false);
+
+            foreach (var rule in rules)
+            {
+                if (_retentionDays.ContainsKey(rule.EntityType))
+                {
+                    _retentionDays[rule.EntityType] = rule.RetentionDays;
+                }
+            }
+
+            _allItems =
+            [
+                .._archivedProjects.Select(p => new ArchiveItem(
+                    p.Id,
+                    "Project",
+                    p.Name,
+                    BuildSnippet(p.Description ?? p.DesiredOutcome),
+                    p.ArchivedAtUtc,
+                    p.UpdatedAtUtc)),
+
+                .._archivedAreas.Select(a => new ArchiveItem(
+                    a.Id,
+                    "Area",
+                    a.Name,
+                    BuildSnippet(a.Description ?? a.Purpose),
+                    a.ArchivedAtUtc,
+                    a.UpdatedAtUtc)),
+
+                .._archivedResources.Select(r => new ArchiveItem(
+                    r.Id,
+                    "Resource",
+                    r.Name,
+                    BuildSnippet(r.Description ?? r.Topic),
+                    r.ArchivedAtUtc,
+                    r.UpdatedAtUtc)),
+
+                .._archivedNotes.Select(n => new ArchiveItem(
+                    n.Id,
+                    "Note",
+                    n.Title,
+                    BuildSnippet(n.Content),
+                    n.ArchivedAtUtc,
+                    n.UpdatedAtUtc))
+            ];
+
+            _allItems = [.. _allItems.OrderByDescending(item => item.ArchivedAtUtc ?? item.UpdatedAtUtc)];
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            _allItems = [];
+            _filtered = [];
+            Snackbar.Add($"Could not load archives: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
         var projectsTask = ProjectService.GetAllArchivedAsync();
         var goalsTask = GoalService.GetAllArchivedAsync();
 
@@ -532,21 +1051,291 @@
         _loading = false;
     }
 
-    private async Task ConfirmRestore(ProjectDto project)
+    private void ApplyFilter()
+    {
+        IEnumerable<ArchiveItem> query = _allItems;
+
+        if (_typeFilter != "All")
+        {
+            query = query.Where(item => item.EntityType == _typeFilter);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            query = query.Where(item =>
+                item.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                (item.Description?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true));
+        }
+
+        if (_dateFrom.HasValue)
+        {
+            query = query.Where(item => item.ArchivedAtUtc.HasValue && item.ArchivedAtUtc.Value >= _dateFrom.Value);
+        }
+
+        if (_dateTo.HasValue)
+        {
+            var inclusiveEnd = _dateTo.Value.AddDays(1);
+            query = query.Where(item => item.ArchivedAtUtc.HasValue && item.ArchivedAtUtc.Value < inclusiveEnd);
+        }
+
+        _filtered = [.. query];
+    }
+
+    private void SetTypeFilter(string type)
+    {
+        _typeFilter = type;
+        ApplyFilter();
+    }
+
+    private void OnSearchChanged(ChangeEventArgs args)
+    {
+        _search = args.Value?.ToString() ?? string.Empty;
+        ApplyFilter();
+    }
+
+    private void ClearSearch()
+    {
+        _search = string.Empty;
+        ApplyFilter();
+    }
+
+    private Task OnDateFromChanged(DateTime? value)
+    {
+        _dateFrom = value;
+        ApplyFilter();
+        return Task.CompletedTask;
+    }
+
+    private Task OnDateToChanged(DateTime? value)
+    {
+        _dateTo = value;
+        ApplyFilter();
+        return Task.CompletedTask;
+    }
+
+    private void ClearFilters()
+    {
+        _search = string.Empty;
+        _typeFilter = "All";
+        _dateFrom = null;
+        _dateTo = null;
+        ApplyFilter();
+    }
+
+    private async Task ConfirmRestore(ArchiveItem item)
     {
         var confirmed = await DialogService.ShowMessageBox(
-            "Restore project",
-            $"Restore \"{project.Name}\"? It will return to active projects with status Not Started, and its tasks will be unarchived.",
-            yesText: "Restore", cancelText: "Cancel");
+            $"Restore {item.EntityType}",
+            $"Restore \"{item.Name}\"? It will return to active views.",
+            yesText: "Restore",
+            cancelText: "Cancel");
 
-        if (confirmed == true)
+        if (confirmed != true)
         {
-            await ProjectService.RestoreAsync(project.Id);
-            Snackbar.Add($"\"{project.Name}\" restored to active projects.", Severity.Success);
+            return;
+        }
+
+        try
+        {
+            switch (item.EntityType)
+            {
+                case "Project":
+                    await ProjectService.RestoreAsync(item.Id);
+                    break;
+                case "Area":
+                    await AreaService.RestoreAsync(item.Id);
+                    break;
+                case "Resource":
+                    await ResourceService.RestoreAsync(item.Id);
+                    break;
+                case "Note":
+                    await NoteService.RestoreAsync(item.Id);
+                    break;
+            }
+
+            Snackbar.Add($"\"{item.Name}\" restored.", Severity.Success);
             await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
         }
     }
 
+    private void ViewItem(ArchiveItem item)
+    {
+        var url = item.EntityType switch
+        {
+            "Project" => $"/projects/{item.Id}",
+            "Area" => $"/areas/{item.Id}",
+            "Resource" => $"/resources/{item.Id}",
+            _ => "/notes"
+        };
+
+        Nav.NavigateTo(url);
+    }
+
+    private async Task SaveRetentionAsync(string entityType)
+    {
+        _savingRetention[entityType] = true;
+
+        try
+        {
+            await RetentionService.UpsertRuleAsync(entityType, _retentionDays[entityType]);
+            Snackbar.Add($"{entityType} retention saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingRetention[entityType] = false;
+        }
+    }
+
+    private async Task SetNeverExpireAsync(string entityType)
+    {
+        _savingRetention[entityType] = true;
+
+        try
+        {
+            await RetentionService.DeleteRuleAsync(entityType);
+            _retentionDays[entityType] = null;
+            Snackbar.Add($"{entityType} retention cleared.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingRetention[entityType] = false;
+        }
+    }
+
+    private async Task PurgeExpiredAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Permanently delete expired items",
+            "This will permanently delete all archived items past their retention period. This cannot be undone.",
+            yesText: "Delete expired items",
+            cancelText: "Cancel");
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        _purging = true;
+
+        var deletedCount = 0;
+        var failureCount = 0;
+        var now = DateTime.UtcNow;
+
+        try
+        {
+            foreach (var project in GetExpiredProjects(now))
+            {
+                try
+                {
+                    await ProjectService.DeleteAsync(project.Id);
+                    deletedCount++;
+                }
+                catch
+                {
+                    failureCount++;
+                }
+            }
+
+            foreach (var area in GetExpiredAreas(now))
+            {
+                try
+                {
+                    await AreaService.DeleteAsync(area.Id);
+                    deletedCount++;
+                }
+                catch
+                {
+                    failureCount++;
+                }
+            }
+
+            foreach (var resource in GetExpiredResources(now))
+            {
+                try
+                {
+                    await ResourceService.DeleteAsync(resource.Id);
+                    deletedCount++;
+                }
+                catch
+                {
+                    failureCount++;
+                }
+            }
+
+            foreach (var note in GetExpiredNotes(now))
+            {
+                try
+                {
+                    await NoteService.DeleteAsync(note.Id);
+                    deletedCount++;
+                }
+                catch
+                {
+                    failureCount++;
+                }
+            }
+
+            if (deletedCount > 0)
+            {
+                Snackbar.Add($"{deletedCount} expired item{(deletedCount != 1 ? "s" : "")} permanently deleted.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("No expired items were eligible for deletion.", Severity.Info);
+            }
+
+            if (failureCount > 0)
+            {
+                Snackbar.Add($"{failureCount} item{(failureCount != 1 ? "s" : "")} could not be deleted.", Severity.Warning);
+            }
+
+            await LoadAsync();
+        }
+        finally
+        {
+            _purging = false;
+        }
+    }
+
+    private int CountNearExpiry(string entityType)
+    {
+        if (!_retentionDays.TryGetValue(entityType, out var days) || days is null)
+        {
+            return 0;
+        }
+
+        var cutoff = DateTime.UtcNow.AddDays(30);
+
+        return _allItems.Count(item =>
+            item.EntityType == entityType &&
+            item.ArchivedAtUtc.HasValue &&
+            item.ArchivedAtUtc.Value.AddDays(days.Value) <= cutoff);
+    }
+
+    private void ToggleRetention() => _showRetention = !_showRetention;
+
+    private void OnRetentionDaysChanged(string entityType, int? value) => _retentionDays[entityType] = value;
+
+    private bool IsSavingRetention(string entityType) =>
+        _savingRetention.TryGetValue(entityType, out var saving) && saving;
+
+    private string GetTypeButtonClass(string type) =>
+        type == _typeFilter ? "arc-type-btn arc-type-btn--on" : "arc-type-btn";
+
+    private static string GetTypeBadgeClass(string entityType) =>
+        $"arc-type arc-type--{entityType.ToLowerInvariant()}";
     private void OpenProject(Guid id) => Nav.NavigateTo($"/projects/{id}");
 
     private async Task RestoreGoalAsync(Guid id, string title)
@@ -556,6 +1345,111 @@
         await LoadAsync();
     }
 
+    private static string GetArchivedLabel(ArchiveItem item) =>
+        item.ArchivedAtUtc.HasValue
+            ? $"Archived {item.ArchivedAtUtc.Value:MMM d, yyyy}"
+            : $"Updated {item.UpdatedAtUtc:MMM d, yyyy}";
+
+    private string GetEmptyTitle()
+    {
+        if (_typeFilter != "All" && !_allItems.Any(item => item.EntityType == _typeFilter))
+        {
+            return $"No archived {GetEntityTypeLabel(_typeFilter, plural: true)}";
+        }
+
+        return "Nothing here";
+    }
+
+    private string GetEmptySubtitle()
+    {
+        if (_allItems.Count == 0)
+        {
+            return "Archived projects, areas, resources, and notes will appear here once you start preserving completed work.";
+        }
+
+        if (_typeFilter != "All" && !_allItems.Any(item => item.EntityType == _typeFilter))
+        {
+            return $"Archive a {GetEntityTypeLabel(_typeFilter, plural: false).ToLowerInvariant()} to keep it available for future reference here.";
+        }
+
+        if (HasActiveFilters)
+        {
+            return "Try widening your search or adjusting the archived date range.";
+        }
+
+        return "There are no archived items in this view right now.";
+    }
+
+    private static string GetEntityTypeLabel(string entityType, bool plural) => (entityType, plural) switch
+    {
+        ("Project", true) => "Projects",
+        ("Area", true) => "Areas",
+        ("Resource", true) => "Resources",
+        ("Note", true) => "Notes",
+        ("Project", false) => "Project",
+        ("Area", false) => "Area",
+        ("Resource", false) => "Resource",
+        _ => "Note"
+    };
+
+    private static string? BuildSnippet(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = string.Join(" ", value.ReplaceLineEndings(" ").Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        return normalized.Length <= 140 ? normalized : $"{normalized[..140]}…";
+    }
+
+    private IEnumerable<ProjectDto> GetExpiredProjects(DateTime now)
+    {
+        if (!_retentionDays.TryGetValue("Project", out var days) || days is null)
+        {
+            return [];
+        }
+
+        return _archivedProjects.Where(item => item.ArchivedAtUtc.HasValue && item.ArchivedAtUtc.Value.AddDays(days.Value) <= now);
+    }
+
+    private IEnumerable<AreaDto> GetExpiredAreas(DateTime now)
+    {
+        if (!_retentionDays.TryGetValue("Area", out var days) || days is null)
+        {
+            return [];
+        }
+
+        return _archivedAreas.Where(item => item.ArchivedAtUtc.HasValue && item.ArchivedAtUtc.Value.AddDays(days.Value) <= now);
+    }
+
+    private IEnumerable<ResourceDto> GetExpiredResources(DateTime now)
+    {
+        if (!_retentionDays.TryGetValue("Resource", out var days) || days is null)
+        {
+            return [];
+        }
+
+        return _archivedResources.Where(item => item.ArchivedAtUtc.HasValue && item.ArchivedAtUtc.Value.AddDays(days.Value) <= now);
+    }
+
+    private IEnumerable<NoteDto> GetExpiredNotes(DateTime now)
+    {
+        if (!_retentionDays.TryGetValue("Note", out var days) || days is null)
+        {
+            return [];
+        }
+
+        return _archivedNotes.Where(item => item.ArchivedAtUtc.HasValue && item.ArchivedAtUtc.Value.AddDays(days.Value) <= now);
+    }
+
+    private record ArchiveItem(
+        Guid Id,
+        string EntityType,
+        string Name,
+        string? Description,
+        DateTime? ArchivedAtUtc,
+        DateTime UpdatedAtUtc);
     private static string PriorityLabel(ProjectPriority p) => p switch
     {
         ProjectPriority.Critical => "⚑ Critical",

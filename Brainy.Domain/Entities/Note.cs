@@ -25,6 +25,12 @@ public class Note : BaseEntity, IUserOwnedEntity
 
     public NoteStatus Status { get; set; }
 
+    public bool IsArchived { get; set; }
+    public DateTime? ArchivedAtUtc { get; set; }
+
+    /// <summary>When this note was moved out of the Inbox. Null while still in Inbox.</summary>
+    public DateTime? ProcessedAtUtc { get; set; }
+
     public ParaCategory ParaCategory { get; set; }
 
     public Guid? SourceId { get; set; }

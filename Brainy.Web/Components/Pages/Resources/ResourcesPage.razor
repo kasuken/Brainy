@@ -1,0 +1,859 @@
+@page "/resources"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Resources
+@using Brainy.Application.Interfaces.Services
+@inject IResourceService ResourceService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Resources — Brainy</PageTitle>
+
+<div class="res-page">
+    <div class="res-header">
+        <div class="res-header__text">
+            <h1 class="res-header__title">Resources</h1>
+            <p class="res-header__sub">
+                @(_resources?.Count ?? 0) @(_showArchived ? "archived resources" : "resources") · @(_filtered?.Count ?? 0) shown
+            </p>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   Class="res-header__new"
+                   OnClick="OpenCreateDialog">
+            New Resource
+        </MudButton>
+    </div>
+
+    <div class="res-toolbar">
+        <div class="res-search">
+            <MudIcon Icon="@Icons.Material.Outlined.Search" Class="res-search__icon" />
+            <input class="res-search__input"
+                   placeholder="Search resources…"
+                   value="@_searchText"
+                   @oninput="OnSearchInput" />
+            @if (!string.IsNullOrEmpty(_searchText))
+            {
+                <button type="button" class="res-search__clear" @onclick="ClearSearch">✕</button>
+            }
+        </div>
+
+        <div class="res-filters">
+            <button type="button"
+                    class="res-chip @(_selectedTopic is null ? "res-chip--on" : "")"
+                    @onclick="ClearTopicFilter">
+                All Topics
+            </button>
+
+            @foreach (var topic in TopicOptions)
+            {
+                <button type="button"
+                        class="res-chip @(_selectedTopic == topic ? "res-chip--on" : "")"
+                        @onclick="() => ToggleTopic(topic)">
+                    @topic
+                </button>
+            }
+
+            <button type="button"
+                    class="res-chip @(_showArchived ? "res-chip--on" : "")"
+                    @onclick="ToggleArchived">
+                <MudIcon Icon="@Icons.Material.Outlined.Archive" Style="font-size:.85rem" />
+                Show Archived
+            </button>
+        </div>
+
+        <div class="res-sort">
+            <span class="res-sort__label">Sort</span>
+            @foreach (var opt in SortOptions)
+            {
+                <button type="button"
+                        class="res-sort__btn @(_sortBy == opt ? "res-sort__btn--on" : "")"
+                        @onclick="() => SetSort(opt)">
+                    @opt
+                    @if (_sortBy == opt)
+                    {
+                        <span class="res-sort__arrow">@(_sortAsc ? "↑" : "↓")</span>
+                    }
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="res-loading">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+            <span class="res-loading__text">Loading resources…</span>
+        </div>
+    }
+    else if (_filtered is { Count: 0 })
+    {
+        <div class="res-empty">
+            <div class="res-empty__glyph">✦</div>
+            <p class="res-empty__title">
+                @EmptyTitle
+            </p>
+            <p class="res-empty__sub">
+                @EmptySubtitle
+            </p>
+            @if ((_resources?.Count ?? 0) == 0 && !_showArchived)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="OpenCreateDialog">
+                    Create your first resource
+                </MudButton>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="res-grid">
+            @for (var i = 0; i < (_filtered?.Count ?? 0); i++)
+            {
+                var r = _filtered![i];
+                var idx = i;
+                <div class="res-card" style="animation-delay:@(idx * 45)ms">
+                    <div class="res-card__actions">
+                        <button type="button" class="res-action-btn" title="Edit"
+                                @onclick="() => OpenEditDialog(r)" @onclick:stopPropagation="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                        </button>
+                        @if (r.IsArchived)
+                        {
+                            <button type="button" class="res-action-btn res-action-btn--restore" title="Restore"
+                                    @onclick="() => ConfirmRestore(r.Id, r.Name)" @onclick:stopPropagation="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="1 4 1 10 7 10" />
+                                    <path d="M3.51 15a9 9 0 1 0 .49-4.5" />
+                                </svg>
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="res-action-btn res-action-btn--archive" title="Archive"
+                                    @onclick="() => ConfirmArchive(r.Id, r.Name)" @onclick:stopPropagation="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="21 8 21 21 3 21 3 8" />
+                                    <rect x="1" y="3" width="22" height="5" />
+                                    <line x1="10" y1="12" x2="14" y2="12" />
+                                </svg>
+                            </button>
+                        }
+                        <button type="button" class="res-action-btn res-action-btn--delete" title="Delete"
+                                @onclick="() => ConfirmDelete(r.Id, r.Name)" @onclick:stopPropagation="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6l-1 14H6L5 6" />
+                                <path d="M10 11v6M14 11v6" />
+                                <path d="M9 6V4h6v2" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="res-card__inner" @onclick="() => OpenDetail(r.Id)">
+                        @if (r.IsArchived)
+                        {
+                            <div class="res-card__badges">
+                                <span class="res-badge res-badge--archived">Archived</span>
+                            </div>
+                        }
+
+                        <p class="res-card__name">@r.Name</p>
+
+                        @if (!string.IsNullOrWhiteSpace(r.Topic))
+                        {
+                            <span class="res-card__topic">📚 @r.Topic</span>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(r.Description))
+                        {
+                            <p class="res-card__desc">
+                                @(r.Description.Length > 120 ? r.Description[..120] + "…" : r.Description)
+                            </p>
+                        }
+
+                        @if (r.Tags.Count > 0)
+                        {
+                            <div class="res-card__tags">
+                                @foreach (var tag in r.Tags)
+                                {
+                                    <span class="res-tag-chip">@tag</span>
+                                }
+                            </div>
+                        }
+
+                        <div class="res-card__meta">
+                            <span class="res-meta-item">
+                                <svg class="res-meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                    <line x1="16" y1="2" x2="16" y2="6" />
+                                    <line x1="8" y1="2" x2="8" y2="6" />
+                                    <line x1="3" y1="10" x2="21" y2="10" />
+                                </svg>
+                                Updated @r.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                            </span>
+
+                            @if (r.Tags.Count > 0)
+                            {
+                                <span class="res-meta-item">🏷️ @r.Tags.Count tag@(r.Tags.Count == 1 ? "" : "s")</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+.res-page {
+    font-family: var(--font-body);
+    padding-bottom: 3rem;
+}
+
+.res-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.res-header__title {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0 0 .15rem;
+    letter-spacing: -.02em;
+    line-height: 1;
+}
+
+.res-header__sub {
+    font-size: .8rem;
+    color: var(--ink-faint);
+    margin: 0;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.res-header__new {
+    flex-shrink: 0;
+}
+
+.res-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    margin-bottom: 1.75rem;
+    padding: 1rem 1.25rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+}
+
+.res-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.res-search__icon {
+    color: var(--ink-faint);
+    font-size: 1.1rem !important;
+    flex-shrink: 0;
+}
+
+.res-search__input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: .95rem;
+    color: var(--ink);
+    outline: none;
+    padding: .25rem 0;
+    border-bottom: 1.5px solid var(--line);
+    transition: border-color .2s;
+}
+
+.res-search__input:focus { border-bottom-color: var(--clay); }
+.res-search__input::placeholder { color: var(--ink-faint); }
+
+.res-search__clear {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ink-faint);
+    font-size: .85rem;
+    padding: .15rem .3rem;
+    border-radius: 4px;
+    transition: color .15s;
+}
+
+.res-search__clear:hover { color: var(--clay); }
+
+.res-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+}
+
+.res-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .28rem .7rem;
+    border-radius: 999px;
+    border: 1.5px solid var(--line);
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: .78rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s;
+}
+
+.res-chip:hover {
+    border-color: var(--clay);
+    color: var(--clay);
+}
+
+.res-chip--on {
+    border-color: var(--clay);
+    background: color-mix(in srgb, var(--clay) 10%, transparent);
+    color: var(--clay);
+    font-weight: 600;
+}
+
+.res-sort {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .3rem;
+    border-top: 1px solid var(--line);
+    padding-top: .65rem;
+}
+
+.res-sort__label {
+    font-size: .7rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin-right: .2rem;
+}
+
+.res-sort__btn {
+    background: none;
+    border: none;
+    font-family: var(--font-body);
+    font-size: .82rem;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: .2rem .5rem;
+    border-radius: 6px;
+    transition: color .15s, background .15s;
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+}
+
+.res-sort__btn:hover { color: var(--ink); background: var(--paper-sunk); }
+.res-sort__btn--on { color: var(--clay); font-weight: 600; }
+.res-sort__arrow { font-size: .75rem; opacity: .7; }
+
+.res-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 5rem 0;
+}
+
+.res-loading__text { color: var(--ink-faint); font-size: .9rem; }
+
+.res-empty {
+    text-align: center;
+    padding: 5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .75rem;
+}
+
+.res-empty__glyph {
+    font-size: 3.5rem;
+    line-height: 1;
+    opacity: .18;
+    color: var(--sage);
+    font-family: var(--font-display);
+}
+
+.res-empty__title {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    color: var(--ink);
+    margin: 0;
+    font-weight: 500;
+}
+
+.res-empty__sub {
+    color: var(--ink-faint);
+    font-size: .9rem;
+    margin: 0;
+    max-width: 40ch;
+}
+
+.res-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: 1.1rem;
+}
+
+.res-card {
+    position: relative;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow .2s, transform .2s, border-color .2s;
+    animation: res-rise .4s both ease-out;
+}
+
+.res-card:hover {
+    box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,.1));
+    transform: translateY(-2px);
+    border-color: var(--line-strong);
+}
+
+@@keyframes res-rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.res-card__inner {
+    padding: 1.1rem 1rem .95rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+    cursor: pointer;
+    min-width: 0;
+    min-height: 100%;
+}
+
+.res-card__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+
+.res-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: .18rem .6rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.res-badge--archived {
+    background: var(--paper-sunk);
+    color: var(--ink-faint);
+}
+
+.res-card__name {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-style: italic;
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.res-card:hover .res-card__name { color: var(--clay); }
+
+.res-card__topic {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .78rem;
+    color: var(--clay-deep);
+    font-weight: 600;
+}
+
+.res-card__desc {
+    font-size: .82rem;
+    color: var(--ink-soft);
+    margin: 0;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.res-card__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+
+.res-tag-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: .18rem .55rem;
+    border-radius: 999px;
+    background: var(--paper-sunk);
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    font-size: .72rem;
+    line-height: 1;
+}
+
+.res-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .6rem;
+    margin-top: auto;
+    padding-top: .35rem;
+}
+
+.res-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .75rem;
+    color: var(--ink-faint);
+}
+
+.res-meta-icon {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    opacity: .5;
+}
+
+.res-card__actions {
+    position: absolute;
+    top: .6rem;
+    right: .6rem;
+    display: flex;
+    gap: .2rem;
+    opacity: 0;
+    transition: opacity .15s;
+    z-index: 1;
+}
+
+.res-card:hover .res-card__actions { opacity: 1; }
+
+.res-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--paper-raised);
+    cursor: pointer;
+    color: var(--ink-soft);
+    transition: background .15s, color .15s, border-color .15s;
+}
+
+.res-action-btn svg { width: 14px; height: 14px; }
+.res-action-btn:hover { background: var(--paper-sunk); color: var(--ink); border-color: var(--line-strong); }
+.res-action-btn--archive:hover { color: var(--clay); border-color: var(--clay); }
+.res-action-btn--restore:hover { color: var(--sage); border-color: var(--sage); }
+.res-action-btn--delete:hover  { color: #b03a18; border-color: #b03a18; }
+
+@@media (max-width: 640px) {
+    .res-toolbar { padding: .85rem 1rem; }
+    .res-grid { grid-template-columns: 1fr; }
+    .res-card__actions { opacity: 1; }
+}
+</style>
+
+@code {
+    private bool _loading = true;
+    private List<ResourceDto>? _resources;
+    private List<ResourceDto>? _filtered;
+
+    private string _searchText = "";
+    private string? _selectedTopic;
+    private bool _showArchived;
+    private string _sortBy = "Name";
+    private bool _sortAsc = true;
+
+    private static readonly string[] SortOptions = ["Name", "Topic", "Created", "Updated"];
+
+    private IReadOnlyList<string> TopicOptions =>
+        (_resources ?? [])
+            .Select(static r => r.Topic?.Trim())
+            .Where(static topic => !string.IsNullOrWhiteSpace(topic))
+            .Cast<string>()
+            .GroupBy(static topic => topic, StringComparer.OrdinalIgnoreCase)
+            .Select(static group => group.First())
+            .OrderBy(static topic => topic)
+            .ToList();
+
+    private string EmptyTitle =>
+        (_resources?.Count ?? 0) == 0
+            ? (_showArchived ? "No archived resources" : "No resources yet")
+            : "Nothing matches";
+
+    private string EmptySubtitle =>
+        (_resources?.Count ?? 0) == 0
+            ? (_showArchived
+                ? "Archived resources will appear here when you store them away."
+                : "Resources help you collect domains, references, and subjects worth revisiting.")
+            : "Try broadening your search, choosing another topic, or clearing filters.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            var result = _showArchived
+                ? await ResourceService.GetAllArchivedAsync()
+                : await ResourceService.GetAllActiveAsync();
+
+            _resources = result.ToList();
+
+            if (_selectedTopic is not null &&
+                !_resources.Any(r => string.Equals(r.Topic, _selectedTopic, StringComparison.OrdinalIgnoreCase)))
+            {
+                _selectedTopic = null;
+            }
+
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            _resources = [];
+            _filtered = [];
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        _searchText = e.Value?.ToString() ?? "";
+        ApplyFilter();
+    }
+
+    private void ClearSearch()
+    {
+        _searchText = "";
+        ApplyFilter();
+    }
+
+    private void ClearTopicFilter()
+    {
+        _selectedTopic = null;
+        ApplyFilter();
+    }
+
+    private void ToggleTopic(string topic)
+    {
+        _selectedTopic = string.Equals(_selectedTopic, topic, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : topic;
+
+        ApplyFilter();
+    }
+
+    private async Task ToggleArchived()
+    {
+        _showArchived = !_showArchived;
+        await LoadAsync();
+    }
+
+    private void SetSort(string option)
+    {
+        if (_sortBy == option)
+        {
+            _sortAsc = !_sortAsc;
+        }
+        else
+        {
+            _sortBy = option;
+            _sortAsc = option is "Updated" ? false : true;
+        }
+
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        IEnumerable<ResourceDto> query = _resources ?? [];
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            query = query.Where(r =>
+                r.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                (r.Topic?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (r.Description?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_selectedTopic))
+        {
+            query = query.Where(r => string.Equals(r.Topic, _selectedTopic, StringComparison.OrdinalIgnoreCase));
+        }
+
+        query = _sortBy switch
+        {
+            "Topic" => _sortAsc
+                ? query.OrderBy(r => r.Topic ?? string.Empty).ThenBy(r => r.Name)
+                : query.OrderByDescending(r => r.Topic ?? string.Empty).ThenBy(r => r.Name),
+            "Created" => _sortAsc
+                ? query.OrderBy(r => r.CreatedAtUtc)
+                : query.OrderByDescending(r => r.CreatedAtUtc),
+            "Updated" => _sortAsc
+                ? query.OrderBy(r => r.UpdatedAtUtc)
+                : query.OrderByDescending(r => r.UpdatedAtUtc),
+            _ => _sortAsc
+                ? query.OrderBy(r => r.Name)
+                : query.OrderByDescending(r => r.Name),
+        };
+
+        _filtered = query.ToList();
+    }
+
+    private void OpenDetail(Guid id) => Nav.NavigateTo($"/resources/{id}");
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters<ResourceEditorDialog>();
+        parameters.Add(x => x.ResourceId, null);
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ResourceEditorDialog>("New Resource", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(ResourceDto resource)
+    {
+        var parameters = new DialogParameters<ResourceEditorDialog>();
+        parameters.Add(x => x.ResourceId, resource.Id);
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ResourceEditorDialog>("Edit Resource", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task ConfirmArchive(Guid id, string name)
+    {
+        var box = await DialogService.ShowMessageBox(
+            "Archive resource",
+            $"Archive \"{name}\"? It will be hidden from active resource views.",
+            yesText: "Archive",
+            cancelText: "Cancel");
+
+        if (box != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await ResourceService.ArchiveAsync(id);
+            Snackbar.Add($"\"{name}\" archived.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task ConfirmRestore(Guid id, string name)
+    {
+        var box = await DialogService.ShowMessageBox(
+            "Restore resource",
+            $"Restore \"{name}\" to active resources?",
+            yesText: "Restore",
+            cancelText: "Cancel");
+
+        if (box != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await ResourceService.RestoreAsync(id);
+            Snackbar.Add($"\"{name}\" restored.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task ConfirmDelete(Guid id, string name)
+    {
+        var box = await DialogService.ShowMessageBox(
+            "Delete resource",
+            $"Permanently delete \"{name}\"? This cannot be undone.",
+            yesText: "Delete",
+            noText: "Cancel");
+
+        if (box != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await ResourceService.DeleteAsync(id);
+            Snackbar.Add($"\"{name}\" deleted.", Severity.Warning);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

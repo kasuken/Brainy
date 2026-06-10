@@ -39,6 +39,8 @@ public class BrainyDbContext(DbContextOptions<BrainyDbContext> options)
 
     public DbSet<Output> Outputs => Set<Output>();
 
+    public DbSet<ArchiveRetentionRule> ArchiveRetentionRules => Set<ArchiveRetentionRule>();
+
     public DbSet<UserDashboardPreference> DashboardPreferences => Set<UserDashboardPreference>();
 
     public DbSet<Idea> Ideas => Set<Idea>();

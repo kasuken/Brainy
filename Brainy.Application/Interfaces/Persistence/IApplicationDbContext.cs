@@ -23,6 +23,7 @@ public interface IApplicationDbContext
     DbSet<NoteRelationship> NoteRelationships { get; }
     DbSet<TaskItem> Tasks { get; }
     DbSet<Output> Outputs { get; }
+    DbSet<ArchiveRetentionRule> ArchiveRetentionRules { get; }
     DbSet<UserDashboardPreference> DashboardPreferences { get; }
     DbSet<Idea> Ideas { get; }
     DbSet<Goal> Goals { get; }
