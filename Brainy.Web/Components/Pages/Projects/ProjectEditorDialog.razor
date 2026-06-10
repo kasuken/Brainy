@@ -1,7 +1,9 @@
+@using Brainy.Application.DTOs.Areas
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @inject IProjectService ProjectService
+@inject IAreaService AreaService
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -16,6 +18,17 @@
                 <MudTextField @bind-Value="_name" Label="Name" Required="true"
                               RequiredError="Name is required"
                               Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                <MudSelect @bind-Value="_areaId" Label="Area" Required="true"
+                           RequiredError="Area is required"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           AnchorOrigin="Origin.BottomLeft"
+                           Placeholder="Select an area…">
+                    @foreach (var area in _areas)
+                    {
+                        <MudSelectItem Value="area.Id">@area.Name</MudSelectItem>
+                    }
+                </MudSelect>
 
                 <MudTextField @bind-Value="_desiredOutcome" Label="Desired Outcome"
                               HelperText="What does 'done' look like?"
@@ -79,6 +92,7 @@
     private bool _saving;
 
     private string _name = "";
+    private Guid _areaId;
     private string? _desiredOutcome;
     private string? _description;
     private ProjectStatus _status = ProjectStatus.NotStarted;
@@ -86,14 +100,21 @@
     private DateTime? _startDate;
     private DateTime? _dueDate;
 
+    private IReadOnlyList<AreaDto> _areas = [];
+
     protected override async Task OnInitializedAsync()
     {
+        _areas = await AreaService.GetAllActiveAsync();
+
         if (ProjectId.HasValue)
         {
             var dto = await ProjectService.GetByIdAsync(ProjectId.Value);
             if (dto is not null)
             {
                 _name           = dto.Name;
+                _areaId         = dto.AreaId ?? Guid.Empty;
+                if (_areaId == Guid.Empty)
+                    Snackbar.Add("This project has no area assigned. Please select an area before saving.", Severity.Warning);
                 _desiredOutcome = dto.DesiredOutcome;
                 _description    = dto.Description;
                 _status         = dto.Status;
@@ -109,19 +130,25 @@
         await _form.Validate();
         if (!_valid) return;
 
+        if (_areaId == Guid.Empty)
+        {
+            Snackbar.Add("Please select an area for this project.", Severity.Warning);
+            return;
+        }
+
         _saving = true;
         try
         {
             if (ProjectId.HasValue)
             {
                 await ProjectService.UpdateAsync(new UpdateProjectDto(
-                    ProjectId.Value, _name, _description, _desiredOutcome,
-                    _status, _priority, _startDate, _dueDate, null));
+                    ProjectId.Value, _name, _areaId, _description, _desiredOutcome,
+                    _status, _priority, _startDate, _dueDate));
             }
             else
             {
                 await ProjectService.CreateAsync(new CreateProjectDto(
-                    _name, _description, _desiredOutcome, _status, _priority, _startDate, _dueDate));
+                    _name, _areaId, _description, _desiredOutcome, _status, _priority, _startDate, _dueDate));
             }
             MudDialog.Close(DialogResult.Ok(true));
         }

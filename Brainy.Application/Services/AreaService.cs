@@ -145,6 +145,13 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
             .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId, cancellationToken).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Area '{id}' was not found.");
 
+        var hasActiveProjects = await context.Projects
+            .AnyAsync(p => p.AreaId == id && !p.IsArchived, cancellationToken).ConfigureAwait(false);
+        if (hasActiveProjects)
+            throw new InvalidOperationException(
+                "This area cannot be deleted because it has active projects. " +
+                "Archive or reassign all projects before deleting the area.");
+
         context.Areas.Remove(area);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -166,17 +173,10 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task UnlinkProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
-    {
-        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-
-        var project = await context.Projects
-            .FirstOrDefaultAsync(p => p.Id == projectId && p.UserId == userId, cancellationToken).ConfigureAwait(false)
-            ?? throw new KeyNotFoundException($"Project '{projectId}' was not found.");
-
-        project.AreaId = null;
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
+    public Task UnlinkProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
+        => throw new InvalidOperationException(
+            "A project must always be related to an area. " +
+            "Use LinkProjectAsync to move the project to a different area instead.");
 
     public async Task LinkNoteAsync(Guid areaId, Guid noteId, CancellationToken cancellationToken = default)
     {
