@@ -443,7 +443,7 @@
         TaskId      = t.Id,
         Text        = t.Title,
         Start       = t.DueDate!.Value.Date,
-        End         = t.DueDate!.Value.Date,
+        End         = t.DueDate!.Value.Date.AddDays(1),
         AllDay      = true,
         Priority    = t.Priority,
         Status      = t.Status,

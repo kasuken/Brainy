@@ -399,13 +399,9 @@
 
         try
         {
-            var noteSearchTask = SearchService.SearchAsync(term);
-            var goalsTask = GoalService.GetAllNonArchivedAsync();
-
-            await Task.WhenAll(noteSearchTask, goalsTask);
-
-            _results = await noteSearchTask;
-            _goalResults = (await goalsTask)
+            _results = await SearchService.SearchAsync(term);
+            var goals = await GoalService.GetAllNonArchivedAsync();
+            _goalResults = goals
                 .Where(goal =>
                     goal.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ||
                     (goal.Description?.Contains(term, StringComparison.OrdinalIgnoreCase) == true))

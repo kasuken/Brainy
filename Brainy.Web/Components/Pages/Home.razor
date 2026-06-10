@@ -360,19 +360,11 @@
         _loading = true;
         StateHasChanged();
 
-        var aggregateTask = TodayService.GetTodayAggregateAsync();
-        var notificationsTask = NotificationService.GetNotificationsAsync();
-        var prioritizedProjectsTask = ProjectPrioritizationService.GetPrioritizedProjectsAsync(5);
-        var overdueGoalsTask = GoalService.GetOverdueAsync();
-        var dueSoonGoalsTask = GoalService.GetDueSoonAsync();
-
-        await Task.WhenAll(aggregateTask, notificationsTask, prioritizedProjectsTask, overdueGoalsTask, dueSoonGoalsTask);
-
-        _aggregate = await aggregateTask;
-        _notifications = await notificationsTask;
-        _prioritizedProjects = await prioritizedProjectsTask;
-        _overdueGoals = await overdueGoalsTask;
-        _dueSoonGoals = await dueSoonGoalsTask;
+        _aggregate = await TodayService.GetTodayAggregateAsync();
+        _notifications = await NotificationService.GetNotificationsAsync();
+        _prioritizedProjects = await ProjectPrioritizationService.GetPrioritizedProjectsAsync(5);
+        _overdueGoals = await GoalService.GetOverdueAsync();
+        _dueSoonGoals = await GoalService.GetDueSoonAsync();
 
         _loading = false;
         StateHasChanged();

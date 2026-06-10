@@ -523,13 +523,8 @@ else
         _loading = true;
         StateHasChanged();
 
-        var detailTask = IdeaService.GetDetailAsync(Id);
-        var areasTask  = AreaService.GetAllActiveAsync();
-
-        await Task.WhenAll(detailTask, areasTask);
-
-        _detail = detailTask.Result;
-        _areas  = areasTask.Result;
+        _detail = await IdeaService.GetDetailAsync(Id);
+        _areas  = await AreaService.GetAllActiveAsync();
 
         if (_detail is not null)
             PopulateEditForm(_detail);

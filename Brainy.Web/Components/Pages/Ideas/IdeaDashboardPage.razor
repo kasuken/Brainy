@@ -366,17 +366,12 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var metricsTask = IdeaService.GetMetricsAsync();
-        var reviewTask  = IdeaService.GetReviewDataAsync();
-        var activeTask  = IdeaService.GetAllActiveAsync();
-        var archivedTask = IdeaService.GetAllArchivedAsync();
+        _metrics    = await IdeaService.GetMetricsAsync();
+        _reviewData = await IdeaService.GetReviewDataAsync();
 
-        await Task.WhenAll(metricsTask, reviewTask, activeTask, archivedTask);
-
-        _metrics    = await metricsTask;
-        _reviewData = await reviewTask;
-
-        var allIdeas = (await activeTask).Concat(await archivedTask).ToList();
+        var active   = await IdeaService.GetAllActiveAsync();
+        var archived = await IdeaService.GetAllArchivedAsync();
+        var allIdeas = active.Concat(archived).ToList();
 
         // Top 10 most recently updated
         _recentIdeas = allIdeas

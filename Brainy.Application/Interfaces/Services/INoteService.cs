@@ -67,4 +67,7 @@ public interface INoteService
 
     /// <summary>Restores an archived note, clearing the archive flag and timestamp.</summary>
     Task RestoreAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Toggles the favorite flag on a note and returns the updated note.</summary>
+    Task<NoteDto> ToggleFavoriteAsync(Guid id, CancellationToken cancellationToken = default);
 }

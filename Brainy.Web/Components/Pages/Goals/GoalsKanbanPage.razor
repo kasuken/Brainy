@@ -162,17 +162,15 @@
 
         try
         {
-            var activeGoalsTask = GoalService.GetAllNonArchivedAsync();
-            var activeAreasTask = AreaService.GetAllActiveAsync();
-            var archivedAreasTask = AreaService.GetAllArchivedAsync();
+            var activeGoals = await GoalService.GetAllNonArchivedAsync();
+            var activeAreas = await AreaService.GetAllActiveAsync();
+            var archivedAreas = await AreaService.GetAllArchivedAsync();
 
-            await Task.WhenAll(activeGoalsTask, activeAreasTask, archivedAreasTask);
-
-            _activeGoals = activeGoalsTask.Result.OrderBy(goal => goal.TargetDate ?? DateTime.MaxValue)
+            _activeGoals = activeGoals.OrderBy(goal => goal.TargetDate ?? DateTime.MaxValue)
                                                .ThenBy(goal => goal.Title)
                                                .ToList();
 
-            _lanes = BuildLanes(activeAreasTask.Result, archivedAreasTask.Result);
+            _lanes = BuildLanes(activeAreas, archivedAreas);
             RefreshFilteredGoals();
         }
         catch (Exception ex)
