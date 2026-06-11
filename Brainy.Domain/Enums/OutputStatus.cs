@@ -8,5 +8,6 @@ public enum OutputStatus
     Draft = 0,
     InReview = 1,
     Published = 2,
-    Archived = 3
+    Archived = 3,
+    Ready = 4
 }

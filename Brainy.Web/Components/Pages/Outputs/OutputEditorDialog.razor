@@ -1,0 +1,207 @@
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.DTOs.Goals
+@using Brainy.Application.DTOs.Outputs
+@using Brainy.Application.DTOs.Projects
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IOutputService OutputService
+@inject IAreaService AreaService
+@inject IProjectService ProjectService
+@inject IGoalService GoalService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-family:var(--font-display)">
+            @(ExistingOutput is not null ? "Edit Output" : "New Output")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <div class="oed-fields">
+                <MudTextField @bind-Value="_title" Label="Title" Required="true"
+                              RequiredError="Title is required"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                <MudTextField @bind-Value="_description" Label="Description"
+                              Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                <MudSelect @bind-Value="_type" Label="Type"
+                           Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (OutputType t in Enum.GetValues<OutputType>())
+                    {
+                        <MudSelectItem Value="@t">@FormatType(t)</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @if (ExistingOutput is not null)
+                {
+                    <MudSelect @bind-Value="_status" Label="Status"
+                               Variant="Variant.Outlined" Margin="Margin.Dense">
+                        @foreach (OutputStatus s in Enum.GetValues<OutputStatus>())
+                        {
+                            <MudSelectItem Value="@s">@FormatStatus(s)</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+
+                <MudSelect @bind-Value="_areaId" Label="Area"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Clearable="true">
+                    @foreach (var area in _areas)
+                    {
+                        <MudSelectItem Value="@((Guid?)area.Id)">@area.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudSelect @bind-Value="_projectId" Label="Project"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Clearable="true">
+                    @foreach (var project in _projects)
+                    {
+                        <MudSelectItem Value="@((Guid?)project.Id)">@project.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudSelect @bind-Value="_goalId" Label="Goal"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Clearable="true">
+                    @foreach (var goal in _goals)
+                    {
+                        <MudSelectItem Value="@((Guid?)goal.Id)">@goal.Title</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudTextField @bind-Value="_content" Label="Content (Markdown supported)"
+                              Lines="10" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </div>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="!_valid || _saving">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @(ExistingOutput is not null ? "Save changes" : "Create Output")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+.oed-fields { display: flex; flex-direction: column; gap: .85rem; padding-top: .25rem; }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>Pass an existing output to enter edit mode; null creates a new output.</summary>
+    [Parameter] public OutputDto? ExistingOutput { get; set; }
+
+    private MudForm _form = null!;
+    private bool _valid;
+    private bool _saving;
+
+    private string _title = "";
+    private string? _description;
+    private OutputType _type = OutputType.BlogPost;
+    private OutputStatus _status = OutputStatus.Draft;
+    private Guid? _areaId;
+    private Guid? _projectId;
+    private Guid? _goalId;
+    private string _content = "";
+
+    private List<AreaDto> _areas = [];
+    private List<ProjectDto> _projects = [];
+    private List<GoalDto> _goals = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var areasTask   = AreaService.GetAllActiveAsync();
+        var projectsTask = ProjectService.GetAllNonArchivedAsync();
+        var goalsTask   = GoalService.GetAllActiveAsync();
+
+        await Task.WhenAll(areasTask, projectsTask, goalsTask);
+
+        _areas    = (await areasTask).ToList();
+        _projects = (await projectsTask).ToList();
+        _goals    = (await goalsTask).ToList();
+
+        if (ExistingOutput is not null)
+        {
+            _title       = ExistingOutput.Title;
+            _description = ExistingOutput.Description;
+            _type        = ExistingOutput.Type;
+            _status      = ExistingOutput.Status;
+            _areaId      = ExistingOutput.AreaId;
+            _projectId   = ExistingOutput.ProjectId;
+            _goalId      = ExistingOutput.GoalId;
+
+            // Load full content from detail endpoint
+            var detail = await OutputService.GetDetailAsync(ExistingOutput.Id);
+            if (detail is not null)
+                _content = detail.Content;
+        }
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_valid) return;
+
+        _saving = true;
+        try
+        {
+            if (ExistingOutput is not null)
+            {
+                await OutputService.UpdateAsync(new UpdateOutputDto(
+                    ExistingOutput.Id, _title, _description, _type, _status,
+                    _content, _projectId, _areaId, _goalId));
+                Snackbar.Add("Output updated.", Severity.Success);
+            }
+            else
+            {
+                await OutputService.CreateAsync(new CreateOutputDto(
+                    _title, _description, _type, _content, _projectId, _areaId, _goalId));
+                Snackbar.Add("Output created.", Severity.Success);
+            }
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    internal static string FormatType(OutputType type) => type switch
+    {
+        OutputType.BlogPost            => "Blog Post",
+        OutputType.LinkedInPost        => "LinkedIn Post",
+        OutputType.Report              => "Report",
+        OutputType.ProductSpec         => "Product Spec",
+        OutputType.MeetingBrief        => "Meeting Brief",
+        OutputType.Roadmap             => "Roadmap",
+        OutputType.DecisionRecord      => "Decision Record",
+        OutputType.LearningPlan        => "Learning Plan",
+        OutputType.ResearchSummary     => "Research Summary",
+        OutputType.PresentationOutline => "Presentation Outline",
+        OutputType.Proposal            => "Proposal",
+        OutputType.EmailDraft          => "Email Draft",
+        OutputType.Custom              => "Custom",
+        _                              => type.ToString()
+    };
+
+    internal static string FormatStatus(OutputStatus status) => status switch
+    {
+        OutputStatus.InReview => "In Review",
+        _                     => status.ToString()
+    };
+}

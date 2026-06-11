@@ -1,0 +1,702 @@
+@page "/outputs"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Outputs
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IOutputService OutputService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Outputs — Brainy</PageTitle>
+
+<style>
+    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
+
+    .op-page {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 1.5rem 0;
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
+
+    .op-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+    }
+
+    @@media (min-width: 1024px) {
+        .op-layout {
+            grid-template-columns: 320px 1fr;
+            align-items: start;
+            gap: 4rem;
+        }
+    }
+
+    .op-sidebar {
+        position: sticky;
+        top: 2rem;
+        display: flex;
+        flex-direction: column;
+        animation: op-fade-up 0.4s ease both;
+    }
+
+    @@keyframes op-fade-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .op-eyebrow {
+        font-size: 0.75rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 700;
+        margin: 0 0 0.5rem;
+    }
+
+    .op-title {
+        font-family: 'Fraunces', serif;
+        font-size: clamp(2.5rem, 6vw, 4rem);
+        font-weight: 600;
+        line-height: 1;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.02em;
+        margin: 0 0 0.5rem;
+    }
+
+    .op-meta {
+        font-size: 0.85rem;
+        color: var(--mud-palette-text-secondary);
+        margin: 0 0 2rem;
+        font-weight: 500;
+    }
+
+    .op-widget {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+    }
+
+    .op-filter-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .op-filter-label {
+        width: 100%;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        margin-bottom: 0.5rem;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        padding-bottom: 0.35rem;
+    }
+
+    .op-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 8px;
+        background: var(--mud-palette-table-lines);
+        border: 1px solid transparent;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-secondary);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .op-chip:hover {
+        background: var(--mud-palette-surface);
+        border-color: var(--mud-palette-lines-default);
+    }
+
+    .op-chip--on {
+        background: rgba(192, 86, 29, 0.1);
+        border-color: rgba(192, 86, 29, 0.3);
+        color: var(--clay, #c0561d);
+    }
+
+    .op-main {
+        animation: op-fade-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    .op-table-wrapper {
+        border-radius: 14px;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.02);
+    }
+
+    .op-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+    }
+
+    .op-table th {
+        padding: 1rem 1.25rem;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 800;
+        border-bottom: 2px solid var(--mud-palette-lines-default);
+        background: var(--mud-palette-table-lines);
+    }
+
+    .op-table td {
+        padding: 1.25rem 1.25rem;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        vertical-align: middle;
+    }
+
+    .op-row {
+        transition: background 0.2s ease;
+    }
+
+    .op-row:hover {
+        background: rgba(192, 86, 29, 0.02);
+    }
+
+    .op-row:last-child td {
+        border-bottom: none;
+    }
+
+    .op-row-title {
+        font-family: 'Fraunces', serif;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        margin: 0 0 0.3rem;
+        line-height: 1.2;
+    }
+
+    .op-row-desc {
+        color: var(--mud-palette-text-secondary);
+        font-size: 0.85rem;
+        line-height: 1.5;
+        max-width: 45ch;
+        margin: 0;
+    }
+
+    .op-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        white-space: nowrap;
+    }
+
+    .op-badge-neutral {
+        background: var(--mud-palette-table-lines);
+        color: var(--mud-palette-text-secondary);
+        border: 1px solid var(--mud-palette-lines-default);
+    }
+
+    /* Status colors */
+    .op-status--draft     { background: var(--mud-palette-table-lines); color: var(--mud-palette-text-secondary); border: 1px solid var(--mud-palette-lines-default); }
+    .op-status--inreview  { background: rgba(237,108,2,.12); color: #b06000; border: 1px solid rgba(237,108,2,.2); }
+    .op-status--ready     { background: rgba(2,136,209,.12); color: #0277bd; border: 1px solid rgba(2,136,209,.2); }
+    .op-status--published { background: rgba(46,125,50,.12); color: #1b5e20; border: 1px solid rgba(46,125,50,.2); }
+    .op-status--archived  { background: var(--mud-palette-table-lines); color: var(--mud-palette-text-disabled); border: 1px solid var(--mud-palette-lines-default); }
+
+    .op-actions {
+        display: flex;
+        gap: 0.4rem;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+
+    .op-row:hover .op-actions {
+        opacity: 1;
+    }
+
+    .op-btn-action {
+        width: 34px; height: 34px;
+        border-radius: 8px;
+        border: 1px solid var(--mud-palette-lines-default);
+        background: var(--mud-palette-surface);
+        display: flex; align-items: center; justify-content: center;
+        color: var(--mud-palette-text-secondary);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .op-btn-action:hover {
+        color: var(--mud-palette-text-primary);
+        border-color: var(--mud-palette-text-primary);
+    }
+
+    .op-btn-action--delete:hover {
+        border-color: #d32f2f;
+        color: #d32f2f;
+    }
+
+    .op-archived-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 0;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--mud-palette-text-disabled);
+        cursor: pointer;
+        border-top: 1px solid var(--mud-palette-lines-default);
+        margin-top: 1.5rem;
+        user-select: none;
+    }
+</style>
+
+<div class="op-page">
+    <div class="op-layout">
+
+        @* ── Sidebar ── *@
+        <aside class="op-sidebar">
+            <p class="op-eyebrow">Express</p>
+            <h1 class="op-title">Outputs</h1>
+            <p class="op-meta">@(_outputs?.Count ?? 0) active · @(_filtered?.Count ?? 0) shown</p>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Size="Size.Large"
+                       Class="mb-6"
+                       Style="font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; border-radius: 8px;"
+                       FullWidth="true"
+                       OnClick="OpenCreateDialogAsync">
+                New Output
+            </MudButton>
+
+            <div class="op-widget">
+                <MudTextField Value="@_searchText"
+                              ValueChanged="@((string v) => OnSearchChanged(v))"
+                              Placeholder="Search outputs…"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Outlined.Search"
+                              Clearable="true"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Class="mb-5" />
+
+                <div class="op-filter-label">Type</div>
+                <div class="op-filter-group">
+                    @foreach (OutputType t in Enum.GetValues<OutputType>())
+                    {
+                        <button class="op-chip @(_typeFilter == t ? "op-chip--on" : "")"
+                                @onclick="() => SetTypeFilter(t)">
+                            @OutputEditorDialog.FormatType(t)
+                        </button>
+                    }
+                </div>
+
+                <div class="op-filter-label">Status</div>
+                <div class="op-filter-group">
+                    @foreach (OutputStatus s in Enum.GetValues<OutputStatus>().Where(s => s != OutputStatus.Archived))
+                    {
+                        <button class="op-chip @(_statusFilter == s ? "op-chip--on" : "")"
+                                @onclick="() => SetStatusFilter(s)">
+                            @OutputEditorDialog.FormatStatus(s)
+                        </button>
+                    }
+                </div>
+
+                <div class="op-filter-label" style="margin-bottom:0.5rem;">View</div>
+                <div class="op-filter-group" style="margin-bottom:0;">
+                    <button class="op-chip @(_showArchived ? "op-chip--on" : "")"
+                            @onclick="ToggleArchivedAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.Archive" Style="font-size:.85rem;" />
+                        Show Archived
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        @* ── Main ── *@
+        <main class="op-main">
+            @if (_loading)
+            {
+                <div style="padding: 5rem 0; text-align: center;">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                    <p style="margin-top: 1rem; color: var(--mud-palette-text-disabled); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem;">Loading outputs…</p>
+                </div>
+            }
+            else if (_filtered is { Count: 0 } && (_archivedOutputs is null || _archivedOutputs.Count == 0 || !_showArchived))
+            {
+                <div style="padding: 5rem 2rem; display: flex; flex-direction: column; align-items: center; text-align: center; border: 1px dashed var(--mud-palette-lines-default); border-radius: 16px; background: var(--mud-palette-table-lines);">
+                    <MudIcon Icon="@Icons.Material.Outlined.Output" Style="font-size:4rem; color: var(--mud-palette-text-disabled); margin-bottom: 1.5rem;" />
+                    <h2 style="font-family: 'Fraunces', serif; font-size: 1.75rem; margin: 0 0 0.5rem; color: var(--mud-palette-text-primary);">
+                        @(_outputs?.Count == 0 ? "No outputs yet" : "Nothing matches")
+                    </h2>
+                    <p style="color: var(--mud-palette-text-secondary); margin: 0 0 2rem; max-width: 400px;">
+                        @(_outputs?.Count == 0
+                            ? "Create your first output — blog posts, reports, proposals and more."
+                            : "Try broadening your search or clearing filters.")
+                    </p>
+                    @if (_outputs?.Count == 0)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="OpenCreateDialogAsync">
+                            Create your first output
+                        </MudButton>
+                    }
+                </div>
+            }
+            else
+            {
+                @* Active outputs *@
+                @if (_filtered is { Count: > 0 })
+                {
+                    <div class="op-table-wrapper">
+                        <table class="op-table">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Area</th>
+                                    <th>Project</th>
+                                    <th>Last Updated</th>
+                                    <th style="text-align:right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var output in _filtered)
+                                {
+                                    <tr class="op-row">
+                                        <td>
+                                            <div class="op-row-title">@output.Title</div>
+                                            @if (!string.IsNullOrWhiteSpace(output.Description))
+                                            {
+                                                <p class="op-row-desc">
+                                                    @(output.Description!.Length > 90
+                                                        ? output.Description[..90] + "…"
+                                                        : output.Description)
+                                                </p>
+                                            }
+                                            @if (output.IsAiGenerated)
+                                            {
+                                                <span class="op-badge" style="background:rgba(103,58,183,.1);color:#4527a0;border:1px solid rgba(103,58,183,.2);margin-top:0.3rem;">
+                                                    AI Generated
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="op-badge op-badge-neutral">@OutputEditorDialog.FormatType(output.Type)</span>
+                                        </td>
+                                        <td>
+                                            <span class="op-badge op-status--@output.Status.ToString().ToLowerInvariant()">
+                                                @OutputEditorDialog.FormatStatus(output.Status)
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="op-badge op-badge-neutral">@(output.AreaName ?? "—")</span>
+                                        </td>
+                                        <td>
+                                            <span class="op-badge op-badge-neutral">@(output.ProjectTitle ?? "—")</span>
+                                        </td>
+                                        <td style="color:var(--mud-palette-text-disabled);font-size:0.8rem;white-space:nowrap;">
+                                            @output.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                        </td>
+                                        <td>
+                                            <div class="op-actions" style="justify-content:flex-end;">
+                                                <button class="op-btn-action" title="View"
+                                                        @onclick='() => Nav.NavigateTo($"/outputs/{output.Id}")'>
+                                                    <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
+                                                </button>
+                                                <button class="op-btn-action" title="Edit"
+                                                        @onclick="() => OpenEditDialogAsync(output)">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
+                                                </button>
+                                                @if (output.Status != OutputStatus.Published)
+                                                {
+                                                    <button class="op-btn-action" title="Publish"
+                                                            @onclick="() => ConfirmPublishAsync(output)">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.Publish" Size="Size.Small" />
+                                                    </button>
+                                                }
+                                                <button class="op-btn-action" title="Archive"
+                                                        @onclick="() => ConfirmArchiveAsync(output)">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
+                                                </button>
+                                                <button class="op-btn-action op-btn-action--delete" title="Delete"
+                                                        @onclick="() => ConfirmDeleteAsync(output)">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @* Archived section *@
+                @if (_showArchived && _archivedOutputs is { Count: > 0 })
+                {
+                    <div class="op-archived-header" @onclick="() => _archivedExpanded = !_archivedExpanded">
+                        <MudIcon Icon="@(_archivedExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
+                        Archived (@_archivedOutputs.Count)
+                    </div>
+
+                    @if (_archivedExpanded)
+                    {
+                        <div class="op-table-wrapper" style="margin-top:0.5rem; opacity:0.8;">
+                            <table class="op-table">
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Type</th>
+                                        <th>Area</th>
+                                        <th>Archived</th>
+                                        <th style="text-align:right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var output in _archivedOutputs)
+                                    {
+                                        <tr class="op-row">
+                                            <td>
+                                                <div class="op-row-title">@output.Title</div>
+                                            </td>
+                                            <td>
+                                                <span class="op-badge op-badge-neutral">@OutputEditorDialog.FormatType(output.Type)</span>
+                                            </td>
+                                            <td>
+                                                <span class="op-badge op-badge-neutral">@(output.AreaName ?? "—")</span>
+                                            </td>
+                                            <td style="color:var(--mud-palette-text-disabled);font-size:0.8rem;white-space:nowrap;">
+                                                @(output.ArchivedDate?.ToLocalTime().ToString("MMM d, yyyy") ?? "—")
+                                            </td>
+                                            <td>
+                                                <div class="op-actions" style="justify-content:flex-end;">
+                                                    <button class="op-btn-action" title="View"
+                                                            @onclick='() => Nav.NavigateTo($"/outputs/{output.Id}")'>
+                                                        <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
+                                                    </button>
+                                                    <button class="op-btn-action" title="Restore"
+                                                            @onclick="() => ConfirmRestoreAsync(output)">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.RestorePage" Size="Size.Small" />
+                                                    </button>
+                                                    <button class="op-btn-action op-btn-action--delete" title="Delete"
+                                                            @onclick="() => ConfirmDeleteAsync(output)">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            }
+        </main>
+    </div>
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<OutputDto>? _outputs;
+    private List<OutputDto>? _filtered;
+    private List<OutputDto>? _archivedOutputs;
+
+    private string _searchText = "";
+    private bool _showArchived;
+    private bool _archivedExpanded = true;
+    private OutputType? _typeFilter;
+    private OutputStatus? _statusFilter;
+
+    private CancellationTokenSource? _searchCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(CancellationToken cancellationToken = default)
+    {
+        _loading = true;
+        StateHasChanged();
+
+        IReadOnlyList<OutputDto> result;
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            result = await OutputService.SearchAsync(_searchText, cancellationToken);
+        }
+        else
+        {
+            result = await OutputService.GetAllActiveAsync(cancellationToken);
+        }
+
+        _outputs = result.ToList();
+
+        if (_showArchived)
+        {
+            var archived = await OutputService.GetAllArchivedAsync(cancellationToken);
+            _archivedOutputs = archived.ToList();
+        }
+        else
+        {
+            _archivedOutputs = null;
+        }
+
+        ApplyFilter();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void OnSearchChanged(string value)
+    {
+        _searchText = value;
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(300, token);
+                await InvokeAsync(() => LoadAsync(token));
+            }
+            catch (OperationCanceledException) { }
+        }, token);
+    }
+
+    private async Task ToggleArchivedAsync()
+    {
+        _showArchived = !_showArchived;
+        _statusFilter = null;
+        await LoadAsync();
+    }
+
+    private void SetTypeFilter(OutputType type)
+    {
+        _typeFilter = _typeFilter == type ? null : type;
+        ApplyFilter();
+    }
+
+    private void SetStatusFilter(OutputStatus status)
+    {
+        _statusFilter = _statusFilter == status ? null : status;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        IEnumerable<OutputDto> q = _outputs ?? [];
+
+        if (_typeFilter.HasValue)
+            q = q.Where(o => o.Type == _typeFilter.Value);
+
+        if (_statusFilter.HasValue)
+            q = q.Where(o => o.Status == _statusFilter.Value);
+
+        _filtered = q.ToList();
+    }
+
+    private async Task OpenCreateDialogAsync()
+    {
+        var parameters = new DialogParameters<OutputEditorDialog>();
+        parameters.Add(x => x.ExistingOutput, null);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<OutputEditorDialog>("New Output", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task OpenEditDialogAsync(OutputDto output)
+    {
+        var parameters = new DialogParameters<OutputEditorDialog>();
+        parameters.Add(x => x.ExistingOutput, output);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<OutputEditorDialog>("Edit Output", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task ConfirmPublishAsync(OutputDto output)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Publish output",
+            $"Publish \"{output.Title}\"? This will mark it as published.",
+            yesText: "Publish", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            await OutputService.PublishAsync(output.Id);
+            Snackbar.Add($"\"{output.Title}\" published.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task ConfirmArchiveAsync(OutputDto output)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Archive output",
+            $"Archive \"{output.Title}\"? It will be hidden from active views.",
+            yesText: "Archive", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            await OutputService.ArchiveAsync(output.Id);
+            Snackbar.Add($"\"{output.Title}\" archived.", Severity.Info);
+            await LoadAsync();
+        }
+    }
+
+    private async Task ConfirmRestoreAsync(OutputDto output)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Restore output",
+            $"Restore \"{output.Title}\" to active outputs?",
+            yesText: "Restore", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            await OutputService.RestoreAsync(output.Id);
+            Snackbar.Add($"\"{output.Title}\" restored.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task ConfirmDeleteAsync(OutputDto output)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Delete output",
+            $"Permanently delete \"{output.Title}\"? This cannot be undone.",
+            yesText: "Delete", noText: "Cancel");
+
+        if (confirmed == true)
+        {
+            await OutputService.DeleteAsync(output.Id);
+            Snackbar.Add($"\"{output.Title}\" deleted.", Severity.Warning);
+            await LoadAsync();
+        }
+    }
+}

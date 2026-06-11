@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<ICalendarService, CalendarService>();
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<IGoalMilestoneService, GoalMilestoneService>();
+        services.AddScoped<IOutputService, OutputService>();
         return services;
     }
 }

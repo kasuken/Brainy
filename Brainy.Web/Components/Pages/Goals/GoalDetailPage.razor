@@ -1,10 +1,12 @@
 @page "/goals/{GoalId:guid}"
 @using Microsoft.AspNetCore.Authorization
 @using Brainy.Application.DTOs.Goals
+@using Brainy.Application.DTOs.Outputs
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @attribute [Authorize]
 @inject IGoalService GoalService
+@inject IOutputService OutputService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
@@ -166,6 +168,54 @@ else
                         </button>
                     }
                 </div>
+            }
+        </section>
+
+        <section class="god-panel">
+            <div class="god-section__header">
+                <h2 class="god-section__title">Related Outputs (@_outputs.Count)</h2>
+                <p class="god-section__sub">Outputs produced from work on this goal.</p>
+            </div>
+
+            @if (_outputs.Count == 0)
+            {
+                <div class="god-empty">
+                    <span class="god-empty__icon">📄</span>
+                    <span>No outputs linked to this goal.</span>
+                </div>
+            }
+            else
+            {
+                <MudSimpleTable Hover="true" Dense="true">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var output in _outputs)
+                        {
+                            <tr>
+                                <td>
+                                    <MudLink Href="@($"/outputs/{output.Id}")" Color="Color.Default">
+                                        @output.Title
+                                    </MudLink>
+                                </td>
+                                <td>@OutputTypeLabel(output.Type)</td>
+                                <td>
+                                    <MudChip T="string" Size="Size.Small" Color="@OutputStatusColor(output.Status)"
+                                             Variant="Variant.Outlined">
+                                        @output.Status.ToString()
+                                    </MudChip>
+                                </td>
+                                <td>@RelativeDate(output.UpdatedAtUtc)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
             }
         </section>
     </div>
@@ -474,6 +524,7 @@ else
 
     private bool _loading = true;
     private GoalDetailDto? _detail;
+    private IReadOnlyList<OutputDto> _outputs = [];
 
     protected override async Task OnParametersSetAsync()
     {
@@ -487,6 +538,9 @@ else
         try
         {
             _detail = await GoalService.GetDetailAsync(GoalId);
+            _outputs = _detail is not null
+                ? await OutputService.GetByGoalAsync(GoalId)
+                : [];
         }
         catch (Exception ex)
         {
@@ -569,4 +623,42 @@ else
         ProjectStatus.Archived => "Archived",
         _ => status.ToString()
     };
+
+    private static Color OutputStatusColor(OutputStatus status) => status switch
+    {
+        OutputStatus.Draft     => Color.Default,
+        OutputStatus.InReview  => Color.Warning,
+        OutputStatus.Ready     => Color.Info,
+        OutputStatus.Published => Color.Success,
+        OutputStatus.Archived  => Color.Dark,
+        _                      => Color.Default
+    };
+
+    private static string OutputTypeLabel(OutputType type) => type switch
+    {
+        OutputType.BlogPost             => "Blog Post",
+        OutputType.LinkedInPost         => "LinkedIn Post",
+        OutputType.Report               => "Report",
+        OutputType.ProductSpec          => "Product Spec",
+        OutputType.MeetingBrief         => "Meeting Brief",
+        OutputType.Roadmap              => "Roadmap",
+        OutputType.DecisionRecord       => "Decision Record",
+        OutputType.LearningPlan         => "Learning Plan",
+        OutputType.ResearchSummary      => "Research Summary",
+        OutputType.PresentationOutline  => "Presentation Outline",
+        OutputType.Proposal             => "Proposal",
+        OutputType.EmailDraft           => "Email Draft",
+        OutputType.Custom               => "Custom",
+        _                               => type.ToString()
+    };
+
+    private static string RelativeDate(DateTime utc)
+    {
+        var diff = DateTime.UtcNow - utc;
+        if (diff.TotalMinutes < 2)  return "just now";
+        if (diff.TotalHours   < 1)  return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays    < 1)  return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays    < 30) return $"{(int)diff.TotalDays}d ago";
+        return utc.ToLocalTime().ToString("MMM d, yyyy");
+    }
 }

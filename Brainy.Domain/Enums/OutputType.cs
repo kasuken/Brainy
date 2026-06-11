@@ -14,5 +14,8 @@ public enum OutputType
     DecisionRecord = 6,
     LearningPlan = 7,
     ResearchSummary = 8,
-    Other = 99
+    PresentationOutline = 9,
+    Proposal = 10,
+    EmailDraft = 11,
+    Custom = 99
 }

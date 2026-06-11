@@ -1,0 +1,263 @@
+@using Brainy.Application.DTOs.Outputs
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IOutputService OutputService
+@inject NavigationManager Nav
+
+@if (!_loading && _metrics is not null)
+{
+    <MudCard Class="odw-card" Elevation="0">
+        <MudCardHeader Class="odw-card-header">
+            <CardHeaderContent>
+                <div class="odw-header-row">
+                    <div>
+                        <MudText Typo="Typo.overline" Class="odw-eyebrow">Express</MudText>
+                        <MudText Typo="Typo.h6" Class="odw-title">Outputs</MudText>
+                    </div>
+                    <MudIconButton Icon="@Icons.Material.Outlined.OpenInNew"
+                                   Size="Size.Small"
+                                   Title="View all outputs"
+                                   OnClick='() => Nav.NavigateTo("/outputs")' />
+                </div>
+            </CardHeaderContent>
+        </MudCardHeader>
+
+        <MudCardContent Class="odw-card-content">
+            <!-- KPI row -->
+            <div class="odw-kpi-row">
+                <div class="odw-kpi odw-kpi--draft">
+                    <MudIcon Icon="@Icons.Material.Outlined.EditNote" Class="odw-kpi__icon" />
+                    <div>
+                        <div class="odw-kpi__value">@_metrics.DraftCount</div>
+                        <div class="odw-kpi__label">Draft</div>
+                    </div>
+                </div>
+                <div class="odw-kpi odw-kpi--ready">
+                    <MudIcon Icon="@Icons.Material.Outlined.CheckCircleOutline" Class="odw-kpi__icon" />
+                    <div>
+                        <div class="odw-kpi__value">@_metrics.ReadyCount</div>
+                        <div class="odw-kpi__label">Ready</div>
+                    </div>
+                </div>
+                <div class="odw-kpi odw-kpi--published">
+                    <MudIcon Icon="@Icons.Material.Outlined.Publish" Class="odw-kpi__icon" />
+                    <div>
+                        <div class="odw-kpi__value">@_metrics.PublishedCount</div>
+                        <div class="odw-kpi__label">Published</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent outputs -->
+            @if (_recent is { Count: > 0 })
+            {
+                <div class="odw-section-label">Recently Updated</div>
+                <div class="odw-recent-list">
+                    @foreach (var output in _recent)
+                    {
+                        <button class="odw-recent-item"
+                                @onclick='() => Nav.NavigateTo($"/outputs/{output.Id}")'>
+                            <span class="odw-recent-title">@output.Title</span>
+                            <span class="odw-recent-status odw-status--@output.Status.ToString().ToLowerInvariant()">
+                                @OutputEditorDialog.FormatStatus(output.Status)
+                            </span>
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="odw-empty">No active outputs yet.</p>
+            }
+        </MudCardContent>
+
+        <MudCardActions Class="odw-card-actions">
+            <MudButton Variant="Variant.Text"
+                       Size="Size.Small"
+                       EndIcon="@Icons.Material.Filled.ArrowForward"
+                       OnClick='() => Nav.NavigateTo("/outputs")'>
+                View all outputs
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+}
+else if (_loading)
+{
+    <MudCard Class="odw-card" Elevation="0">
+        <MudCardContent>
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="24px" Class="mb-2" />
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="80px" Class="mb-2" />
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="48px" />
+        </MudCardContent>
+    </MudCard>
+}
+
+<style>
+@@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
+
+.odw-card {
+    background: var(--mud-palette-surface) !important;
+    border: 1px solid var(--mud-palette-lines-default) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.03) !important;
+    font-family: 'Hanken Grotesk', sans-serif;
+}
+
+.odw-card-header { padding-bottom: 0 !important; }
+
+.odw-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.odw-eyebrow {
+    font-size: 0.65rem !important;
+    letter-spacing: 0.16em !important;
+    text-transform: uppercase !important;
+    color: var(--mud-palette-text-disabled) !important;
+    line-height: 1 !important;
+}
+
+.odw-title {
+    font-family: 'Fraunces', serif !important;
+    font-weight: 600 !important;
+    font-size: 1.15rem !important;
+    color: var(--mud-palette-text-primary) !important;
+    margin: 0 !important;
+}
+
+.odw-card-content { padding-top: 0.75rem !important; }
+
+.odw-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+}
+
+.odw-kpi {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+
+.odw-kpi--draft    { background: var(--mud-palette-table-lines); border-color: var(--mud-palette-lines-default); }
+.odw-kpi--ready    { background: rgba(2,136,209,.08); border-color: rgba(2,136,209,.2); }
+.odw-kpi--published{ background: rgba(46,125,50,.08); border-color: rgba(46,125,50,.2); }
+
+.odw-kpi__icon { font-size: 1.1rem !important; opacity: 0.6; }
+
+.odw-kpi__value {
+    font-family: 'Fraunces', serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--mud-palette-text-primary);
+}
+
+.odw-kpi__label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--mud-palette-text-disabled);
+}
+
+.odw-section-label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--mud-palette-text-disabled);
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.odw-recent-list { display: flex; flex-direction: column; gap: 0.35rem; }
+
+.odw-recent-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 8px;
+    background: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    transition: all 0.2s;
+}
+
+.odw-recent-item:hover {
+    background: var(--mud-palette-table-lines);
+    border-color: var(--mud-palette-lines-default);
+}
+
+.odw-recent-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--mud-palette-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.odw-recent-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.45rem;
+    border-radius: 5px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.odw-status--draft     { background: var(--mud-palette-table-lines); color: var(--mud-palette-text-secondary); }
+.odw-status--inreview  { background: rgba(237,108,2,.12); color: #b06000; }
+.odw-status--ready     { background: rgba(2,136,209,.12); color: #0277bd; }
+.odw-status--published { background: rgba(46,125,50,.12); color: #1b5e20; }
+.odw-status--archived  { background: var(--mud-palette-table-lines); color: var(--mud-palette-text-disabled); }
+
+.odw-empty {
+    font-size: 0.85rem;
+    color: var(--mud-palette-text-disabled);
+    font-style: italic;
+    margin: 0.25rem 0;
+}
+
+.odw-card-actions { padding-top: 0 !important; padding-bottom: 0.5rem !important; }
+</style>
+
+@code {
+    private bool _loading = true;
+    private OutputMetricsDto? _metrics;
+    private List<OutputDto> _recent = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var metricsTask = OutputService.GetMetricsAsync();
+        var activeTask  = OutputService.GetAllActiveAsync();
+
+        await Task.WhenAll(metricsTask, activeTask);
+
+        _metrics = await metricsTask;
+        var active = await activeTask;
+        _recent = active
+            .OrderByDescending(o => o.UpdatedAtUtc)
+            .Take(3)
+            .ToList();
+
+        _loading = false;
+    }
+}

@@ -34,5 +34,25 @@ public class OutputConfiguration : IEntityTypeConfiguration<Output>
 
         builder.Property(o => o.PromptVersion)
             .HasMaxLength(100);
+
+        builder.Property(o => o.Description)
+            .HasMaxLength(2000);
+
+        builder.Property(o => o.IsArchived);
+
+        builder.Property(o => o.PublishedDate);
+
+        builder.Property(o => o.ArchivedDate);
+
+        builder.HasOne(o => o.Area)
+            .WithMany()
+            .HasForeignKey(o => o.AreaId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(o => o.Goal)
+            .WithMany()
+            .HasForeignKey(o => o.GoalId)
+            .OnDelete(DeleteBehavior.SetNull);
+
     }
 }

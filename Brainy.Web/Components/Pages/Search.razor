@@ -80,16 +80,16 @@
                 </MudText>
             </div>
 
-            @if (_results.Count > 0)
+            @if (NoteResults.Any())
             {
                 <div class="search-results-section">
                     <div class="search-results-section__head">
                         <span class="search-results-section__title">Notes</span>
-                        <span class="search-results-section__count">@_results.Count</span>
+                        <span class="search-results-section__count">@NoteResults.Count()</span>
                     </div>
 
                     <div class="search-results-list">
-                        @foreach (var result in _results)
+                        @foreach (var result in NoteResults)
                         {
                             <div class="search-card" @onclick="() => OpenNote(result.Id)">
 
@@ -125,6 +125,67 @@
                                     </p>
                                 }
                             </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (OutputResults.Any())
+            {
+                <div class="search-results-section">
+                    <div class="search-results-section__head">
+                        <span class="search-results-section__title">Outputs</span>
+                        <span class="search-results-section__count">@OutputResults.Count()</span>
+                    </div>
+
+                    <div class="search-results-list">
+                        @foreach (var result in OutputResults)
+                        {
+                            <a class="search-card search-card--link" href="@($"/outputs/{result.Id}")">
+
+                                <div class="search-card__header">
+                                    <MudChip T="string"
+                                             Size="Size.Small"
+                                             Color="Color.Secondary"
+                                             Variant="Variant.Outlined"
+                                             Class="search-card__badge">
+                                        @result.OutputType
+                                    </MudChip>
+
+                                    @if (result.OutputStatus.HasValue)
+                                    {
+                                        <MudChip T="string"
+                                                 Size="Size.Small"
+                                                 Color="OutputStatusColor(result.OutputStatus.Value)"
+                                                 Variant="Variant.Filled"
+                                                 Class="search-card__badge">
+                                            @result.OutputStatus
+                                        </MudChip>
+                                    }
+
+                                    @if (result.Relevance == 2)
+                                    {
+                                        <span class="search-card__relevance-pill">Title match</span>
+                                    }
+
+                                    <MudSpacer />
+
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @result.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                    </MudText>
+                                </div>
+
+                                <MudText Typo="Typo.subtitle1" Class="search-card__title">
+                                    @HighlightTitle(result.Title, _lastQuery)
+                                </MudText>
+
+                                @if (!string.IsNullOrWhiteSpace(result.ContentSnippet))
+                                {
+                                    <p class="search-card__snippet">
+                                        @HighlightSnippet(result.ContentSnippet, _lastQuery)
+                                    </p>
+                                }
+                            </a>
                         }
                     </div>
                 </div>
@@ -367,6 +428,10 @@
     private IReadOnlyList<GoalDto> _goalResults = [];
     private bool _searching;
     private bool _hasSearched;
+
+    private IEnumerable<SearchResultDto> NoteResults   => _results.Where(r => r.ResultType == "Note");
+    private IEnumerable<SearchResultDto> OutputResults => _results.Where(r => r.ResultType == "Output");
+
     private int TotalResults => _results.Count + _goalResults.Count;
 
     private Task OnTextChanged(string value)
@@ -436,6 +501,16 @@
         GoalStatus.Achieved => Color.Success,
         GoalStatus.Abandoned => Color.Error,
         GoalStatus.Archived => Color.Dark,
+        _ => Color.Default
+    };
+
+    private static Color OutputStatusColor(OutputStatus status) => status switch
+    {
+        OutputStatus.Draft    => Color.Default,
+        OutputStatus.InReview => Color.Warning,
+        OutputStatus.Ready    => Color.Info,
+        OutputStatus.Published => Color.Success,
+        OutputStatus.Archived  => Color.Dark,
         _ => Color.Default
     };
 

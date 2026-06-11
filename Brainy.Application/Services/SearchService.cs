@@ -2,12 +2,13 @@ using Brainy.Application.DTOs.Search;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Brainy.Application.Services;
 
 /// <summary>
-/// Searches notes by title and content for the current user.
+/// Searches notes and outputs by title and content for the current user.
 /// Results are ranked by relevance: title matches rank higher than
 /// content-only matches, then sorted by last-updated date descending.
 /// </summary>
@@ -28,9 +29,9 @@ internal sealed class SearchService(
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        // Single DB round-trip: filter by title OR content, then sort by relevance in memory.
-        // EF Core translates String.Contains to LIKE '%term%' on SQL Server.
-        var matches = await context.Notes
+        // Two parallel DB round-trips: one for Notes, one for Outputs.
+        // EF Core translates String.Contains to LIKE '%term%'.
+        var notesTask = context.Notes
             .AsNoTracking()
             .Where(n => n.UserId == userId &&
                         (n.Title.Contains(term) || n.Content.Contains(term)))
@@ -48,29 +49,76 @@ internal sealed class SearchService(
                 n.UpdatedAtUtc,
             })
             .Take(MaxResults * 2) // over-fetch before in-memory sort
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+            .ToListAsync(cancellationToken);
 
-        // Compute relevance in memory and sort: title match first, then most recent.
-        return matches
-            .Select(n =>
+        var outputsTask = context.Outputs
+            .AsNoTracking()
+            .Where(o => o.UserId == userId &&
+                        !o.IsArchived &&
+                        (o.Title.Contains(term) ||
+                         (o.Description != null && o.Description.Contains(term)) ||
+                         o.Content.Contains(term)))
+            .Select(o => new
             {
-                var titleMatch = n.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
-                var relevance = titleMatch ? 2 : 1;
-                var snippet = BuildSnippet(n.Content, term);
-                return new SearchResultDto(
-                    n.Id,
-                    n.Title,
-                    snippet,
-                    n.AiSummary,
-                    n.Status,
-                    n.ParaCategory,
-                    n.ProjectId,
-                    n.AreaId,
-                    n.ResourceId,
-                    n.UpdatedAtUtc,
-                    relevance);
+                o.Id,
+                o.Title,
+                o.Description,
+                o.Content,
+                o.Type,
+                o.Status,
+                o.UpdatedAtUtc,
             })
+            .Take(MaxResults * 2)
+            .ToListAsync(cancellationToken);
+
+        await Task.WhenAll(notesTask, outputsTask).ConfigureAwait(false);
+
+        // Compute relevance in memory and merge both result sets.
+        var noteResults = notesTask.Result.Select(n =>
+        {
+            var titleMatch = n.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
+            return new SearchResultDto(
+                n.Id,
+                n.Title,
+                BuildSnippet(n.Content, term),
+                n.AiSummary,
+                n.Status,
+                n.ParaCategory,
+                n.ProjectId,
+                n.AreaId,
+                n.ResourceId,
+                n.UpdatedAtUtc,
+                Relevance: titleMatch ? 2 : 1,
+                ResultType: "Note");
+        });
+
+        var outputResults = outputsTask.Result.Select(o =>
+        {
+            var titleMatch = o.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
+            var snippet = BuildSnippet(o.Content, term);
+            // Fall back to description snippet when the content snippet is empty
+            if (string.IsNullOrEmpty(snippet) && !string.IsNullOrEmpty(o.Description))
+                snippet = BuildSnippet(o.Description, term);
+
+            return new SearchResultDto(
+                o.Id,
+                o.Title,
+                snippet,
+                AiSummary: null,
+                Status: default,
+                ParaCategory: default,
+                ProjectId: null,
+                AreaId: null,
+                ResourceId: null,
+                o.UpdatedAtUtc,
+                Relevance: titleMatch ? 2 : 1,
+                ResultType: "Output",
+                OutputType: o.Type,
+                OutputStatus: o.Status);
+        });
+
+        return noteResults
+            .Concat(outputResults)
             .OrderByDescending(r => r.Relevance)
             .ThenByDescending(r => r.UpdatedAtUtc)
             .Take(MaxResults)

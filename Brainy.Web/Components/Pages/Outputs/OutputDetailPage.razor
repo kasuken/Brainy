@@ -1,0 +1,569 @@
+@page "/outputs/{Id:guid}"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.DTOs.Outputs
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IOutputService OutputService
+@inject INoteService NoteService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>@(_detail?.Title ?? "Output") — Brainy</PageTitle>
+
+@if (_loading)
+{
+    <div class="od-loading">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+    </div>
+}
+else if (_detail is null)
+{
+    <div class="od-notfound">
+        <span class="od-notfound__glyph">◈</span>
+        <p class="od-notfound__title">Output not found</p>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                   OnClick='() => Nav.NavigateTo("/outputs")'>
+            Back to Outputs
+        </MudButton>
+    </div>
+}
+else
+{
+    <!-- ── Header ──────────────────────────────────────────────────── -->
+    <div class="od-header">
+        <div class="od-breadcrumb">
+            <button class="od-back" @onclick='() => Nav.NavigateTo("/outputs")'>
+                <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+                    <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                </svg>
+                Outputs
+            </button>
+            <span class="od-breadcrumb__sep">›</span>
+            <span class="od-breadcrumb__current">@_detail.Title</span>
+        </div>
+
+        <div class="od-title-row">
+            <div class="od-title-block">
+                <div class="od-title-top">
+                    <h1 class="od-title">@_detail.Title</h1>
+                    <span class="od-badge od-badge-type">@OutputEditorDialog.FormatType(_detail.Type)</span>
+                    <span class="od-badge od-status--@_detail.Status.ToString().ToLowerInvariant()">
+                        @OutputEditorDialog.FormatStatus(_detail.Status)
+                    </span>
+                    @if (_detail.IsAiGenerated)
+                    {
+                        <span class="od-badge" style="background:rgba(103,58,183,.1);color:#4527a0;border:1px solid rgba(103,58,183,.2);">
+                            AI Generated
+                        </span>
+                    }
+                    @if (_detail.IsArchived)
+                    {
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small">Archived</MudChip>
+                    }
+                </div>
+                <div class="od-meta-row">
+                    @if (!string.IsNullOrWhiteSpace(_detail.AreaName))
+                    {
+                        <span class="od-meta-item">
+                            <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Style="font-size:0.75rem;opacity:.6;" />
+                            @_detail.AreaName
+                        </span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_detail.ProjectTitle))
+                    {
+                        <span class="od-meta-item">
+                            <MudIcon Icon="@Icons.Material.Outlined.AccountTree" Style="font-size:0.75rem;opacity:.6;" />
+                            @_detail.ProjectTitle
+                        </span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_detail.GoalTitle))
+                    {
+                        <span class="od-meta-item">
+                            <MudIcon Icon="@Icons.Material.Outlined.Flag" Style="font-size:0.75rem;opacity:.6;" />
+                            @_detail.GoalTitle
+                        </span>
+                    }
+                    <span class="od-meta-item">Created @_detail.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+                    <span class="od-meta-item">Updated @_detail.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+                    @if (_detail.PublishedDate.HasValue)
+                    {
+                        <span class="od-meta-item" style="color:#1b5e20;">
+                            Published @_detail.PublishedDate.Value.ToLocalTime().ToString("MMM d, yyyy")
+                        </span>
+                    }
+                    @if (_detail.IsArchived && _detail.ArchivedDate.HasValue)
+                    {
+                        <span class="od-meta-item" style="color:#9c4416;">
+                            Archived @_detail.ArchivedDate.Value.ToLocalTime().ToString("MMM d, yyyy")
+                        </span>
+                    }
+                </div>
+            </div>
+
+            <div class="od-actions">
+                <MudButton Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Outlined.Edit"
+                           Size="Size.Small"
+                           OnClick="OpenEditDialogAsync">
+                    Edit
+                </MudButton>
+
+                @if (!_detail.IsArchived && _detail.Status != OutputStatus.Published)
+                {
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Success"
+                               StartIcon="@Icons.Material.Outlined.Publish"
+                               Size="Size.Small"
+                               Disabled="_saving"
+                               OnClick="ConfirmPublishAsync">
+                        @if (_saving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        }
+                        Publish
+                    </MudButton>
+                }
+
+                @if (_detail.IsArchived)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Success"
+                               StartIcon="@Icons.Material.Filled.Unarchive"
+                               Size="Size.Small" OnClick="ConfirmRestoreAsync"
+                               Disabled="_saving">
+                        Restore
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.Archive"
+                               Size="Size.Small" OnClick="ConfirmArchiveAsync"
+                               Disabled="_saving">
+                        Archive
+                    </MudButton>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Description ──────────────────────────────────────────── -->
+    @if (!string.IsNullOrWhiteSpace(_detail.Description))
+    {
+        <MudPaper Class="od-description-panel" Elevation="0">
+            <p class="od-description-text">@_detail.Description</p>
+        </MudPaper>
+    }
+
+    <!-- ── Content ──────────────────────────────────────────────── -->
+    <MudPaper Class="od-content-panel" Elevation="0">
+        <div class="od-section-label">Content</div>
+        @if (string.IsNullOrWhiteSpace(_detail.Content))
+        {
+            <p style="color:var(--mud-palette-text-disabled); font-style: italic;">No content yet. Edit this output to add content.</p>
+        }
+        else
+        {
+            <pre class="od-content-pre">@_detail.Content</pre>
+        }
+    </MudPaper>
+
+    <!-- ── Source Notes ─────────────────────────────────────────── -->
+    <MudPaper Class="od-section-panel" Elevation="0">
+        <div class="od-section-label">Source Notes</div>
+
+        @if (_detail.SourceNotes.Count == 0)
+        {
+            <p style="color:var(--mud-palette-text-disabled); font-size:0.9rem; margin-bottom:1rem;">No source notes linked yet.</p>
+        }
+        else
+        {
+            <div class="od-note-list">
+                @foreach (var note in _detail.SourceNotes)
+                {
+                    <div class="od-note-item">
+                        <MudIcon Icon="@Icons.Material.Outlined.Article" Size="Size.Small" Style="opacity:.6;" />
+                        <span class="od-note-title">@note.NoteTitle</span>
+                        <span class="od-note-date">@note.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+                        <button class="od-note-remove" title="Remove source note"
+                                @onclick="() => RemoveSourceNoteAsync(note.NoteId)">
+                            <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Add Note picker -->
+        <div class="od-add-note-row">
+            <MudAutocomplete T="NoteDto"
+                             @bind-Value="_selectedNote"
+                             SearchFunc="SearchNotesAsync"
+                             ToStringFunc="@(n => n?.Title ?? "")"
+                             Label="Add source note"
+                             Placeholder="Search by title…"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Dense="true"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="false"
+                             Style="flex:1;" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       Size="Size.Small"
+                       Disabled="_selectedNote is null || _addingNote"
+                       OnClick="AddSelectedNoteAsync">
+                @if (_addingNote)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                }
+                Add
+            </MudButton>
+        </div>
+    </MudPaper>
+}
+
+<!-- Archive confirmation -->
+<MudMessageBox @ref="_archiveMsgBox" Title="Archive Output?" CancelText="Cancel">
+    <MessageContent>
+        Archiving <strong>@_detail?.Title</strong> will hide it from active views. You can restore it at any time.
+    </MessageContent>
+    <YesButton>
+        <MudButton Color="Color.Warning" Variant="Variant.Filled">Archive</MudButton>
+    </YesButton>
+</MudMessageBox>
+
+<!-- Restore confirmation -->
+<MudMessageBox @ref="_restoreMsgBox" Title="Restore Output?" CancelText="Cancel">
+    <MessageContent>
+        Restore <strong>@_detail?.Title</strong> back to active outputs?
+    </MessageContent>
+    <YesButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled">Restore</MudButton>
+    </YesButton>
+</MudMessageBox>
+
+<!-- Publish confirmation -->
+<MudMessageBox @ref="_publishMsgBox" Title="Publish Output?" CancelText="Cancel">
+    <MessageContent>
+        Publish <strong>@_detail?.Title</strong>? This will mark it as Published.
+    </MessageContent>
+    <YesButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled">
+            <MudIcon Icon="@Icons.Material.Outlined.Publish" Class="mr-1" />Publish
+        </MudButton>
+    </YesButton>
+</MudMessageBox>
+
+<style>
+@@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
+
+:root {
+    --font-display: 'Fraunces', serif;
+    --font-body: 'Hanken Grotesk', sans-serif;
+    --clay: #c0561d;
+    --clay-deep: #9e3e0a;
+    --ink: var(--mud-palette-text-primary);
+    --ink-soft: var(--mud-palette-text-secondary);
+    --ink-faint: var(--mud-palette-text-disabled);
+    --line: var(--mud-palette-lines-default);
+    --paper-raised: var(--mud-palette-surface);
+    --paper-sunk: var(--mud-palette-table-lines);
+}
+
+body { font-family: var(--font-body); }
+
+.od-loading, .od-notfound {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 6rem 1rem;
+}
+.od-notfound__glyph { font-size: 3rem; opacity: .15; font-family: var(--font-display); color: var(--clay); }
+.od-notfound__title { font-family: var(--font-display); font-size: 1.4rem; color: var(--ink); margin: 0; }
+
+.od-breadcrumb {
+    display: flex; align-items: center; gap: .4rem;
+    margin-bottom: 1rem; font-size: .8rem; color: var(--ink-faint);
+}
+.od-back {
+    background: none; border: none; cursor: pointer;
+    display: inline-flex; align-items: center; gap: .3rem;
+    color: var(--clay); font-family: var(--font-body);
+    font-size: .8rem; font-weight: 600; padding: 0; transition: opacity .15s;
+}
+.od-back:hover { opacity: .7; }
+.od-breadcrumb__sep { color: var(--line); }
+.od-breadcrumb__current { color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+
+.od-header { margin-bottom: 1.5rem; }
+.od-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.od-title-block { flex: 1; min-width: 0; }
+.od-title-top { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .5rem; }
+.od-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+    font-weight: 500;
+    font-style: italic;
+    color: var(--ink);
+    margin: 0;
+    letter-spacing: -.02em;
+    line-height: 1.15;
+}
+
+.od-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: .3rem; }
+.od-meta-item { font-size: .75rem; color: var(--ink-faint); display: inline-flex; align-items: center; gap: .25rem; }
+
+.od-badge {
+    display: inline-flex; align-items: center;
+    padding: 0.2rem 0.55rem; border-radius: 6px;
+    font-size: 0.65rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
+}
+.od-badge-type { background: var(--paper-sunk); color: var(--ink-soft); border: 1px solid var(--line); }
+.od-status--draft     { background: var(--paper-sunk); color: var(--ink-soft); border: 1px solid var(--line); }
+.od-status--inreview  { background: rgba(237,108,2,.12); color: #b06000; border: 1px solid rgba(237,108,2,.2); }
+.od-status--ready     { background: rgba(2,136,209,.12); color: #0277bd; border: 1px solid rgba(2,136,209,.2); }
+.od-status--published { background: rgba(46,125,50,.12); color: #1b5e20; border: 1px solid rgba(46,125,50,.2); }
+.od-status--archived  { background: var(--paper-sunk); color: var(--ink-faint); border: 1px solid var(--line); }
+
+.od-actions { display: flex; flex-direction: column; gap: .4rem; flex-shrink: 0; }
+
+.od-description-panel {
+    background: var(--paper-sunk) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 12px !important;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+}
+.od-description-text { margin: 0; color: var(--ink-soft); line-height: 1.65; }
+
+.od-content-panel, .od-section-panel {
+    background: var(--paper-raised) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 14px !important;
+    padding: 1.25rem 1.4rem;
+    margin-bottom: 1.25rem;
+}
+
+.od-section-label {
+    font-size: 0.7rem; font-weight: 800; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-faint);
+    margin-bottom: 0.75rem; padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--line);
+}
+
+.od-content-pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--ink);
+    margin: 0;
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+.od-note-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+.od-note-item {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--paper-sunk);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 0.875rem;
+}
+.od-note-title { flex: 1; color: var(--ink); font-weight: 500; }
+.od-note-date { font-size: 0.75rem; color: var(--ink-faint); white-space: nowrap; }
+.od-note-remove {
+    background: none; border: none; cursor: pointer;
+    color: var(--ink-faint); padding: 0; display: flex; align-items: center;
+    transition: color 0.2s;
+}
+.od-note-remove:hover { color: #d32f2f; }
+
+.od-add-note-row { display: flex; align-items: flex-end; gap: 0.75rem; margin-top: 0.75rem; }
+
+@@media (max-width: 640px) {
+    .od-title-row { flex-direction: column; }
+    .od-actions { flex-direction: row; flex-wrap: wrap; }
+    .od-breadcrumb__current { max-width: 160px; }
+    .od-add-note-row { flex-direction: column; align-items: stretch; }
+}
+</style>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool _loading = true;
+    private bool _saving;
+    private OutputDetailDto? _detail;
+
+    private List<NoteDto> _allNotes = [];
+    private NoteDto? _selectedNote;
+    private bool _addingNote;
+
+    private MudMessageBox _archiveMsgBox = null!;
+    private MudMessageBox _restoreMsgBox = null!;
+    private MudMessageBox _publishMsgBox = null!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        var notes = await NoteService.GetAllAsync();
+        _allNotes = notes.ToList();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        _detail = await OutputService.GetDetailAsync(Id);
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task OpenEditDialogAsync()
+    {
+        if (_detail is null) return;
+
+        // Convert detail to summary DTO for the editor
+        var summaryDto = new OutputDto(
+            _detail.Id, _detail.Title, _detail.Description, _detail.Type, _detail.Status,
+            _detail.IsAiGenerated, _detail.IsArchived, _detail.ProjectId, _detail.ProjectTitle,
+            _detail.AreaId, _detail.AreaName, _detail.GoalId, _detail.GoalTitle,
+            _detail.PublishedDate, _detail.ArchivedDate, _detail.CreatedAtUtc, _detail.UpdatedAtUtc);
+
+        var parameters = new DialogParameters<OutputEditorDialog>();
+        parameters.Add(x => x.ExistingOutput, summaryDto);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<OutputEditorDialog>("Edit Output", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task ConfirmPublishAsync()
+    {
+        var confirmed = await _publishMsgBox.ShowAsync();
+        if (confirmed == true)
+        {
+            _saving = true;
+            try
+            {
+                await OutputService.PublishAsync(Id);
+                Snackbar.Add("Output published.", Severity.Success);
+                await LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+            finally
+            {
+                _saving = false;
+            }
+        }
+    }
+
+    private async Task ConfirmArchiveAsync()
+    {
+        var confirmed = await _archiveMsgBox.ShowAsync();
+        if (confirmed == true)
+        {
+            _saving = true;
+            try
+            {
+                await OutputService.ArchiveAsync(Id);
+                Snackbar.Add("Output archived.", Severity.Info);
+                await LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+            finally
+            {
+                _saving = false;
+            }
+        }
+    }
+
+    private async Task ConfirmRestoreAsync()
+    {
+        var confirmed = await _restoreMsgBox.ShowAsync();
+        if (confirmed == true)
+        {
+            _saving = true;
+            try
+            {
+                await OutputService.RestoreAsync(Id);
+                Snackbar.Add("Output restored.", Severity.Success);
+                await LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+            finally
+            {
+                _saving = false;
+            }
+        }
+    }
+
+    private Task<IEnumerable<NoteDto>> SearchNotesAsync(string value, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return Task.FromResult(_allNotes.Take(10).AsEnumerable());
+
+        var results = _allNotes
+            .Where(n => n.Title.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .Take(10);
+
+        return Task.FromResult(results);
+    }
+
+    private async Task AddSelectedNoteAsync()
+    {
+        if (_selectedNote is null) return;
+
+        _addingNote = true;
+        try
+        {
+            await OutputService.AddSourceNoteAsync(Id, _selectedNote.Id);
+            Snackbar.Add($"\"{_selectedNote.Title}\" added as source.", Severity.Success);
+            _selectedNote = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _addingNote = false;
+        }
+    }
+
+    private async Task RemoveSourceNoteAsync(Guid noteId)
+    {
+        try
+        {
+            await OutputService.RemoveSourceNoteAsync(Id, noteId);
+            Snackbar.Add("Source note removed.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

@@ -3,8 +3,8 @@ using Brainy.Domain.Enums;
 namespace Brainy.Application.DTOs.Search;
 
 /// <summary>
-/// A single note search result, including a content snippet with the matched excerpt
-/// and a relevance score for ordering results.
+/// A single search result (Note or Output), including a content snippet with the matched
+/// excerpt and a relevance score for ordering results.
 /// </summary>
 public record SearchResultDto(
     Guid Id,
@@ -22,4 +22,10 @@ public record SearchResultDto(
     /// Relevance score: 2 = title match, 1 = content-only match.
     /// Higher is more relevant.
     /// </summary>
-    int Relevance);
+    int Relevance,
+    /// <summary>Discriminator that identifies the source entity: "Note" or "Output".</summary>
+    string ResultType = "Note",
+    /// <summary>Populated when <see cref="ResultType"/> is "Output".</summary>
+    OutputType? OutputType = null,
+    /// <summary>Populated when <see cref="ResultType"/> is "Output".</summary>
+    OutputStatus? OutputStatus = null);

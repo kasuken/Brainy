@@ -3,6 +3,7 @@
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.DTOs.Tasks
 @using Brainy.Application.DTOs.Notes
+@using Brainy.Application.DTOs.Outputs
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @attribute [Authorize]
@@ -10,6 +11,7 @@
 @inject IProjectService ProjectService
 @inject ITaskService TaskService
 @inject INoteService NoteService
+@inject IOutputService OutputService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
@@ -266,6 +268,55 @@ else
                         </div>
                     }
                 </div>
+            }
+        </MudTabPanel>
+
+        <!-- Outputs tab -->
+        <MudTabPanel Text="Outputs" BadgeData="@(_outputs.Count > 0 ? _outputs.Count : (int?)null)"
+                     BadgeColor="Color.Info">
+            <div class="pd-section-header">
+                <h2 class="pd-section-title">Related Outputs</h2>
+            </div>
+
+            @if (_outputs.Count == 0)
+            {
+                <div class="pd-empty">
+                    <span class="pd-empty__icon">📄</span>
+                    <p>No outputs linked to this project.</p>
+                </div>
+            }
+            else
+            {
+                <MudSimpleTable Hover="true" Dense="true" Class="pd-outputs-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var output in _outputs)
+                        {
+                            <tr>
+                                <td>
+                                    <MudLink Href="@($"/outputs/{output.Id}")" Color="Color.Default">
+                                        @output.Title
+                                    </MudLink>
+                                </td>
+                                <td><span class="pd-output-type">@OutputTypeLabel(output.Type)</span></td>
+                                <td>
+                                    <MudChip T="string" Size="Size.Small" Color="@OutputStatusColor(output.Status)"
+                                             Variant="Variant.Outlined">
+                                        @output.Status.ToString()
+                                    </MudChip>
+                                </td>
+                                <td><span class="pd-output-date">@RelativeDate(output.UpdatedAtUtc)</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
             }
         </MudTabPanel>
 
@@ -859,6 +910,18 @@ else
     50%       { opacity: 1;  transform: scale(1.15); }
 }
 
+/* Outputs tab */
+.pd-outputs-table { margin-top: .25rem; }
+.pd-output-type {
+    font-size: .78rem;
+    color: var(--ink-soft);
+}
+.pd-output-date {
+    font-size: .78rem;
+    color: var(--ink-faint);
+    white-space: nowrap;
+}
+
 @@media (max-width: 640px) {
     .pd-title-row { flex-direction: column; }
     .pd-actions { flex-direction: row; }
@@ -874,6 +937,7 @@ else
 
     private bool _loading = true;
     private ProjectDetailDto? _detail;
+    private IReadOnlyList<OutputDto> _outputs = [];
 
     // Live progress — updated by PeriodicTimer independently of the full detail load
     private ProjectProgressDto? _progress;
@@ -909,6 +973,9 @@ else
     {
         _loading = true;
         _detail = await ProjectService.GetProjectDetailAsync(ProjectId);
+        _outputs = _detail is not null
+            ? await OutputService.GetByProjectAsync(ProjectId)
+            : [];
         _loading = false;
     }
 
@@ -1078,4 +1145,42 @@ else
         ProjectPriority.Low      => "rgba(74,92,56,.10)",
         _                        => "transparent"
     };
+
+    private static Color OutputStatusColor(OutputStatus status) => status switch
+    {
+        OutputStatus.Draft     => Color.Default,
+        OutputStatus.InReview  => Color.Warning,
+        OutputStatus.Ready     => Color.Info,
+        OutputStatus.Published => Color.Success,
+        OutputStatus.Archived  => Color.Dark,
+        _                      => Color.Default
+    };
+
+    private static string OutputTypeLabel(OutputType type) => type switch
+    {
+        OutputType.BlogPost             => "Blog Post",
+        OutputType.LinkedInPost         => "LinkedIn Post",
+        OutputType.Report               => "Report",
+        OutputType.ProductSpec          => "Product Spec",
+        OutputType.MeetingBrief         => "Meeting Brief",
+        OutputType.Roadmap              => "Roadmap",
+        OutputType.DecisionRecord       => "Decision Record",
+        OutputType.LearningPlan         => "Learning Plan",
+        OutputType.ResearchSummary      => "Research Summary",
+        OutputType.PresentationOutline  => "Presentation Outline",
+        OutputType.Proposal             => "Proposal",
+        OutputType.EmailDraft           => "Email Draft",
+        OutputType.Custom               => "Custom",
+        _                               => type.ToString()
+    };
+
+    private static string RelativeDate(DateTime utc)
+    {
+        var diff = DateTime.UtcNow - utc;
+        if (diff.TotalMinutes < 2)  return "just now";
+        if (diff.TotalHours   < 1)  return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays    < 1)  return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays    < 30) return $"{(int)diff.TotalDays}d ago";
+        return utc.ToLocalTime().ToString("MMM d, yyyy");
+    }
 }

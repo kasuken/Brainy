@@ -14,6 +14,8 @@ public class Output : BaseEntity, IUserOwnedEntity
 
     public string Title { get; set; } = string.Empty;
 
+    public string? Description { get; set; }
+
     public string Content { get; set; } = string.Empty;
 
     public OutputType Type { get; set; }
@@ -32,6 +34,20 @@ public class Output : BaseEntity, IUserOwnedEntity
     public Guid? ProjectId { get; set; }
 
     public Project? Project { get; set; }
+
+    public Guid? AreaId { get; set; }
+
+    public Area? Area { get; set; }
+
+    public Guid? GoalId { get; set; }
+
+    public Goal? Goal { get; set; }
+
+    public DateTime? PublishedDate { get; set; }
+
+    public DateTime? ArchivedDate { get; set; }
+
+    public bool IsArchived { get; set; }
 
     /// <summary>The notes this output was distilled from.</summary>
     public ICollection<Note> SourceNotes { get; set; } = new List<Note>();
