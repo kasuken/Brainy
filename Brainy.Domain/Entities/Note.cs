@@ -65,6 +65,9 @@ public class Note : BaseEntity, IUserOwnedEntity
 
     public ICollection<Output> Outputs { get; set; } = new List<Output>();
 
+    /// <summary>Images embedded in the note's content, stored as binary in the database.</summary>
+    public ICollection<NoteImage> Images { get; set; } = new List<NoteImage>();
+
     /// <summary>When true, the note is pinned to the Favorites section on the Notes page.</summary>
     public bool IsFavorite { get; set; }
 }

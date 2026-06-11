@@ -22,7 +22,11 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             .AsNoTracking()
             .Where(n => n.UserId == userId)
             .OrderByDescending(n => n.UpdatedAtUtc)
-            .Select(n => ToDto(n))
+            .Select(n => new NoteDto(
+                n.Id, n.Title, n.Content, n.AiSummary, n.Status, n.IsArchived,
+                n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId,
+                n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
+                n.IsFavorite, n.Images.Any()))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -291,7 +295,8 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         n.ResourceId,
         n.CreatedAtUtc,
         n.UpdatedAtUtc,
-        n.IsFavorite);
+        n.IsFavorite,
+        n.Images.Count > 0);
 
     public async Task<NoteDto> ToggleFavoriteAsync(Guid id, CancellationToken cancellationToken = default)
     {

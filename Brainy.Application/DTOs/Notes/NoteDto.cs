@@ -19,4 +19,5 @@ public record NoteDto(
     Guid? ResourceId,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
-    bool IsFavorite = false);
+    bool IsFavorite = false,
+    bool HasImages = false);

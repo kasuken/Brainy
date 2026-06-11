@@ -6,8 +6,10 @@
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @using Markdig
+@using Microsoft.JSInterop
 
 @inject INoteService NoteService
+@inject INoteImageService NoteImageService
 @inject INoteRelationshipService RelationshipService
 @inject IRelatedNotesService RelatedNotesService
 @inject ISnackbar Snackbar
@@ -150,6 +152,15 @@
                                              stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                                             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                                        </svg>
+                                    </button>
+                                    <button type="button" class="note-editor__tool" title="Paste an image (Ctrl+V) to embed it"
+                                            @onclick="HintPasteImage">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                            <circle cx="8.5" cy="8.5" r="1.5" />
+                                            <path d="M21 15l-5-5L5 21" />
                                         </svg>
                                     </button>
                                 </div>
@@ -400,7 +411,10 @@
     private bool _saving;
     private IDisposable? _locationChangingHandler;
 
-    // ── Relationships ──
+    // ── Clipboard image paste ──
+    private DotNetObjectReference<NoteEditorDialog>? _dotNetRef;
+    private bool _pasteRegistered;
+    private readonly List<Guid> _pendingImageIds = [];
     private IReadOnlyList<NoteRelationshipDto> _links = [];
     private bool _linksLoading;
 
@@ -442,6 +456,71 @@
     {
         if (firstRender)
             _locationChangingHandler = Nav.RegisterLocationChangingHandler(OnLocationChangingAsync);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The content textarea only exists on the Write tab; (re)attach the paste
+        // handler whenever it becomes available and detach when leaving Write.
+        if (!_loading && _activeTab == "write" && !_pasteRegistered)
+        {
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("brainyNoteEditor.registerPasteHandler", "ned-content-area", _dotNetRef);
+            _pasteRegistered = true;
+        }
+        else if (_activeTab != "write" && _pasteRegistered)
+        {
+            _pasteRegistered = false;
+        }
+    }
+
+    /// <summary>
+    /// Invoked from JavaScript when an image is pasted into the editor. Pulls the image
+    /// bytes via a stream reference, stores them in the database, and inserts the Markdown
+    /// reference at the caret.
+    /// </summary>
+    [JSInvokable]
+    public async Task OnImagePastedAsync(string contentType, string fileName)
+    {
+        try
+        {
+            var streamRef = await JS.InvokeAsync<IJSStreamReference?>("brainyNoteEditor.getPastedImageBytes");
+            if (streamRef is null)
+                return;
+
+            byte[] bytes;
+            await using (var stream = await streamRef.OpenReadStreamAsync(INoteImageService.MaxSizeBytes))
+            using (var ms = new MemoryStream())
+            {
+                await stream.CopyToAsync(ms);
+                bytes = ms.ToArray();
+            }
+
+            await JS.InvokeVoidAsync("brainyNoteEditor.clearPastedImage");
+
+            var saved = await NoteImageService.UploadAsync(
+                new UploadNoteImageDto(bytes, contentType, fileName, NoteId));
+            _pendingImageIds.Add(saved.Id);
+
+            var alt = string.IsNullOrWhiteSpace(saved.FileName) ? "image" : saved.FileName;
+            var markdown = $"\n![{alt}](/api/note-images/{saved.Id})\n";
+
+            var newValue = await JS.InvokeAsync<string?>(
+                "brainyNoteEditor.insertTextAtCursor", "ned-content-area", markdown);
+
+            if (newValue is not null)
+            {
+                _model.Content = newValue;
+                MarkDirty();
+            }
+
+            StateHasChanged();
+            Snackbar.Add("Image added.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not add image: {ex.Message}", Severity.Error);
+        }
     }
 
     private async ValueTask OnLocationChangingAsync(LocationChangingContext context)
@@ -519,6 +598,9 @@
         }
     }
 
+    private void HintPasteImage() =>
+        Snackbar.Add("Copy an image, then paste it (Ctrl+V) into the editor to embed it.", Severity.Info);
+
     private async Task SaveAsync()
     {
         _titleError = string.IsNullOrWhiteSpace(_model.Title);
@@ -552,6 +634,13 @@
                     _model.Title,
                     _model.Content,
                     _model.ParaCategory));
+            }
+
+            // Link any images pasted before the note was first saved.
+            if (_pendingImageIds.Count > 0)
+            {
+                await NoteImageService.AssociateWithNoteAsync(saved.Id, _pendingImageIds);
+                _pendingImageIds.Clear();
             }
 
             _isDirty = false;
@@ -762,6 +851,9 @@
         _relatedCts?.Cancel();
         _relatedCts?.Dispose();
         _locationChangingHandler?.Dispose();
+        try { await JS.InvokeVoidAsync("brainyNoteEditor.unregisterPasteHandler", "ned-content-area"); }
+        catch { /* ignore: circuit may be tearing down */ }
+        _dotNetRef?.Dispose();
         await CleanupJsAsync();
     }
 }

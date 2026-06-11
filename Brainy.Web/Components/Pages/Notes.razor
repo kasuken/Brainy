@@ -354,7 +354,16 @@
                                         </span>
                                     </MudTd>
                                     <MudTd DataLabel="Title">
-                                        <div style="font-family:'Fraunces',serif; font-size:1.1rem; color:var(--mud-palette-text-primary); margin-bottom:0.25rem;"><strong>@noteContext.Title</strong></div>
+                                        <div style="display:flex; align-items:center; gap:0.4rem; font-family:'Fraunces',serif; font-size:1.1rem; color:var(--mud-palette-text-primary); margin-bottom:0.25rem;">
+                                            <strong>@noteContext.Title</strong>
+                                            @if (noteContext.HasImages)
+                                            {
+                                                <MudTooltip Text="Contains images" Placement="Placement.Top">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Image"
+                                                             Style="font-size:1rem; color:var(--mud-palette-text-secondary); flex-shrink:0;" />
+                                                </MudTooltip>
+                                            }
+                                        </div>
                                         @if (!string.IsNullOrWhiteSpace(noteContext.AiSummary))
                                         {
                                             <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="display:block;">

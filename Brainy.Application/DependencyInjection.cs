@@ -15,6 +15,7 @@ public static class DependencyInjection
     public static IServiceCollection AddBrainyApplication(this IServiceCollection services)
     {
         services.AddScoped<INoteService, NoteService>();
+        services.AddScoped<INoteImageService, NoteImageService>();
         services.AddScoped<IProjectService, ProjectService>();
         services.AddScoped<ITaskService, TaskService>();
         services.AddScoped<IAreaService, AreaService>();

@@ -1085,6 +1085,15 @@ body {
 .markdown-body strong { font-weight: 700; color: var(--ink); }
 .markdown-body em     { font-style: italic; color: var(--ink-soft); }
 
+.markdown-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    margin: 0.75rem 0;
+    display: block;
+}
+
 .markdown-body blockquote {
     border-left: 3px solid var(--clay);
     margin: 1.1rem 0;

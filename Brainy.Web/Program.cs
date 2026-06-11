@@ -4,6 +4,7 @@ using Brainy.Data;
 using Brainy.Data.Identity;
 using Brainy.Web.Components;
 using Brainy.Web.Components.Account;
+using Brainy.Web.Endpoints;
 using Brainy.Web.Identity;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -71,5 +72,8 @@ app.MapRazorComponents<App>()
 
 // Map additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
+
+// Serve note images stored in the database.
+app.MapNoteImageEndpoints();
 
 app.Run();

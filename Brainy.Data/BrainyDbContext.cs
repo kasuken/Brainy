@@ -25,6 +25,8 @@ public class BrainyDbContext(DbContextOptions<BrainyDbContext> options)
 
     public DbSet<Note> Notes => Set<Note>();
 
+    public DbSet<NoteImage> NoteImages => Set<NoteImage>();
+
     public DbSet<Tag> Tags => Set<Tag>();
 
     public DbSet<Highlight> Highlights => Set<Highlight>();

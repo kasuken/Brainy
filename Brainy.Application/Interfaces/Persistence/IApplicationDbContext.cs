@@ -16,6 +16,7 @@ public interface IApplicationDbContext
     DbSet<Resource> Resources { get; }
     DbSet<Source> Sources { get; }
     DbSet<Note> Notes { get; }
+    DbSet<NoteImage> NoteImages { get; }
     DbSet<Tag> Tags { get; }
     DbSet<Highlight> Highlights { get; }
     DbSet<Summary> Summaries { get; }
