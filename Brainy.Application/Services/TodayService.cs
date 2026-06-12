@@ -55,8 +55,12 @@ internal sealed class TodayService(
         var today = DateTime.Today;
 
         return await ActiveBase(userId)
-            .Where(t => t.DueDate.HasValue && t.DueDate.Value.Date == today
-                        && !_inactiveStatuses.Contains(t.Status))
+            .Where(t => !_inactiveStatuses.Contains(t.Status)
+                        && ((t.DueDate.HasValue && t.DueDate.Value.Date == today)
+                            || t.Subtasks.Any(s => !s.IsArchived
+                                                   && !_inactiveStatuses.Contains(s.Status)
+                                                   && s.DueDate.HasValue
+                                                   && s.DueDate.Value.Date == today)))
             .OrderByDescending(t => t.Priority)
             .ThenBy(t => t.Title)
             .Select(ToDto)
@@ -70,8 +74,12 @@ internal sealed class TodayService(
         var today = DateTime.Today;
 
         return await ActiveBase(userId)
-            .Where(t => t.DueDate.HasValue && t.DueDate.Value.Date < today
-                        && !_inactiveStatuses.Contains(t.Status))
+            .Where(t => !_inactiveStatuses.Contains(t.Status)
+                        && ((t.DueDate.HasValue && t.DueDate.Value.Date < today)
+                            || t.Subtasks.Any(s => !s.IsArchived
+                                                   && !_inactiveStatuses.Contains(s.Status)
+                                                   && s.DueDate.HasValue
+                                                   && s.DueDate.Value.Date < today)))
             .OrderBy(t => t.DueDate)
             .ThenByDescending(t => t.Priority)
             .Select(ToDto)

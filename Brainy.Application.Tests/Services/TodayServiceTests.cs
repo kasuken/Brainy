@@ -383,4 +383,66 @@ public class TodayServiceTests
         // Assert
         result.Should().BeEmpty();
     }
+
+    // ── Parent surfacing from subtask due dates ───────────────────────────────
+
+    [Fact]
+    public async Task GetOverdueAsync_WhenSubtaskOverdue_SurfacesParent()
+    {
+        // Arrange
+        var (sut, db) = BuildService(nameof(GetOverdueAsync_WhenSubtaskOverdue_SurfacesParent));
+        var project = CreateProject(DefaultUserId);
+        var parent = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.InProgress);
+        var subtask = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1));
+        subtask.ParentTaskId = parent.Id;
+        db.Projects.Add(project);
+        db.Tasks.AddRange(parent, subtask);
+        await db.SaveChangesAsync();
+
+        // Act
+        var result = await sut.GetOverdueAsync();
+
+        // Assert
+        result.Should().ContainSingle().Which.Id.Should().Be(parent.Id);
+    }
+
+    [Fact]
+    public async Task GetDueTodayAsync_WhenSubtaskDueToday_SurfacesParent()
+    {
+        // Arrange
+        var (sut, db) = BuildService(nameof(GetDueTodayAsync_WhenSubtaskDueToday_SurfacesParent));
+        var project = CreateProject(DefaultUserId);
+        var parent = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.InProgress);
+        var subtask = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today);
+        subtask.ParentTaskId = parent.Id;
+        db.Projects.Add(project);
+        db.Tasks.AddRange(parent, subtask);
+        await db.SaveChangesAsync();
+
+        // Act
+        var result = await sut.GetDueTodayAsync();
+
+        // Assert
+        result.Should().ContainSingle().Which.Id.Should().Be(parent.Id);
+    }
+
+    [Fact]
+    public async Task GetDueTodayAsync_WhenSubtaskDoneAndDueToday_DoesNotSurfaceParent()
+    {
+        // Arrange
+        var (sut, db) = BuildService(nameof(GetDueTodayAsync_WhenSubtaskDoneAndDueToday_DoesNotSurfaceParent));
+        var project = CreateProject(DefaultUserId);
+        var parent = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.InProgress);
+        var subtask = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today, status: TaskItemStatus.Done);
+        subtask.ParentTaskId = parent.Id;
+        db.Projects.Add(project);
+        db.Tasks.AddRange(parent, subtask);
+        await db.SaveChangesAsync();
+
+        // Act
+        var result = await sut.GetDueTodayAsync();
+
+        // Assert
+        result.Should().BeEmpty();
+    }
 }

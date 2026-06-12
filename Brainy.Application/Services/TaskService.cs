@@ -166,14 +166,31 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
         var task = await context.Tasks
+            .Include(t => t.Subtasks)
             .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Task '{id}' was not found.");
 
+        var now = DateTime.UtcNow;
+        var changed = false;
+
         if (task.Status != TaskItemStatus.Done)
         {
             task.Status        = TaskItemStatus.Done;
-            task.CompletedDate = DateTime.UtcNow;
+            task.CompletedDate = now;
+            changed = true;
+        }
+
+        // Completing a task completes all of its active subtasks too.
+        foreach (var sub in task.Subtasks.Where(s => !s.IsArchived && s.Status != TaskItemStatus.Done))
+        {
+            sub.Status        = TaskItemStatus.Done;
+            sub.CompletedDate = now;
+            changed = true;
+        }
+
+        if (changed)
+        {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
             if (task.ParentTaskId.HasValue)

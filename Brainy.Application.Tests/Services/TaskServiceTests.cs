@@ -251,4 +251,60 @@ public class TaskServiceTests
         var refreshed = await db.Tasks.AsNoTracking().FirstAsync(t => t.Id == parent.Id);
         refreshed.Status.Should().Be(TaskItemStatus.Done);
     }
+
+    // ── Cascade completion down to subtasks ───────────────────────────────────
+
+    [Fact]
+    public async Task CompleteAsync_WhenParentCompleted_CompletesAllActiveSubtasks()
+    {
+        var (sut, db) = BuildService(nameof(CompleteAsync_WhenParentCompleted_CompletesAllActiveSubtasks));
+        var project = CreateProject(DefaultUserId);
+        var parent = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.InProgress);
+        var sub1 = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Todo, parentTaskId: parent.Id);
+        var sub2 = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.InProgress, parentTaskId: parent.Id);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(parent, sub1, sub2);
+        await db.SaveChangesAsync();
+
+        await sut.CompleteAsync(parent.Id);
+
+        var subs = await db.Tasks.AsNoTracking()
+            .Where(t => t.ParentTaskId == parent.Id)
+            .ToListAsync();
+        subs.Should().OnlyContain(s => s.Status == TaskItemStatus.Done);
+    }
+
+    [Fact]
+    public async Task CompleteAsync_WhenParentCompleted_DoesNotCompleteArchivedSubtasks()
+    {
+        var (sut, db) = BuildService(nameof(CompleteAsync_WhenParentCompleted_DoesNotCompleteArchivedSubtasks));
+        var project = CreateProject(DefaultUserId);
+        var parent = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.InProgress);
+        var archivedSub = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Todo, parentTaskId: parent.Id, isArchived: true);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(parent, archivedSub);
+        await db.SaveChangesAsync();
+
+        await sut.CompleteAsync(parent.Id);
+
+        var refreshed = await db.Tasks.AsNoTracking().FirstAsync(t => t.Id == archivedSub.Id);
+        refreshed.Status.Should().Be(TaskItemStatus.Todo);
+    }
+
+    [Fact]
+    public async Task CompleteAsync_WhenParentCompleted_SetsSubtaskCompletedDate()
+    {
+        var (sut, db) = BuildService(nameof(CompleteAsync_WhenParentCompleted_SetsSubtaskCompletedDate));
+        var project = CreateProject(DefaultUserId);
+        var parent = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.InProgress);
+        var sub = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Todo, parentTaskId: parent.Id);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(parent, sub);
+        await db.SaveChangesAsync();
+
+        await sut.CompleteAsync(parent.Id);
+
+        var refreshed = await db.Tasks.AsNoTracking().FirstAsync(t => t.Id == sub.Id);
+        refreshed.CompletedDate.Should().NotBeNull();
+    }
 }

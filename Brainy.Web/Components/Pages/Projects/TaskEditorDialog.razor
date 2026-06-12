@@ -48,6 +48,54 @@
                            Variant="Variant.Outlined"
                            Clearable="true"
                            DateFormat="MMM d, yyyy" />
+
+            @if (ShowSubtasks)
+            {
+                <MudDivider Class="ted-divider" />
+                <div class="ted-subtasks">
+                    <div class="ted-subtasks__head">
+                        <span class="ted-subtasks__title">Subtasks</span>
+                        @if (_stagedSubtasks.Count > 0)
+                        {
+                            <span class="ted-subtasks__count">@_stagedSubtasks.Count to add</span>
+                        }
+                    </div>
+                    @if (_stagedSubtasks.Count > 0)
+                    {
+                        <MudList T="string" Dense="true" Class="ted-subtasks__list">
+                            @foreach (var sub in _stagedSubtasks)
+                            {
+                                <MudListItem T="string" Class="ted-subtasks__item">
+                                    <div class="ted-subtasks__row">
+                                        <span class="ted-subtasks__glyph">↳</span>
+                                        <span class="ted-subtasks__text">@sub</span>
+                                        <MudIconButton Icon="@Icons.Material.Rounded.Close"
+                                                       Size="Size.Small"
+                                                       Color="Color.Default"
+                                                       OnClick="@(() => RemoveStagedSubtask(sub))"
+                                                       title="Remove subtask" />
+                                    </div>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+                    <div class="ted-subtasks__add">
+                        <MudTextField @bind-Value="_newSubtaskTitle"
+                                      Label="Add a subtask"
+                                      Variant="Variant.Outlined"
+                                      Immediate="true"
+                                      OnKeyDown="OnSubtaskKeyDown"
+                                      FullWidth="true" />
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Rounded.Add"
+                                   OnClick="AddStagedSubtask"
+                                   Disabled="@string.IsNullOrWhiteSpace(_newSubtaskTitle)">
+                            Add
+                        </MudButton>
+                    </div>
+                </div>
+            }
         </MudStack>
     </DialogContent>
     <DialogActions>
@@ -77,6 +125,38 @@
     color: var(--ink);
 }
 .ted-form { padding: .25rem 0 .5rem; }
+.ted-divider { margin: .25rem 0; }
+.ted-subtasks__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: .35rem;
+}
+.ted-subtasks__title {
+    font-family: var(--font-display);
+    font-size: .95rem;
+    font-weight: 500;
+    color: var(--ink);
+}
+.ted-subtasks__count {
+    font-size: .75rem;
+    color: var(--clay);
+}
+.ted-subtasks__list { padding: 0; }
+.ted-subtasks__row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    width: 100%;
+}
+.ted-subtasks__glyph { color: var(--clay); }
+.ted-subtasks__text { flex: 1; }
+.ted-subtasks__add {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-top: .35rem;
+}
 </style>
 
 @code {
@@ -95,6 +175,12 @@
     private TaskItemStatus _status = TaskItemStatus.Todo;
     private DateTime? _dueDate;
     private bool _saving;
+    private bool _isSubtask;
+    private string _newSubtaskTitle = string.Empty;
+    private readonly List<string> _stagedSubtasks = [];
+
+    // Only top-level tasks (not subtasks, and not the "create subtask" flow) can own subtasks.
+    private bool ShowSubtasks => !_isSubtask && !ParentTaskId.HasValue;
 
     protected override async Task OnInitializedAsync()
     {
@@ -110,7 +196,27 @@
                 _priority    = task.Priority;
                 _status      = task.Status;
                 _dueDate     = task.DueDate;
+                _isSubtask   = task.ParentTaskId.HasValue;
             }
+        }
+    }
+
+    private void AddStagedSubtask()
+    {
+        var title = _newSubtaskTitle?.Trim();
+        if (string.IsNullOrWhiteSpace(title)) return;
+
+        _stagedSubtasks.Add(title);
+        _newSubtaskTitle = string.Empty;
+    }
+
+    private void RemoveStagedSubtask(string title) => _stagedSubtasks.Remove(title);
+
+    private void OnSubtaskKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            AddStagedSubtask();
         }
     }
 
@@ -120,10 +226,25 @@
         _saving = true;
         try
         {
+            Guid parentId;
             if (TaskId.HasValue)
+            {
                 await TaskService.UpdateAsync(new UpdateTaskDto(TaskId.Value, _title, _description, _status, _priority, _dueDate));
+                parentId = TaskId.Value;
+            }
             else
-                await TaskService.CreateAsync(new CreateTaskDto(ProjectId, _title, _description, _priority, _dueDate, ParentTaskId));
+            {
+                var created = await TaskService.CreateAsync(new CreateTaskDto(ProjectId, _title, _description, _priority, _dueDate, ParentTaskId));
+                parentId = created.Id;
+            }
+
+            if (ShowSubtasks && _stagedSubtasks.Count > 0)
+            {
+                foreach (var subtaskTitle in _stagedSubtasks)
+                {
+                    await TaskService.CreateAsync(new CreateTaskDto(ProjectId, subtaskTitle, null, TaskPriority.Medium, null, parentId));
+                }
+            }
 
             MudDialog.Close(DialogResult.Ok(true));
         }
