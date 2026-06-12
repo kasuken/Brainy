@@ -7,8 +7,8 @@
 <MudDialog Class="ted-dialog">
     <TitleContent>
         <div class="ted-header">
-            <span class="ted-header__glyph">@(TaskId.HasValue ? "✎" : "+")</span>
-            <span class="ted-header__title">@(TaskId.HasValue ? "Edit Task" : "New Task")</span>
+            <span class="ted-header__glyph">@(TaskId.HasValue ? "✎" : (ParentTaskId.HasValue ? "↳" : "+"))</span>
+            <span class="ted-header__title">@HeaderTitle</span>
         </div>
     </TitleContent>
     <DialogContent>
@@ -53,7 +53,7 @@
     <DialogActions>
         <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default">Cancel</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_saving">
-            @(_saving ? "Saving…" : (TaskId.HasValue ? "Save changes" : "Create task"))
+            @(_saving ? "Saving…" : (TaskId.HasValue ? "Save changes" : (ParentTaskId.HasValue ? "Create subtask" : "Create task")))
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -83,7 +83,11 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid? TaskId { get; set; }
     [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public Guid? ParentTaskId { get; set; }
     [Parameter] public TaskItemStatus InitialStatus { get; set; } = TaskItemStatus.Todo;
+
+    private string HeaderTitle =>
+        TaskId.HasValue ? "Edit Task" : ParentTaskId.HasValue ? "New Subtask" : "New Task";
 
     private string _title = string.Empty;
     private string? _description;
@@ -119,7 +123,7 @@
             if (TaskId.HasValue)
                 await TaskService.UpdateAsync(new UpdateTaskDto(TaskId.Value, _title, _description, _status, _priority, _dueDate));
             else
-                await TaskService.CreateAsync(new CreateTaskDto(ProjectId, _title, _description, _priority, _dueDate));
+                await TaskService.CreateAsync(new CreateTaskDto(ProjectId, _title, _description, _priority, _dueDate, ParentTaskId));
 
             MudDialog.Close(DialogResult.Ok(true));
         }
