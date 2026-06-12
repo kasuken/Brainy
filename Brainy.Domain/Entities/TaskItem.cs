@@ -41,6 +41,12 @@ public class TaskItem : BaseEntity, IUserOwnedEntity
 
     public Project Project { get; set; } = null!;
 
+    /// <summary>
+    /// Optional t-shirt size estimate of the effort or complexity of this task.
+    /// Null means the user has not estimated yet.
+    /// </summary>
+    public TaskComplexity? Complexity { get; set; }
+
     /// <summary>Set when this task is a subtask of another task.</summary>
     public Guid? ParentTaskId { get; set; }
 

@@ -43,9 +43,9 @@
                                                Label="New due date"
                                                Variant="Variant.Outlined"
                                                Margin="Margin.Dense"
-                                               DisableToolbar="true"
+                                               ShowToolbar="false"
                                                Clearable="true"
-                                               Style="max-width:180px;" />
+                                                />
                                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
                                            Disabled="@(!_rescheduleDate.HasValue)"
                                            OnClick="@(() => ApplyReschedule(t.Id))">Apply</MudButton>
@@ -133,3 +133,5 @@
         _                     => "td-task--low",
     };
 }
+
+

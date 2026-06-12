@@ -40,7 +40,8 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             task.CreatedAtUtc, task.UpdatedAtUtc,
             SubtaskCount: subtasks.Count,
             DoneSubtaskCount: subtasks.Count(s => s.Status == TaskItemStatus.Done),
-            Subtasks: subtasks);
+            Subtasks: subtasks,
+            Complexity: task.Complexity);
     }
 
     public async Task<IReadOnlyList<TaskItemDto>> GetByProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
@@ -61,8 +62,8 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
                     .Select(s => new TaskItemDto(
                         s.Id, s.Title, s.Description, s.Status, s.Priority,
                         s.DueDate, s.CompletedDate, s.IsArchived, s.IsCurrentTask, s.ProjectId, s.ParentTaskId,
-                        s.CreatedAtUtc, s.UpdatedAtUtc, 0, 0, null))
-                    .ToList()))
+                        s.CreatedAtUtc, s.UpdatedAtUtc, 0, 0, null, s.Complexity))
+                    .ToList(), t.Complexity))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -121,6 +122,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             Title        = dto.Title.Trim(),
             Description  = dto.Description?.Trim(),
             Priority     = dto.Priority,
+            Complexity   = dto.Complexity,
             DueDate      = dto.DueDate,
             Status       = TaskItemStatus.Todo,
         };
@@ -153,6 +155,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         task.Title       = dto.Title.Trim();
         task.Description = dto.Description?.Trim();
         task.Priority    = dto.Priority;
+        task.Complexity  = dto.Complexity;
         task.DueDate     = dto.DueDate;
 
         // Handle status transition — keep CompletedDate in sync
@@ -382,5 +385,5 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         t.Id, t.Title, t.Description, t.Status, t.Priority,
         t.DueDate, t.CompletedDate, t.IsArchived, t.IsCurrentTask, t.ProjectId, t.ParentTaskId,
         t.CreatedAtUtc, t.UpdatedAtUtc,
-        SubtaskCount: 0, DoneSubtaskCount: 0);
+        SubtaskCount: 0, DoneSubtaskCount: 0, Complexity: t.Complexity);
 }

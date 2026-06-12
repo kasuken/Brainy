@@ -407,7 +407,7 @@
             else
             {
                 @* ── Notification bar ── *@
-                @if (_notifications.Count > 0)
+                @* @if (_notifications.Count > 0)
                 {
                     <div class="td-notifications">
                         @foreach (var n in _notifications)
@@ -419,7 +419,7 @@
                             </MudAlert>
                         }
                     </div>
-                }
+                } *@
 
                 @* ── Quick actions toolbar ── *@
                 <div class="td-quick-actions-wrap">
@@ -528,13 +528,6 @@
     private IReadOnlyList<ProjectSummaryDto> _prioritizedProjects = [];
     private IReadOnlyList<GoalDto> _overdueGoals = [];
     private IReadOnlyList<GoalDto> _dueSoonGoals = [];
-
-    private string Greeting => DateTime.Now.Hour switch
-    {
-        >= 5 and < 12  => "Good morning",
-        >= 12 and < 18 => "Good afternoon",
-        _               => "Good evening",
-    };
 
     protected override async Task OnInitializedAsync()
     {

@@ -11,4 +11,5 @@ public record TasksHubFilterDto(
     DateTime? DueAfter = null,
     string? SearchTerm = null,
     int Page = 1,
-    int PageSize = 20);
+    int PageSize = 20,
+    TaskComplexity? Complexity = null);

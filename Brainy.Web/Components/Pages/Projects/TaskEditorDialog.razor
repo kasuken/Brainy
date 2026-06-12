@@ -43,6 +43,16 @@
                         <MudSelectItem Value="TaskItemStatus.Done">Done</MudSelectItem>
                     </MudSelect>
                 </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="TaskComplexity?" @bind-Value="_complexity" Label="Complexity (t-shirt)" Variant="Variant.Outlined" Clearable="true" FullWidth="true">
+                        <MudSelectItem T="TaskComplexity?" Value="@null">— Not estimated</MudSelectItem>
+                        <MudSelectItem T="TaskComplexity?" Value="@((TaskComplexity?)TaskComplexity.XS)">XS · Extra-small</MudSelectItem>
+                        <MudSelectItem T="TaskComplexity?" Value="@((TaskComplexity?)TaskComplexity.S)">S · Small</MudSelectItem>
+                        <MudSelectItem T="TaskComplexity?" Value="@((TaskComplexity?)TaskComplexity.M)">M · Medium</MudSelectItem>
+                        <MudSelectItem T="TaskComplexity?" Value="@((TaskComplexity?)TaskComplexity.L)">L · Large</MudSelectItem>
+                        <MudSelectItem T="TaskComplexity?" Value="@((TaskComplexity?)TaskComplexity.XL)">XL · Extra-large</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
             </MudGrid>
             <MudDatePicker @bind-Date="_dueDate"
                            Label="Due Date"
@@ -261,6 +271,7 @@
     private string? _description;
     private TaskPriority _priority = TaskPriority.Medium;
     private TaskItemStatus _status = TaskItemStatus.Todo;
+    private TaskComplexity? _complexity;
     private DateTime? _dueDate;
     private bool _saving;
     private bool _isSubtask;
@@ -286,6 +297,7 @@
                 _priority         = task.Priority;
                 _status           = task.Status;
                 _dueDate          = task.DueDate;
+                _complexity       = task.Complexity;
                 _isSubtask        = task.ParentTaskId.HasValue;
                 _existingSubtasks = task.Subtasks ?? [];
             }
@@ -320,12 +332,12 @@
             Guid parentId;
             if (TaskId.HasValue)
             {
-                await TaskService.UpdateAsync(new UpdateTaskDto(TaskId.Value, _title, _description, _status, _priority, _dueDate));
+                await TaskService.UpdateAsync(new UpdateTaskDto(TaskId.Value, _title, _description, _status, _priority, _dueDate, _complexity));
                 parentId = TaskId.Value;
             }
             else
             {
-                var created = await TaskService.CreateAsync(new CreateTaskDto(ProjectId, _title, _description, _priority, _dueDate, ParentTaskId));
+                var created = await TaskService.CreateAsync(new CreateTaskDto(ProjectId, _title, _description, _priority, _dueDate, ParentTaskId, _complexity));
                 parentId = created.Id;
             }
 

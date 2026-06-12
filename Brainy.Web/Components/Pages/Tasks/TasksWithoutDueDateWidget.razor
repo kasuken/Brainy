@@ -33,11 +33,29 @@
                                 @t.Priority.ToString()
                             </MudChip>
                         </div>
+                        @if (_rescheduleTaskId == t.Id)
+                        {
+                            <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap;">
+                                <MudDatePicker @bind-Date="_rescheduleDate"
+                                               Label="Due date"
+                                               Variant="Variant.Outlined"
+                                               Margin="Margin.Dense"
+                                               ShowToolbar="false"
+                                               Clearable="true"
+                                                />
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                           Disabled="@(!_rescheduleDate.HasValue)"
+                                           OnClick="@(() => ApplyReschedule(t.Id))">Apply</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text"
+                                           OnClick="CancelReschedule">Cancel</MudButton>
+                            </div>
+                        }
                     </div>
                     <MudTooltip Text="Set due date">
                         <MudIconButton Icon="@Icons.Material.Outlined.CalendarToday"
-                                       Size="Size.Small" Color="Color.Primary"
-                                       OnClick="() => OnSetDueDate.InvokeAsync(t.Id)" />
+                                       Size="Size.Small"
+                                       Color="@(_rescheduleTaskId == t.Id ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => ToggleReschedule(t.Id, t.DueDate))" />
                     </MudTooltip>
                 </div>
             }
@@ -49,14 +67,31 @@
     /// <summary>Tasks without a due date.</summary>
     [Parameter] public IReadOnlyList<TasksHubTaskDto> Tasks { get; set; } = [];
 
-    /// <summary>Raised with the task ID when the user wants to set a due date.</summary>
-    [Parameter] public EventCallback<Guid> OnSetDueDate { get; set; }
+    /// <summary>Raised when the user picks a due date inline. Provides the task ID and chosen date.</summary>
+    [Parameter] public EventCallback<(Guid TaskId, DateTime? NewDate)> OnReschedule { get; set; }
 
     [Parameter] public bool Collapsed { get; set; }
 
     private bool _collapsed;
+    private Guid? _rescheduleTaskId;
+    private DateTime? _rescheduleDate;
 
     protected override void OnInitialized() => _collapsed = Collapsed;
+
+    private void ToggleReschedule(Guid taskId, DateTime? currentDate)
+    {
+        if (_rescheduleTaskId == taskId) { _rescheduleTaskId = null; _rescheduleDate = null; }
+        else { _rescheduleTaskId = taskId; _rescheduleDate = currentDate; }
+    }
+
+    private async Task ApplyReschedule(Guid taskId)
+    {
+        await OnReschedule.InvokeAsync((taskId, _rescheduleDate));
+        _rescheduleTaskId = null;
+        _rescheduleDate = null;
+    }
+
+    private void CancelReschedule() { _rescheduleTaskId = null; _rescheduleDate = null; }
 
     private static Color PriorityColor(TaskPriority p) => p switch
     {
@@ -74,3 +109,5 @@
         _                     => "td-task--low",
     };
 }
+
+

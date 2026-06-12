@@ -20,7 +20,7 @@ internal sealed class TasksHubService(IApplicationDbContext context, ICurrentUse
 
     private static readonly Expression<Func<TaskItem, TasksHubTaskDto>> ToDto =
         t => new TasksHubTaskDto(t.Id, t.Title, t.Description, t.Status, t.Priority,
-            t.DueDate, t.ProjectId, t.Project.Name, t.CreatedAtUtc, t.UpdatedAtUtc);
+            t.DueDate, t.ProjectId, t.Project.Name, t.CreatedAtUtc, t.UpdatedAtUtc, t.Complexity);
 
     // ---------------------------------------------------------------------------
     // Aggregate
@@ -277,6 +277,9 @@ internal sealed class TasksHubService(IApplicationDbContext context, ICurrentUse
 
         if (filter.DueAfter.HasValue)
             query = query.Where(t => t.DueDate.HasValue && t.DueDate.Value >= filter.DueAfter.Value);
+
+        if (filter.Complexity.HasValue)
+            query = query.Where(t => t.Complexity == filter.Complexity.Value);
 
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
         {

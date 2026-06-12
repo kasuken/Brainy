@@ -9,4 +9,5 @@ public record CreateTaskDto(
     string? Description = null,
     TaskPriority Priority = TaskPriority.Medium,
     DateTime? DueDate = null,
-    Guid? ParentTaskId = null);
+    Guid? ParentTaskId = null,
+    TaskComplexity? Complexity = null);

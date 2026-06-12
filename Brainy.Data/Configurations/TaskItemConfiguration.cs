@@ -29,6 +29,11 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .HasConversion<string>()
             .HasMaxLength(50);
 
+        builder.Property(t => t.Complexity)
+            .HasConversion<string>()
+            .HasMaxLength(10)
+            .IsRequired(false);
+
         builder.HasIndex(t => t.IsArchived);
         builder.HasIndex(t => t.DueDate);
 

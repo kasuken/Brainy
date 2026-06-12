@@ -19,4 +19,5 @@ public record TaskItemDto(
     DateTime UpdatedAtUtc,
     int SubtaskCount,
     int DoneSubtaskCount,
-    IReadOnlyList<TaskItemDto>? Subtasks = null);
+    IReadOnlyList<TaskItemDto>? Subtasks = null,
+    TaskComplexity? Complexity = null);

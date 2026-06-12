@@ -9,4 +9,5 @@ public record UpdateTaskDto(
     string? Description = null,
     TaskItemStatus Status = TaskItemStatus.Todo,
     TaskPriority Priority = TaskPriority.Medium,
-    DateTime? DueDate = null);
+    DateTime? DueDate = null,
+    TaskComplexity? Complexity = null);

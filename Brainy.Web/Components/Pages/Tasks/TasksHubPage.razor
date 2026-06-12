@@ -172,7 +172,6 @@
         border-radius: 12px;
         margin-bottom: 0.65rem;
         position: relative;
-        overflow: hidden;
         transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
     }
 
@@ -182,6 +181,7 @@
         left: 0; top: 0; bottom: 0;
         width: 4px;
         opacity: 0.85;
+        border-radius: 12px 0 0 12px;
     }
 
     .td-task--critical::before { background: #d32f2f; }
@@ -485,21 +485,35 @@
                             }
                         </MudSelect>
 
-                        <MudDatePicker @bind-Date="_filterDueAfter"
-                                       Label="Due from"
-                                       Variant="Variant.Outlined"
-                                       Margin="Margin.Dense"
-                                       DisableToolbar="true"
-                                       Clearable="true"
-                                       Style="max-width:150px;" />
+                        <div style="flex: 1; max-width: 150px;">
+                            <MudDatePicker @bind-Date="_filterDueAfter"
+                                           Label="Due from"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense"
+                                           ShowToolbar="false"
+                                           Clearable="true" />
+                        </div>
 
-                        <MudDatePicker @bind-Date="_filterDueBefore"
-                                       Label="Due to"
-                                       Variant="Variant.Outlined"
-                                       Margin="Margin.Dense"
-                                       DisableToolbar="true"
-                                       Clearable="true"
-                                       Style="max-width:150px;" />
+                        <div style="flex: 1; max-width: 150px;">
+                            <MudDatePicker @bind-Date="_filterDueBefore"
+                                           Label="Due to"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense"
+                                           ShowToolbar="false"
+                                           Clearable="true" />
+                        </div>
+
+                        <MudSelect T="TaskComplexity?" @bind-Value="_filterComplexity"
+                                   Label="Complexity" Variant="Variant.Outlined"
+                                   Margin="Margin.Dense" Clearable="true"
+                                   Style="min-width:140px;">
+                            <MudSelectItem T="TaskComplexity?" Value="@null">All sizes</MudSelectItem>
+                            <MudSelectItem T="TaskComplexity?" Value="@((TaskComplexity?)TaskComplexity.XS)">XS</MudSelectItem>
+                            <MudSelectItem T="TaskComplexity?" Value="@((TaskComplexity?)TaskComplexity.S)">S</MudSelectItem>
+                            <MudSelectItem T="TaskComplexity?" Value="@((TaskComplexity?)TaskComplexity.M)">M</MudSelectItem>
+                            <MudSelectItem T="TaskComplexity?" Value="@((TaskComplexity?)TaskComplexity.L)">L</MudSelectItem>
+                            <MudSelectItem T="TaskComplexity?" Value="@((TaskComplexity?)TaskComplexity.XL)">XL</MudSelectItem>
+                        </MudSelect>
                     </div>
                     <div class="th-filter-bar-actions">
                         <MudButton Variant="Variant.Filled" Color="Color.Primary"
@@ -541,6 +555,13 @@
                                             <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
                                                 @t.Priority.ToString()
                                             </MudChip>
+                                            @if (t.Complexity.HasValue)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Text"
+                                                         Style="font-family:'Fraunces',serif;font-weight:600;">
+                                                    @t.Complexity.Value.ToString()
+                                                </MudChip>
+                                            }
                                             @if (t.DueDate.HasValue)
                                             {
                                                 <span class="td-task-due">Due @t.DueDate.Value.ToString("MMM d")</span>
@@ -549,13 +570,14 @@
                                         @if (_rescheduleTaskId == t.Id)
                                         {
                                             <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap;">
-                                                <MudDatePicker @bind-Date="_rescheduleDate"
-                                                               Label="New due date"
-                                                               Variant="Variant.Outlined"
-                                                               Margin="Margin.Dense"
-                                                               DisableToolbar="true"
-                                                               Clearable="true"
-                                                               Style="max-width:180px;" />
+                                                <div style="flex: 1; max-width: 180px;">
+                                                    <MudDatePicker @bind-Date="_rescheduleDate"
+                                                                   Label="New due date"
+                                                                   Variant="Variant.Outlined"
+                                                                   Margin="Margin.Dense"
+                                                                   ShowToolbar="false"
+                                                                   Clearable="true" />
+                                                </div>
                                                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
                                                            Disabled="@(!_rescheduleDate.HasValue)"
                                                            OnClick="@(() => HandleRescheduleApply(t.Id))">Apply</MudButton>
@@ -611,13 +633,14 @@
                             @if (_bulkReschedulePanelOpen)
                             {
                                 <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1.1rem;background:var(--mud-palette-surface);border:1px solid var(--mud-palette-primary);border-radius:12px;margin-bottom:1rem;flex-wrap:wrap;">
-                                    <MudDatePicker @bind-Date="_bulkRescheduleDate"
-                                                   Label="New due date for all selected"
-                                                   Variant="Variant.Outlined"
-                                                   Margin="Margin.Dense"
-                                                   DisableToolbar="true"
-                                                   Clearable="true"
-                                                   Style="max-width:220px;" />
+                                    <div style="flex: 1; max-width: 220px;">
+                                        <MudDatePicker @bind-Date="_bulkRescheduleDate"
+                                                       Label="New due date for all selected"
+                                                       Variant="Variant.Outlined"
+                                                       Margin="Margin.Dense"
+                                                       ShowToolbar="false"
+                                                       Clearable="true" />
+                                    </div>
                                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
                                                Disabled="@(!_bulkRescheduleDate.HasValue)"
                                                OnClick="BulkRescheduleAsync">Apply to @_selectedTaskIds.Count task@(_selectedTaskIds.Count == 1 ? "" : "s")</MudButton>
@@ -661,6 +684,13 @@
                                             <MudChip T="string" Size="Size.Small" Color="@StatusColor(t.Status)" Variant="Variant.Filled">
                                                 @StatusLabel(t.Status)
                                             </MudChip>
+                                            @if (t.Complexity.HasValue)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Text"
+                                                         Style="font-family:'Fraunces',serif;font-weight:600;">
+                                                    @t.Complexity.Value.ToString()
+                                                </MudChip>
+                                            }
                                             @if (t.DueDate.HasValue)
                                             {
                                                 <span class="td-task-due @(IsOverdue(t) ? "td-task-due--overdue" : "")">
@@ -671,13 +701,14 @@
                                         @if (_rescheduleTaskId == t.Id)
                                         {
                                             <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap;">
-                                                <MudDatePicker @bind-Date="_rescheduleDate"
-                                                               Label="New due date"
-                                                               Variant="Variant.Outlined"
-                                                               Margin="Margin.Dense"
-                                                               DisableToolbar="true"
-                                                               Clearable="true"
-                                                               Style="max-width:180px;" />
+                                                <div style="flex: 1; max-width: 180px;">
+                                                    <MudDatePicker @bind-Date="_rescheduleDate"
+                                                                   Label="New due date"
+                                                                   Variant="Variant.Outlined"
+                                                                   Margin="Margin.Dense"
+                                                                   ShowToolbar="false"
+                                                                   Clearable="true" />
+                                                </div>
                                                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
                                                            Disabled="@(!_rescheduleDate.HasValue)"
                                                            OnClick="@(() => HandleRescheduleApply(t.Id))">Apply</MudButton>
@@ -806,6 +837,7 @@
 
     private TaskItemStatus? _filterStatus;
     private TaskPriority?   _filterMinPriority;
+    private TaskComplexity? _filterComplexity;
     private Guid?           _filterProjectId;
     private DateTime?       _filterDueAfter;
     private DateTime?       _filterDueBefore;
@@ -900,7 +932,8 @@
 
     private bool AnyFiltersSet =>
         _filterStatus.HasValue || _filterMinPriority.HasValue ||
-        _filterProjectId.HasValue || _filterDueAfter.HasValue || _filterDueBefore.HasValue;
+        _filterProjectId.HasValue || _filterDueAfter.HasValue || _filterDueBefore.HasValue ||
+        _filterComplexity.HasValue;
 
     private async Task ApplyFiltersAsync()
     {
@@ -911,7 +944,8 @@
                 Status:      _filterStatus,
                 MinPriority: _filterMinPriority,
                 DueAfter:    _filterDueAfter,
-                DueBefore:   _filterDueBefore);
+                DueBefore:   _filterDueBefore,
+                Complexity:  _filterComplexity);
 
             _filteredResults = await TasksHubService.GetFilteredTasksAsync(filter);
             _filtersApplied  = true;
@@ -930,6 +964,7 @@
     {
         _filterStatus        = null;
         _filterMinPriority   = null;
+        _filterComplexity    = null;
         _filterProjectId     = null;
         _filterDueAfter      = null;
         _filterDueBefore     = null;

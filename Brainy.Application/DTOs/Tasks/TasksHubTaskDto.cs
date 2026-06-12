@@ -13,4 +13,5 @@ public record TasksHubTaskDto(
     Guid ProjectId,
     string ProjectName,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    TaskComplexity? Complexity = null);
