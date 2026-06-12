@@ -41,7 +41,13 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             SubtaskCount: subtasks.Count,
             DoneSubtaskCount: subtasks.Count(s => s.Status == TaskItemStatus.Done),
             Subtasks: subtasks,
-            Complexity: task.Complexity);
+            Complexity: task.Complexity,
+            SortOrder: task.SortOrder,
+            IsRecurring: task.IsRecurring,
+            RecurrenceType: task.RecurrenceType,
+            RecurrenceInterval: task.RecurrenceInterval,
+            RecurrenceEndDate: task.RecurrenceEndDate,
+            NextOccurrenceDate: task.NextOccurrenceDate);
     }
 
     public async Task<IReadOnlyList<TaskItemDto>> GetByProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
@@ -62,16 +68,19 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
                     .Select(s => new TaskItemDto(
                         s.Id, s.Title, s.Description, s.Status, s.Priority,
                         s.DueDate, s.CompletedDate, s.IsArchived, s.IsCurrentTask, s.ProjectId, s.ParentTaskId,
-                        s.CreatedAtUtc, s.UpdatedAtUtc, 0, 0, null, s.Complexity))
-                    .ToList(), t.Complexity))
+                        s.CreatedAtUtc, s.UpdatedAtUtc, 0, 0, null, s.Complexity, s.SortOrder))
+                    .ToList(),
+                t.Complexity, t.SortOrder,
+                t.IsRecurring, t.RecurrenceType, t.RecurrenceInterval, t.RecurrenceEndDate, t.NextOccurrenceDate))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        // Priority is persisted as a string, so ordering by it in the database would be
-        // lexicographic rather than by severity. Order in memory using the enum value instead.
+        // SortOrder is the primary key (preserves explicit user ordering); fall back to
+        // Priority → DueDate → Title for tasks that have never been manually sorted (SortOrder == 0).
         return tasks
             .Select(t => t with { Subtasks = OrderTasks(t.Subtasks) })
-            .OrderByDescending(t => t.Priority)
+            .OrderBy(t => t.SortOrder)
+            .ThenByDescending(t => t.Priority)
             .ThenBy(t => t.DueDate)
             .ThenBy(t => t.Title)
             .ToList();
@@ -125,6 +134,11 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             Complexity   = dto.Complexity,
             DueDate      = dto.DueDate,
             Status       = TaskItemStatus.Todo,
+            IsRecurring          = dto.IsRecurring,
+            RecurrenceType       = dto.RecurrenceType,
+            RecurrenceInterval   = dto.RecurrenceInterval,
+            RecurrenceEndDate    = dto.RecurrenceEndDate,
+            NextOccurrenceDate   = dto.NextOccurrenceDate,
         };
 
         context.Tasks.Add(task);
@@ -157,6 +171,11 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         task.Priority    = dto.Priority;
         task.Complexity  = dto.Complexity;
         task.DueDate     = dto.DueDate;
+        task.IsRecurring          = dto.IsRecurring;
+        task.RecurrenceType       = dto.RecurrenceType;
+        task.RecurrenceInterval   = dto.RecurrenceInterval;
+        task.RecurrenceEndDate    = dto.RecurrenceEndDate;
+        task.NextOccurrenceDate   = dto.NextOccurrenceDate;
 
         // Handle status transition — keep CompletedDate in sync
         var statusChanged = dto.Status != task.Status;
@@ -335,6 +354,130 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             .ConfigureAwait(false);
     }
 
+    public async Task ReorderAsync(Guid projectId, TaskItemStatus status, IReadOnlyList<Guid> orderedTaskIds, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(orderedTaskIds);
+
+        var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
+
+        var tasks = await context.Tasks
+            .Where(t => t.ProjectId == projectId && t.UserId == userId
+                        && t.Status == status && !t.IsArchived && t.ParentTaskId == null)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        for (var i = 0; i < orderedTaskIds.Count; i++)
+        {
+            var task = tasks.Find(t => t.Id == orderedTaskIds[i]);
+            if (task is not null)
+                task.SortOrder = i;
+        }
+
+        await context.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<TaskItemDto> CreateRecurringOccurrenceAsync(Guid taskId, CancellationToken ct = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
+
+        var template = await context.Tasks
+            .FirstOrDefaultAsync(t => t.Id == taskId && t.UserId == userId, ct)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Task '{taskId}' was not found.");
+
+        if (!template.IsRecurring)
+            throw new InvalidOperationException($"Task '{taskId}' is not a recurring task.");
+
+        var occurrenceDueDate = template.NextOccurrenceDate;
+
+        var occurrence = new TaskItem
+        {
+            Id          = Guid.NewGuid(),
+            UserId      = userId,
+            ProjectId   = template.ProjectId,
+            Title       = template.Title,
+            Description = template.Description,
+            Priority    = template.Priority,
+            Complexity  = template.Complexity,
+            DueDate     = occurrenceDueDate,
+            Status      = TaskItemStatus.Todo,
+            // Occurrences are one-off tasks, not themselves templates
+        };
+
+        context.Tasks.Add(occurrence);
+
+        // Advance the template's next occurrence date
+        if (occurrenceDueDate.HasValue
+            && template.RecurrenceType.HasValue
+            && template.RecurrenceInterval is > 0)
+        {
+            var interval = template.RecurrenceInterval.Value;
+            template.NextOccurrenceDate = template.RecurrenceType.Value switch
+            {
+                Domain.Enums.RecurrenceType.Daily   => occurrenceDueDate.Value.AddDays(interval),
+                Domain.Enums.RecurrenceType.Weekly  => occurrenceDueDate.Value.AddDays(7 * interval),
+                Domain.Enums.RecurrenceType.Monthly => occurrenceDueDate.Value.AddMonths(interval),
+                Domain.Enums.RecurrenceType.Yearly  => occurrenceDueDate.Value.AddYears(interval),
+                _                                   => occurrenceDueDate.Value,
+            };
+        }
+
+        await context.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return ToDto(occurrence);
+    }
+
+    public async Task AddDependencyAsync(Guid taskId, Guid dependsOnTaskId, CancellationToken ct = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
+
+        var taskExists = await context.Tasks
+            .AnyAsync(t => t.Id == taskId && t.UserId == userId, ct)
+            .ConfigureAwait(false);
+        if (!taskExists)
+            throw new KeyNotFoundException($"Task '{taskId}' was not found.");
+
+        var dependsOnExists = await context.Tasks
+            .AnyAsync(t => t.Id == dependsOnTaskId && t.UserId == userId, ct)
+            .ConfigureAwait(false);
+        if (!dependsOnExists)
+            throw new KeyNotFoundException($"Task '{dependsOnTaskId}' was not found.");
+
+        var alreadyExists = await context.TaskDependencies
+            .AnyAsync(d => d.TaskId == taskId && d.DependsOnTaskId == dependsOnTaskId, ct)
+            .ConfigureAwait(false);
+        if (alreadyExists) return;
+
+        context.TaskDependencies.Add(new TaskDependency
+        {
+            Id              = Guid.NewGuid(),
+            TaskId          = taskId,
+            DependsOnTaskId = dependsOnTaskId,
+        });
+
+        await context.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task RemoveDependencyAsync(Guid taskId, Guid dependsOnTaskId, CancellationToken ct = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
+
+        var dep = await context.TaskDependencies
+            .FirstOrDefaultAsync(d => d.TaskId == taskId && d.DependsOnTaskId == dependsOnTaskId, ct)
+            .ConfigureAwait(false);
+        if (dep is null) return;
+
+        // Guard: the task must belong to the current user
+        var taskBelongsToUser = await context.Tasks
+            .AnyAsync(t => t.Id == taskId && t.UserId == userId, ct)
+            .ConfigureAwait(false);
+        if (!taskBelongsToUser)
+            throw new KeyNotFoundException($"Task '{taskId}' was not found.");
+
+        context.TaskDependencies.Remove(dep);
+        await context.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
     /// <summary>
     /// Recomputes a parent task's completion state from its non-archived subtasks:
     /// the parent is auto-completed when every subtask is done, and auto-reopened
@@ -385,5 +528,8 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         t.Id, t.Title, t.Description, t.Status, t.Priority,
         t.DueDate, t.CompletedDate, t.IsArchived, t.IsCurrentTask, t.ProjectId, t.ParentTaskId,
         t.CreatedAtUtc, t.UpdatedAtUtc,
-        SubtaskCount: 0, DoneSubtaskCount: 0, Complexity: t.Complexity);
+        SubtaskCount: 0, DoneSubtaskCount: 0, Complexity: t.Complexity, SortOrder: t.SortOrder,
+        IsRecurring: t.IsRecurring, RecurrenceType: t.RecurrenceType,
+        RecurrenceInterval: t.RecurrenceInterval, RecurrenceEndDate: t.RecurrenceEndDate,
+        NextOccurrenceDate: t.NextOccurrenceDate);
 }

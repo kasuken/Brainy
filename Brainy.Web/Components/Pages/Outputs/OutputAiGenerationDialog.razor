@@ -1,0 +1,217 @@
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Application.Interfaces.AI
+
+@inject INoteService NoteService
+@inject IAiAssistant AiAssistant
+@inject ISnackbar Snackbar
+
+<MudDialog Class="oagd">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-family:var(--font-display)">✨ Generate Draft with AI</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="oagd__body">
+
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                Select up to @MaxNotes notes as source material for your <strong>@OutputTitle</strong> draft.
+            </MudText>
+
+            <MudTextField @bind-Value="_search"
+                          Placeholder="Search notes…"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          Clearable="true"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-3" />
+
+            @if (_loading)
+            {
+                <div class="oagd__state">
+                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div class="oagd__state">
+                    <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Class="oagd__state-icon" />
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">No notes found.</MudText>
+                </div>
+            }
+            else
+            {
+                <div class="oagd__list">
+                    @foreach (var note in Filtered)
+                    {
+                        var isSelected = _selected.Contains(note.Id);
+                        var isDisabled = !isSelected && _selected.Count >= MaxNotes;
+                        <button type="button"
+                                class="oagd__row @(isSelected ? "oagd__row--active" : "") @(isDisabled ? "oagd__row--disabled" : "")"
+                                @onclick="() => ToggleNote(note.Id)"
+                                disabled="@isDisabled">
+                            <MudIcon Icon="@(isSelected ? Icons.Material.Filled.CheckBox : Icons.Material.Outlined.CheckBoxOutlineBlank)"
+                                     Class="oagd__check" />
+                            <span class="oagd__row-title">@note.Title</span>
+                        </button>
+                    }
+                </div>
+
+                @if (_selected.Count > 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+                        @_selected.Count of @MaxNotes note@(_selected.Count == 1 ? "" : "s") selected
+                    </MudText>
+                }
+            }
+
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton OnClick="GenerateAsync"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.AutoAwesome"
+                   Disabled="@(_selected.Count == 0 || _generating)">
+            @if (_generating)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Generate
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .oagd__body { padding: 0.25rem 0 0.5rem; }
+
+    .oagd__state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 1.5rem;
+        text-align: center;
+    }
+
+    .oagd__state-icon {
+        font-size: 1.8rem !important;
+        width: 1.8rem !important;
+        height: 1.8rem !important;
+        opacity: 0.4;
+    }
+
+    .oagd__list {
+        max-height: 260px;
+        overflow-y: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper-raised);
+    }
+
+    .oagd__row {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.55rem 0.85rem;
+        width: 100%;
+        border: none;
+        border-bottom: 1px solid var(--line);
+        background: transparent;
+        cursor: pointer;
+        font-family: var(--font-body);
+        text-align: left;
+        transition: background 0.12s ease;
+    }
+
+    .oagd__row:last-child { border-bottom: none; }
+    .oagd__row:hover:not(.oagd__row--disabled) { background: var(--paper-sunk); }
+    .oagd__row--active { background: var(--clay-soft); }
+    .oagd__row--disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .oagd__check {
+        flex-shrink: 0;
+        font-size: 1.1rem !important;
+        width: 1.1rem !important;
+        height: 1.1rem !important;
+        color: var(--clay);
+    }
+
+    .oagd__row-title {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--ink);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>Title of the output being drafted — forwarded to the AI prompt.</summary>
+    [Parameter] public string OutputTitle { get; set; } = string.Empty;
+
+    /// <summary>Human-readable output type label — forwarded to the AI prompt.</summary>
+    [Parameter] public string OutputType { get; set; } = string.Empty;
+
+    private const int MaxNotes = 10;
+
+    private string _search = string.Empty;
+    private IReadOnlyList<NoteDto> _allNotes = [];
+    private readonly HashSet<Guid> _selected = [];
+    private bool _loading = true;
+    private bool _generating;
+
+    private IEnumerable<NoteDto> Filtered =>
+        _allNotes.Where(n =>
+            string.IsNullOrWhiteSpace(_search) ||
+            n.Title.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _allNotes = await NoteService.GetAllAsync();
+        _loading = false;
+    }
+
+    private void ToggleNote(Guid id)
+    {
+        // Remove if already selected; add only when under the limit
+        if (!_selected.Remove(id) && _selected.Count < MaxNotes)
+            _selected.Add(id);
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (_selected.Count == 0) return;
+
+        _generating = true;
+        try
+        {
+            var contents = _allNotes
+                .Where(n => _selected.Contains(n.Id))
+                .Select(n => n.Content)
+                .ToList();
+
+            var result = await AiAssistant.GenerateOutputAsync(OutputTitle, OutputType, contents);
+
+            if (result.Success)
+                MudDialog.Close(DialogResult.Ok(result.Content));
+            else
+                Snackbar.Add(result.ErrorMessage ?? "AI generation failed.", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _generating = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

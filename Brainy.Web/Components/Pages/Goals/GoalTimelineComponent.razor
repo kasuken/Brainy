@@ -1,36 +1,34 @@
 @using Brainy.Application.DTOs.Goals
+@using Brainy.Domain.Enums
 
-@if (OrderedMilestones.Count == 0)
+@if (_mergedEntries.Count == 0)
 {
     <div class="goal-timeline goal-timeline--empty">
         <span class="goal-timeline__empty-icon">⋯</span>
-        <span>No milestones to map yet.</span>
+        <span>No activity to display yet.</span>
     </div>
 }
 else
 {
     <div class="goal-timeline">
-        @foreach (var milestone in OrderedMilestones)
+        @foreach (var entry in _mergedEntries)
         {
-            <div class="goal-timeline__item @(milestone.IsCompleted ? "goal-timeline__item--done" : null)">
+            <div class="goal-timeline__item @(entry.IsComplete ? "goal-timeline__item--done" : null)">
                 <div class="goal-timeline__rail">
-                    <span class="goal-timeline__node"></span>
+                    <span class="goal-timeline__node">
+                        <span class="goal-timeline__icon">@entry.Icon</span>
+                    </span>
                 </div>
                 <div class="goal-timeline__content">
                     <div class="goal-timeline__topline">
-                        <h4 class="goal-timeline__title">@milestone.Title</h4>
-                        <span class="goal-timeline__state">@(milestone.IsCompleted ? "Completed" : "Pending")</span>
+                        <h4 class="goal-timeline__title">@entry.Title</h4>
+                        <span class="goal-timeline__state">@entry.Badge</span>
                     </div>
-                    <p class="goal-timeline__date">
-                        @if (milestone.IsCompleted && milestone.CompletedAtUtc.HasValue)
-                        {
-                            <span>Completed @milestone.CompletedAtUtc.Value.ToLocalTime().ToString("MMMM d, yyyy")</span>
-                        }
-                        else
-                        {
-                            <span>Added @milestone.CreatedAtUtc.ToLocalTime().ToString("MMMM d, yyyy")</span>
-                        }
-                    </p>
+                    <p class="goal-timeline__date">@entry.SortDate.ToLocalTime().ToString("MMMM d, yyyy")</p>
+                    @if (!string.IsNullOrWhiteSpace(entry.Detail))
+                    {
+                        <p class="goal-timeline__detail">@entry.Detail</p>
+                    }
                 </div>
             </div>
         }
@@ -89,14 +87,21 @@ else
 .goal-timeline__node {
     position: relative;
     z-index: 1;
-    width: 14px;
-    height: 14px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
-    margin-top: .25rem;
+    margin-top: .18rem;
     border: 2px solid var(--line-strong);
     background: var(--paper-raised);
     box-shadow: 0 0 0 4px rgba(255,255,255,.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .7rem;
+    line-height: 1;
 }
+
+.goal-timeline__icon { pointer-events: none; }
 
 .goal-timeline__content {
     padding: .9rem 1rem;
@@ -134,10 +139,18 @@ else
     font-size: .84rem;
 }
 
+.goal-timeline__detail {
+    margin: .2rem 0 0;
+    color: var(--ink-faint);
+    font-size: .78rem;
+    font-style: italic;
+}
+
 .goal-timeline__item--done .goal-timeline__node {
     border-color: #2f7247;
     background: #3c915d;
     box-shadow: 0 0 0 4px rgba(60,145,93,.16);
+    color: #fff;
 }
 
 .goal-timeline__item--done .goal-timeline__content {
@@ -152,9 +165,86 @@ else
 
 @code {
     [Parameter] public IReadOnlyList<GoalMilestoneDto> Milestones { get; set; } = [];
+    [Parameter] public IReadOnlyList<GoalActivityDto> Activities { get; set; } = [];
 
-    private IReadOnlyList<GoalMilestoneDto> OrderedMilestones => Milestones
-        .OrderBy(m => m.CompletedAtUtc ?? m.CreatedAtUtc)
-        .ThenBy(m => m.CreatedAtUtc)
-        .ToList();
+    private sealed record TimelineEntry(
+        DateTime SortDate,
+        string Icon,
+        string Title,
+        string Badge,
+        string? Detail,
+        bool IsComplete);
+
+    private IReadOnlyList<TimelineEntry> _mergedEntries = [];
+
+    protected override void OnParametersSet() => RebuildEntries();
+
+    private void RebuildEntries()
+    {
+        var entries = new List<TimelineEntry>();
+
+        foreach (var m in Milestones)
+        {
+            var sortDate = m.CompletedAtUtc ?? m.CreatedAtUtc;
+            entries.Add(new TimelineEntry(
+                SortDate:   sortDate,
+                Icon:       m.IsCompleted ? "⭐" : "◎",
+                Title:      m.Title,
+                Badge:      m.IsCompleted ? "Milestone Completed" : "Milestone",
+                Detail:     null,
+                IsComplete: m.IsCompleted));
+        }
+
+        foreach (var a in Activities)
+        {
+            entries.Add(new TimelineEntry(
+                SortDate:   a.CreatedAtUtc,
+                Icon:       ActivityIcon(a.ActivityType),
+                Title:      a.Description,
+                Badge:      ActivityBadge(a.ActivityType),
+                Detail:     BuildDetail(a),
+                IsComplete: a.ActivityType is GoalActivityType.Archived));
+        }
+
+        _mergedEntries = entries
+            .OrderBy(e => e.SortDate)
+            .ThenBy(e => e.Badge)
+            .ToList();
+    }
+
+    private static string ActivityIcon(GoalActivityType type) => type switch
+    {
+        GoalActivityType.Created          => "🎯",
+        GoalActivityType.StatusChanged    => "🔄",
+        GoalActivityType.TitleEdited      => "✏️",
+        GoalActivityType.DescriptionEdited => "✏️",
+        GoalActivityType.TargetDateChanged => "📅",
+        GoalActivityType.MilestoneAdded   => "⭐",
+        GoalActivityType.MilestoneCompleted => "⭐",
+        GoalActivityType.Archived         => "📁",
+        _                                 => "·",
+    };
+
+    private static string ActivityBadge(GoalActivityType type) => type switch
+    {
+        GoalActivityType.Created           => "Created",
+        GoalActivityType.StatusChanged     => "Status",
+        GoalActivityType.TitleEdited       => "Edit",
+        GoalActivityType.DescriptionEdited => "Edit",
+        GoalActivityType.TargetDateChanged => "Date",
+        GoalActivityType.MilestoneAdded    => "Milestone",
+        GoalActivityType.MilestoneCompleted => "Milestone",
+        GoalActivityType.Archived          => "Archived",
+        _                                  => "",
+    };
+
+    private static string? BuildDetail(GoalActivityDto a)
+    {
+        if (a.OldValue is null && a.NewValue is null) return null;
+        return a.ActivityType switch
+        {
+            GoalActivityType.StatusChanged => $"{a.OldValue} → {a.NewValue}",
+            _                              => null,
+        };
+    }
 }

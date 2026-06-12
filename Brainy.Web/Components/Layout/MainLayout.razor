@@ -13,12 +13,13 @@
     <MudAppBar Elevation="0" Class="brainy-appbar">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
         <a href="/" class="brainy-appbar__brand">
-            <span class="brainy-appbar__mark">B</span>
+            <img class="brainy-appbar__logo" src="img/logo.png" alt="Brainy logo" />
             <span class="brainy-appbar__name">Brainy</span>
         </a>
         <MudSpacer />
         <AuthorizeView>
             <Authorized>
+                <GlobalSearchBar />
                 <div class="brainy-user">
                     <span class="brainy-user__avatar">@GetInitials(context.User.Identity?.Name)</span>
                     <span class="brainy-user__email d-none d-sm-flex">@context.User.Identity?.Name</span>

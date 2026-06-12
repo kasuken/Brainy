@@ -10,4 +10,9 @@ public record CreateTaskDto(
     TaskPriority Priority = TaskPriority.Medium,
     DateTime? DueDate = null,
     Guid? ParentTaskId = null,
-    TaskComplexity? Complexity = null);
+    TaskComplexity? Complexity = null,
+    bool IsRecurring = false,
+    RecurrenceType? RecurrenceType = null,
+    int? RecurrenceInterval = null,
+    DateTime? RecurrenceEndDate = null,
+    DateTime? NextOccurrenceDate = null);

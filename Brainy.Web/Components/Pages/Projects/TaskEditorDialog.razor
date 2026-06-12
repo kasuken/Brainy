@@ -60,6 +60,49 @@
                            Clearable="true"
                            DateFormat="MMM d, yyyy" />
 
+            @* ── Recurrence ── *@
+            <MudDivider Class="ted-divider" />
+            <div class="ted-recurrence">
+                <div class="ted-recurrence__toggle">
+                    <MudSwitch @bind-Value="_isRecurring" Color="Color.Primary" Label="Recurring task" />
+                </div>
+                @if (_isRecurring)
+                {
+                    <MudGrid Spacing="2" Class="ted-recurrence__fields">
+                        <MudItem xs="12" sm="6">
+                            <MudSelect @bind-Value="_recurrenceType" T="RecurrenceType?" Label="Repeats" Variant="Variant.Outlined" FullWidth="true">
+                                <MudSelectItem T="RecurrenceType?" Value="@((RecurrenceType?)RecurrenceType.Daily)">Daily</MudSelectItem>
+                                <MudSelectItem T="RecurrenceType?" Value="@((RecurrenceType?)RecurrenceType.Weekly)">Weekly</MudSelectItem>
+                                <MudSelectItem T="RecurrenceType?" Value="@((RecurrenceType?)RecurrenceType.Monthly)">Monthly</MudSelectItem>
+                                <MudSelectItem T="RecurrenceType?" Value="@((RecurrenceType?)RecurrenceType.Yearly)">Yearly</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudNumericField @bind-Value="_recurrenceInterval"
+                                             Label="Every (interval)"
+                                             Variant="Variant.Outlined"
+                                             Min="1"
+                                             Max="365"
+                                             FullWidth="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudDatePicker @bind-Date="_nextOccurrenceDate"
+                                           Label="First / next occurrence"
+                                           Variant="Variant.Outlined"
+                                           Clearable="true"
+                                           DateFormat="MMM d, yyyy" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudDatePicker @bind-Date="_recurrenceEndDate"
+                                           Label="Ends on (optional)"
+                                           Variant="Variant.Outlined"
+                                           Clearable="true"
+                                           DateFormat="MMM d, yyyy" />
+                        </MudItem>
+                    </MudGrid>
+                }
+            </div>
+
             @if (ShowSubtasks)
             {
                 <MudDivider Class="ted-divider" />
@@ -255,6 +298,7 @@
     color: var(--mud-palette-primary);
     text-decoration: underline;
 }
+.ted-recurrence__fields { margin-top: .5rem; }
 </style>
 
 @code {
@@ -275,6 +319,13 @@
     private DateTime? _dueDate;
     private bool _saving;
     private bool _isSubtask;
+
+    // Recurrence fields
+    private bool _isRecurring;
+    private RecurrenceType? _recurrenceType;
+    private int? _recurrenceInterval = 1;
+    private DateTime? _recurrenceEndDate;
+    private DateTime? _nextOccurrenceDate;
     private string _newSubtaskTitle = string.Empty;
     private readonly List<string> _stagedSubtasks = [];
     private IReadOnlyList<TaskItemDto> _existingSubtasks = [];
@@ -300,6 +351,11 @@
                 _complexity       = task.Complexity;
                 _isSubtask        = task.ParentTaskId.HasValue;
                 _existingSubtasks = task.Subtasks ?? [];
+                _isRecurring          = task.IsRecurring;
+                _recurrenceType       = task.RecurrenceType;
+                _recurrenceInterval   = task.RecurrenceInterval ?? 1;
+                _recurrenceEndDate    = task.RecurrenceEndDate;
+                _nextOccurrenceDate   = task.NextOccurrenceDate;
             }
         }
     }
@@ -332,12 +388,16 @@
             Guid parentId;
             if (TaskId.HasValue)
             {
-                await TaskService.UpdateAsync(new UpdateTaskDto(TaskId.Value, _title, _description, _status, _priority, _dueDate, _complexity));
+                await TaskService.UpdateAsync(new UpdateTaskDto(
+                    TaskId.Value, _title, _description, _status, _priority, _dueDate, _complexity,
+                    _isRecurring, _recurrenceType, _recurrenceInterval, _recurrenceEndDate, _nextOccurrenceDate));
                 parentId = TaskId.Value;
             }
             else
             {
-                var created = await TaskService.CreateAsync(new CreateTaskDto(ProjectId, _title, _description, _priority, _dueDate, ParentTaskId, _complexity));
+                var created = await TaskService.CreateAsync(new CreateTaskDto(
+                    ProjectId, _title, _description, _priority, _dueDate, ParentTaskId, _complexity,
+                    _isRecurring, _recurrenceType, _recurrenceInterval, _recurrenceEndDate, _nextOccurrenceDate));
                 parentId = created.Id;
             }
 

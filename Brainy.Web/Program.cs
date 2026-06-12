@@ -49,6 +49,9 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 // Application-layer services.
 builder.Services.AddBrainyApplication();
 
+// AI assistant (provider is configured via AiAssistant:Provider in appsettings.json).
+builder.Services.AddAiAssistant(builder.Configuration);
+
 var app = builder.Build();
 
 // Apply any pending EF Core migrations on startup.

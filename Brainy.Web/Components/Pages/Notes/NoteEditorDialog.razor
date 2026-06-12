@@ -1,12 +1,16 @@
 @implements IAsyncDisposable
 
+@using Brainy.Application.DTOs.Highlights
 @using Brainy.Application.DTOs.Notes
 @using Brainy.Application.DTOs.NoteRelationships
 @using Brainy.Application.DTOs.RelatedNotes
+@using Brainy.Application.DTOs.Summaries
+@using Brainy.Application.Interfaces.AI
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @using Markdig
 @using Microsoft.JSInterop
+@using System.Text.Json
 
 @inject INoteService NoteService
 @inject INoteImageService NoteImageService
@@ -15,6 +19,9 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject NavigationManager Nav
+@inject IHighlightService HighlightService
+@inject ISummaryService SummaryService
+@inject IAiAssistant AiAssistant
 @inject IJSRuntime JS
 
 <MudDialog>
@@ -356,6 +363,255 @@
                                     }
                                 </div>
 
+                                @* ── Check Duplicates ── *@
+                                <div class="note-editor__sidebar-section">
+                                    <div class="ned-dup__header">
+                                        <h3 class="note-editor__sidebar-heading">🔁 Check Duplicates</h3>
+                                    </div>
+                                    <MudButton Variant="Variant.Outlined"
+                                               Size="Size.Small"
+                                               Disabled="_dupChecking"
+                                               OnClick="CheckDuplicatesAsync"
+                                               Class="ned-dup__btn mb-2">
+                                        @if (_dupChecking)
+                                        {
+                                            <MudProgressCircular Indeterminate="true"
+                                                                 Size="Size.Small"
+                                                                 Color="Color.Default"
+                                                                 Class="mr-1" />
+                                            <span>Checking…</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Check for duplicates</span>
+                                        }
+                                    </MudButton>
+                                    @if (_dupChecked && !_dupChecking)
+                                    {
+                                        @if (_duplicates.Count == 0)
+                                        {
+                                            <p class="ned-links__empty">No duplicates found ✓</p>
+                                        }
+                                        else
+                                        {
+                                            <div class="ned-dup__list">
+                                                @foreach (var dup in _duplicates)
+                                                {
+                                                    var dupId = dup.Id;
+                                                    <div class="ned-dup__item">
+                                                        <span class="ned-dup__title">@dup.Title</span>
+                                                        <div class="ned-dup__actions">
+                                                            <MudButton Size="Size.Small"
+                                                                       Variant="Variant.Text"
+                                                                       Color="Color.Primary"
+                                                                       OnClick="() => LinkAsSimilarAsync(dupId)">Link as Similar</MudButton>
+                                                            <MudButton Size="Size.Small"
+                                                                       Variant="Variant.Text"
+                                                                       Color="Color.Default"
+                                                                       OnClick="() => DismissDuplicate(dupId)">Dismiss</MudButton>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    }
+                                </div>
+
+                                @* ── Highlights ── *@
+                                <div class="note-editor__sidebar-section">
+                                    <div class="ned-links__header">
+                                        <h3 class="note-editor__sidebar-heading">Highlights</h3>
+                                        <button type="button"
+                                                class="ned-links__add-btn"
+                                                title="Add highlight"
+                                                @onclick="() => _showAddHighlightForm = !_showAddHighlightForm">
+                                            <MudIcon Icon="@Icons.Material.Outlined.Highlight"
+                                                     Class="ned-links__add-icon" />
+                                        </button>
+                                    </div>
+
+                                    @if (_showAddHighlightForm)
+                                    {
+                                        <div class="ned-highlights__form">
+                                            <MudTextField T="string"
+                                                          @bind-Value="_newHighlightText"
+                                                          Label="Highlighted passage"
+                                                          Placeholder="The exact text…"
+                                                          Variant="Variant.Outlined"
+                                                          Margin="Margin.Dense"
+                                                          Lines="2"
+                                                          Immediate="true"
+                                                          Class="mb-2" />
+                                            <MudTextField T="string"
+                                                          @bind-Value="_newHighlightAnnotation"
+                                                          Label="Annotation (optional)"
+                                                          Placeholder="Why does this matter?"
+                                                          Variant="Variant.Outlined"
+                                                          Margin="Margin.Dense"
+                                                          Immediate="true"
+                                                          Class="mb-2" />
+                                            <div class="ned-highlights__layers mb-2">
+                                                <span class="note-editor__meta-label">Layer:</span>
+                                                <button type="button"
+                                                        class="ned-highlights__layer-btn @(_newHighlightLayer == 1 ? "active" : "")"
+                                                        title="Bold – first pass"
+                                                        @onclick="() => _newHighlightLayer = 1">Bold</button>
+                                                <button type="button"
+                                                        class="ned-highlights__layer-btn ned-highlights__layer-btn--2 @(_newHighlightLayer == 2 ? "active" : "")"
+                                                        title="Highlight – second pass"
+                                                        @onclick="() => _newHighlightLayer = 2">Highlight</button>
+                                                <button type="button"
+                                                        class="ned-highlights__layer-btn ned-highlights__layer-btn--3 @(_newHighlightLayer == 3 ? "active" : "")"
+                                                        title="Key Insight – most important"
+                                                        @onclick="() => _newHighlightLayer = 3">Key</button>
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <MudButton Variant="Variant.Filled"
+                                                           Color="Color.Primary"
+                                                           Size="Size.Small"
+                                                           Disabled="_highlightsLoading"
+                                                           OnClick="AddHighlightAsync">Add</MudButton>
+                                                <MudButton Variant="Variant.Text"
+                                                           Size="Size.Small"
+                                                           OnClick="() => _showAddHighlightForm = false">Cancel</MudButton>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    @if (_highlightsLoading)
+                                    {
+                                        <div class="ned-links__loading">
+                                            <MudProgressCircular Indeterminate="true"
+                                                                 Size="Size.Small"
+                                                                 Color="Color.Primary" />
+                                        </div>
+                                    }
+                                    else if (_highlights.Count == 0 && !_showAddHighlightForm)
+                                    {
+                                        <p class="ned-links__empty">No highlights yet.</p>
+                                    }
+                                    else if (_highlights.Count > 0)
+                                    {
+                                        <div class="ned-highlights__list">
+                                            @foreach (var h in _highlights)
+                                            {
+                                                <div class="ned-highlights__item ned-links__item">
+                                                    <span class="ned-highlights__layer-badge ned-highlights__layer-badge--@h.Layer"
+                                                          title="Layer @h.Layer: @LayerLabel(h.Layer)">
+                                                        @LayerLabel(h.Layer)
+                                                    </span>
+                                                    <div class="ned-highlights__content">
+                                                        <span class="ned-highlights__text">@h.Text</span>
+                                                        @if (!string.IsNullOrWhiteSpace(h.Annotation))
+                                                        {
+                                                            <span class="ned-highlights__annotation">@h.Annotation</span>
+                                                        }
+                                                    </div>
+                                                    <button type="button"
+                                                            class="ned-links__remove"
+                                                            title="Delete highlight"
+                                                            @onclick="() => DeleteHighlightAsync(h)">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.DeleteOutline"
+                                                                 Class="ned-links__remove-icon" />
+                                                    </button>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                @* ── Summary Layers ── *@
+                                <div class="note-editor__sidebar-section">
+                                    <div class="ned-links__header">
+                                        <h3 class="note-editor__sidebar-heading">Summary Layers</h3>
+                                        @if (_summaryGenerating)
+                                        {
+                                            <MudProgressCircular Indeterminate="true"
+                                                                 Size="Size.Small"
+                                                                 Color="Color.Primary"
+                                                                 Class="ned-links__add-btn" />
+                                        }
+                                        else
+                                        {
+                                            <button type="button"
+                                                    class="ned-links__add-btn"
+                                                    title="Generate AI summary"
+                                                    disabled="@(_originalNote is null)"
+                                                    @onclick="GenerateAiSummaryAsync">
+                                                ✨
+                                            </button>
+                                        }
+                                        <button type="button"
+                                                class="ned-links__add-btn"
+                                                title="Add summary layer"
+                                                @onclick="() => _showAddSummaryForm = !_showAddSummaryForm">
+                                            <MudIcon Icon="@Icons.Material.Outlined.Summarize"
+                                                     Class="ned-links__add-icon" />
+                                        </button>
+                                    </div>
+
+                                    @if (_showAddSummaryForm)
+                                    {
+                                        <div class="ned-summaries__form">
+                                            <MudTextField T="string"
+                                                          @bind-Value="_newSummaryContent"
+                                                          Label="Summary"
+                                                          Placeholder="Distil the key ideas…"
+                                                          Variant="Variant.Outlined"
+                                                          Margin="Margin.Dense"
+                                                          Lines="3"
+                                                          Immediate="true"
+                                                          Class="mb-2" />
+                                            <div class="d-flex gap-2">
+                                                <MudButton Variant="Variant.Filled"
+                                                           Color="Color.Primary"
+                                                           Size="Size.Small"
+                                                           Disabled="_summariesLoading"
+                                                           OnClick="AddSummaryAsync">Add</MudButton>
+                                                <MudButton Variant="Variant.Text"
+                                                           Size="Size.Small"
+                                                           OnClick="() => _showAddSummaryForm = false">Cancel</MudButton>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    @if (_summariesLoading)
+                                    {
+                                        <div class="ned-links__loading">
+                                            <MudProgressCircular Indeterminate="true"
+                                                                 Size="Size.Small"
+                                                                 Color="Color.Primary" />
+                                        </div>
+                                    }
+                                    else if (_summaries.Count == 0 && !_showAddSummaryForm)
+                                    {
+                                        <p class="ned-links__empty">No summary layers yet.</p>
+                                    }
+                                    else if (_summaries.Count > 0)
+                                    {
+                                        <div class="ned-summaries__list">
+                                            @foreach (var s in _summaries)
+                                            {
+                                                <div class="ned-summaries__item ned-links__item">
+                                                    @if (s.IsAiGenerated)
+                                                    {
+                                                        <span class="ned-summaries__ai-badge ned-links__type-badge"
+                                                              title="AI-generated">✨ AI</span>
+                                                    }
+                                                    <span class="ned-summaries__content">@s.Content</span>
+                                                    <button type="button"
+                                                            class="ned-links__remove"
+                                                            title="Delete summary"
+                                                            @onclick="() => DeleteSummaryAsync(s)">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.DeleteOutline"
+                                                                 Class="ned-links__remove-icon" />
+                                                    </button>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
                                 <div class="note-editor__sidebar-section">
                                     <h3 class="note-editor__sidebar-heading">Metadata</h3>
                                     <div class="note-editor__meta">
@@ -459,6 +715,26 @@
     private bool _relatedLoading;
     private CancellationTokenSource? _relatedCts;
 
+    // ── Highlights ──
+    private IReadOnlyList<HighlightDto> _highlights = [];
+    private bool _highlightsLoading;
+    private bool _showAddHighlightForm;
+    private string _newHighlightText       = string.Empty;
+    private string _newHighlightAnnotation = string.Empty;
+    private int    _newHighlightLayer      = 1;
+
+    // ── Summary layers ──
+    private IReadOnlyList<SummaryDto> _summaries = [];
+    private bool _summariesLoading;
+    private bool _summaryGenerating;
+    private bool _showAddSummaryForm;
+    private string _newSummaryContent = string.Empty;
+
+    // ── Duplicate detection ──
+    private bool _dupChecking;
+    private bool _dupChecked;
+    private List<(Guid Id, string Title)> _duplicates = [];
+
     private static readonly MarkdownPipeline _pipeline =
         new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
 
@@ -486,6 +762,9 @@
             _relatedLoading = true;
             _relatedNotes   = await RelatedNotesService.GetRelatedAsync(NoteId.Value);
             _relatedLoading = false;
+
+            _highlights = await HighlightService.GetByNoteAsync(NoteId.Value);
+            _summaries  = await SummaryService.GetByNoteAsync(NoteId.Value);
         }
         _loading = false;
     }
@@ -899,6 +1178,237 @@
         ParaCategory.Archive  => "#9a9180",
         _                     => "#9a9180"
     };
+
+    // ── Highlights helpers ────────────────────────────────────────────────────
+
+    private async Task AddHighlightAsync()
+    {
+        if (!NoteId.HasValue) return;
+        if (string.IsNullOrWhiteSpace(_newHighlightText))
+        {
+            Snackbar.Add("Highlight text must not be empty.", Severity.Warning);
+            return;
+        }
+
+        _highlightsLoading = true;
+        try
+        {
+            await HighlightService.CreateAsync(new CreateHighlightDto(
+                NoteId.Value,
+                _newHighlightText,
+                string.IsNullOrWhiteSpace(_newHighlightAnnotation) ? null : _newHighlightAnnotation,
+                _newHighlightLayer));
+            _highlights = await HighlightService.GetByNoteAsync(NoteId.Value);
+            _newHighlightText       = string.Empty;
+            _newHighlightAnnotation = string.Empty;
+            _newHighlightLayer      = 1;
+            _showAddHighlightForm   = false;
+            Snackbar.Add("Highlight added.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not add highlight: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _highlightsLoading = false;
+        }
+    }
+
+    private async Task DeleteHighlightAsync(HighlightDto highlight)
+    {
+        _highlightsLoading = true;
+        try
+        {
+            await HighlightService.DeleteAsync(highlight.Id);
+            _highlights = await HighlightService.GetByNoteAsync(NoteId!.Value);
+            Snackbar.Add("Highlight removed.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not remove highlight: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _highlightsLoading = false;
+        }
+    }
+
+    private static string LayerLabel(int layer) => layer switch
+    {
+        1 => "Bold",
+        2 => "Highlight",
+        3 => "Key",
+        _ => $"L{layer}"
+    };
+
+    // ── Summary helpers ───────────────────────────────────────────────────────
+
+    private async Task AddSummaryAsync()
+    {
+        if (!NoteId.HasValue) return;
+        if (string.IsNullOrWhiteSpace(_newSummaryContent))
+        {
+            Snackbar.Add("Summary content must not be empty.", Severity.Warning);
+            return;
+        }
+
+        _summariesLoading = true;
+        try
+        {
+            await SummaryService.CreateAsync(new CreateSummaryDto(NoteId.Value, _newSummaryContent));
+            _summaries         = await SummaryService.GetByNoteAsync(NoteId.Value);
+            _newSummaryContent = string.Empty;
+            _showAddSummaryForm = false;
+            Snackbar.Add("Summary layer added.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not add summary: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _summariesLoading = false;
+        }
+    }
+
+    private async Task DeleteSummaryAsync(SummaryDto summary)
+    {
+        _summariesLoading = true;
+        try
+        {
+            await SummaryService.DeleteAsync(summary.Id);
+            _summaries = await SummaryService.GetByNoteAsync(NoteId!.Value);
+            Snackbar.Add("Summary removed.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not remove summary: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _summariesLoading = false;
+        }
+    }
+
+    /// <summary>Generates an AI summary for the current note and saves it as a summary layer.</summary>
+    private async Task GenerateAiSummaryAsync()
+    {
+        if (_originalNote is null) return;
+
+        _summaryGenerating = true;
+        try
+        {
+            var content = $"{_model.Title}\n\n{_model.Content}";
+            var result = await AiAssistant.SummarizeAsync(content);
+            if (!result.Success)
+            {
+                Snackbar.Add($"AI summary failed: {result.ErrorMessage}", Severity.Warning);
+                return;
+            }
+            await SummaryService.CreateAsync(new CreateSummaryDto(
+                _originalNote.Id,
+                result.Content,
+                IsAiGenerated: true,
+                Model: result.Model,
+                PromptVersion: result.PromptVersion));
+            _summaries = await SummaryService.GetByNoteAsync(_originalNote.Id);
+            Snackbar.Add("AI summary generated.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not generate AI summary: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _summaryGenerating = false;
+            StateHasChanged();
+        }
+    }
+
+    // ── Duplicate detection helpers ───────────────────────────────────────────
+
+    /// <summary>Fetches the 20 most-recent candidate notes and asks the AI to identify potential duplicates.</summary>
+    private async Task CheckDuplicatesAsync()
+    {
+        if (!NoteId.HasValue) return;
+
+        _dupChecking = true;
+        _dupChecked  = false;
+        _duplicates.Clear();
+        StateHasChanged();
+
+        try
+        {
+            var allNotes = await NoteService.GetAllAsync();
+            var candidates = allNotes
+                .Where(n => n.Id != NoteId.Value)
+                .Take(20)
+                .Select(n => (Id: n.Id, Title: n.Title, Summary: n.AiSummary))
+                .ToList();
+
+            var result = await AiAssistant.DetectDuplicatesAsync(
+                _model.Title, _model.Content, candidates);
+
+            if (!result.Success)
+            {
+                Snackbar.Add(result.ErrorMessage ?? "AI assistant is not configured.", Severity.Warning);
+                return;
+            }
+
+            var ids = string.IsNullOrWhiteSpace(result.Content)
+                ? []
+                : JsonSerializer.Deserialize<List<string>>(result.Content) ?? [];
+
+            var idSet = ids
+                .Select(s => Guid.TryParse(s, out var g) ? g : (Guid?)null)
+                .Where(g => g.HasValue)
+                .Select(g => g!.Value)
+                .ToHashSet();
+
+            _duplicates = allNotes
+                .Where(n => idSet.Contains(n.Id))
+                .Select(n => (n.Id, n.Title))
+                .ToList();
+
+            _dupChecked = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not check for duplicates: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _dupChecking = false;
+        }
+    }
+
+    /// <summary>Creates a Duplicate relationship between the current note and the given note, then removes it from the list.</summary>
+    private async Task LinkAsSimilarAsync(Guid duplicateId)
+    {
+        if (!NoteId.HasValue) return;
+        try
+        {
+            await RelationshipService.CreateAsync(new CreateNoteRelationshipDto(
+                NoteId.Value, duplicateId, RelationshipType.Duplicate));
+            _links = await RelationshipService.GetForNoteAsync(NoteId.Value);
+            DismissDuplicate(duplicateId);
+            Snackbar.Add("Note linked as duplicate.", Severity.Success);
+        }
+        catch (InvalidOperationException)
+        {
+            // Relationship already exists — just remove from the displayed list
+            DismissDuplicate(duplicateId);
+            Snackbar.Add("Notes are already linked.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not link note: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void DismissDuplicate(Guid id) =>
+        _duplicates = _duplicates.Where(d => d.Id != id).ToList();
 
     public async ValueTask DisposeAsync()
     {

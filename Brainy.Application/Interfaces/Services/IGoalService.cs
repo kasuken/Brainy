@@ -46,4 +46,10 @@ public interface IGoalService
 
     /// <summary>Returns non-archived, non-achieved goals whose TargetDate is in the past.</summary>
     Task<IReadOnlyList<GoalDto>> GetOverdueAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the full activity log for a goal in chronological order (oldest first).
+    /// Includes edits, status changes, and lifecycle events recorded by the service layer.
+    /// </summary>
+    Task<IReadOnlyList<GoalActivityDto>> GetActivitiesAsync(Guid goalId, CancellationToken cancellationToken = default);
 }

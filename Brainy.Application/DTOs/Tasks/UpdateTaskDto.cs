@@ -10,4 +10,9 @@ public record UpdateTaskDto(
     TaskItemStatus Status = TaskItemStatus.Todo,
     TaskPriority Priority = TaskPriority.Medium,
     DateTime? DueDate = null,
-    TaskComplexity? Complexity = null);
+    TaskComplexity? Complexity = null,
+    bool IsRecurring = false,
+    RecurrenceType? RecurrenceType = null,
+    int? RecurrenceInterval = null,
+    DateTime? RecurrenceEndDate = null,
+    DateTime? NextOccurrenceDate = null);

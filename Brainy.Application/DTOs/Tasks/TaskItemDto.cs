@@ -20,4 +20,10 @@ public record TaskItemDto(
     int SubtaskCount,
     int DoneSubtaskCount,
     IReadOnlyList<TaskItemDto>? Subtasks = null,
-    TaskComplexity? Complexity = null);
+    TaskComplexity? Complexity = null,
+    int SortOrder = 0,
+    bool IsRecurring = false,
+    RecurrenceType? RecurrenceType = null,
+    int? RecurrenceInterval = null,
+    DateTime? RecurrenceEndDate = null,
+    DateTime? NextOccurrenceDate = null);

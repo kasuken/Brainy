@@ -1,0 +1,633 @@
+@rendermode InteractiveServer
+@namespace Brainy.Web.Components.Layout
+@implements IAsyncDisposable
+
+@using Brainy.Application.DTOs.Search
+@using Brainy.Application.Interfaces.Services
+
+@inject ISearchService SearchService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="gsb" @ref="_rootRef">
+
+    @* ── Mobile trigger (icon only, visible on < md) ── *@
+    <button class="gsb__trigger d-flex d-md-none" @onclick="OpenAsync" aria-label="Search (Ctrl+K)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+    </button>
+
+    @* ── Inline search bar (visible on md+) ── *@
+    <div class="gsb__bar d-none d-md-flex">
+        <span class="gsb__bar-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+        </span>
+
+        <input @ref="_inputRef"
+               class="gsb__input"
+               type="search"
+               placeholder="Search…"
+               autocomplete="off"
+               spellcheck="false"
+               aria-label="Global search"
+               aria-expanded="@_open.ToString().ToLowerInvariant()"
+               aria-haspopup="listbox"
+               value="@_query"
+               @oninput="OnInputAsync"
+               @onfocus="OnFocusAsync"
+               @onkeydown="OnKeyDownAsync" />
+
+        <kbd class="gsb__kbd" aria-hidden="true">Ctrl K</kbd>
+    </div>
+
+    @* ── Results overlay ── *@
+    @if (_open && (_results.Count > 0 || _searching || _noResults))
+    {
+        <div class="gsb__overlay" role="listbox" aria-label="Search results">
+
+            @if (_searching)
+            {
+                <div class="gsb__state">
+                    <MudProgressCircular Indeterminate="true"
+                                         Color="Color.Primary"
+                                         Size="Size.Small"
+                                         Class="gsb__spinner" />
+                    <span class="gsb__state-text">Searching…</span>
+                </div>
+            }
+            else if (_noResults)
+            {
+                <div class="gsb__state">
+                    <MudIcon Icon="@Icons.Material.Outlined.SearchOff"
+                             Class="gsb__state-icon" />
+                    <span class="gsb__state-text">
+                        No results for <strong>"@_query"</strong>
+                    </span>
+                </div>
+            }
+            else
+            {
+                @foreach (var group in _grouped)
+                {
+                    <div class="gsb__group">
+                        <div class="gsb__group-header" aria-hidden="true">
+                            <MudIcon Icon="@TypeIcon(group.Key)"
+                                     Class="gsb__group-icon"
+                                     Size="Size.Small" />
+                            <span class="gsb__group-label">@group.Key</span>
+                        </div>
+
+                        @foreach (var item in group.Value)
+                        {
+                            var localItem = item;
+                            var isActive = _flatIndex.TryGetValue(localItem.Id, out var idx) &&
+                                           _selectedIndex == idx;
+                            <button class="gsb__item @(isActive ? "gsb__item--active" : "")"
+                                    role="option"
+                                    aria-selected="@isActive"
+                                    @onclick="() => NavigateTo(localItem)"
+                                    @onmouseenter="() => OnItemHover(localItem.Id)">
+                                <span class="gsb__item-title">@localItem.Title</span>
+                                @if (!string.IsNullOrWhiteSpace(localItem.ContentSnippet))
+                                {
+                                    <span class="gsb__item-snippet">
+                                        @TruncateSnippet(localItem.ContentSnippet)
+                                    </span>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
+
+                @if (_totalRaw > MaxDisplayResults)
+                {
+                    <button class="gsb__more" @onclick="GoToFullSearchAsync">
+                        See all results
+                        <MudIcon Icon="@Icons.Material.Outlined.ArrowForward"
+                                 Class="gsb__more-icon"
+                                 Size="Size.Small" />
+                    </button>
+                }
+            }
+
+        </div>
+    }
+
+</div>
+
+<style>
+    /* ── Root ── */
+    .gsb {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    /* ── Mobile trigger ── */
+    .gsb__trigger {
+        -webkit-appearance: none;
+        appearance: none;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 8px;
+        color: #f4ece0;
+        padding: 0.37rem 0.6rem;
+        cursor: pointer;
+        align-items: center;
+        line-height: 0;
+        transition: background 0.15s;
+    }
+
+    .gsb__trigger:hover {
+        background: rgba(255,255,255,0.14);
+    }
+
+    /* ── Inline bar (md+) ── */
+    .gsb__bar {
+        align-items: center;
+        gap: 0.45rem;
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 10px;
+        padding: 0.3rem 0.7rem;
+        min-width: 200px;
+        max-width: 320px;
+        cursor: text;
+        transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .gsb__bar:focus-within {
+        background: rgba(255,255,255,0.11);
+        border-color: rgba(192, 86, 29, 0.65);
+        box-shadow: 0 0 0 3px rgba(192, 86, 29, 0.15);
+    }
+
+    .gsb__bar-icon {
+        color: rgba(244,236,224,0.45);
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+        pointer-events: none;
+    }
+
+    .gsb__input {
+        background: transparent;
+        border: none;
+        outline: none;
+        color: #f4ece0;
+        font-size: 0.865rem;
+        font-family: 'Hanken Grotesk', sans-serif;
+        width: 100%;
+        min-width: 0;
+        caret-color: #c0561d;
+    }
+
+    .gsb__input::placeholder {
+        color: rgba(244,236,224,0.38);
+    }
+
+    .gsb__input::-webkit-search-cancel-button,
+    .gsb__input::-webkit-search-decoration {
+        -webkit-appearance: none;
+    }
+
+    .gsb__kbd {
+        flex-shrink: 0;
+        font-size: 0.6rem;
+        font-family: 'Hanken Grotesk', sans-serif;
+        font-weight: 600;
+        color: rgba(244,236,224,0.32);
+        border: 1px solid rgba(244,236,224,0.18);
+        border-radius: 4px;
+        padding: 0.1rem 0.32rem;
+        letter-spacing: 0.02em;
+        pointer-events: none;
+        white-space: nowrap;
+        line-height: 1.5;
+    }
+
+    /* ── Dropdown overlay ── */
+    .gsb__overlay {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        width: 400px;
+        max-width: calc(100vw - 2rem);
+        background: #201a14;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 14px;
+        box-shadow: 0 20px 48px rgba(0,0,0,0.6), 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 9999;
+        overflow: hidden;
+        animation: gsb-in 0.13s ease;
+    }
+
+    @@keyframes gsb-in {
+        from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+        to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* ── Loading / empty state rows ── */
+    .gsb__state {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.95rem 1rem;
+        color: rgba(244,236,224,0.5);
+        font-size: 0.855rem;
+    }
+
+    .gsb__spinner {
+        width: 16px !important;
+        height: 16px !important;
+        flex-shrink: 0;
+    }
+
+    .gsb__state-icon {
+        font-size: 1rem !important;
+        width: 1rem !important;
+        height: 1rem !important;
+        opacity: 0.55;
+        flex-shrink: 0;
+    }
+
+    /* ── Groups ── */
+    .gsb__group {
+        padding: 0.4rem 0 0.3rem;
+    }
+
+    .gsb__group + .gsb__group {
+        border-top: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .gsb__group-header {
+        display: flex;
+        align-items: center;
+        gap: 0.38rem;
+        padding: 0.25rem 0.9rem 0.2rem;
+    }
+
+    .gsb__group-icon {
+        font-size: 0.72rem !important;
+        width: 0.72rem !important;
+        height: 0.72rem !important;
+        color: rgba(192, 86, 29, 0.75);
+    }
+
+    .gsb__group-label {
+        font-size: 0.64rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: rgba(192, 86, 29, 0.75);
+    }
+
+    /* ── Result rows ── */
+    .gsb__item {
+        display: block;
+        width: 100%;
+        background: transparent;
+        border: none;
+        text-align: left;
+        padding: 0.45rem 1rem;
+        cursor: pointer;
+        transition: background 0.09s;
+    }
+
+    .gsb__item:hover,
+    .gsb__item--active {
+        background: rgba(192, 86, 29, 0.14);
+    }
+
+    .gsb__item-title {
+        display: block;
+        font-size: 0.855rem;
+        font-weight: 600;
+        color: #f4ece0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.35;
+    }
+
+    .gsb__item-snippet {
+        display: block;
+        font-size: 0.755rem;
+        color: rgba(244,236,224,0.44);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-top: 0.08rem;
+        line-height: 1.4;
+    }
+
+    /* ── "See all" footer ── */
+    .gsb__more {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        width: 100%;
+        background: transparent;
+        border: none;
+        border-top: 1px solid rgba(255,255,255,0.07);
+        color: rgba(192,86,29,0.8);
+        font-size: 0.785rem;
+        font-family: 'Hanken Grotesk', sans-serif;
+        font-weight: 600;
+        padding: 0.6rem 1rem;
+        cursor: pointer;
+        transition: background 0.12s, color 0.12s;
+    }
+
+    .gsb__more:hover {
+        background: rgba(192,86,29,0.1);
+        color: #c0561d;
+    }
+
+    .gsb__more-icon {
+        font-size: 0.8rem !important;
+        width: 0.8rem !important;
+        height: 0.8rem !important;
+    }
+</style>
+
+@code {
+    private const int MaxDisplayResults = 10;
+    private const int SnippetDisplayLength = 75;
+
+    private ElementReference _rootRef;
+    private ElementReference _inputRef;
+    private DotNetObjectReference<GlobalSearchBar>? _dotNetRef;
+
+    private string _query = string.Empty;
+    private bool _open;
+    private bool _searching;
+    private bool _noResults;
+    private int _selectedIndex;
+    private int _totalRaw;
+    private CancellationTokenSource? _debounceCts;
+
+    private IReadOnlyList<SearchResultDto> _results = [];
+    private Dictionary<string, List<SearchResultDto>> _grouped = [];
+    private Dictionary<Guid, int> _flatIndex = [];
+    private List<SearchResultDto> _flat = [];
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+        // brainySearch.js (loaded in App.razor) wires up Ctrl+K and click-outside.
+        await JS.InvokeVoidAsync("brainySearch.init", _dotNetRef).ConfigureAwait(false);
+    }
+
+    // ── JS-invokable (called from brainySearch.js) ────────────────────────
+
+    /// <summary>Opens and focuses the search bar when the user presses Ctrl+K / Cmd+K.</summary>
+    [JSInvokable]
+    public async Task OpenFromKeyboardAsync()
+    {
+        _open = true;
+        await InvokeAsync(StateHasChanged);
+        // Small delay so the input is present in the DOM after re-render
+        await Task.Delay(50).ConfigureAwait(false);
+        try
+        {
+            await JS.InvokeVoidAsync("brainySearch.focus", _inputRef).ConfigureAwait(false);
+        }
+        catch (JSDisconnectedException) { }
+        catch (ObjectDisposedException) { }
+    }
+
+    /// <summary>Closes the overlay when the user clicks outside the component.</summary>
+    [JSInvokable]
+    public async Task CloseFromOutsideAsync()
+    {
+        if (!_open) return;
+        _open = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ── UI event handlers ─────────────────────────────────────────────────
+
+    private async Task OpenAsync()
+    {
+        _open = true;
+        StateHasChanged();
+        await Task.Delay(60).ConfigureAwait(false);
+        try
+        {
+            await JS.InvokeVoidAsync("brainySearch.focus", _inputRef).ConfigureAwait(false);
+        }
+        catch (JSDisconnectedException) { }
+        catch (ObjectDisposedException) { }
+    }
+
+    private Task OnFocusAsync()
+    {
+        _open = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task OnInputAsync(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? string.Empty;
+
+        // Cancel any pending debounce
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        _debounceCts = new CancellationTokenSource();
+        var token = _debounceCts.Token;
+
+        if (string.IsNullOrWhiteSpace(_query))
+        {
+            ResetResults();
+            _open = false;
+            StateHasChanged();
+            return;
+        }
+
+        _open = true;
+        _searching = true;
+        _noResults = false;
+        StateHasChanged();
+
+        try
+        {
+            await Task.Delay(300, token).ConfigureAwait(false);
+            if (token.IsCancellationRequested) return;
+
+            var raw = await SearchService.SearchAsync(_query, token).ConfigureAwait(false);
+            if (token.IsCancellationRequested) return;
+
+            _totalRaw = raw.Count;
+            _results = raw.Take(MaxDisplayResults).ToList();
+            _noResults = _results.Count == 0;
+            RebuildGrouped();
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer keystroke — do nothing
+        }
+        catch (Exception)
+        {
+            ResetResults();
+        }
+        finally
+        {
+            _searching = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                if (_flat.Count > 0)
+                    _selectedIndex = (_selectedIndex + 1) % _flat.Count;
+                StateHasChanged();
+                break;
+
+            case "ArrowUp":
+                if (_flat.Count > 0)
+                    _selectedIndex = (_selectedIndex - 1 + _flat.Count) % _flat.Count;
+                StateHasChanged();
+                break;
+
+            case "Enter":
+                if (_selectedIndex >= 0 && _selectedIndex < _flat.Count)
+                    NavigateTo(_flat[_selectedIndex]);
+                break;
+
+            case "Escape":
+                _open = false;
+                StateHasChanged();
+                break;
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private void OnItemHover(Guid id)
+    {
+        if (_flatIndex.TryGetValue(id, out var idx))
+            _selectedIndex = idx;
+    }
+
+    // ── Navigation ────────────────────────────────────────────────────────
+
+    private void NavigateTo(SearchResultDto result)
+    {
+        _open = false;
+        _query = string.Empty;
+        ResetResults();
+        Nav.NavigateTo(BuildUrl(result));
+    }
+
+    private async Task GoToFullSearchAsync()
+    {
+        _open = false;
+        Nav.NavigateTo($"/search?q={Uri.EscapeDataString(_query)}");
+        await Task.CompletedTask;
+    }
+
+    private static string BuildUrl(SearchResultDto result) => result.ResultType switch
+    {
+        "Note"    => $"/notes/{result.Id}",
+        "Output"  => $"/outputs/{result.Id}",
+        "Project" => $"/projects/{result.Id}",
+        "Area"    => $"/areas/{result.Id}",
+        "Goal"    => $"/goals/{result.Id}",
+        "Idea"    => $"/ideas/{result.Id}",
+        // Tasks live inside their parent project; fall back to hub when ProjectId is missing.
+        "Task"    => result.ProjectId.HasValue
+                         ? $"/projects/{result.ProjectId.Value}"
+                         : "/tasks-hub",
+        _         => "/search",
+    };
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    private void RebuildGrouped()
+    {
+        _grouped = _results
+            .GroupBy(r => r.ResultType)
+            .OrderBy(g => TypeOrder(g.Key))
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        _flat = [.. _grouped.Values.SelectMany(v => v)];
+        _flatIndex = _flat
+            .Select((r, i) => (r.Id, i))
+            .ToDictionary(t => t.Id, t => t.i);
+        _selectedIndex = 0;
+    }
+
+    private void ResetResults()
+    {
+        _results = [];
+        _grouped = [];
+        _flat = [];
+        _flatIndex = [];
+        _totalRaw = 0;
+        _noResults = false;
+    }
+
+    private static int TypeOrder(string type) => type switch
+    {
+        "Note"    => 0,
+        "Project" => 1,
+        "Task"    => 2,
+        "Area"    => 3,
+        "Goal"    => 4,
+        "Idea"    => 5,
+        "Output"  => 6,
+        _         => 99,
+    };
+
+    private static string TypeIcon(string type) => type switch
+    {
+        "Note"    => Icons.Material.Outlined.StickyNote2,
+        "Output"  => Icons.Material.Outlined.Output,
+        "Project" => Icons.Material.Outlined.AccountTree,
+        "Task"    => Icons.Material.Outlined.TaskAlt,
+        "Area"    => Icons.Material.Outlined.Landscape,
+        "Goal"    => Icons.Material.Outlined.Flag,
+        "Idea"    => Icons.Material.Outlined.EmojiObjects,
+        _         => Icons.Material.Outlined.Circle,
+    };
+
+    private static string TruncateSnippet(string snippet) =>
+        snippet.Length <= SnippetDisplayLength
+            ? snippet
+            : snippet[..SnippetDisplayLength] + "…";
+
+    // ── Disposal ─────────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        _debounceCts?.Dispose();
+        try
+        {
+            await JS.InvokeVoidAsync("brainySearch.dispose").ConfigureAwait(false);
+        }
+        catch { /* ignore if already disconnected */ }
+        _dotNetRef?.Dispose();
+    }
+}

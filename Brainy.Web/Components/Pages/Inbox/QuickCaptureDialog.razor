@@ -3,6 +3,7 @@
 @using Brainy.Domain.Enums
 
 @inject INoteService NoteService
+@inject INoteImageService NoteImageService
 @inject ISnackbar Snackbar
 
 <MudDialog Class="qcd">
@@ -19,7 +20,7 @@
                     var active = option.Type == _captureType;
                     <button type="button"
                             class="qcd__type @(active ? "qcd__type--active" : "")"
-                            @onclick="() => _captureType = option.Type">
+                            @onclick="() => SetCaptureType(option.Type)">
                         <span class="qcd__type-icon" aria-hidden="true">@option.Icon</span>
                         <span class="qcd__type-label">@option.Label</span>
                     </button>
@@ -45,6 +46,56 @@
                               Variant="Variant.Outlined"
                               Immediate="true"
                               Class="qcd__field" />
+            }
+
+            @if (_captureType == CaptureType.File)
+            {
+                <div class="qcd__dropzone @(_selectedFile is not null ? "qcd__dropzone--filled" : "")">
+                    <div class="qcd__dropzone-content" aria-hidden="true">
+                        <span class="qcd__dropzone-icon">📎</span>
+                        <span class="qcd__dropzone-text">
+                            @if (_selectedFile is not null)
+                            {
+                                @_selectedFile.Name
+                            }
+                            else
+                            {
+                                <span>Click to attach a file</span>
+                                <span class="qcd__dropzone-hint">txt · md · pdf · docx · csv · mp3 · wav · mp4</span>
+                            }
+                        </span>
+                    </div>
+                    <InputFile id="qcd-file-input"
+                               accept=".txt,.md,.pdf,.docx,.csv,.mp3,.mp4,.wav,.m4a"
+                               OnChange="HandleFileSelectedAsync"
+                               class="qcd__file-input"
+                               aria-label="Select file to attach" />
+                </div>
+            }
+
+            @if (_captureType == CaptureType.Image)
+            {
+                <div class="qcd__dropzone @(_selectedImage is not null ? "qcd__dropzone--filled" : "")">
+                    <div class="qcd__dropzone-content" aria-hidden="true">
+                        <span class="qcd__dropzone-icon">🖼️</span>
+                        <span class="qcd__dropzone-text">
+                            @if (_selectedImage is not null)
+                            {
+                                @_selectedImage.Name
+                            }
+                            else
+                            {
+                                <span>Click to attach an image</span>
+                                <span class="qcd__dropzone-hint">png · jpg · gif · webp · bmp · svg</span>
+                            }
+                        </span>
+                    </div>
+                    <InputFile id="qcd-image-input"
+                               accept="image/*"
+                               OnChange="HandleImageSelected"
+                               class="qcd__file-input"
+                               aria-label="Select image to attach" />
+                </div>
             }
 
             <MudTextField T="string"
@@ -135,6 +186,68 @@
         line-height: 1.5;
     }
 
+    /* ── Drop-zone ── */
+
+    .qcd__dropzone {
+        position: relative;
+        border: 1.5px dashed var(--line);
+        border-radius: 8px;
+        padding: 1.25rem 1rem;
+        text-align: center;
+        cursor: pointer;
+        overflow: hidden;
+        transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .qcd__dropzone:hover {
+        border-color: var(--clay-ring);
+        background: var(--paper);
+    }
+
+    .qcd__dropzone--filled {
+        border-color: var(--clay);
+        background: var(--clay-soft);
+    }
+
+    .qcd__dropzone-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.35rem;
+        pointer-events: none; /* let clicks fall through to the InputFile */
+    }
+
+    .qcd__dropzone-icon {
+        font-size: 1.75rem;
+        line-height: 1;
+    }
+
+    .qcd__dropzone-text {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.2rem;
+        color: var(--ink-soft);
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .qcd__dropzone-hint {
+        color: var(--ink-faint);
+        font-size: 0.75rem;
+        font-weight: 400;
+    }
+
+    /* Invisible overlay that captures the click and opens the OS file picker */
+    .qcd__file-input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+        width: 100%;
+        height: 100%;
+    }
+
     @@media (max-width: 600px) {
         .qcd__types {
             gap: 0.4rem;
@@ -154,49 +267,115 @@
         Note,
         Url,
         Document,
-        Snippet
+        Snippet,
+        File,
+        Image,
     }
 
     private readonly IReadOnlyList<CaptureOption> _captureTypes =
     [
-        new(CaptureType.Note, "📝", "Note"),
-        new(CaptureType.Url, "🔗", "URL"),
+        new(CaptureType.Note,     "📝", "Note"),
+        new(CaptureType.Url,      "🔗", "URL"),
         new(CaptureType.Document, "📄", "Document"),
-        new(CaptureType.Snippet, "✂️", "Snippet")
+        new(CaptureType.Snippet,  "✂️",  "Snippet"),
+        new(CaptureType.File,     "📎", "File"),
+        new(CaptureType.Image,    "🖼️", "Image"),
     ];
 
-    private CaptureType _captureType = CaptureType.Note;
-    private string _title = "";
-    private string _content = "";
-    private string _url = "";
-    private string _sourceTitle = "";
-    private bool _saving;
-    private bool _valid => !string.IsNullOrWhiteSpace(_title);
-    private string ContentLabel => _captureType == CaptureType.Url ? "Notes" : "Content / Notes";
+    private CaptureType   _captureType  = CaptureType.Note;
+    private string        _title        = "";
+    private string        _content      = "";
+    private string        _url          = "";
+    private string        _sourceTitle  = "";
+    private bool          _saving;
+
+    private IBrowserFile? _selectedFile;
+    private IBrowserFile? _selectedImage;
+
+    // Extensions whose content can be read as plain text.
+    private static readonly HashSet<string> TextExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".txt", ".md", ".csv" };
+
+    // Image capture is only valid once a file is chosen; other types just need a title.
+    private bool _valid =>
+        !string.IsNullOrWhiteSpace(_title) &&
+        (_captureType != CaptureType.Image || _selectedImage is not null);
+
+    private string ContentLabel => _captureType switch
+    {
+        CaptureType.Url   => "Notes",
+        CaptureType.Image => "Caption / Notes",
+        _                 => "Content / Notes"
+    };
+
+    // ── Event handlers ────────────────────────────────────────────────────────
 
     private void OnTitleChanged(string value) => _title = value;
 
+    /// <summary>Switches the active capture type and resets any pending file selections.</summary>
+    private void SetCaptureType(CaptureType type)
+    {
+        if (_captureType == type) return;
+        _captureType   = type;
+        _selectedFile  = null;
+        _selectedImage = null;
+    }
+
+    /// <summary>
+    /// Called when the user picks a file in File-capture mode.
+    /// Text files are read into <c>_content</c>; everything else gets a placeholder.
+    /// </summary>
+    private async Task HandleFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        var name = _selectedFile.Name;
+        var ext  = Path.GetExtension(name);
+
+        if (string.IsNullOrWhiteSpace(_title))
+            _title = Path.GetFileNameWithoutExtension(name);
+
+        if (TextExtensions.Contains(ext))
+        {
+            try
+            {
+                const long maxTextBytes = 5 * 1024 * 1024; // 5 MB ceiling for text reads
+                await using var stream = _selectedFile.OpenReadStream(maxTextBytes);
+                using var reader = new StreamReader(stream);
+                _content = await reader.ReadToEndAsync();
+            }
+            catch
+            {
+                // Fall back to a placeholder if the stream fails (e.g. file too large).
+                _content = $"[Attached file: {name}]";
+            }
+        }
+        else
+        {
+            _content = $"[Attached file: {name}]";
+        }
+    }
+
+    /// <summary>Called when the user picks an image in Image-capture mode.</summary>
+    private void HandleImageSelected(InputFileChangeEventArgs e)
+    {
+        _selectedImage = e.File;
+        if (string.IsNullOrWhiteSpace(_title))
+            _title = Path.GetFileNameWithoutExtension(_selectedImage.Name);
+    }
+
+    // ── Save ──────────────────────────────────────────────────────────────────
+
     private async Task Submit()
     {
-        if (!_valid)
-        {
-            return;
-        }
+        if (!_valid) return;
 
         _saving = true;
-
         try
         {
-            var sourceUrl   = _captureType == CaptureType.Url ? _url.Trim()         : null;
-            var sourceTitle = _captureType == CaptureType.Url ? _sourceTitle.Trim() : null;
-
-            await NoteService.CreateAsync(new CreateNoteDto(
-                _title.Trim(),
-                _content,
-                ParaCategory.Project,
-                Status: NoteStatus.Inbox,
-                SourceUrl: string.IsNullOrWhiteSpace(sourceUrl) ? null : sourceUrl,
-                SourceTitle: string.IsNullOrWhiteSpace(sourceTitle) ? null : sourceTitle));
+            if (_captureType == CaptureType.Image && _selectedImage is not null)
+                await SaveImageCaptureAsync();
+            else
+                await SaveTextCaptureAsync();
 
             Snackbar.Add("Captured to Inbox.", Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));
@@ -209,6 +388,55 @@
         {
             _saving = false;
         }
+    }
+
+    /// <summary>Creates a plain-text note (Note / URL / Document / Snippet / File types).</summary>
+    private async Task SaveTextCaptureAsync()
+    {
+        var sourceUrl   = _captureType == CaptureType.Url ? _url.Trim()         : null;
+        var sourceTitle = _captureType == CaptureType.Url ? _sourceTitle.Trim() : null;
+
+        await NoteService.CreateAsync(new CreateNoteDto(
+            _title.Trim(),
+            _content,
+            ParaCategory.Project,
+            Status:      NoteStatus.Inbox,
+            SourceUrl:   string.IsNullOrWhiteSpace(sourceUrl)   ? null : sourceUrl,
+            SourceTitle: string.IsNullOrWhiteSpace(sourceTitle) ? null : sourceTitle));
+    }
+
+    /// <summary>
+    /// Uploads the selected image to the image store, creates the note with an embedded
+    /// Markdown image reference, then links the stored image to the new note so the
+    /// image-serving endpoint can enforce ownership on future reads.
+    /// </summary>
+    private async Task SaveImageCaptureAsync()
+    {
+        var file     = _selectedImage!;
+        var fileName = file.Name;
+
+        await using var stream = file.OpenReadStream(INoteImageService.MaxSizeBytes);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        var bytes = ms.ToArray();
+
+        // Upload first so we have the image ID for the Markdown reference.
+        var imageDto = await NoteImageService.UploadAsync(
+            new UploadNoteImageDto(bytes, file.ContentType, fileName));
+
+        var imageMarkdown = $"![{fileName}](/api/note-images/{imageDto.Id})";
+        var noteContent   = string.IsNullOrWhiteSpace(_content)
+            ? imageMarkdown
+            : $"{imageMarkdown}\n\n{_content}";
+
+        var created = await NoteService.CreateAsync(new CreateNoteDto(
+            _title.Trim(),
+            noteContent,
+            ParaCategory.Project,
+            Status: NoteStatus.Inbox));
+
+        // Link the image to the note so the serving endpoint enforces ownership.
+        await NoteImageService.AssociateWithNoteAsync(created.Id, [imageDto.Id]);
     }
 
     private void Cancel() => MudDialog.Cancel();

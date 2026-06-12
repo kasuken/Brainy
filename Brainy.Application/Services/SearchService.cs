@@ -8,8 +8,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Brainy.Application.Services;
 
 /// <summary>
-/// Searches notes and outputs by title and content for the current user.
-/// Results are ranked by relevance: title matches rank higher than
+/// Searches notes, outputs, projects, areas, tasks, goals, and ideas by title and content
+/// for the current user. Results are ranked by relevance: title matches rank higher than
 /// content-only matches, then sorted by last-updated date descending.
 /// </summary>
 internal sealed class SearchService(
@@ -29,7 +29,7 @@ internal sealed class SearchService(
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        // Two parallel DB round-trips: one for Notes, one for Outputs.
+        // Parallel DB round-trips: one per entity type.
         // EF Core translates String.Contains to LIKE '%term%'.
         var notesTask = context.Notes
             .AsNoTracking()
@@ -71,9 +71,92 @@ internal sealed class SearchService(
             .Take(MaxResults * 2)
             .ToListAsync(cancellationToken);
 
-        await Task.WhenAll(notesTask, outputsTask).ConfigureAwait(false);
+        var projectsTask = context.Projects
+            .AsNoTracking()
+            .Where(p => p.UserId == userId &&
+                        !p.IsArchived &&
+                        (p.Name.Contains(term) ||
+                         (p.Description != null && p.Description.Contains(term))))
+            .Select(p => new
+            {
+                p.Id,
+                p.Name,
+                p.Description,
+                p.AreaId,
+                p.UpdatedAtUtc,
+            })
+            .Take(MaxResults)
+            .ToListAsync(cancellationToken);
 
-        // Compute relevance in memory and merge both result sets.
+        var areasTask = context.Areas
+            .AsNoTracking()
+            .Where(a => a.UserId == userId &&
+                        !a.IsArchived &&
+                        (a.Name.Contains(term) ||
+                         (a.Description != null && a.Description.Contains(term))))
+            .Select(a => new
+            {
+                a.Id,
+                a.Name,
+                a.Description,
+                a.UpdatedAtUtc,
+            })
+            .Take(MaxResults)
+            .ToListAsync(cancellationToken);
+
+        var tasksTask = context.Tasks
+            .AsNoTracking()
+            .Where(t => t.UserId == userId &&
+                        !t.IsArchived &&
+                        (t.Title.Contains(term) ||
+                         (t.Description != null && t.Description.Contains(term))))
+            .Select(t => new
+            {
+                t.Id,
+                t.Title,
+                t.Description,
+                t.ProjectId,
+                t.UpdatedAtUtc,
+            })
+            .Take(MaxResults)
+            .ToListAsync(cancellationToken);
+
+        var goalsTask = context.Goals
+            .AsNoTracking()
+            .Where(g => g.UserId == userId &&
+                        !g.IsArchived &&
+                        (g.Title.Contains(term) ||
+                         (g.Description != null && g.Description.Contains(term))))
+            .Select(g => new
+            {
+                g.Id,
+                g.Title,
+                g.Description,
+                g.UpdatedAtUtc,
+            })
+            .Take(MaxResults)
+            .ToListAsync(cancellationToken);
+
+        var ideasTask = context.Ideas
+            .AsNoTracking()
+            .Where(i => i.UserId == userId &&
+                        !i.IsArchived &&
+                        (i.Title.Contains(term) ||
+                         (i.Description != null && i.Description.Contains(term))))
+            .Select(i => new
+            {
+                i.Id,
+                i.Title,
+                i.Description,
+                i.UpdatedAtUtc,
+            })
+            .Take(MaxResults)
+            .ToListAsync(cancellationToken);
+
+        await Task.WhenAll(notesTask, outputsTask, projectsTask, areasTask, tasksTask, goalsTask, ideasTask)
+            .ConfigureAwait(false);
+
+        // Compute relevance in memory and merge all result sets.
         var noteResults = notesTask.Result.Select(n =>
         {
             var titleMatch = n.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
@@ -117,8 +200,103 @@ internal sealed class SearchService(
                 OutputStatus: o.Status);
         });
 
+        var projectResults = projectsTask.Result.Select(p =>
+        {
+            var titleMatch = p.Name.Contains(term, StringComparison.OrdinalIgnoreCase);
+            return new SearchResultDto(
+                p.Id,
+                p.Name,
+                BuildSnippet(p.Description ?? string.Empty, term),
+                AiSummary: null,
+                Status: default,
+                ParaCategory: default,
+                ProjectId: null,
+                AreaId: p.AreaId,
+                ResourceId: null,
+                p.UpdatedAtUtc,
+                Relevance: titleMatch ? 2 : 1,
+                ResultType: "Project");
+        });
+
+        var areaResults = areasTask.Result.Select(a =>
+        {
+            var titleMatch = a.Name.Contains(term, StringComparison.OrdinalIgnoreCase);
+            return new SearchResultDto(
+                a.Id,
+                a.Name,
+                BuildSnippet(a.Description ?? string.Empty, term),
+                AiSummary: null,
+                Status: default,
+                ParaCategory: default,
+                ProjectId: null,
+                AreaId: null,
+                ResourceId: null,
+                a.UpdatedAtUtc,
+                Relevance: titleMatch ? 2 : 1,
+                ResultType: "Area");
+        });
+
+        var taskResults = tasksTask.Result.Select(t =>
+        {
+            var titleMatch = t.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
+            return new SearchResultDto(
+                t.Id,
+                t.Title,
+                BuildSnippet(t.Description ?? string.Empty, term),
+                AiSummary: null,
+                Status: default,
+                ParaCategory: default,
+                ProjectId: t.ProjectId,
+                AreaId: null,
+                ResourceId: null,
+                t.UpdatedAtUtc,
+                Relevance: titleMatch ? 2 : 1,
+                ResultType: "Task");
+        });
+
+        var goalResults = goalsTask.Result.Select(g =>
+        {
+            var titleMatch = g.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
+            return new SearchResultDto(
+                g.Id,
+                g.Title,
+                BuildSnippet(g.Description ?? string.Empty, term),
+                AiSummary: null,
+                Status: default,
+                ParaCategory: default,
+                ProjectId: null,
+                AreaId: null,
+                ResourceId: null,
+                g.UpdatedAtUtc,
+                Relevance: titleMatch ? 2 : 1,
+                ResultType: "Goal");
+        });
+
+        var ideaResults = ideasTask.Result.Select(i =>
+        {
+            var titleMatch = i.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
+            return new SearchResultDto(
+                i.Id,
+                i.Title,
+                BuildSnippet(i.Description ?? string.Empty, term),
+                AiSummary: null,
+                Status: default,
+                ParaCategory: default,
+                ProjectId: null,
+                AreaId: null,
+                ResourceId: null,
+                i.UpdatedAtUtc,
+                Relevance: titleMatch ? 2 : 1,
+                ResultType: "Idea");
+        });
+
         return noteResults
             .Concat(outputResults)
+            .Concat(projectResults)
+            .Concat(areaResults)
+            .Concat(taskResults)
+            .Concat(goalResults)
+            .Concat(ideaResults)
             .OrderByDescending(r => r.Relevance)
             .ThenByDescending(r => r.UpdatedAtUtc)
             .Take(MaxResults)

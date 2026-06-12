@@ -140,7 +140,7 @@ else
                     <h2 class="god-section__title">Timeline</h2>
                     <p class="god-section__sub">Chronological pulse of the goal.</p>
                 </div>
-                <GoalTimelineComponent Milestones="_detail.Milestones" />
+                <GoalTimelineComponent Milestones="_detail.Milestones" Activities="_activities" />
             </section>
         </div>
 
@@ -588,6 +588,7 @@ else
     private bool _loading = true;
     private GoalDetailDto? _detail;
     private IReadOnlyList<OutputDto> _outputs = [];
+    private IReadOnlyList<GoalActivityDto> _activities = [];
 
     protected override async Task OnParametersSetAsync()
     {
@@ -603,6 +604,9 @@ else
             _detail = await GoalService.GetDetailAsync(GoalId);
             _outputs = _detail is not null
                 ? await OutputService.GetByGoalAsync(GoalId)
+                : [];
+            _activities = _detail is not null
+                ? await GoalService.GetActivitiesAsync(GoalId)
                 : [];
         }
         catch (Exception ex)

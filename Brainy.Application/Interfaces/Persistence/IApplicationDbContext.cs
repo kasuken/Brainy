@@ -23,12 +23,14 @@ public interface IApplicationDbContext
     DbSet<ActionItem> ActionItems { get; }
     DbSet<NoteRelationship> NoteRelationships { get; }
     DbSet<TaskItem> Tasks { get; }
+    DbSet<TaskDependency> TaskDependencies { get; }
     DbSet<Output> Outputs { get; }
     DbSet<ArchiveRetentionRule> ArchiveRetentionRules { get; }
     DbSet<UserDashboardPreference> DashboardPreferences { get; }
     DbSet<Idea> Ideas { get; }
     DbSet<Goal> Goals { get; }
     DbSet<GoalMilestone> GoalMilestones { get; }
+    DbSet<GoalActivity> GoalActivities { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

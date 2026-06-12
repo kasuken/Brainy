@@ -35,6 +35,9 @@ public class TaskItem : BaseEntity, IUserOwnedEntity
     /// </summary>
     public bool IsCurrentTask { get; set; }
 
+    /// <summary>Position within the kanban column; lower values appear first. Set by ReorderAsync.</summary>
+    public int SortOrder { get; set; }
+
     public DateTime? ArchivedAtUtc { get; set; }
 
     public Guid ProjectId { get; set; }
@@ -53,4 +56,28 @@ public class TaskItem : BaseEntity, IUserOwnedEntity
     public TaskItem? ParentTask { get; set; }
 
     public ICollection<TaskItem> Subtasks { get; set; } = new List<TaskItem>();
+
+    // ── Recurrence ────────────────────────────────────────────────────────────
+
+    /// <summary>When true, this task acts as a template for recurring occurrences.</summary>
+    public bool IsRecurring { get; set; }
+
+    public RecurrenceType? RecurrenceType { get; set; }
+
+    /// <summary>How many units (days / weeks / months / years) between occurrences.</summary>
+    public int? RecurrenceInterval { get; set; }
+
+    /// <summary>Date after which no further occurrences should be created.</summary>
+    public DateTime? RecurrenceEndDate { get; set; }
+
+    /// <summary>Date of the next occurrence to be spawned via CreateRecurringOccurrenceAsync.</summary>
+    public DateTime? NextOccurrenceDate { get; set; }
+
+    // ── Dependencies ──────────────────────────────────────────────────────────
+
+    /// <summary>Tasks that this task depends on (prerequisites).</summary>
+    public ICollection<TaskDependency> Dependencies { get; set; } = [];
+
+    /// <summary>Tasks that depend on this task.</summary>
+    public ICollection<TaskDependency> Dependents { get; set; } = [];
 }

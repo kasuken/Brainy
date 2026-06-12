@@ -1,4 +1,5 @@
 using Brainy.Application.DTOs.Tasks;
+using Brainy.Domain.Enums;
 
 namespace Brainy.Application.Interfaces.Services;
 
@@ -49,4 +50,28 @@ public interface ITaskService
 
     /// <summary>Clears the Current Task flag from all tasks belonging to the current user.</summary>
     Task ClearCurrentTaskAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Persists the display order of cards within a project column.
+    /// Assigns <see cref="Domain.Entities.TaskItem.SortOrder"/> based on each task's index in
+    /// <paramref name="orderedTaskIds"/>. Unknown IDs are silently skipped.
+    /// </summary>
+    Task ReorderAsync(Guid projectId, TaskItemStatus status, IReadOnlyList<Guid> orderedTaskIds, CancellationToken ct = default);
+
+    // ── Recurrence ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Spawns the next occurrence of a recurring task template. The new task is a
+    /// one-off copy with <c>Status = Todo</c> and <c>DueDate = template.NextOccurrenceDate</c>.
+    /// The template's <see cref="Domain.Entities.TaskItem.NextOccurrenceDate"/> is advanced by one interval.
+    /// </summary>
+    Task<TaskItemDto> CreateRecurringOccurrenceAsync(Guid taskId, CancellationToken ct = default);
+
+    // ── Dependencies ─────────────────────────────────────────────────────────
+
+    /// <summary>Records that <paramref name="taskId"/> depends on <paramref name="dependsOnTaskId"/>. Idempotent.</summary>
+    Task AddDependencyAsync(Guid taskId, Guid dependsOnTaskId, CancellationToken ct = default);
+
+    /// <summary>Removes the dependency between <paramref name="taskId"/> and <paramref name="dependsOnTaskId"/>. No-op if the relationship does not exist.</summary>
+    Task RemoveDependencyAsync(Guid taskId, Guid dependsOnTaskId, CancellationToken ct = default);
 }

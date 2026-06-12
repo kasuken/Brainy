@@ -52,11 +52,16 @@ else
                     {
                         @foreach (var task in tasks)
                         {
-                            <div class="tb-card @(task.Id == _draggingTaskId ? "tb-card--dragging" : "") @(task.Status == TaskItemStatus.Done ? "tb-card--done" : "")"
+                        <div class="tb-card @(task.Id == _draggingTaskId ? "tb-card--dragging" : "") @(task.Status == TaskItemStatus.Done ? "tb-card--done" : "") @(task.Id == _dragOverCardId ? "tb-card--drop-target" : "")"
                                  draggable="true"
                                  @ondragstart="() => OnDragStart(task.Id)"
                                  @ondragend="OnDragEnd"
-                                 @ondragover:preventDefault>
+                             @ondragenter:stopPropagation
+                             @ondragenter="() => OnDragEnterCard(task.Id)"
+                             @ondragover:preventDefault
+                             @ondrop:stopPropagation
+                             @ondrop:preventDefault
+                             @ondrop="() => OnDropOnCard(task.Id, col.Status)">
 
                                 <div class="tb-card__strip tb-strip--@task.Priority.ToString().ToLower()"></div>
 
@@ -259,6 +264,11 @@ else
     color: var(--ink-soft);
 }
 
+/* Drop-target indicator: thin colored bar above the card being hovered over */
+.tb-card--drop-target {
+    box-shadow: 0 -3px 0 0 var(--col-color, var(--clay)), 0 4px 14px rgba(33,29,23,.12);
+}
+
 @@keyframes tb-card-in {
     from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -445,6 +455,7 @@ else
     private Dictionary<TaskItemStatus, List<TaskItemDto>> _tasksByStatus = new();
     private Guid? _draggingTaskId;
     private TaskItemStatus? _dragOverStatus;
+    private Guid? _dragOverCardId;
     private bool _loading = true;
     private Guid _loadedProjectId;
 
@@ -478,31 +489,103 @@ else
 
     private void OnDragEnter(TaskItemStatus status) => _dragOverStatus = status;
 
+    private void OnDragEnterCard(Guid cardId)
+    {
+        // Only highlight as drop target when hovering over a different card
+        if (_draggingTaskId.HasValue && _draggingTaskId.Value != cardId)
+            _dragOverCardId = cardId;
+    }
+
     private void OnDragEnd()
     {
         _draggingTaskId = null;
         _dragOverStatus = null;
+        _dragOverCardId = null;
     }
 
+    /// <summary>Handles drops onto the column body (empty space) — moves card or reorders to end.</summary>
     private async Task OnDrop(TaskItemStatus targetStatus)
     {
         _dragOverStatus = null;
+        _dragOverCardId = null;
         if (_draggingTaskId is null) return;
 
         var taskId = _draggingTaskId.Value;
         _draggingTaskId = null;
 
         var source = _tasksByStatus.Values.SelectMany(l => l).FirstOrDefault(t => t.Id == taskId);
-        if (source is null || source.Status == targetStatus) return;
+        if (source is null) return;
 
+        if (source.Status == targetStatus)
+        {
+            // Dropped on empty column area — move card to end of its own column and persist
+            var list = _tasksByStatus[targetStatus];
+            list.RemoveAll(t => t.Id == taskId);
+            list.Add(source);
+            await PersistColumnOrderAsync(targetStatus, list);
+        }
+        else
+        {
+            await MoveToColumnAsync(source, taskId, targetStatus);
+        }
+
+        await OnTaskChanged.InvokeAsync();
+    }
+
+    /// <summary>Handles drops onto a specific card — reorders within column or cross-column move.</summary>
+    private async Task OnDropOnCard(Guid targetCardId, TaskItemStatus colStatus)
+    {
+        _dragOverStatus = null;
+        _dragOverCardId = null;
+        if (_draggingTaskId is null) return;
+
+        var taskId = _draggingTaskId.Value;
+        _draggingTaskId = null;
+
+        if (taskId == targetCardId) return;
+
+        var source = _tasksByStatus.Values.SelectMany(l => l).FirstOrDefault(t => t.Id == taskId);
+        if (source is null) return;
+
+        if (source.Status == colStatus)
+        {
+            // Intra-column reorder: insert the dragged card immediately before the target card
+            var list = _tasksByStatus[colStatus];
+            list.RemoveAll(t => t.Id == taskId);
+            var insertIdx = list.FindIndex(t => t.Id == targetCardId);
+            list.Insert(insertIdx < 0 ? list.Count : insertIdx, source);
+            await PersistColumnOrderAsync(colStatus, list);
+        }
+        else
+        {
+            await MoveToColumnAsync(source, taskId, colStatus);
+        }
+
+        await OnTaskChanged.InvokeAsync();
+    }
+
+    private async Task PersistColumnOrderAsync(TaskItemStatus status, List<TaskItemDto> ordered)
+    {
+        try
+        {
+            await TaskService.ReorderAsync(ProjectId, status, ordered.Select(t => t.Id).ToList());
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not save order: {ex.Message}", Severity.Warning);
+            await LoadTasksAsync();
+        }
+    }
+
+    private async Task MoveToColumnAsync(TaskItemDto source, Guid taskId, TaskItemStatus targetStatus)
+    {
         try
         {
             var updated = await TaskService.UpdateAsync(new UpdateTaskDto(
                 taskId, source.Title, source.Description,
-                targetStatus, source.Priority, source.DueDate));
+                targetStatus, source.Priority, source.DueDate, source.Complexity));
 
-            // The returned DTO carries no subtask data; reload when the moved card
-            // has subtasks so its progress indicator survives the move.
+            // Reload when the moved card has subtasks so its progress indicator survives the move.
             if (source.SubtaskCount > 0)
             {
                 await LoadTasksAsync();
@@ -512,8 +595,6 @@ else
                 _tasksByStatus[source.Status].RemoveAll(t => t.Id == taskId);
                 _tasksByStatus[targetStatus].Add(updated);
             }
-
-            await OnTaskChanged.InvokeAsync();
         }
         catch (Exception ex)
         {

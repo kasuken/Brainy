@@ -1,6 +1,14 @@
+using Azure;
+using Azure.AI.OpenAI;
+using Brainy.Application.AI;
+using Brainy.Application.Interfaces.AI;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Application.Options;
 using Brainy.Application.Services;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenAI.Chat;
 
 namespace Brainy.Application;
 
@@ -38,6 +46,57 @@ public static class DependencyInjection
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<IGoalMilestoneService, GoalMilestoneService>();
         services.AddScoped<IOutputService, OutputService>();
+        services.AddScoped<IHighlightService, HighlightService>();
+        services.AddScoped<ISummaryService, SummaryService>();
         return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="IAiAssistant"/> based on the <c>AiAssistant</c> configuration section.
+    /// When <see cref="AiProviderType.None"/> is configured, a no-op implementation is registered
+    /// so callers always receive a graceful response instead of an exception.
+    /// </summary>
+    public static IServiceCollection AddAiAssistant(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<AiAssistantOptions>(configuration.GetSection(AiAssistantOptions.SectionName));
+
+        var options = configuration
+            .GetSection(AiAssistantOptions.SectionName)
+            .Get<AiAssistantOptions>() ?? new AiAssistantOptions();
+
+        if (options.Provider == AiProviderType.None)
+        {
+            services.AddSingleton<IAiAssistant, NullAiAssistant>();
+            return services;
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.ApiKey, nameof(options.ApiKey));
+
+        IChatClient chatClient = options.Provider switch
+        {
+            AiProviderType.OpenAI =>
+                new ChatClient(options.Model, options.ApiKey).AsIChatClient(),
+
+            AiProviderType.AzureOpenAI =>
+                CreateAzureOpenAIChatClient(options),
+
+            _ => throw new InvalidOperationException($"Unsupported AI provider: {options.Provider}"),
+        };
+
+        services.AddSingleton(chatClient);
+        services.AddSingleton<IAiAssistant, OpenAiAssistant>();
+        return services;
+    }
+
+    private static IChatClient CreateAzureOpenAIChatClient(AiAssistantOptions options)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.Endpoint, nameof(options.Endpoint));
+
+        var azureClient = new AzureOpenAIClient(
+            new Uri(options.Endpoint),
+            new AzureKeyCredential(options.ApiKey!));
+
+        var deployment = options.DeploymentName ?? options.Model;
+        return azureClient.GetChatClient(deployment).AsIChatClient();
     }
 }

@@ -1,0 +1,89 @@
+using Brainy.Application.DTOs.Summaries;
+using Brainy.Application.Interfaces.Identity;
+using Brainy.Application.Interfaces.Persistence;
+using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace Brainy.Application.Services;
+
+/// <summary>
+/// Manages <see cref="Summary"/> entities scoped to the current user's notes.
+/// Reads use <c>AsNoTracking</c> for performance; writes load tracked entities.
+/// </summary>
+internal sealed class SummaryService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser) : ISummaryService
+{
+    public async Task<IReadOnlyList<SummaryDto>> GetByNoteAsync(
+        Guid noteId,
+        CancellationToken ct = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
+
+        return await context.Summaries
+            .AsNoTracking()
+            .Where(s => s.NoteId == noteId && s.Note.UserId == userId)
+            .OrderByDescending(s => s.CreatedAtUtc)
+            .Select(s => new SummaryDto(
+                s.Id, s.NoteId, s.Content,
+                s.IsAiGenerated, s.Model, s.PromptVersion,
+                s.CreatedAtUtc))
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<SummaryDto> CreateAsync(
+        CreateSummaryDto dto,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+
+        if (string.IsNullOrWhiteSpace(dto.Content))
+            throw new ArgumentException("Summary content must not be empty.", nameof(dto));
+
+        var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
+
+        var noteExists = await context.Notes
+            .AnyAsync(n => n.Id == dto.NoteId && n.UserId == userId, ct)
+            .ConfigureAwait(false);
+
+        if (!noteExists)
+            throw new KeyNotFoundException($"Note '{dto.NoteId}' was not found.");
+
+        var summary = new Summary
+        {
+            Id            = Guid.NewGuid(),
+            NoteId        = dto.NoteId,
+            Content       = dto.Content.Trim(),
+            IsAiGenerated = dto.IsAiGenerated,
+            Model         = dto.Model,
+            PromptVersion = dto.PromptVersion
+        };
+
+        context.Summaries.Add(summary);
+        await context.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return new SummaryDto(
+            summary.Id,
+            summary.NoteId,
+            summary.Content,
+            summary.IsAiGenerated,
+            summary.Model,
+            summary.PromptVersion,
+            summary.CreatedAtUtc);
+    }
+
+    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
+
+        var summary = await context.Summaries
+            .FirstOrDefaultAsync(s => s.Id == id && s.Note.UserId == userId, ct)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Summary '{id}' was not found.");
+
+        context.Summaries.Remove(summary);
+        await context.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+}

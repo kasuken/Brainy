@@ -39,6 +39,8 @@ public class BrainyDbContext(DbContextOptions<BrainyDbContext> options)
 
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
 
+    public DbSet<TaskDependency> TaskDependencies => Set<TaskDependency>();
+
     public DbSet<Output> Outputs => Set<Output>();
 
     public DbSet<ArchiveRetentionRule> ArchiveRetentionRules => Set<ArchiveRetentionRule>();
@@ -50,6 +52,8 @@ public class BrainyDbContext(DbContextOptions<BrainyDbContext> options)
     public DbSet<Goal> Goals => Set<Goal>();
 
     public DbSet<GoalMilestone> GoalMilestones => Set<GoalMilestone>();
+
+    public DbSet<GoalActivity> GoalActivities => Set<GoalActivity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

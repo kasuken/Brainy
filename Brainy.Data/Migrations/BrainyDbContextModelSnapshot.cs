@@ -270,6 +270,48 @@ namespace Brainy.Data.Migrations
                     b.ToTable("Goal", (string)null);
                 });
 
+            modelBuilder.Entity("Brainy.Domain.Entities.GoalActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ActivityType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("GoalId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("NewValue")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("OldValue")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("GoalId");
+
+                    b.ToTable("GoalActivity", (string)null);
+                });
+
             modelBuilder.Entity("Brainy.Domain.Entities.GoalMilestone", b =>
                 {
                     b.Property<Guid>("Id")
@@ -911,6 +953,34 @@ namespace Brainy.Data.Migrations
                     b.ToTable("Tag", (string)null);
                 });
 
+            modelBuilder.Entity("Brainy.Domain.Entities.TaskDependency", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("DependsOnTaskId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DependsOnTaskId");
+
+                    b.HasIndex("TaskId", "DependsOnTaskId")
+                        .IsUnique();
+
+                    b.ToTable("TaskDependency", (string)null);
+                });
+
             modelBuilder.Entity("Brainy.Domain.Entities.TaskItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -943,6 +1013,12 @@ namespace Brainy.Data.Migrations
                     b.Property<bool>("IsCurrentTask")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsRecurring")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("NextOccurrenceDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid?>("ParentTaskId")
                         .HasColumnType("uniqueidentifier");
 
@@ -953,6 +1029,18 @@ namespace Brainy.Data.Migrations
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("RecurrenceEndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("RecurrenceInterval")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RecurrenceType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1251,6 +1339,17 @@ namespace Brainy.Data.Migrations
                     b.Navigation("Area");
                 });
 
+            modelBuilder.Entity("Brainy.Domain.Entities.GoalActivity", b =>
+                {
+                    b.HasOne("Brainy.Domain.Entities.Goal", "Goal")
+                        .WithMany()
+                        .HasForeignKey("GoalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Goal");
+                });
+
             modelBuilder.Entity("Brainy.Domain.Entities.GoalMilestone", b =>
                 {
                     b.HasOne("Brainy.Domain.Entities.Goal", "Goal")
@@ -1459,6 +1558,25 @@ namespace Brainy.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Brainy.Domain.Entities.TaskDependency", b =>
+                {
+                    b.HasOne("Brainy.Domain.Entities.TaskItem", "DependsOnTask")
+                        .WithMany("Dependents")
+                        .HasForeignKey("DependsOnTaskId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Brainy.Domain.Entities.TaskItem", "Task")
+                        .WithMany("Dependencies")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DependsOnTask");
+
+                    b.Navigation("Task");
+                });
+
             modelBuilder.Entity("Brainy.Domain.Entities.TaskItem", b =>
                 {
                     b.HasOne("Brainy.Domain.Entities.TaskItem", "ParentTask")
@@ -1644,6 +1762,10 @@ namespace Brainy.Data.Migrations
 
             modelBuilder.Entity("Brainy.Domain.Entities.TaskItem", b =>
                 {
+                    b.Navigation("Dependencies");
+
+                    b.Navigation("Dependents");
+
                     b.Navigation("Subtasks");
                 });
 #pragma warning restore 612, 618

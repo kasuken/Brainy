@@ -176,6 +176,15 @@ internal sealed class GoalService(IApplicationDbContext context, ICurrentUserSer
         context.Goals.Add(goal);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+        context.GoalActivities.Add(new GoalActivity
+        {
+            Id           = Guid.NewGuid(),
+            GoalId       = goal.Id,
+            ActivityType = GoalActivityType.Created,
+            Description  = "Goal created",
+        });
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
         return await GetByIdAsync(goal.Id, cancellationToken).ConfigureAwait(false)
                ?? throw new InvalidOperationException("Failed to retrieve newly created goal.");
     }
@@ -200,6 +209,12 @@ internal sealed class GoalService(IApplicationDbContext context, ICurrentUserSer
                 throw new KeyNotFoundException($"Area {dto.AreaId} not found.");
         }
 
+        // Capture old values before mutation for activity recording
+        var oldTitle       = goal.Title;
+        var oldDescription = goal.Description;
+        var oldStatus      = goal.Status;
+        var oldTargetDate  = goal.TargetDate;
+
         goal.Title = dto.Title;
         goal.Description = dto.Description;
         goal.AreaId = dto.AreaId;
@@ -212,6 +227,29 @@ internal sealed class GoalService(IApplicationDbContext context, ICurrentUserSer
             goal.AchievedDate = null;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        // Record one activity per changed field
+        var activities = new List<GoalActivity>();
+
+        if (!string.Equals(oldTitle, dto.Title, StringComparison.Ordinal))
+            activities.Add(Activity(goal.Id, GoalActivityType.TitleEdited, "Title updated", oldTitle, dto.Title));
+
+        if (!string.Equals(oldDescription, dto.Description, StringComparison.Ordinal))
+            activities.Add(Activity(goal.Id, GoalActivityType.DescriptionEdited, "Description updated", oldDescription, dto.Description));
+
+        if (oldStatus != dto.Status)
+            activities.Add(Activity(goal.Id, GoalActivityType.StatusChanged,
+                $"Status changed from {oldStatus} to {dto.Status}", oldStatus.ToString(), dto.Status.ToString()));
+
+        if (oldTargetDate != dto.TargetDate)
+            activities.Add(Activity(goal.Id, GoalActivityType.TargetDateChanged, "Target date changed",
+                oldTargetDate?.ToString("O"), dto.TargetDate?.ToString("O")));
+
+        if (activities.Count > 0)
+        {
+            context.GoalActivities.AddRange(activities);
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         return await GetByIdAsync(goal.Id, cancellationToken).ConfigureAwait(false)
                ?? throw new InvalidOperationException("Failed to retrieve updated goal.");
@@ -230,6 +268,14 @@ internal sealed class GoalService(IApplicationDbContext context, ICurrentUserSer
         goal.IsArchived = true;
         goal.ArchivedAtUtc = DateTime.UtcNow;
         goal.Status = GoalStatus.Archived;
+
+        context.GoalActivities.Add(new GoalActivity
+        {
+            Id           = Guid.NewGuid(),
+            GoalId       = id,
+            ActivityType = GoalActivityType.Archived,
+            Description  = "Goal archived",
+        });
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -395,4 +441,34 @@ internal sealed class GoalService(IApplicationDbContext context, ICurrentUserSer
 
     private static GoalMilestoneDto ToMilestoneDto(GoalMilestone m) =>
         new(m.Id, m.GoalId, m.Title, m.IsCompleted, m.CompletedAtUtc, m.CreatedAtUtc);
+
+    public async Task<IReadOnlyList<GoalActivityDto>> GetActivitiesAsync(Guid goalId, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await context.GoalActivities
+            .AsNoTracking()
+            .Where(a => a.GoalId == goalId && a.Goal.UserId == userId)
+            .OrderBy(a => a.CreatedAtUtc)
+            .Select(a => new GoalActivityDto(a.Id, a.ActivityType, a.Description, a.OldValue, a.NewValue, a.CreatedAtUtc))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static GoalActivity Activity(
+        Guid goalId,
+        GoalActivityType type,
+        string description,
+        string? oldValue = null,
+        string? newValue = null) =>
+        new()
+        {
+            Id           = Guid.NewGuid(),
+            GoalId       = goalId,
+            ActivityType = type,
+            Description  = description,
+            OldValue     = oldValue,
+            NewValue     = newValue,
+        };
 }
+
