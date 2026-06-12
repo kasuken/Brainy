@@ -246,13 +246,10 @@ else if (_loading)
 
     protected override async Task OnInitializedAsync()
     {
-        var metricsTask = OutputService.GetMetricsAsync();
-        var activeTask  = OutputService.GetAllActiveAsync();
-
-        await Task.WhenAll(metricsTask, activeTask);
-
-        _metrics = await metricsTask;
-        var active = await activeTask;
+        // EF Core DbContext is not thread-safe; these calls share one OutputService
+        // (and thus one context), so they must run sequentially, not via Task.WhenAll.
+        _metrics = await OutputService.GetMetricsAsync();
+        var active = await OutputService.GetAllActiveAsync();
         _recent = active
             .OrderByDescending(o => o.UpdatedAtUtc)
             .Take(3)

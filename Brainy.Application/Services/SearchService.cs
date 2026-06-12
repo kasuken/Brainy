@@ -29,9 +29,10 @@ internal sealed class SearchService(
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        // Parallel DB round-trips: one per entity type.
-        // EF Core translates String.Contains to LIKE '%term%'.
-        var notesTask = context.Notes
+        // One DB round-trip per entity type. EF Core translates String.Contains to LIKE '%term%'.
+        // EF Core DbContext is not thread-safe: each query must complete before the next starts,
+        // so these are awaited sequentially rather than run concurrently on the shared context.
+        var notes = await context.Notes
             .AsNoTracking()
             .Where(n => n.UserId == userId &&
                         (n.Title.Contains(term) || n.Content.Contains(term)))
@@ -49,9 +50,9 @@ internal sealed class SearchService(
                 n.UpdatedAtUtc,
             })
             .Take(MaxResults * 2) // over-fetch before in-memory sort
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
 
-        var outputsTask = context.Outputs
+        var outputs = await context.Outputs
             .AsNoTracking()
             .Where(o => o.UserId == userId &&
                         !o.IsArchived &&
@@ -69,9 +70,9 @@ internal sealed class SearchService(
                 o.UpdatedAtUtc,
             })
             .Take(MaxResults * 2)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
 
-        var projectsTask = context.Projects
+        var projects = await context.Projects
             .AsNoTracking()
             .Where(p => p.UserId == userId &&
                         !p.IsArchived &&
@@ -86,9 +87,9 @@ internal sealed class SearchService(
                 p.UpdatedAtUtc,
             })
             .Take(MaxResults)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
 
-        var areasTask = context.Areas
+        var areas = await context.Areas
             .AsNoTracking()
             .Where(a => a.UserId == userId &&
                         !a.IsArchived &&
@@ -102,9 +103,9 @@ internal sealed class SearchService(
                 a.UpdatedAtUtc,
             })
             .Take(MaxResults)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
 
-        var tasksTask = context.Tasks
+        var tasks = await context.Tasks
             .AsNoTracking()
             .Where(t => t.UserId == userId &&
                         !t.IsArchived &&
@@ -119,9 +120,9 @@ internal sealed class SearchService(
                 t.UpdatedAtUtc,
             })
             .Take(MaxResults)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
 
-        var goalsTask = context.Goals
+        var goals = await context.Goals
             .AsNoTracking()
             .Where(g => g.UserId == userId &&
                         !g.IsArchived &&
@@ -135,9 +136,9 @@ internal sealed class SearchService(
                 g.UpdatedAtUtc,
             })
             .Take(MaxResults)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
 
-        var ideasTask = context.Ideas
+        var ideas = await context.Ideas
             .AsNoTracking()
             .Where(i => i.UserId == userId &&
                         !i.IsArchived &&
@@ -151,13 +152,10 @@ internal sealed class SearchService(
                 i.UpdatedAtUtc,
             })
             .Take(MaxResults)
-            .ToListAsync(cancellationToken);
-
-        await Task.WhenAll(notesTask, outputsTask, projectsTask, areasTask, tasksTask, goalsTask, ideasTask)
-            .ConfigureAwait(false);
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
 
         // Compute relevance in memory and merge all result sets.
-        var noteResults = notesTask.Result.Select(n =>
+        var noteResults = notes.Select(n =>
         {
             var titleMatch = n.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
             return new SearchResultDto(
@@ -175,7 +173,7 @@ internal sealed class SearchService(
                 ResultType: "Note");
         });
 
-        var outputResults = outputsTask.Result.Select(o =>
+        var outputResults = outputs.Select(o =>
         {
             var titleMatch = o.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
             var snippet = BuildSnippet(o.Content, term);
@@ -200,7 +198,7 @@ internal sealed class SearchService(
                 OutputStatus: o.Status);
         });
 
-        var projectResults = projectsTask.Result.Select(p =>
+        var projectResults = projects.Select(p =>
         {
             var titleMatch = p.Name.Contains(term, StringComparison.OrdinalIgnoreCase);
             return new SearchResultDto(
@@ -218,7 +216,7 @@ internal sealed class SearchService(
                 ResultType: "Project");
         });
 
-        var areaResults = areasTask.Result.Select(a =>
+        var areaResults = areas.Select(a =>
         {
             var titleMatch = a.Name.Contains(term, StringComparison.OrdinalIgnoreCase);
             return new SearchResultDto(
@@ -236,7 +234,7 @@ internal sealed class SearchService(
                 ResultType: "Area");
         });
 
-        var taskResults = tasksTask.Result.Select(t =>
+        var taskResults = tasks.Select(t =>
         {
             var titleMatch = t.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
             return new SearchResultDto(
@@ -254,7 +252,7 @@ internal sealed class SearchService(
                 ResultType: "Task");
         });
 
-        var goalResults = goalsTask.Result.Select(g =>
+        var goalResults = goals.Select(g =>
         {
             var titleMatch = g.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
             return new SearchResultDto(
@@ -272,7 +270,7 @@ internal sealed class SearchService(
                 ResultType: "Goal");
         });
 
-        var ideaResults = ideasTask.Result.Select(i =>
+        var ideaResults = ideas.Select(i =>
         {
             var titleMatch = i.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
             return new SearchResultDto(
