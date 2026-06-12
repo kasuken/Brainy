@@ -169,6 +169,7 @@
     private string _title = "";
     private string _content = "";
     private string _url = "";
+    private string _sourceTitle = "";
     private bool _saving;
     private bool _valid => !string.IsNullOrWhiteSpace(_title);
     private string ContentLabel => _captureType == CaptureType.Url ? "Notes" : "Content / Notes";
@@ -186,15 +187,16 @@
 
         try
         {
-            var content = _captureType == CaptureType.Url && !string.IsNullOrWhiteSpace(_url)
-                ? $"Source: {_url.Trim()}\n\n{_content}".Trim()
-                : _content;
+            var sourceUrl   = _captureType == CaptureType.Url ? _url.Trim()         : null;
+            var sourceTitle = _captureType == CaptureType.Url ? _sourceTitle.Trim() : null;
 
             await NoteService.CreateAsync(new CreateNoteDto(
                 _title.Trim(),
-                content,
+                _content,
                 ParaCategory.Project,
-                Status: NoteStatus.Inbox));
+                Status: NoteStatus.Inbox,
+                SourceUrl: string.IsNullOrWhiteSpace(sourceUrl) ? null : sourceUrl,
+                SourceTitle: string.IsNullOrWhiteSpace(sourceTitle) ? null : sourceTitle));
 
             Snackbar.Add("Captured to Inbox.", Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));

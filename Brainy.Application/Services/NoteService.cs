@@ -26,7 +26,9 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
                 n.Id, n.Title, n.Content, n.AiSummary, n.Status, n.IsArchived,
                 n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId,
                 n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
-                n.IsFavorite, n.Images.Any()))
+                n.IsFavorite, n.Images.Any(),
+                SourceUrl: n.Source != null ? n.Source.Url : null,
+                SourceTitle: n.Source != null ? n.Source.Title : null))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -37,6 +39,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
 
         var note = await context.Notes
             .AsNoTracking()
+            .Include(n => n.Source)
             .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -62,6 +65,21 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             ResourceId = dto.ResourceId
         };
 
+        if (!string.IsNullOrWhiteSpace(dto.SourceUrl))
+        {
+            var source = new Source
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Type = SourceType.Url,
+                Url = dto.SourceUrl.Trim(),
+                Title = string.IsNullOrWhiteSpace(dto.SourceTitle) ? null : dto.SourceTitle.Trim(),
+                CapturedAtUtc = DateTime.UtcNow
+            };
+            context.Sources.Add(source);
+            note.Source = source;
+        }
+
         context.Notes.Add(note);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -75,6 +93,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
         var note = await context.Notes
+            .Include(n => n.Source)
             .FirstOrDefaultAsync(n => n.Id == dto.Id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{dto.Id}' was not found.");
@@ -87,6 +106,39 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         note.ProjectId = dto.ProjectId;
         note.AreaId = dto.AreaId;
         note.ResourceId = dto.ResourceId;
+
+        // SourceUrl == null  → leave existing source untouched
+        // SourceUrl == ""    → clear the source link
+        // SourceUrl has value → create or update the linked Source entity
+        if (dto.SourceUrl is not null)
+        {
+            if (string.IsNullOrWhiteSpace(dto.SourceUrl))
+            {
+                note.SourceId = null;
+                note.Source = null;
+            }
+            else if (note.Source is not null)
+            {
+                note.Source.Url = dto.SourceUrl.Trim();
+                note.Source.Title = string.IsNullOrWhiteSpace(dto.SourceTitle)
+                    ? null
+                    : dto.SourceTitle.Trim();
+            }
+            else
+            {
+                var source = new Source
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    Type = SourceType.Url,
+                    Url = dto.SourceUrl.Trim(),
+                    Title = string.IsNullOrWhiteSpace(dto.SourceTitle) ? null : dto.SourceTitle.Trim(),
+                    CapturedAtUtc = DateTime.UtcNow
+                };
+                context.Sources.Add(source);
+                note.Source = source;
+            }
+        }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -101,7 +153,13 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             .AsNoTracking()
             .Where(n => n.UserId == userId && n.Status == NoteStatus.Inbox)
             .OrderBy(n => n.CreatedAtUtc)
-            .Select(n => ToDto(n))
+            .Select(n => new NoteDto(
+                n.Id, n.Title, n.Content, n.AiSummary, n.Status, n.IsArchived,
+                n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId,
+                n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
+                n.IsFavorite, n.Images.Any(),
+                SourceUrl: n.Source != null ? n.Source.Url : null,
+                SourceTitle: n.Source != null ? n.Source.Title : null))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -113,6 +171,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
         var note = await context.Notes
+            .Include(n => n.Source)
             .FirstOrDefaultAsync(n => n.Id == dto.Id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{dto.Id}' was not found.");
@@ -187,7 +246,13 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             .AsNoTracking()
             .Where(n => n.UserId == userId && n.ProjectId == null && n.Status != NoteStatus.Archived)
             .OrderByDescending(n => n.UpdatedAtUtc)
-            .Select(n => ToDto(n))
+            .Select(n => new NoteDto(
+                n.Id, n.Title, n.Content, n.AiSummary, n.Status, n.IsArchived,
+                n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId,
+                n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
+                n.IsFavorite, n.Images.Any(),
+                SourceUrl: n.Source != null ? n.Source.Url : null,
+                SourceTitle: n.Source != null ? n.Source.Title : null))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -197,13 +262,14 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
         var note = await context.Notes
+            .Include(n => n.Source)
             .FirstOrDefaultAsync(n => n.Id == noteId && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{noteId}' was not found.");
 
         note.ProjectId = projectId;
 
-        // Only upgrade category if it's not already categorised as a project item
+        // Only upgrade category if it is not already categorised as a project item
         if (note.ParaCategory != ParaCategory.Project && note.ParaCategory != ParaCategory.Resource)
             note.ParaCategory = ParaCategory.Project;
 
@@ -220,6 +286,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
         var note = await context.Notes
+            .Include(n => n.Source)
             .FirstOrDefaultAsync(n => n.Id == noteId && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{noteId}' was not found.");
@@ -250,7 +317,13 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             .AsNoTracking()
             .Where(n => n.UserId == userId && n.IsArchived)
             .OrderByDescending(n => n.ArchivedAtUtc)
-            .Select(n => ToDto(n))
+            .Select(n => new NoteDto(
+                n.Id, n.Title, n.Content, n.AiSummary, n.Status, n.IsArchived,
+                n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId,
+                n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
+                n.IsFavorite, n.Images.Any(),
+                SourceUrl: n.Source != null ? n.Source.Url : null,
+                SourceTitle: n.Source != null ? n.Source.Title : null))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -296,13 +369,16 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         n.CreatedAtUtc,
         n.UpdatedAtUtc,
         n.IsFavorite,
-        n.Images.Count > 0);
+        n.Images.Count > 0,
+        SourceUrl: n.Source?.Url,
+        SourceTitle: n.Source?.Title);
 
     public async Task<NoteDto> ToggleFavoriteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
         var note = await context.Notes
+            .Include(n => n.Source)
             .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{id}' was not found.");

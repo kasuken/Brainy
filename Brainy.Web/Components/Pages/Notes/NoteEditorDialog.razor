@@ -210,6 +210,40 @@
                             </MudSelect>
                         </div>
 
+                        @* ── Source ── *@
+                        <div class="note-editor__sidebar-section">
+                            <h3 class="note-editor__sidebar-heading">Source</h3>
+                            <MudTextField T="string"
+                                          Value="_model.SourceUrl"
+                                          ValueChanged="OnSourceUrlChanged"
+                                          Label="Source URL"
+                                          Placeholder="https://…"
+                                          InputType="InputType.Url"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Immediate="true"
+                                          Adornment="Adornment.Start"
+                                          AdornmentIcon="@Icons.Material.Outlined.Link"
+                                          Class="mb-2" />
+                            <MudTextField T="string"
+                                          Value="_model.SourceTitle"
+                                          ValueChanged="OnSourceTitleChanged"
+                                          Label="Source Title"
+                                          Placeholder="Article or page name"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Immediate="true" />
+                            @if (!string.IsNullOrWhiteSpace(_model.SourceUrl))
+                            {
+                                <MudLink Href="@_model.SourceUrl"
+                                         Target="_blank"
+                                         Typo="Typo.caption"
+                                         Class="mt-1 d-block ned-source__open-link">
+                                    Open source ↗
+                                </MudLink>
+                            }
+                        </div>
+
                         @if (NoteId.HasValue)
                         {
                             <div class="note-editor__sidebar-section">
@@ -399,6 +433,8 @@
         public string Content            { get; set; } = string.Empty;
         public ParaCategory ParaCategory { get; set; } = ParaCategory.Project;
         public NoteStatus   Status       { get; set; } = NoteStatus.Inbox;
+        public string       SourceUrl    { get; set; } = string.Empty;
+        public string       SourceTitle  { get; set; } = string.Empty;
     }
 
     private readonly NoteFormModel _model = new();
@@ -442,6 +478,8 @@
             _model.Content       = note.Content;
             _model.ParaCategory  = note.ParaCategory;
             _model.Status        = note.Status;
+            _model.SourceUrl     = note.SourceUrl    ?? string.Empty;
+            _model.SourceTitle   = note.SourceTitle  ?? string.Empty;
 
             _links = await RelationshipService.GetForNoteAsync(NoteId.Value);
 
@@ -585,6 +623,18 @@
         MarkDirty();
     }
 
+    private void OnSourceUrlChanged(string value)
+    {
+        _model.SourceUrl = value;
+        MarkDirty();
+    }
+
+    private void OnSourceTitleChanged(string value)
+    {
+        _model.SourceTitle = value;
+        MarkDirty();
+    }
+
     private async Task InsertMarkdownAsync(string prefix, string suffix, string placeholder)
     {
         var newValue = await JS.InvokeAsync<string?>(
@@ -625,7 +675,9 @@
                     _model.ParaCategory,
                     _originalNote.ProjectId,
                     _originalNote.AreaId,
-                    _originalNote.ResourceId));
+                    _originalNote.ResourceId,
+                    SourceUrl: _model.SourceUrl,
+                    SourceTitle: _model.SourceTitle));
                 _originalNote = saved;
             }
             else
@@ -633,7 +685,9 @@
                 saved = await NoteService.CreateAsync(new CreateNoteDto(
                     _model.Title,
                     _model.Content,
-                    _model.ParaCategory));
+                    _model.ParaCategory,
+                    SourceUrl: string.IsNullOrWhiteSpace(_model.SourceUrl) ? null : _model.SourceUrl,
+                    SourceTitle: string.IsNullOrWhiteSpace(_model.SourceTitle) ? null : _model.SourceTitle));
             }
 
             // Link any images pasted before the note was first saved.

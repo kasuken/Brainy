@@ -181,7 +181,7 @@
 
     .arc-ledger-item {
         display: grid;
-        grid-template-columns: 1fr;
+        grid-template-columns: 2rem 1fr;
         gap: 1rem;
         padding: 1.25rem 0;
         border-bottom: 1px solid var(--mud-palette-lines-default);
@@ -189,11 +189,67 @@
         position: relative;
     }
 
+    .arc-item-body {
+        grid-column: 1 / -1;
+    }
+
+    .arc-item-actions {
+        grid-column: 1 / -1;
+    }
+
     @@media (min-width: 768px) {
         .arc-ledger-item {
-            grid-template-columns: 100px 1fr auto;
+            grid-template-columns: 2rem 100px 1fr auto;
             align-items: start;
         }
+
+        .arc-item-body {
+            grid-column: auto;
+        }
+
+        .arc-item-actions {
+            grid-column: auto;
+        }
+    }
+
+    /* ── Bulk action toolbar ── */
+    .arc-bulk-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 10px;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+        animation: arc-fade-up 0.25s ease both;
+    }
+
+    .arc-bulk-count {
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-secondary);
+        margin-right: auto;
+    }
+
+    /* ── Select-all header ── */
+    .arc-select-all-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0;
+        border-bottom: 2px solid var(--mud-palette-lines-default);
+    }
+
+    .arc-select-all-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
     }
 
     .arc-ledger-item:hover {
@@ -423,13 +479,58 @@
 
                 @if (_filtered.Count > 0)
                 {
+                    @* ── Bulk actions toolbar ── *@
+                    @if (_selectedItems.Count > 0)
+                    {
+                        <div class="arc-bulk-toolbar">
+                            <span class="arc-bulk-count">@_selectedItems.Count selected</span>
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Dark"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Restore"
+                                       OnClick="BulkRestoreAsync">
+                                Restore Selected
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.DeleteForever"
+                                       OnClick="ConfirmBulkDeleteAsync">
+                                Delete Selected
+                            </MudButton>
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Default"
+                                       Size="Size.Small"
+                                       OnClick="@(() => _selectedItems.Clear())">
+                                Clear
+                            </MudButton>
+                        </div>
+                    }
+
                     <h2 class="arc-section-title">Items</h2>
                     <div class="arc-ledger">
+                        @* Select-all header *@
+                        <div class="arc-select-all-row">
+                            <MudCheckBox T="bool"
+                                         Value="@(_filtered.Count > 0 && _filtered.All(i => _selectedItems.Contains(i.Id)))"
+                                         ValueChanged="ToggleSelectAllItems"
+                                         Size="Size.Small"
+                                         Color="Color.Primary" />
+                            <span class="arc-select-all-label">Select all (@_filtered.Count)</span>
+                        </div>
+
                         @for (int i = 0; i < _filtered.Count; i++)
                         {
                             var item = _filtered[i];
                             var idx = i;
                             <div class="arc-ledger-item arc-row-in" style="animation-delay:@(idx * 25)ms;">
+                                <div style="display:flex; align-items:flex-start; padding-top:0.1rem;">
+                                    <MudCheckBox T="bool"
+                                                 Value="@_selectedItems.Contains(item.Id)"
+                                                 ValueChanged="@((bool v) => ToggleItem(item.Id, v))"
+                                                 Size="Size.Small"
+                                                 Color="Color.Primary" />
+                                </div>
                                 <div class="arc-item-type">@item.EntityType</div>
                                 <div class="arc-item-body">
                                     <h3 class="arc-item-name">@item.Name</h3>
@@ -452,6 +553,13 @@
                                                OnClick="() => ViewItem(item)">
                                         View
                                     </MudButton>
+                                    <MudButton Variant="Variant.Text"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.DeleteForever"
+                                               OnClick="() => ConfirmDeleteItemAsync(item)">
+                                        Delete
+                                    </MudButton>
                                 </div>
                             </div>
                         }
@@ -460,13 +568,61 @@
 
                 @if (FilteredGoals.Any())
                 {
+                    @* ── Goals bulk actions toolbar ── *@
+                    @if (_selectedGoalIds.Count > 0)
+                    {
+                        <div class="arc-bulk-toolbar" style="margin-top: 1rem;">
+                            <span class="arc-bulk-count">@_selectedGoalIds.Count selected</span>
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Dark"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Restore"
+                                       OnClick="BulkRestoreGoalsAsync">
+                                Restore Selected
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.DeleteForever"
+                                       OnClick="ConfirmBulkDeleteGoalsAsync">
+                                Delete Selected
+                            </MudButton>
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Default"
+                                       Size="Size.Small"
+                                       OnClick="@(() => _selectedGoalIds.Clear())">
+                                Clear
+                            </MudButton>
+                        </div>
+                    }
+
                     <h2 class="arc-section-title" style="margin-top: 2rem;">Goals</h2>
                     <div class="arc-ledger">
-                        @for(int i = 0; i < FilteredGoals.Count(); i++)
+                        @* Select-all header *@
+                        @{
+                            var filteredGoalsList = FilteredGoals.ToList();
+                        }
+                        <div class="arc-select-all-row">
+                            <MudCheckBox T="bool"
+                                         Value="@(filteredGoalsList.Count > 0 && filteredGoalsList.All(g => _selectedGoalIds.Contains(g.Id)))"
+                                         ValueChanged="ToggleSelectAllGoals"
+                                         Size="Size.Small"
+                                         Color="Color.Primary" />
+                            <span class="arc-select-all-label">Select all (@filteredGoalsList.Count)</span>
+                        </div>
+
+                        @for(int i = 0; i < filteredGoalsList.Count; i++)
                         {
-                            var goal = FilteredGoals.ElementAt(i);
+                            var goal = filteredGoalsList[i];
                             var idx = i;
                             <div class="arc-ledger-item arc-row-in" style="animation-delay:@(idx * 25)ms;">
+                                <div style="display:flex; align-items:flex-start; padding-top:0.1rem;">
+                                    <MudCheckBox T="bool"
+                                                 Value="@_selectedGoalIds.Contains(goal.Id)"
+                                                 ValueChanged="@((bool v) => ToggleGoalItem(goal.Id, v))"
+                                                 Size="Size.Small"
+                                                 Color="Color.Primary" />
+                                </div>
                                 <div class="arc-item-type">
                                     <span style="color: var(--mud-palette-warning);">@GoalStatusLabel(goal.Status)</span><br/>
                                     <span style="font-size:0.6rem; opacity:0.6;">GOAL</span>
@@ -497,6 +653,13 @@
                                                Size="Size.Small"
                                                OnClick="@(() => Nav.NavigateTo($"/goals/{goal.Id}"))">
                                         View
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Text"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.DeleteForever"
+                                               OnClick="() => ConfirmDeleteGoalAsync(goal)">
+                                        Delete
                                     </MudButton>
                                 </div>
                             </div>
@@ -663,6 +826,10 @@
 
     private List<GoalDto> _goals = [];
 
+    // ── Bulk selection state ──────────────────────────────────────────────────
+    private readonly HashSet<Guid> _selectedItems = [];
+    private readonly HashSet<Guid> _selectedGoalIds = [];
+
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private bool HasActiveFilters =>
@@ -788,6 +955,10 @@
         }
 
         _filtered = [.. query];
+
+        // Clear stale selections whenever the visible set changes.
+        _selectedItems.Clear();
+        _selectedGoalIds.Clear();
     }
 
     private void SetTypeFilter(string type)
@@ -1167,6 +1338,231 @@
         GoalStatus.Archived => "Archived",
         _ => status.ToString()
     };
+
+    // ── Selection helpers ─────────────────────────────────────────────────────
+
+    private void ToggleItem(Guid id, bool selected)
+    {
+        if (selected) _selectedItems.Add(id);
+        else          _selectedItems.Remove(id);
+    }
+
+    private void ToggleGoalItem(Guid id, bool selected)
+    {
+        if (selected) _selectedGoalIds.Add(id);
+        else          _selectedGoalIds.Remove(id);
+    }
+
+    private void ToggleSelectAllItems(bool selectAll)
+    {
+        if (selectAll)
+            foreach (var item in _filtered) _selectedItems.Add(item.Id);
+        else
+            _selectedItems.ExceptWith(_filtered.Select(i => i.Id));
+    }
+
+    private void ToggleSelectAllGoals(bool selectAll)
+    {
+        if (selectAll)
+            foreach (var goal in FilteredGoals) _selectedGoalIds.Add(goal.Id);
+        else
+            _selectedGoalIds.ExceptWith(FilteredGoals.Select(g => g.Id));
+    }
+
+    // ── Bulk restore (items) ──────────────────────────────────────────────────
+
+    private async Task BulkRestoreAsync()
+    {
+        var toRestore = _filtered.Where(i => _selectedItems.Contains(i.Id)).ToList();
+        var (success, fail) = (0, 0);
+
+        foreach (var item in toRestore)
+        {
+            try
+            {
+                switch (item.EntityType)
+                {
+                    case "Project":  await ProjectService.RestoreAsync(item.Id);  break;
+                    case "Area":     await AreaService.RestoreAsync(item.Id);     break;
+                    case "Resource": await ResourceService.RestoreAsync(item.Id); break;
+                    case "Note":     await NoteService.RestoreAsync(item.Id);     break;
+                }
+                success++;
+            }
+            catch
+            {
+                fail++;
+            }
+        }
+
+        if (success > 0) Snackbar.Add($"{success} item{(success != 1 ? "s" : "")} restored.", Severity.Success);
+        if (fail > 0)    Snackbar.Add($"{fail} item{(fail != 1 ? "s" : "")} could not be restored.", Severity.Warning);
+
+        _selectedItems.Clear();
+        await LoadAsync();
+    }
+
+    // ── Bulk permanent delete (items) ─────────────────────────────────────────
+
+    private async Task ConfirmBulkDeleteAsync()
+    {
+        var count = _selectedItems.Count;
+        var confirmed = await DialogService.ShowMessageBox(
+            "Permanently delete selected items",
+            $"Permanently delete {count} selected item{(count != 1 ? "s" : "")}? This cannot be undone.",
+            yesText: "Delete permanently",
+            cancelText: "Cancel");
+
+        if (confirmed != true) return;
+
+        var toDelete = _filtered.Where(i => _selectedItems.Contains(i.Id)).ToList();
+        var (success, fail) = (0, 0);
+
+        foreach (var item in toDelete)
+        {
+            try
+            {
+                switch (item.EntityType)
+                {
+                    case "Project":  await ProjectService.DeleteAsync(item.Id);  break;
+                    case "Area":     await AreaService.DeleteAsync(item.Id);     break;
+                    case "Resource": await ResourceService.DeleteAsync(item.Id); break;
+                    case "Note":     await NoteService.DeleteAsync(item.Id);     break;
+                }
+                success++;
+            }
+            catch
+            {
+                fail++;
+            }
+        }
+
+        if (success > 0) Snackbar.Add($"{success} item{(success != 1 ? "s" : "")} permanently deleted.", Severity.Success);
+        if (fail > 0)    Snackbar.Add($"{fail} item{(fail != 1 ? "s" : "")} could not be deleted.", Severity.Warning);
+
+        _selectedItems.Clear();
+        await LoadAsync();
+    }
+
+    // ── Per-row permanent delete (item) ──────────────────────────────────────
+
+    private async Task ConfirmDeleteItemAsync(ArchiveItem item)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            $"Permanently delete {item.EntityType}",
+            $"Permanently delete \"{item.Name}\"? This cannot be undone.",
+            yesText: "Delete permanently",
+            cancelText: "Cancel");
+
+        if (confirmed != true) return;
+
+        try
+        {
+            switch (item.EntityType)
+            {
+                case "Project":  await ProjectService.DeleteAsync(item.Id);  break;
+                case "Area":     await AreaService.DeleteAsync(item.Id);     break;
+                case "Resource": await ResourceService.DeleteAsync(item.Id); break;
+                case "Note":     await NoteService.DeleteAsync(item.Id);     break;
+            }
+
+            Snackbar.Add($"\"{item.Name}\" permanently deleted.", Severity.Success);
+            _selectedItems.Remove(item.Id);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    // ── Bulk restore (goals) ──────────────────────────────────────────────────
+
+    private async Task BulkRestoreGoalsAsync()
+    {
+        var toRestore = FilteredGoals.Where(g => _selectedGoalIds.Contains(g.Id)).ToList();
+        var (success, fail) = (0, 0);
+
+        foreach (var goal in toRestore)
+        {
+            try
+            {
+                await GoalService.RestoreAsync(goal.Id);
+                success++;
+            }
+            catch
+            {
+                fail++;
+            }
+        }
+
+        if (success > 0) Snackbar.Add($"{success} goal{(success != 1 ? "s" : "")} restored.", Severity.Success);
+        if (fail > 0)    Snackbar.Add($"{fail} goal{(fail != 1 ? "s" : "")} could not be restored.", Severity.Warning);
+
+        _selectedGoalIds.Clear();
+        await LoadAsync();
+    }
+
+    // ── Bulk permanent delete (goals) ─────────────────────────────────────────
+
+    private async Task ConfirmBulkDeleteGoalsAsync()
+    {
+        var count = _selectedGoalIds.Count;
+        var confirmed = await DialogService.ShowMessageBox(
+            "Permanently delete selected goals",
+            $"Permanently delete {count} selected goal{(count != 1 ? "s" : "")}? This cannot be undone.",
+            yesText: "Delete permanently",
+            cancelText: "Cancel");
+
+        if (confirmed != true) return;
+
+        var toDelete = FilteredGoals.Where(g => _selectedGoalIds.Contains(g.Id)).ToList();
+        var (success, fail) = (0, 0);
+
+        foreach (var goal in toDelete)
+        {
+            try
+            {
+                await GoalService.DeleteAsync(goal.Id);
+                success++;
+            }
+            catch
+            {
+                fail++;
+            }
+        }
+
+        if (success > 0) Snackbar.Add($"{success} goal{(success != 1 ? "s" : "")} permanently deleted.", Severity.Success);
+        if (fail > 0)    Snackbar.Add($"{fail} goal{(fail != 1 ? "s" : "")} could not be deleted.", Severity.Warning);
+
+        _selectedGoalIds.Clear();
+        await LoadAsync();
+    }
+
+    // ── Per-row permanent delete (goal) ──────────────────────────────────────
+
+    private async Task ConfirmDeleteGoalAsync(GoalDto goal)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Permanently delete goal",
+            $"Permanently delete \"{goal.Title}\"? This cannot be undone.",
+            yesText: "Delete permanently",
+            cancelText: "Cancel");
+
+        if (confirmed != true) return;
+
+        try
+        {
+            await GoalService.DeleteAsync(goal.Id);
+            Snackbar.Add($"\"{goal.Title}\" permanently deleted.", Severity.Success);
+            _selectedGoalIds.Remove(goal.Id);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
 
     private record ArchiveItem(
         Guid Id,

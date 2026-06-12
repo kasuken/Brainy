@@ -4,10 +4,13 @@
 @using Microsoft.AspNetCore.Authorization
 @using Brainy.Application.DTOs.Ideas
 @using Brainy.Application.DTOs.Areas
+@using Brainy.Application.DTOs.Projects
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @inject IIdeaService IdeaService
 @inject IAreaService AreaService
+@inject IProjectService ProjectService
+@inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 
@@ -94,6 +97,33 @@ else
                             <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
                         }
                         Convert to Project
+                    </MudButton>
+                }
+                @if (!_detail.IsArchived)
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Info"
+                               StartIcon="@Icons.Material.Outlined.NoteAdd"
+                               Size="Size.Small"
+                               Disabled="_convertingNote"
+                               OnClick="ConfirmConvertToNoteAsync">
+                        @if (_convertingNote)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        }
+                        Convert to Note
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Tertiary"
+                               StartIcon="@Icons.Material.Outlined.AssignmentTurnedIn"
+                               Size="Size.Small"
+                               Disabled="_convertingTask"
+                               OnClick="ConfirmConvertToTaskAsync">
+                        @if (_convertingTask)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        }
+                        Convert to Task
                     </MudButton>
                 }
                 @if (_detail.IsArchived)
@@ -295,6 +325,19 @@ else
     </YesButton>
 </MudMessageBox>
 
+<!-- Convert-to-Note confirmation -->
+<MudMessageBox @ref="_convertNoteMsgBox" Title="Convert to Note?" CancelText="Cancel">
+    <MessageContent>
+        A new Resource note will be created from this idea's title and description. The idea will be kept.
+    </MessageContent>
+    <YesButton>
+        <MudButton Color="Color.Info" Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Outlined.NoteAdd">
+            Create Note
+        </MudButton>
+    </YesButton>
+</MudMessageBox>
+
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
    Idea Detail page — "Archival Mind" workspace style
@@ -419,6 +462,8 @@ else
 .id-status--rejected           { background: rgba(176,58,24,.10) !important; color: #b03a18 !important; }
 .id-status--convertedtoproject { background: rgba(111,122,90,.25) !important; color: #354a28 !important; }
 .id-status--archived           { background: var(--paper-sunk) !important; color: var(--ink-faint) !important; }
+.id-status--convertedtonote    { background: rgba(58,123,205,.14) !important; color: #1a5aa0 !important; }
+.id-status--convertedtotask    { background: rgba(111,58,205,.13) !important; color: #5a2aa0 !important; }
 
 /* Priority colors */
 .id-priority--critical { background: rgba(176,58,24,.12) !important; color: #b03a18 !important; }
@@ -560,11 +605,14 @@ else
     private bool    _savingNotes;
 
     // Confirmation dialogs
-    private MudMessageBox _archiveMsgBox  = null!;
-    private MudMessageBox _restoreMsgBox  = null!;
-    private MudMessageBox _convertMsgBox  = null!;
+    private MudMessageBox _archiveMsgBox     = null!;
+    private MudMessageBox _restoreMsgBox     = null!;
+    private MudMessageBox _convertMsgBox     = null!;
+    private MudMessageBox _convertNoteMsgBox = null!;
 
     private bool _converting;
+    private bool _convertingNote;
+    private bool _convertingTask;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -755,6 +803,78 @@ else
         }
     }
 
+    // ── Convert to Note ────────────────────────────────────────────────────
+
+    private async Task ConfirmConvertToNoteAsync()
+    {
+        bool? confirmed = await _convertNoteMsgBox.ShowAsync();
+        if (confirmed is not true) return;
+
+        _convertingNote = true;
+        try
+        {
+            await IdeaService.ConvertToNoteAsync(Id);
+            Snackbar.Add("Note created from idea.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _convertingNote = false;
+        }
+    }
+
+    // ── Convert to Task ────────────────────────────────────────────────────
+
+    private static readonly DialogOptions _taskDialogOptions = new()
+    {
+        MaxWidth      = MaxWidth.ExtraSmall,
+        FullWidth     = true,
+        BackdropClick = true,
+        CloseButton   = false
+    };
+
+    private async Task ConfirmConvertToTaskAsync()
+    {
+        var projects = await ProjectService.GetAllNonArchivedAsync();
+
+        if (projects.Count == 0)
+        {
+            Snackbar.Add("No projects available. Create a project first.", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters<ConvertIdeaToTaskDialog>
+        {
+            { d => d.Projects, projects }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConvertIdeaToTaskDialog>("", parameters, _taskDialogOptions);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: Guid projectId } && projectId != Guid.Empty)
+        {
+            _convertingTask = true;
+            try
+            {
+                await IdeaService.ConvertToTaskAsync(Id, projectId);
+                Snackbar.Add("Task created from idea.", Severity.Success);
+                await LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+            finally
+            {
+                _convertingTask = false;
+            }
+        }
+    }
+
     // ── Label helpers ──────────────────────────────────────────────────────
 
     private static string StatusLabel(IdeaStatus s) => s switch
@@ -764,8 +884,10 @@ else
         IdeaStatus.Validating          => "Validating",
         IdeaStatus.Planned             => "Planned",
         IdeaStatus.Rejected            => "Rejected",
-        IdeaStatus.ConvertedToProject  => "Converted",
+        IdeaStatus.ConvertedToProject  => "Converted to Project",
         IdeaStatus.Archived            => "Archived",
+        IdeaStatus.ConvertedToNote     => "Converted to Note",
+        IdeaStatus.ConvertedToTask     => "Converted to Task",
         _                              => s.ToString()
     };
 

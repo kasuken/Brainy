@@ -3,9 +3,17 @@
 @attribute [Authorize]
 
 @using Brainy.Application.DTOs.Para
+@using Brainy.Application.DTOs.Projects
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.DTOs.Resources
 @using Brainy.Application.Interfaces.Services
 
 @inject IParaSummaryService ParaSummaryService
+@inject IProjectService ProjectService
+@inject IAreaService AreaService
+@inject IResourceService ResourceService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
 
 <PageTitle>PARA Overview – Brainy</PageTitle>
 
@@ -201,6 +209,120 @@
     .para-grid > :nth-child(2) { animation-delay: 0.1s; }
     .para-grid > :nth-child(3) { animation-delay: 0.2s; }
     .para-grid > :nth-child(4) { animation-delay: 0.3s; }
+
+    /* ── Recent Items / Quick Actions section ── */
+    .para-actions-section {
+        margin-top: 3rem;
+        animation: pd-fade-up 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+        animation-delay: 0.4s;
+    }
+
+    .para-actions-title {
+        font-family: 'Fraunces', serif;
+        font-size: 1.75rem;
+        font-weight: 500;
+        margin: 0 0 1.5rem;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.01em;
+    }
+
+    .para-items-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+
+    @@media (min-width: 900px) {
+        .para-items-grid {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+    }
+
+    .para-items-col {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .para-items-col-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid;
+        margin-bottom: 0.25rem;
+    }
+
+    .para-items-col-header--project  { border-color: #d32f2f; }
+    .para-items-col-header--area     { border-color: #ed6c02; }
+    .para-items-col-header--resource { border-color: #fbc02d; }
+
+    .para-item-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .para-item-row:last-of-type {
+        border-bottom: none;
+    }
+
+    .para-item-link {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--mud-palette-text-primary);
+        text-decoration: none;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+    }
+
+    .para-item-link:hover {
+        color: var(--mud-palette-primary);
+        text-decoration: underline;
+    }
+
+    .para-items-empty {
+        font-size: 0.85rem;
+        color: var(--mud-palette-text-disabled);
+        text-align: center;
+        padding: 1.25rem 0;
+        margin: 0;
+    }
+
+    .para-items-footer {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--mud-palette-lines-default);
+        text-align: right;
+    }
+
+    .para-items-footer a {
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        text-decoration: none;
+    }
+
+    .para-items-footer a:hover {
+        color: var(--mud-palette-text-primary);
+    }
     
 </style>
 
@@ -288,6 +410,128 @@
                     </a>
 
                 </div>
+
+                @* ── Recent Items / Quick Actions ── *@
+                <section class="para-actions-section">
+                    <h2 class="para-actions-title">Recent Active Items</h2>
+                    <div class="para-items-grid">
+
+                        @* Projects column *@
+                        <div class="para-items-col">
+                            <div class="para-items-col-header para-items-col-header--project">
+                                <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
+                                Projects
+                            </div>
+                            @if (_recentProjects.Count == 0)
+                            {
+                                <p class="para-items-empty">No active projects</p>
+                            }
+                            else
+                            {
+                                @foreach (var project in _recentProjects)
+                                {
+                                    <div class="para-item-row">
+                                        <a href="/projects/@project.Id" class="para-item-link" title="@project.Name">@project.Name</a>
+                                        <MudMenu Icon="@Icons.Material.Filled.MoreVert"
+                                                 Size="Size.Small"
+                                                 Dense="true"
+                                                 AnchorOrigin="Origin.BottomRight"
+                                                 TransformOrigin="Origin.TopRight">
+                                            <MudMenuItem Icon="@Icons.Material.Outlined.OpenInNew"
+                                                         OnClick="@(() => Nav.NavigateTo($"/projects/{project.Id}"))">
+                                                Open
+                                            </MudMenuItem>
+                                            <MudMenuItem Icon="@Icons.Material.Outlined.Archive"
+                                                         OnClick="() => ArchiveProjectAsync(project)">
+                                                Move to Archive
+                                            </MudMenuItem>
+                                        </MudMenu>
+                                    </div>
+                                }
+                            }
+                            <div class="para-items-footer">
+                                <a href="/projects">All projects →</a>
+                            </div>
+                        </div>
+
+                        @* Areas column *@
+                        <div class="para-items-col">
+                            <div class="para-items-col-header para-items-col-header--area">
+                                <MudIcon Icon="@Icons.Material.Outlined.Landscape" Size="Size.Small" />
+                                Areas
+                            </div>
+                            @if (_recentAreas.Count == 0)
+                            {
+                                <p class="para-items-empty">No active areas</p>
+                            }
+                            else
+                            {
+                                @foreach (var area in _recentAreas)
+                                {
+                                    <div class="para-item-row">
+                                        <a href="/areas/@area.Id" class="para-item-link" title="@area.Name">@area.Name</a>
+                                        <MudMenu Icon="@Icons.Material.Filled.MoreVert"
+                                                 Size="Size.Small"
+                                                 Dense="true"
+                                                 AnchorOrigin="Origin.BottomRight"
+                                                 TransformOrigin="Origin.TopRight">
+                                            <MudMenuItem Icon="@Icons.Material.Outlined.OpenInNew"
+                                                         OnClick="@(() => Nav.NavigateTo($"/areas/{area.Id}"))">
+                                                Open
+                                            </MudMenuItem>
+                                            <MudMenuItem Icon="@Icons.Material.Outlined.Archive"
+                                                         OnClick="() => ArchiveAreaAsync(area)">
+                                                Move to Archive
+                                            </MudMenuItem>
+                                        </MudMenu>
+                                    </div>
+                                }
+                            }
+                            <div class="para-items-footer">
+                                <a href="/areas">All areas →</a>
+                            </div>
+                        </div>
+
+                        @* Resources column *@
+                        <div class="para-items-col">
+                            <div class="para-items-col-header para-items-col-header--resource">
+                                <MudIcon Icon="@Icons.Material.Outlined.MenuBook" Size="Size.Small" />
+                                Resources
+                            </div>
+                            @if (_recentResources.Count == 0)
+                            {
+                                <p class="para-items-empty">No active resources</p>
+                            }
+                            else
+                            {
+                                @foreach (var resource in _recentResources)
+                                {
+                                    <div class="para-item-row">
+                                        <a href="/resources/@resource.Id" class="para-item-link" title="@resource.Name">@resource.Name</a>
+                                        <MudMenu Icon="@Icons.Material.Filled.MoreVert"
+                                                 Size="Size.Small"
+                                                 Dense="true"
+                                                 AnchorOrigin="Origin.BottomRight"
+                                                 TransformOrigin="Origin.TopRight">
+                                            <MudMenuItem Icon="@Icons.Material.Outlined.OpenInNew"
+                                                         OnClick="@(() => Nav.NavigateTo($"/resources/{resource.Id}"))">
+                                                Open
+                                            </MudMenuItem>
+                                            <MudMenuItem Icon="@Icons.Material.Outlined.Archive"
+                                                         OnClick="() => ArchiveResourceAsync(resource)">
+                                                Move to Archive
+                                            </MudMenuItem>
+                                        </MudMenu>
+                                    </div>
+                                }
+                            }
+                            <div class="para-items-footer">
+                                <a href="/resources">All resources →</a>
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
             }
         </main>
 
@@ -336,7 +580,8 @@
                     "Review the count on each card to understand where your knowledge currently lives.",
                     "Open Projects when you need work tied to short-term outcomes and next actions.",
                     "Open Areas or Resources when you need responsibilities or reference topics.",
-                    "Open Archives when you need inactive material that should stay out of active views."
+                    "Open Archives when you need inactive material that should stay out of active views.",
+                    "Use the Recent Active Items section to quickly archive items directly from this page."
                 ]
             }
         ]
@@ -345,9 +590,89 @@
     private ParaSummaryDto? _summary;
     private bool _loading = true;
 
+    private List<ProjectDto> _recentProjects = [];
+    private List<AreaDto>    _recentAreas    = [];
+    private List<ResourceDto> _recentResources = [];
+
     protected override async Task OnInitializedAsync()
     {
-        _summary = await ParaSummaryService.GetSummaryAsync();
+        var summaryTask   = ParaSummaryService.GetSummaryAsync();
+        var projectsTask  = ProjectService.GetAllNonArchivedAsync();
+        var areasTask     = AreaService.GetAllActiveAsync();
+        var resourcesTask = ResourceService.GetAllActiveAsync();
+
+        await Task.WhenAll(summaryTask, projectsTask, areasTask, resourcesTask);
+
+        _summary          = summaryTask.Result;
+        _recentProjects   = [.. projectsTask.Result.OrderByDescending(p => p.UpdatedAtUtc).Take(5)];
+        _recentAreas      = [.. areasTask.Result.OrderByDescending(a => a.UpdatedAtUtc).Take(5)];
+        _recentResources  = [.. resourcesTask.Result.OrderByDescending(r => r.UpdatedAtUtc).Take(5)];
+
         _loading = false;
+    }
+
+    // ── Archive actions ───────────────────────────────────────────────────────
+
+    /// <summary>Archives a project and optimistically updates the summary counts.</summary>
+    private async Task ArchiveProjectAsync(ProjectDto project)
+    {
+        try
+        {
+            await ProjectService.ArchiveAsync(project.Id);
+            Snackbar.Add($"\"{project.Name}\" moved to Archives.", Severity.Success);
+            _recentProjects.RemoveAll(p => p.Id == project.Id);
+            if (_summary is not null)
+                _summary = _summary with
+                {
+                    ActiveProjectCount   = Math.Max(0, _summary.ActiveProjectCount - 1),
+                    ArchivedProjectCount = _summary.ArchivedProjectCount + 1
+                };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    /// <summary>Archives an area and optimistically updates the summary counts.</summary>
+    private async Task ArchiveAreaAsync(AreaDto area)
+    {
+        try
+        {
+            await AreaService.ArchiveAsync(area.Id);
+            Snackbar.Add($"\"{area.Name}\" moved to Archives.", Severity.Success);
+            _recentAreas.RemoveAll(a => a.Id == area.Id);
+            if (_summary is not null)
+                _summary = _summary with
+                {
+                    ActiveAreaCount   = Math.Max(0, _summary.ActiveAreaCount - 1),
+                    ArchivedAreaCount = _summary.ArchivedAreaCount + 1
+                };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    /// <summary>Archives a resource and optimistically updates the summary counts.</summary>
+    private async Task ArchiveResourceAsync(ResourceDto resource)
+    {
+        try
+        {
+            await ResourceService.ArchiveAsync(resource.Id);
+            Snackbar.Add($"\"{resource.Name}\" moved to Archives.", Severity.Success);
+            _recentResources.RemoveAll(r => r.Id == resource.Id);
+            if (_summary is not null)
+                _summary = _summary with
+                {
+                    ActiveResourceCount   = Math.Max(0, _summary.ActiveResourceCount - 1),
+                    ArchivedResourceCount = _summary.ArchivedResourceCount + 1
+                };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
     }
 }

@@ -324,6 +324,69 @@
         padding: 0 0.25rem;
     }
 
+    /* ── Type filter chips ── */
+    .search-filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        padding: 0 0.1rem;
+    }
+
+    .search-filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.3rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        border: 1.5px solid var(--mud-palette-lines-default);
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-secondary);
+        transition: border-color 0.15s, background 0.15s, color 0.15s, box-shadow 0.15s;
+        white-space: nowrap;
+    }
+
+    .search-filter-chip:hover {
+        border-color: var(--mud-palette-primary);
+        color: var(--mud-palette-primary);
+        box-shadow: 0 1px 6px rgba(192,86,29,0.12);
+    }
+
+    .search-filter-chip--active {
+        background: var(--mud-palette-primary);
+        border-color: var(--mud-palette-primary);
+        color: #fff !important;
+        box-shadow: 0 2px 8px rgba(192,86,29,0.22);
+    }
+
+    .search-filter-chip__icon {
+        font-size: 0.9rem !important;
+        width: 0.9rem !important;
+        height: 0.9rem !important;
+        opacity: 0.85;
+    }
+
+    .search-filter-chip__badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.3em;
+        padding: 0 0.3em;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        background: rgba(0,0,0,0.12);
+        margin-left: 0.1rem;
+    }
+
+    .search-filter-chip--active .search-filter-chip__badge {
+        background: rgba(255,255,255,0.28);
+    }
+
+    /* ── Result sections ── */
     .search-results-section + .search-results-section {
         margin-top: 1.5rem;
     }
@@ -443,11 +506,11 @@
             {
                 Title = "What this screen is for",
                 Icon = Icons.Material.Outlined.Search,
-                Lead = "Search helps you retrieve knowledge fast across notes, outputs, and active goals.",
+                Lead = "Search helps you retrieve knowledge fast across notes, outputs, projects, tasks, areas, resources, ideas, and goals.",
                 Points =
                 [
-                    "Find notes and outputs by title or content.",
-                    "Find active goals by title or description.",
+                    "Find any entity by title or content.",
+                    "Use type filter chips to narrow results to a specific entity type.",
                     "Use relevance hints, dates, categories, and status chips to pick the right result."
                 ]
             },
@@ -460,7 +523,7 @@
                 [
                     "Search reduces the time between remembering something exists and using it.",
                     "Fast retrieval keeps knowledge actionable instead of buried in storage.",
-                    "Result context helps you choose the right note, goal, or output without opening everything."
+                    "Result context helps you choose the right item without opening everything."
                 ]
             },
             new PageHelpSection
@@ -471,26 +534,61 @@
                 Points =
                 [
                     "Type a word or phrase in the search box; results update after a short pause.",
-                    "Scan the Notes, Outputs, and Goals sections for the result type you need.",
-                    "Use title-match badges, PARA category chips, output statuses, goal statuses, and dates to judge relevance.",
-                    "Click a note card to open the note, or click an output or goal card to open its detail page.",
+                    "Use the type filter chips to focus on a specific entity type.",
+                    "Scan title-match badges, PARA category chips, statuses, and dates to judge relevance.",
+                    "Click a card to navigate to the entity.",
                     "Clear the search box to reset the page."
                 ]
             }
         ]
     };
 
+    // ── Filter chip definitions: (type key, label, icon) ────────────────────
+    private static readonly (string Type, string Label, string Icon)[] TypeFilterOptions =
+    [
+        ("All",      "All",       Icons.Material.Outlined.SelectAll),
+        ("Note",     "Notes",     Icons.Material.Outlined.StickyNote2),
+        ("Output",   "Outputs",   Icons.Material.Outlined.Output),
+        ("Project",  "Projects",  Icons.Material.Outlined.AccountTree),
+        ("Task",     "Tasks",     Icons.Material.Outlined.TaskAlt),
+        ("Area",     "Areas",     Icons.Material.Outlined.Landscape),
+        ("Resource", "Resources", Icons.Material.Outlined.LibraryBooks),
+        ("Idea",     "Ideas",     Icons.Material.Outlined.Lightbulb),
+        ("Goal",     "Goals",     Icons.Material.Outlined.Flag),
+    ];
+
     private string _query = string.Empty;
     private string _lastQuery = string.Empty;
+    private string _typeFilter = "All";
     private IReadOnlyList<SearchResultDto> _results = [];
     private IReadOnlyList<GoalDto> _goalResults = [];
     private bool _searching;
     private bool _hasSearched;
+    // CS0414 suppressed: Blazor's Razor compiler reads this field in BuildRenderTree;
+    // Roslyn's data-flow analysis does not track template-side reads.
+#pragma warning disable CS0414
+    private bool _searchError;
+#pragma warning restore CS0414
 
-    private IEnumerable<SearchResultDto> NoteResults   => _results.Where(r => r.ResultType == "Note");
-    private IEnumerable<SearchResultDto> OutputResults => _results.Where(r => r.ResultType == "Output");
+    private IEnumerable<SearchResultDto> NoteResults     => _results.Where(r => r.ResultType == "Note");
+    private IEnumerable<SearchResultDto> OutputResults   => _results.Where(r => r.ResultType == "Output");
+    private IEnumerable<SearchResultDto> ProjectResults  => _results.Where(r => r.ResultType == "Project");
+    private IEnumerable<SearchResultDto> TaskResults     => _results.Where(r => r.ResultType == "Task");
+    private IEnumerable<SearchResultDto> AreaResults     => _results.Where(r => r.ResultType == "Area");
+    private IEnumerable<SearchResultDto> ResourceResults => _results.Where(r => r.ResultType == "Resource");
+    private IEnumerable<SearchResultDto> IdeaResults     => _results.Where(r => r.ResultType == "Idea");
 
-    private int TotalResults => _results.Count + _goalResults.Count;
+    /// <summary>Returns true when the section for the given type should be rendered.</summary>
+    private bool ShowSection(string type) => _typeFilter == "All" || _typeFilter == type;
+
+    private int GetFilterCount(string type) => type switch
+    {
+        "All"      => _results.Count + _goalResults.Count,
+        "Goal"     => _goalResults.Count,
+        _          => _results.Count(r => r.ResultType == type),
+    };
+
+    private int TotalResults => GetFilterCount(_typeFilter);
 
     private Task OnTextChanged(string value)
     {
@@ -500,6 +598,8 @@
             _results = [];
             _goalResults = [];
             _hasSearched = false;
+            _searchError = false;
+            _typeFilter = "All";
         }
 
         return Task.CompletedTask;
@@ -513,11 +613,14 @@
             _results = [];
             _goalResults = [];
             _hasSearched = false;
+            _searchError = false;
+            _typeFilter = "All";
             return;
         }
 
         _searching = true;
         _hasSearched = true;
+        _searchError = false;
         StateHasChanged();
 
         try
@@ -533,6 +636,12 @@
                 .ThenBy(goal => goal.Title)
                 .ToList();
             _lastQuery = term;
+        }
+        catch (Exception)
+        {
+            _searchError = true;
+            _results = [];
+            _goalResults = [];
         }
         finally
         {

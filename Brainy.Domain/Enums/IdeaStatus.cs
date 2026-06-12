@@ -25,5 +25,11 @@ public enum IdeaStatus
     ConvertedToProject = 5,
 
     /// <summary>Soft-archived; retained for historical reference.</summary>
-    Archived = 6
+    Archived = 6,
+
+    /// <summary>Extracted into a reference note (PARA: Resource).</summary>
+    ConvertedToNote = 7,
+
+    /// <summary>Extracted into a task within an existing project.</summary>
+    ConvertedToTask = 8
 }

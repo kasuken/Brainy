@@ -53,4 +53,19 @@ public interface IIdeaService
     /// Creates a project from the idea's title, description, and area, then marks the idea as ConvertedToProject.
     /// </summary>
     Task<IdeaDto> ConvertToProjectAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Converts the idea into a new Resource note.
+    /// Creates a note from the idea's title and description, marks the idea as ConvertedToNote,
+    /// and returns the new note's <see cref="Guid"/>. The idea itself is kept as-is.
+    /// </summary>
+    Task<Guid> ConvertToNoteAsync(Guid ideaId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Converts the idea into a new task inside the specified project.
+    /// Creates a task from the idea's title and description with Normal priority,
+    /// marks the idea as ConvertedToTask, and returns the new task's <see cref="Guid"/>.
+    /// The idea itself is kept as-is.
+    /// </summary>
+    Task<Guid> ConvertToTaskAsync(Guid ideaId, Guid projectId, CancellationToken cancellationToken = default);
 }

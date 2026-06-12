@@ -12,4 +12,11 @@ public record UpdateNoteDto(
     ParaCategory ParaCategory,
     Guid? ProjectId,
     Guid? AreaId,
-    Guid? ResourceId);
+    Guid? ResourceId,
+    /// <summary>
+    /// Source URL to set or update. Pass an empty string to clear the source.
+    /// Pass <c>null</c> (default) to leave the existing source unchanged.
+    /// </summary>
+    string? SourceUrl = null,
+    /// <summary>Human-readable title for the source. Ignored when <see cref="SourceUrl"/> is null.</summary>
+    string? SourceTitle = null);

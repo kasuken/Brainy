@@ -1,12 +1,14 @@
 @page "/tasks-hub"
 @attribute [Authorize]
 @using Brainy.Application.DTOs
+@using Brainy.Application.DTOs.Projects
 @using Brainy.Application.DTOs.Tasks
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @using Brainy.Web.Components.Pages.Tasks
 @inject ITasksHubService TasksHubService
 @inject ITaskService TaskService
+@inject IProjectService ProjectService
 @inject ISnackbar Snackbar
 
 <PageTitle>Tasks Hub · Brainy</PageTitle>
@@ -333,6 +335,54 @@
         color: var(--mud-palette-text-secondary);
         font-weight: 500;
     }
+
+    /* ── Filter Bar ── */
+    .th-filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: flex-end;
+        padding: 1rem 1.25rem;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        margin-bottom: 1.5rem;
+    }
+
+    .th-filter-bar-fields {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: flex-end;
+        flex: 1;
+    }
+
+    .th-filter-bar-actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        padding-bottom: 2px;
+    }
+
+    /* ── Bulk Toolbar ── */
+    .th-bulk-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        margin-bottom: 1rem;
+        background: rgba(192, 86, 29, 0.06);
+        border: 1px solid rgba(192, 86, 29, 0.25);
+    }
+
+    /* ── Filtered Results Section ── */
+    .th-filtered-section {
+        margin-bottom: 2.5rem;
+        padding-bottom: 2rem;
+        border-bottom: 1px dashed var(--mud-palette-lines-default);
+    }
 </style>
 <AuthorizeView>
     <Authorized>
@@ -399,6 +449,71 @@
                                   OnDebounceIntervalElapsed="HandleSearch" />
                 </div>
 
+                @* ── Filter bar ── *@
+                <div class="th-filter-bar">
+                    <div class="th-filter-bar-fields">
+                        <MudSelect T="TaskItemStatus?" @bind-Value="_filterStatus"
+                                   Label="Status" Variant="Variant.Outlined"
+                                   Margin="Margin.Dense" Clearable="true"
+                                   Style="min-width:130px;">
+                            <MudSelectItem T="TaskItemStatus?" Value="@null">All</MudSelectItem>
+                            <MudSelectItem T="TaskItemStatus?" Value="@((TaskItemStatus?)TaskItemStatus.Todo)">Todo</MudSelectItem>
+                            <MudSelectItem T="TaskItemStatus?" Value="@((TaskItemStatus?)TaskItemStatus.InProgress)">In Progress</MudSelectItem>
+                            <MudSelectItem T="TaskItemStatus?" Value="@((TaskItemStatus?)TaskItemStatus.Waiting)">Waiting</MudSelectItem>
+                            <MudSelectItem T="TaskItemStatus?" Value="@((TaskItemStatus?)TaskItemStatus.Done)">Done</MudSelectItem>
+                        </MudSelect>
+
+                        <MudSelect T="TaskPriority?" @bind-Value="_filterMinPriority"
+                                   Label="Min Priority" Variant="Variant.Outlined"
+                                   Margin="Margin.Dense" Clearable="true"
+                                   Style="min-width:140px;">
+                            <MudSelectItem T="TaskPriority?" Value="@null">All</MudSelectItem>
+                            <MudSelectItem T="TaskPriority?" Value="@((TaskPriority?)TaskPriority.Critical)">Critical only</MudSelectItem>
+                            <MudSelectItem T="TaskPriority?" Value="@((TaskPriority?)TaskPriority.High)">High+</MudSelectItem>
+                            <MudSelectItem T="TaskPriority?" Value="@((TaskPriority?)TaskPriority.Medium)">Medium+</MudSelectItem>
+                            <MudSelectItem T="TaskPriority?" Value="@((TaskPriority?)TaskPriority.Low)">All priorities</MudSelectItem>
+                        </MudSelect>
+
+                        <MudSelect T="Guid?" @bind-Value="_filterProjectId"
+                                   Label="Project" Variant="Variant.Outlined"
+                                   Margin="Margin.Dense" Clearable="true"
+                                   Style="min-width:160px;">
+                            <MudSelectItem T="Guid?" Value="@null">All projects</MudSelectItem>
+                            @foreach (var p in _projects)
+                            {
+                                <MudSelectItem T="Guid?" Value="@((Guid?)p.Id)">@p.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudDatePicker @bind-Date="_filterDueAfter"
+                                       Label="Due from"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       DisableToolbar="true"
+                                       Clearable="true"
+                                       Style="max-width:150px;" />
+
+                        <MudDatePicker @bind-Date="_filterDueBefore"
+                                       Label="Due to"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       DisableToolbar="true"
+                                       Clearable="true"
+                                       Style="max-width:150px;" />
+                    </div>
+                    <div class="th-filter-bar-actions">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.FilterList"
+                                   OnClick="ApplyFiltersAsync">Apply Filters</MudButton>
+                        @if (AnyFiltersSet || _filtersApplied)
+                        {
+                            <MudButton Variant="Variant.Text"
+                                       StartIcon="@Icons.Material.Filled.FilterListOff"
+                                       OnClick="ClearFilters">Clear</MudButton>
+                        }
+                    </div>
+                </div>
+
                 @* ── Search results ── *@
                 @if (_searchResults is not null)
                 {
@@ -431,11 +546,156 @@
                                                 <span class="td-task-due">Due @t.DueDate.Value.ToString("MMM d")</span>
                                             }
                                         </div>
+                                        @if (_rescheduleTaskId == t.Id)
+                                        {
+                                            <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap;">
+                                                <MudDatePicker @bind-Date="_rescheduleDate"
+                                                               Label="New due date"
+                                                               Variant="Variant.Outlined"
+                                                               Margin="Margin.Dense"
+                                                               DisableToolbar="true"
+                                                               Clearable="true"
+                                                               Style="max-width:180px;" />
+                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                           Disabled="@(!_rescheduleDate.HasValue)"
+                                                           OnClick="@(() => HandleRescheduleApply(t.Id))">Apply</MudButton>
+                                                <MudButton Size="Size.Small" Variant="Variant.Text"
+                                                           OnClick="CancelInlineReschedule">Cancel</MudButton>
+                                            </div>
+                                        }
                                     </div>
+                                    <MudTooltip Text="Reschedule">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.EditCalendar"
+                                                       Size="Size.Small"
+                                                       Color="@(_rescheduleTaskId == t.Id ? Color.Primary : Color.Default)"
+                                                       OnClick="@(() => ToggleInlineReschedule(t.Id, t.DueDate))" />
+                                    </MudTooltip>
                                     <MudTooltip Text="Mark complete">
                                         <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
                                                        Size="Size.Small" Color="Color.Success"
                                                        OnClick="() => HandleCompleted(t.Id)" />
+                                    </MudTooltip>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+                else if (_filtersApplied && _filteredResults is not null)
+                {
+                    @* ── Filtered results with checkboxes + bulk actions ── *@
+                    <div class="th-filtered-section">
+
+                        @* Bulk actions toolbar — visible only when items are selected *@
+                        @if (_selectedTaskIds.Count > 0)
+                        {
+                            <div class="th-bulk-toolbar">
+                                <MudText Typo="Typo.body2" Style="font-weight:700;">
+                                    @_selectedTaskIds.Count selected
+                                </MudText>
+                                <MudSpacer />
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                           StartIcon="@Icons.Material.Outlined.CheckCircle"
+                                           OnClick="BulkCompleteAsync">Complete</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Outlined.EditCalendar"
+                                           OnClick="ToggleBulkReschedulePanel">Reschedule</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning"
+                                           StartIcon="@Icons.Material.Outlined.Archive"
+                                           OnClick="BulkArchiveAsync">Archive</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text"
+                                           OnClick="DeselectAll">
+                                    Deselect all
+                                </MudButton>
+                            </div>
+
+                            @if (_bulkReschedulePanelOpen)
+                            {
+                                <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1.1rem;background:var(--mud-palette-surface);border:1px solid var(--mud-palette-primary);border-radius:12px;margin-bottom:1rem;flex-wrap:wrap;">
+                                    <MudDatePicker @bind-Date="_bulkRescheduleDate"
+                                                   Label="New due date for all selected"
+                                                   Variant="Variant.Outlined"
+                                                   Margin="Margin.Dense"
+                                                   DisableToolbar="true"
+                                                   Clearable="true"
+                                                   Style="max-width:220px;" />
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                               Disabled="@(!_bulkRescheduleDate.HasValue)"
+                                               OnClick="BulkRescheduleAsync">Apply to @_selectedTaskIds.Count task@(_selectedTaskIds.Count == 1 ? "" : "s")</MudButton>
+                                    <MudButton Size="Size.Small" Variant="Variant.Text"
+                                               OnClick="CancelBulkReschedule">Cancel</MudButton>
+                                </div>
+                            }
+                        }
+
+                        @* Header with select-all ── *@
+                        <div class="td-section-head">
+                            <MudCheckBox T="bool"
+                                         Value="@(_filteredResults.Items.Count > 0 && _selectedTaskIds.Count == _filteredResults.Items.Count)"
+                                         ValueChanged="ToggleSelectAll"
+                                         Size="Size.Small"
+                                         Style="margin-right:0.25rem;" />
+                            <span class="td-section-label">Filtered Results</span>
+                            <span class="td-section-count">@_filteredResults.TotalCount result@(_filteredResults.TotalCount == 1 ? "" : "s")</span>
+                        </div>
+
+                        @if (_filteredResults.Items.Count == 0)
+                        {
+                            <p class="td-empty">No tasks match the current filters.</p>
+                        }
+                        else
+                        {
+                            @foreach (var t in _filteredResults.Items)
+                            {
+                                var isSelected = _selectedTaskIds.Contains(t.Id);
+                                <div class="td-task @PriorityClass(t.Priority) @(IsOverdue(t) ? "td-task--overdue" : "")">
+                                    <MudCheckBox T="bool" Value="@isSelected"
+                                                 ValueChanged="@(v => ToggleTaskSelection(t.Id, v))"
+                                                 Size="Size.Small" />
+                                    <div class="td-task-body">
+                                        <p class="td-task-title">@t.Title</p>
+                                        <div class="td-task-meta">
+                                            <span class="td-task-project">@t.ProjectName</span>
+                                            <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
+                                                @t.Priority.ToString()
+                                            </MudChip>
+                                            <MudChip T="string" Size="Size.Small" Color="@StatusColor(t.Status)" Variant="Variant.Filled">
+                                                @StatusLabel(t.Status)
+                                            </MudChip>
+                                            @if (t.DueDate.HasValue)
+                                            {
+                                                <span class="td-task-due @(IsOverdue(t) ? "td-task-due--overdue" : "")">
+                                                    Due @t.DueDate.Value.ToString("MMM d")
+                                                </span>
+                                            }
+                                        </div>
+                                        @if (_rescheduleTaskId == t.Id)
+                                        {
+                                            <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap;">
+                                                <MudDatePicker @bind-Date="_rescheduleDate"
+                                                               Label="New due date"
+                                                               Variant="Variant.Outlined"
+                                                               Margin="Margin.Dense"
+                                                               DisableToolbar="true"
+                                                               Clearable="true"
+                                                               Style="max-width:180px;" />
+                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                           Disabled="@(!_rescheduleDate.HasValue)"
+                                                           OnClick="@(() => HandleRescheduleApply(t.Id))">Apply</MudButton>
+                                                <MudButton Size="Size.Small" Variant="Variant.Text"
+                                                           OnClick="CancelInlineReschedule">Cancel</MudButton>
+                                            </div>
+                                        }
+                                    </div>
+                                    <MudTooltip Text="Reschedule">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.EditCalendar"
+                                                       Size="Size.Small"
+                                                       Color="@(_rescheduleTaskId == t.Id ? Color.Primary : Color.Default)"
+                                                       OnClick="@(() => ToggleInlineReschedule(t.Id, t.DueDate))" />
+                                    </MudTooltip>
+                                    <MudTooltip Text="Mark complete">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                                                       Size="Size.Small" Color="Color.Success"
+                                                       OnClick="@(() => HandleCompleted(t.Id))" />
                                     </MudTooltip>
                                 </div>
                             }
@@ -447,22 +707,27 @@
                     @* ── Widget Sections Grid ── *@
                     <div class="td-sections">
                         <TasksNeedingAttentionWidget Tasks="_aggregate!.NeedingAttentionTasks"
-                                                     OnComplete="HandleCompleted" />
+                                                     OnComplete="HandleCompleted"
+                                                     OnReschedule="HandleWidgetRescheduleAsync" />
 
                         <OverdueTasksWidget Tasks="_aggregate!.OverdueTasks"
-                                            OnComplete="HandleCompleted" />
+                                            OnComplete="HandleCompleted"
+                                            OnReschedule="HandleWidgetRescheduleAsync" />
 
                         <HighPriorityTasksWidget Tasks="_aggregate!.HighPriorityTasks"
-                                                 OnComplete="HandleCompleted" />
+                                                 OnComplete="HandleCompleted"
+                                                 OnReschedule="HandleWidgetRescheduleAsync" />
 
                         <TasksOnHoldWidget Tasks="_aggregate!.OnHoldTasks"
-                                           OnResume="HandleResume" />
+                                           OnResume="HandleResume"
+                                           OnReschedule="HandleWidgetRescheduleAsync" />
 
                         <TasksWithoutDueDateWidget Tasks="_aggregate!.WithoutDueDateTasks"
-                                                   OnSetDueDate="HandleSetDueDateRequest" />
+                                                   OnReschedule="HandleWidgetRescheduleAsync" />
 
                         <MyTasksWidget Tasks="_aggregate!.ActiveTasks"
                                        OnComplete="HandleCompleted"
+                                       OnReschedule="HandleWidgetRescheduleAsync"
                                        Collapsed="true" />
                     </div>
                 }
@@ -489,9 +754,11 @@
                 Points =
                 [
                     "Search tasks across projects and clear the results when you are done.",
+                    "Filter tasks by status, priority, project, or due date range.",
                     "Review My Tasks, High-Priority, Overdue, Needing Attention, On Hold and No Due Date groups.",
                     "Use Task Health and Status Summary to spot bottlenecks.",
-                    "Complete tasks or resume paused work directly from the hub."
+                    "Complete or reschedule tasks directly from the hub without opening the full editor.",
+                    "Use bulk actions to complete, reschedule, or archive multiple tasks at once."
                 ]
             },
             new PageHelpSection
@@ -514,22 +781,59 @@
                 Points =
                 [
                     "Use Search tasks to find a specific task across active projects.",
+                    "Use the filter bar to narrow by status, priority, project, or due date, then Apply Filters.",
+                    "In the filtered list, check tasks to select them and use bulk actions.",
+                    "Click the calendar icon on any task row to reschedule inline — pick a date and press Apply.",
                     "Scan Status Summary and Task Health before choosing what to act on.",
-                    "Work through Needing Attention, Overdue, High-Priority, On Hold, No Due Date and My Tasks.",
-                    "Click the check action to mark a task complete when the work is done.",
-                    "Resume on-hold tasks here; open the task in its project when you need to set a due date."
+                    "Work through Needing Attention, Overdue, High-Priority, On Hold, No Due Date and My Tasks."
                 ]
             }
         ]
     };
 
+    // ── Core state ──────────────────────────────────────────────────────────
+
     private bool _loading = true;
     private string? _loadError;
     private TasksHubAggregateDto? _aggregate;
+
+    // ── Search ───────────────────────────────────────────────────────────────
+
     private string _searchTerm = string.Empty;
     private PagedResult<TasksHubTaskDto>? _searchResults;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    // ── Filter bar ──────────────────────────────────────────────────────────
+
+    private TaskItemStatus? _filterStatus;
+    private TaskPriority?   _filterMinPriority;
+    private Guid?           _filterProjectId;
+    private DateTime?       _filterDueAfter;
+    private DateTime?       _filterDueBefore;
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private PagedResult<TasksHubTaskDto>? _filteredResults;
+    private bool _filtersApplied;
+
+    // ── Bulk selection ───────────────────────────────────────────────────────
+
+    private HashSet<Guid> _selectedTaskIds = [];
+    private DateTime?     _bulkRescheduleDate;
+    private bool          _bulkReschedulePanelOpen;
+
+    // ── Inline reschedule (page-level: search results + filtered results) ────
+
+    private Guid?     _rescheduleTaskId;
+    private DateTime? _rescheduleDate;
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        // DbContext is not thread-safe — run sequentially.
+        await LoadAsync();
+        await LoadProjectsAsync();
+    }
+
+    // ── Data loading ─────────────────────────────────────────────────────────
 
     private async Task LoadAsync()
     {
@@ -549,6 +853,20 @@
         _loading = false;
         StateHasChanged();
     }
+
+    private async Task LoadProjectsAsync()
+    {
+        try
+        {
+            _projects = await ProjectService.GetAllNonArchivedAsync();
+        }
+        catch
+        {
+            // Non-critical: the project filter dropdown will just be empty.
+        }
+    }
+
+    // ── Search ───────────────────────────────────────────────────────────────
 
     private async Task HandleSearch()
     {
@@ -573,10 +891,185 @@
 
     private void ClearSearch()
     {
-        _searchTerm = string.Empty;
+        _searchTerm    = string.Empty;
         _searchResults = null;
         StateHasChanged();
     }
+
+    // ── Filters ──────────────────────────────────────────────────────────────
+
+    private bool AnyFiltersSet =>
+        _filterStatus.HasValue || _filterMinPriority.HasValue ||
+        _filterProjectId.HasValue || _filterDueAfter.HasValue || _filterDueBefore.HasValue;
+
+    private async Task ApplyFiltersAsync()
+    {
+        try
+        {
+            var filter = new TasksHubFilterDto(
+                ProjectId:   _filterProjectId,
+                Status:      _filterStatus,
+                MinPriority: _filterMinPriority,
+                DueAfter:    _filterDueAfter,
+                DueBefore:   _filterDueBefore);
+
+            _filteredResults = await TasksHubService.GetFilteredTasksAsync(filter);
+            _filtersApplied  = true;
+            _selectedTaskIds.Clear();
+            _bulkReschedulePanelOpen = false;
+        }
+        catch
+        {
+            Snackbar.Add("Could not apply filters.", Severity.Error);
+        }
+
+        StateHasChanged();
+    }
+
+    private void ClearFilters()
+    {
+        _filterStatus        = null;
+        _filterMinPriority   = null;
+        _filterProjectId     = null;
+        _filterDueAfter      = null;
+        _filterDueBefore     = null;
+        _filteredResults     = null;
+        _filtersApplied      = false;
+        _selectedTaskIds.Clear();
+        _bulkReschedulePanelOpen = false;
+        StateHasChanged();
+    }
+
+    // ── Bulk selection ───────────────────────────────────────────────────────
+
+    private void ToggleSelectAll(bool selected)
+    {
+        if (selected)
+            _selectedTaskIds = _filteredResults?.Items.Select(t => t.Id).ToHashSet() ?? [];
+        else
+            _selectedTaskIds.Clear();
+    }
+
+    private void ToggleTaskSelection(Guid taskId, bool selected)
+    {
+        if (selected) _selectedTaskIds.Add(taskId);
+        else          _selectedTaskIds.Remove(taskId);
+    }
+
+    private void DeselectAll() { _selectedTaskIds.Clear(); _bulkReschedulePanelOpen = false; }
+
+    private void ToggleBulkReschedulePanel() => _bulkReschedulePanelOpen = !_bulkReschedulePanelOpen;
+
+    private void CancelBulkReschedule() { _bulkReschedulePanelOpen = false; _bulkRescheduleDate = null; }
+
+    // ── Bulk actions ─────────────────────────────────────────────────────────
+
+    private async Task BulkCompleteAsync()
+    {
+        if (_selectedTaskIds.Count == 0) return;
+        try
+        {
+            var count = await TasksHubService.BulkOperationAsync(
+                new BulkTaskOperationDto([.. _selectedTaskIds], NewStatus: TaskItemStatus.Done));
+            Snackbar.Add($"{count} task{(count == 1 ? "" : "s")} completed.", Severity.Success);
+            _selectedTaskIds.Clear();
+            await LoadAsync();
+            await ApplyFiltersAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not complete tasks.", Severity.Error);
+        }
+    }
+
+    private async Task BulkRescheduleAsync()
+    {
+        if (_selectedTaskIds.Count == 0 || !_bulkRescheduleDate.HasValue) return;
+        try
+        {
+            var count = await TasksHubService.BulkOperationAsync(
+                new BulkTaskOperationDto([.. _selectedTaskIds], NewDueDate: _bulkRescheduleDate));
+            Snackbar.Add($"{count} task{(count == 1 ? "" : "s")} rescheduled.", Severity.Success);
+            _bulkReschedulePanelOpen = false;
+            _bulkRescheduleDate      = null;
+            _selectedTaskIds.Clear();
+            await LoadAsync();
+            await ApplyFiltersAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not reschedule tasks.", Severity.Error);
+        }
+    }
+
+    private async Task BulkArchiveAsync()
+    {
+        if (_selectedTaskIds.Count == 0) return;
+        try
+        {
+            var count = await TasksHubService.BulkOperationAsync(
+                new BulkTaskOperationDto([.. _selectedTaskIds], Archive: true));
+            Snackbar.Add($"{count} task{(count == 1 ? "" : "s")} archived.", Severity.Success);
+            _selectedTaskIds.Clear();
+            await LoadAsync();
+            await ApplyFiltersAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not archive tasks.", Severity.Error);
+        }
+    }
+
+    // ── Inline reschedule (page-level) ───────────────────────────────────────
+
+    private void ToggleInlineReschedule(Guid taskId, DateTime? currentDate)
+    {
+        if (_rescheduleTaskId == taskId) { _rescheduleTaskId = null; _rescheduleDate = null; }
+        else { _rescheduleTaskId = taskId; _rescheduleDate = currentDate; }
+    }
+
+    private void CancelInlineReschedule() { _rescheduleTaskId = null; _rescheduleDate = null; }
+
+    private async Task HandleRescheduleApply(Guid taskId)
+    {
+        await HandleReschedule(taskId, _rescheduleDate);
+        _rescheduleTaskId = null;
+        _rescheduleDate   = null;
+    }
+
+    /// <summary>
+    /// Bridge method used as a method group for all widget OnReschedule EventCallback bindings.
+    /// Named-tuple EventCallbacks cannot be inferred by the Razor compiler from inline lambdas.
+    /// </summary>
+    private Task HandleWidgetRescheduleAsync((Guid TaskId, DateTime? NewDate) args) =>
+        HandleReschedule(args.TaskId, args.NewDate);
+
+    /// <summary>
+    /// Persists a new due date for a single task. Called by both widget callbacks and inline
+    /// pickers in the search/filter result lists.
+    /// </summary>
+    private async Task HandleReschedule(Guid taskId, DateTime? newDate)
+    {
+        try
+        {
+            var task = FindTask(taskId);
+            if (task is null) { Snackbar.Add("Task not found.", Severity.Error); return; }
+
+            await TaskService.UpdateAsync(new UpdateTaskDto(
+                task.Id, task.Title, task.Description, task.Status, task.Priority, newDate));
+
+            Snackbar.Add("Due date updated.", Severity.Success);
+            await LoadAsync();
+            if (!string.IsNullOrWhiteSpace(_searchTerm)) await HandleSearch();
+            if (_filtersApplied) await ApplyFiltersAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not reschedule task.", Severity.Error);
+        }
+    }
+
+    // ── Complete / Resume ────────────────────────────────────────────────────
 
     private async Task HandleCompleted(Guid taskId)
     {
@@ -585,6 +1078,8 @@
             await TaskService.CompleteAsync(taskId);
             Snackbar.Add("Task completed.", Severity.Success);
             await LoadAsync();
+            if (!string.IsNullOrWhiteSpace(_searchTerm)) await HandleSearch();
+            if (_filtersApplied) await ApplyFiltersAsync();
         }
         catch
         {
@@ -598,14 +1093,11 @@
         {
             var task = _aggregate!.OnHoldTasks.First(t => t.Id == taskId);
             await TaskService.UpdateAsync(new UpdateTaskDto(
-                task.Id,
-                task.Title,
-                task.Description,
-                TaskItemStatus.InProgress,
-                task.Priority,
-                task.DueDate));
+                task.Id, task.Title, task.Description,
+                TaskItemStatus.InProgress, task.Priority, task.DueDate));
             Snackbar.Add("Task resumed.", Severity.Success);
             await LoadAsync();
+            if (_filtersApplied) await ApplyFiltersAsync();
         }
         catch
         {
@@ -613,12 +1105,39 @@
         }
     }
 
-    private Task HandleSetDueDateRequest(Guid taskId)
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Looks up a task DTO from filtered results, search results, or the aggregate — in that order.
+    /// This ensures reschedule works even when Done tasks are shown in the filtered view.
+    /// </summary>
+    private TasksHubTaskDto? FindTask(Guid id)
     {
-        // Navigate to the project to set a due date — due date editing is out of scope for the hub page.
-        Snackbar.Add("Open the task in its project to set a due date.", Severity.Info);
-        return Task.CompletedTask;
+        if (_filteredResults is not null)
+        {
+            var found = _filteredResults.Items.FirstOrDefault(t => t.Id == id);
+            if (found is not null) return found;
+        }
+
+        if (_searchResults is not null)
+        {
+            var found = _searchResults.Items.FirstOrDefault(t => t.Id == id);
+            if (found is not null) return found;
+        }
+
+        if (_aggregate is null) return null;
+
+        return _aggregate.ActiveTasks.FirstOrDefault(t => t.Id == id)
+            ?? _aggregate.HighPriorityTasks.FirstOrDefault(t => t.Id == id)
+            ?? _aggregate.OverdueTasks.FirstOrDefault(t => t.Id == id)
+            ?? _aggregate.NeedingAttentionTasks.FirstOrDefault(t => t.Id == id)
+            ?? _aggregate.WithoutDueDateTasks.FirstOrDefault(t => t.Id == id)
+            ?? _aggregate.OnHoldTasks.FirstOrDefault(t => t.Id == id)
+            ?? _aggregate.StaleTasks.FirstOrDefault(t => t.Id == id);
     }
+
+    private static bool IsOverdue(TasksHubTaskDto t) =>
+        t.DueDate.HasValue && t.DueDate.Value.Date < DateTime.Today;
 
     private static Color PriorityColor(TaskPriority p) => p switch
     {
@@ -626,6 +1145,22 @@
         TaskPriority.High     => Color.Warning,
         TaskPriority.Medium   => Color.Info,
         _                     => Color.Default,
+    };
+
+    private static Color StatusColor(TaskItemStatus s) => s switch
+    {
+        TaskItemStatus.InProgress => Color.Primary,
+        TaskItemStatus.Waiting    => Color.Warning,
+        TaskItemStatus.Done       => Color.Success,
+        _                         => Color.Default,
+    };
+
+    private static string StatusLabel(TaskItemStatus s) => s switch
+    {
+        TaskItemStatus.InProgress => "In Progress",
+        TaskItemStatus.Waiting    => "Waiting",
+        TaskItemStatus.Done       => "Done",
+        _                         => "Todo",
     };
 
     private static string PriorityClass(TaskPriority p) => p switch

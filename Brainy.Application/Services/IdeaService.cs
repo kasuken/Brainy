@@ -313,6 +313,68 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         return ToDto(idea, areaName);
     }
 
+    /// <inheritdoc/>
+    public async Task<Guid> ConvertToNoteAsync(Guid ideaId, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var idea = await context.Ideas
+            .FirstOrDefaultAsync(i => i.Id == ideaId && i.UserId == userId, cancellationToken).ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Idea '{ideaId}' was not found.");
+
+        var note = new Note
+        {
+            Id             = Guid.NewGuid(),
+            UserId         = userId,
+            Title          = idea.Title,
+            Content        = idea.Description ?? string.Empty,
+            ParaCategory   = ParaCategory.Resource,
+            Status         = NoteStatus.Active,
+            ProcessedAtUtc = DateTime.UtcNow
+        };
+
+        context.Notes.Add(note);
+        idea.Status = IdeaStatus.ConvertedToNote;
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return note.Id;
+    }
+
+    /// <inheritdoc/>
+    public async Task<Guid> ConvertToTaskAsync(Guid ideaId, Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var idea = await context.Ideas
+            .FirstOrDefaultAsync(i => i.Id == ideaId && i.UserId == userId, cancellationToken).ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Idea '{ideaId}' was not found.");
+
+        var projectExists = await context.Projects
+            .AnyAsync(p => p.Id == projectId && p.UserId == userId, cancellationToken).ConfigureAwait(false);
+
+        if (!projectExists)
+            throw new KeyNotFoundException($"Project '{projectId}' was not found.");
+
+        var task = new TaskItem
+        {
+            Id          = Guid.NewGuid(),
+            UserId      = userId,
+            ProjectId   = projectId,
+            Title       = idea.Title,
+            Description = idea.Description,
+            Priority    = TaskPriority.Medium,
+            Status      = TaskItemStatus.Todo
+        };
+
+        context.Tasks.Add(task);
+        idea.Status = IdeaStatus.ConvertedToTask;
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return task.Id;
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static IdeaDto ToDto(Idea i, string? areaName) => new(

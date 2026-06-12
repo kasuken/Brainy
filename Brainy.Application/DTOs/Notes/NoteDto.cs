@@ -20,4 +20,8 @@ public record NoteDto(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     bool IsFavorite = false,
-    bool HasImages = false);
+    bool HasImages = false,
+    /// <summary>URL of the linked <see cref="Domain.Entities.Source"/>, if any.</summary>
+    string? SourceUrl = null,
+    /// <summary>Display title of the linked <see cref="Domain.Entities.Source"/>, if any.</summary>
+    string? SourceTitle = null);

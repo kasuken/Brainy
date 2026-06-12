@@ -60,4 +60,12 @@ internal sealed class ArchiveRetentionService(IApplicationDbContext context, ICu
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
     }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Enforcement across all users requires a system-level (non-scoped) user identity.
+    /// Returns 0 until a system identity provider is wired up.
+    /// </remarks>
+    public Task<int> EnforceRetentionAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(0);
 }
