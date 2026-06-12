@@ -2,6 +2,7 @@
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @inject ITaskService TaskService
+@inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
 <MudDialog Class="ted-dialog">
@@ -55,11 +56,65 @@
                 <div class="ted-subtasks">
                     <div class="ted-subtasks__head">
                         <span class="ted-subtasks__title">Subtasks</span>
-                        @if (_stagedSubtasks.Count > 0)
+                        @if (_existingSubtasks.Count > 0)
+                        {
+                            var pending = _existingSubtasks.Count(s => s.Status != TaskItemStatus.Done);
+                            <span class="ted-subtasks__count">@pending of @_existingSubtasks.Count pending</span>
+                        }
+                        else if (_stagedSubtasks.Count > 0)
                         {
                             <span class="ted-subtasks__count">@_stagedSubtasks.Count to add</span>
                         }
                     </div>
+
+                    @* ── Existing subtasks ── *@
+                    @if (_existingSubtasks.Count > 0)
+                    {
+                        <MudList T="string" Dense="true" Class="ted-subtasks__list">
+                            @foreach (var sub in _existingSubtasks)
+                            {
+                                var subDone     = sub.Status == TaskItemStatus.Done;
+                                var subOverdue  = !subDone && sub.DueDate.HasValue && sub.DueDate.Value.Date < DateTime.Today;
+                                var subDueToday = !subDone && sub.DueDate.HasValue && sub.DueDate.Value.Date == DateTime.Today;
+                                var toggling    = _togglingSubtasks.Contains(sub.Id);
+                                <MudListItem T="string" Class="@($"ted-subtasks__item {(subOverdue ? "ted-subtasks__item--overdue" : subDueToday ? "ted-subtasks__item--due-today" : "")}")">
+                                    <div class="ted-subtasks__row">
+                                        <MudTooltip Text="@(subDone ? "Mark incomplete" : "Mark complete")">
+                                            <MudIconButton Icon="@(subDone ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                                                           Color="@(subDone ? Color.Success : subOverdue ? Color.Error : subDueToday ? Color.Warning : Color.Default)"
+                                                           Size="Size.Small"
+                                                           Disabled="@toggling"
+                                                           Style="flex-shrink:0; padding:2px; margin:-2px;"
+                                                           OnClick="@(() => ToggleSubtaskAsync(sub))" />
+                                        </MudTooltip>
+                                        <MudTooltip Text="Edit subtask">
+                                            <button type="button"
+                                                    class="ted-subtask-title-btn @(subDone ? "ted-subtasks__text--done" : "")"
+                                                    @onclick="@(() => OpenSubtaskAsync(sub))">@sub.Title</button>
+                                        </MudTooltip>
+                                        @if (!subDone && sub.DueDate.HasValue)
+                                        {
+                                            @if (subOverdue)
+                                            {
+                                                var days = (int)(DateTime.Today - sub.DueDate.Value.Date).TotalDays;
+                                                <span class="ted-subtask-badge ted-subtask-badge--overdue">@days day@(days == 1 ? "" : "s") overdue</span>
+                                            }
+                                            else if (subDueToday)
+                                            {
+                                                <span class="ted-subtask-badge ted-subtask-badge--today">Due today</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="ted-subtask-badge">@sub.DueDate.Value.ToString("MMM d")</span>
+                                            }
+                                        }
+                                    </div>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+
+                    @* ── Staged (new) subtasks ── *@
                     @if (_stagedSubtasks.Count > 0)
                     {
                         <MudList T="string" Dense="true" Class="ted-subtasks__list">
@@ -157,6 +212,39 @@
     gap: .5rem;
     margin-top: .35rem;
 }
+.ted-subtasks__item--overdue  { background: rgba(var(--mud-palette-error-rgb), .06); border-radius: 6px; }
+.ted-subtasks__item--due-today { background: rgba(var(--mud-palette-warning-rgb), .06); border-radius: 6px; }
+.ted-subtasks__text--done { text-decoration: line-through; opacity: .55; }
+.ted-subtask-badge {
+    font-size: .7rem;
+    padding: .1rem .4rem;
+    border-radius: 999px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.ted-subtask-badge--overdue {
+    background: rgba(var(--mud-palette-error-rgb), .12);
+    color: var(--mud-palette-error-darken);
+}
+.ted-subtask-title-btn {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-size: inherit;
+    color: inherit;
+    font-family: inherit;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ted-subtask-title-btn:hover {
+    color: var(--mud-palette-primary);
+    text-decoration: underline;
+}
 </style>
 
 @code {
@@ -178,6 +266,8 @@
     private bool _isSubtask;
     private string _newSubtaskTitle = string.Empty;
     private readonly List<string> _stagedSubtasks = [];
+    private IReadOnlyList<TaskItemDto> _existingSubtasks = [];
+    private readonly HashSet<Guid> _togglingSubtasks = [];
 
     // Only top-level tasks (not subtasks, and not the "create subtask" flow) can own subtasks.
     private bool ShowSubtasks => !_isSubtask && !ParentTaskId.HasValue;
@@ -191,12 +281,13 @@
             var task = await TaskService.GetByIdAsync(TaskId.Value);
             if (task is not null)
             {
-                _title       = task.Title;
-                _description = task.Description;
-                _priority    = task.Priority;
-                _status      = task.Status;
-                _dueDate     = task.DueDate;
-                _isSubtask   = task.ParentTaskId.HasValue;
+                _title            = task.Title;
+                _description      = task.Description;
+                _priority         = task.Priority;
+                _status           = task.Status;
+                _dueDate          = task.DueDate;
+                _isSubtask        = task.ParentTaskId.HasValue;
+                _existingSubtasks = task.Subtasks ?? [];
             }
         }
     }
@@ -259,4 +350,59 @@
     }
 
     private void Cancel() => MudDialog.Cancel();
+
+    private async Task ToggleSubtaskAsync(TaskItemDto sub)
+    {
+        _togglingSubtasks.Add(sub.Id);
+        try
+        {
+            if (sub.Status == TaskItemStatus.Done)
+                await TaskService.ReopenAsync(sub.Id);
+            else
+                await TaskService.CompleteAsync(sub.Id);
+
+            await RefreshSubtasksAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _togglingSubtasks.Remove(sub.Id);
+        }
+    }
+
+    private async Task OpenSubtaskAsync(TaskItemDto sub)
+    {
+        var parameters = new DialogParameters<TaskEditorDialog>
+        {
+            { d => d.TaskId, sub.Id },
+            { d => d.ProjectId, ProjectId }
+        };
+
+        var dialog = await DialogService.ShowAsync<TaskEditorDialog>(
+            "Edit Subtask",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await RefreshSubtasksAsync();
+    }
+
+    private async Task RefreshSubtasksAsync()
+    {
+        if (!TaskId.HasValue) return;
+        var task = await TaskService.GetByIdAsync(TaskId.Value);
+        _existingSubtasks = task?.Subtasks ?? [];
+        if (task is not null && task.Status != _status)
+        {
+            var wasAutoCompleted = task.Status == TaskItemStatus.Done && _status != TaskItemStatus.Done;
+            _status = task.Status;
+            if (wasAutoCompleted)
+                Snackbar.Add("All subtasks complete — task marked as done ✓", Severity.Success);
+        }
+        StateHasChanged();
+    }
 }

@@ -37,6 +37,13 @@
                                 <span class="td-task-due">@t.DueDate.Value.ToString("h:mm tt")</span>
                             }
                         </div>
+                        @if (t.DueTodaySubtaskCount > 0)
+                        {
+                            <div class="td-task-subtask-hint td-task-subtask-hint--today">
+                                <MudIcon Icon="@Icons.Material.Outlined.SubdirectoryArrowRight" Size="Size.Small" />
+                                <span>@t.DueTodaySubtaskCount subtask@(t.DueTodaySubtaskCount == 1 ? "" : "s") due today — open to review</span>
+                            </div>
+                        }
                     </div>
                     <MudTooltip Text="Edit task">
                         <MudIconButton Icon="@Icons.Material.Outlined.Edit"
@@ -87,3 +94,17 @@
         _                     => "td-task--low",
     };
 }
+
+<style>
+.td-task-subtask-hint {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    font-size: .75rem;
+    margin-top: .25rem;
+    font-style: italic;
+}
+.td-task-subtask-hint--today  { color: var(--mud-palette-warning-darken); }
+.td-task-subtask-hint--overdue { color: var(--mud-palette-error); }
+.td-task-subtask-hint .mud-icon-root { font-size: .9rem !important; }
+</style>

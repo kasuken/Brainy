@@ -40,6 +40,13 @@
                                 </span>
                             }
                         </div>
+                        @if (t.OverdueSubtaskCount > 0)
+                        {
+                            <div class="td-task-subtask-hint td-task-subtask-hint--overdue">
+                                <MudIcon Icon="@Icons.Material.Outlined.SubdirectoryArrowRight" Size="Size.Small" />
+                                <span>@t.OverdueSubtaskCount subtask@(t.OverdueSubtaskCount == 1 ? "" : "s") overdue — open to review</span>
+                            </div>
+                        }
                     </div>
                     <MudTooltip Text="Edit task">
                         <MudIconButton Icon="@Icons.Material.Outlined.Edit"
@@ -90,3 +97,17 @@
         _                     => "td-task--low",
     };
 }
+
+<style>
+.td-task-subtask-hint {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    font-size: .75rem;
+    margin-top: .25rem;
+    font-style: italic;
+}
+.td-task-subtask-hint--today   { color: var(--mud-palette-warning-darken); }
+.td-task-subtask-hint--overdue { color: var(--mud-palette-error); }
+.td-task-subtask-hint .mud-icon-root { font-size: .9rem !important; }
+</style>

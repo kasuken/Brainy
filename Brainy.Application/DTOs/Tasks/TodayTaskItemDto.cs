@@ -15,4 +15,6 @@ public record TodayTaskItemDto(
     DateTime? DueDate,
     Guid ProjectId,
     string ProjectName,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    int OverdueSubtaskCount = 0,
+    int DueTodaySubtaskCount = 0);

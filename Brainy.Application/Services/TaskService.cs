@@ -20,10 +20,27 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
 
         var task = await context.Tasks
             .AsNoTracking()
+            .Include(t => t.Subtasks)
             .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId, cancellationToken)
             .ConfigureAwait(false);
 
-        return task is null ? null : ToDto(task);
+        if (task is null) return null;
+
+        var subtasks = task.Subtasks
+            .Where(s => !s.IsArchived)
+            .Select(s => ToDto(s))
+            .OrderByDescending(s => s.Priority)
+            .ThenBy(s => s.DueDate)
+            .ThenBy(s => s.Title)
+            .ToList();
+
+        return new TaskItemDto(
+            task.Id, task.Title, task.Description, task.Status, task.Priority,
+            task.DueDate, task.CompletedDate, task.IsArchived, task.IsCurrentTask, task.ProjectId, task.ParentTaskId,
+            task.CreatedAtUtc, task.UpdatedAtUtc,
+            SubtaskCount: subtasks.Count,
+            DoneSubtaskCount: subtasks.Count(s => s.Status == TaskItemStatus.Done),
+            Subtasks: subtasks);
     }
 
     public async Task<IReadOnlyList<TaskItemDto>> GetByProjectAsync(Guid projectId, CancellationToken cancellationToken = default)

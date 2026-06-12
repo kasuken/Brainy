@@ -25,12 +25,13 @@ internal sealed class TodayService(
     public async Task<IReadOnlyList<TodayTaskItemDto>> GetCurrentTasksAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var today = DateTime.Today;
 
         return await ActiveBase(userId)
             .Where(t => t.Status == TaskItemStatus.InProgress)
             .OrderByDescending(t => t.Priority)
             .ThenBy(t => t.DueDate)
-            .Select(ToDto)
+            .Select(BuildToDto(today))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -38,13 +39,14 @@ internal sealed class TodayService(
     public async Task<IReadOnlyList<TodayTaskItemDto>> GetHighPriorityTasksAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var today = DateTime.Today;
 
         return await ActiveBase(userId)
             .Where(t => t.Priority >= TaskPriority.High && !_inactiveStatuses.Contains(t.Status))
             .OrderByDescending(t => t.Priority)
             .ThenBy(t => t.DueDate)
             .Take(5)
-            .Select(ToDto)
+            .Select(BuildToDto(today))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -63,7 +65,7 @@ internal sealed class TodayService(
                                                    && s.DueDate.Value.Date == today)))
             .OrderByDescending(t => t.Priority)
             .ThenBy(t => t.Title)
-            .Select(ToDto)
+            .Select(BuildToDto(today))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -82,7 +84,7 @@ internal sealed class TodayService(
                                                    && s.DueDate.Value.Date < today)))
             .OrderBy(t => t.DueDate)
             .ThenByDescending(t => t.Priority)
-            .Select(ToDto)
+            .Select(BuildToDto(today))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -90,8 +92,9 @@ internal sealed class TodayService(
     public async Task<IReadOnlyList<TodayTaskItemDto>> GetDueThisWeekAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var tomorrow = DateTime.Today.AddDays(1);
-        var weekEnd  = DateTime.Today.AddDays(6);
+        var today    = DateTime.Today;
+        var tomorrow = today.AddDays(1);
+        var weekEnd  = today.AddDays(6);
 
         return await ActiveBase(userId)
             .Where(t => t.DueDate.HasValue
@@ -100,7 +103,7 @@ internal sealed class TodayService(
                         && !_inactiveStatuses.Contains(t.Status))
             .OrderBy(t => t.DueDate)
             .ThenByDescending(t => t.Priority)
-            .Select(ToDto)
+            .Select(BuildToDto(today))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -108,8 +111,9 @@ internal sealed class TodayService(
     public async Task<IReadOnlyList<TodayTaskItemDto>> GetNextTasksAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var nextWeekStart = DateTime.Today.AddDays(7);
-        var horizon       = DateTime.Today.AddDays(21);
+        var today         = DateTime.Today;
+        var nextWeekStart = today.AddDays(7);
+        var horizon       = today.AddDays(21);
 
         return await ActiveBase(userId)
             .Where(t => t.DueDate.HasValue
@@ -119,7 +123,7 @@ internal sealed class TodayService(
             .OrderBy(t => t.DueDate)
             .ThenByDescending(t => t.Priority)
             .Take(10)
-            .Select(ToDto)
+            .Select(BuildToDto(today))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -183,11 +187,14 @@ internal sealed class TodayService(
     /// <summary>
     /// Returns the single task the user has designated as their Current Task, or null if none is set.
     /// </summary>
-    private Task<TodayTaskItemDto?> GetCurrentTaskByFlagAsync(string userId, CancellationToken cancellationToken) =>
-        ActiveBase(userId)
+    private Task<TodayTaskItemDto?> GetCurrentTaskByFlagAsync(string userId, CancellationToken cancellationToken)
+    {
+        var today = DateTime.Today;
+        return ActiveBase(userId)
             .Where(t => t.IsCurrentTask)
-            .Select(ToDto)
+            .Select(BuildToDto(today))
             .FirstOrDefaultAsync(cancellationToken);
+    }
 
     /// <summary>
     /// Base queryable that enforces the "active task" contract:
@@ -201,7 +208,7 @@ internal sealed class TodayService(
                         && !t.Project.IsArchived
                         && t.ParentTaskId == null);
 
-    private static readonly System.Linq.Expressions.Expression<Func<Domain.Entities.TaskItem, TodayTaskItemDto>> ToDto =
+    private static System.Linq.Expressions.Expression<Func<Domain.Entities.TaskItem, TodayTaskItemDto>> BuildToDto(DateTime today) =>
         t => new TodayTaskItemDto(
             t.Id,
             t.Title,
@@ -211,5 +218,15 @@ internal sealed class TodayService(
             t.DueDate,
             t.ProjectId,
             t.Project.Name,
-            t.CreatedAtUtc);
+            t.CreatedAtUtc,
+            t.Subtasks.Count(s => !s.IsArchived
+                                   && s.Status != TaskItemStatus.Done
+                                   && s.Status != TaskItemStatus.Archived
+                                   && s.DueDate.HasValue
+                                   && s.DueDate.Value.Date < today),
+            t.Subtasks.Count(s => !s.IsArchived
+                                   && s.Status != TaskItemStatus.Done
+                                   && s.Status != TaskItemStatus.Archived
+                                   && s.DueDate.HasValue
+                                   && s.DueDate.Value.Date == today));
 }
