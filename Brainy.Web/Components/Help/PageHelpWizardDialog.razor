@@ -1,0 +1,313 @@
+@namespace Brainy.Web.Components.Help
+
+<MudDialog Class="phw">
+
+    <TitleContent>
+        <div class="phw__title">
+            <span class="phw__title-icon" aria-hidden="true">
+                <MudIcon Icon="@Icons.Material.Filled.AutoStories" />
+            </span>
+            <div class="phw__title-text">
+                <span class="phw__title-name">@Guide.PageTitle</span>
+                @if (!string.IsNullOrWhiteSpace(Guide.Tagline))
+                {
+                    <span class="phw__title-sub">@Guide.Tagline</span>
+                }
+            </div>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        <div class="phw__body">
+
+            @* ── Progress dots ── *@
+            <div class="phw__dots" role="tablist">
+                @for (var i = 0; i < Guide.Sections.Count; i++)
+                {
+                    var idx = i;
+                    var state = idx == _step ? "phw__dot--active" : idx < _step ? "phw__dot--done" : "";
+                    <button type="button"
+                            class="phw__dot @state"
+                            @onclick="() => _step = idx"
+                            aria-label="@($"Go to step {idx + 1}")"></button>
+                }
+            </div>
+
+            @{ var section = Guide.Sections[_step]; }
+            <div class="phw__section" @key="_step">
+                <div class="phw__section-head">
+                    <span class="phw__section-icon" aria-hidden="true">
+                        <MudIcon Icon="@section.Icon" />
+                    </span>
+                    <div>
+                        <div class="phw__step-count">Step @(_step + 1) of @Guide.Sections.Count</div>
+                        <div class="phw__section-title">@section.Title</div>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(section.Lead))
+                {
+                    <p class="phw__lead">@section.Lead</p>
+                }
+
+                @if (section.Points.Count > 0)
+                {
+                    @if (section.Ordered)
+                    {
+                        <ol class="phw__points phw__points--ordered">
+                            @foreach (var point in section.Points)
+                            {
+                                <li>@point</li>
+                            }
+                        </ol>
+                    }
+                    else
+                    {
+                        <ul class="phw__points">
+                            @foreach (var point in section.Points)
+                            {
+                                <li>@point</li>
+                            }
+                        </ul>
+                    }
+                }
+            </div>
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <div class="phw__actions">
+            <MudButton OnClick="Close" Variant="Variant.Text" Class="phw__skip">Skip</MudButton>
+            <MudSpacer />
+            @if (_step > 0)
+            {
+                <MudButton OnClick="Prev"
+                           Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.ChevronLeft"
+                           Class="phw__back">Back</MudButton>
+            }
+            @if (_step < Guide.Sections.Count - 1)
+            {
+                <MudButton OnClick="Next"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           EndIcon="@Icons.Material.Filled.ChevronRight"
+                           Class="phw__next">Next</MudButton>
+            }
+            else
+            {
+                <MudButton OnClick="Close"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Check"
+                           Class="phw__next">Got it</MudButton>
+            }
+        </div>
+    </DialogActions>
+
+</MudDialog>
+
+<style>
+    .phw .mud-dialog {
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: var(--paper-raised);
+        overflow: hidden;
+    }
+
+    .phw .mud-dialog-title {
+        padding: 1.1rem 1.4rem;
+        background: linear-gradient(150deg, var(--clay) 0%, var(--clay-deep) 100%);
+    }
+
+    .phw__title {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+    }
+
+    .phw__title-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.4rem;
+        height: 2.4rem;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.18);
+        color: #fff;
+        flex-shrink: 0;
+    }
+
+    .phw__title-icon .mud-icon-root {
+        color: #fff;
+    }
+
+    .phw__title-text {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.2;
+    }
+
+    .phw__title-name {
+        font-family: var(--font-display);
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #fff;
+    }
+
+    .phw__title-sub {
+        font-size: 0.82rem;
+        color: rgba(253, 248, 240, 0.85);
+        margin-top: 0.15rem;
+    }
+
+    .phw__body {
+        padding: 0.4rem 0.2rem 0.2rem;
+    }
+
+    /* ── Progress dots ── */
+    .phw__dots {
+        display: flex;
+        gap: 0.45rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .phw__dot {
+        height: 6px;
+        flex: 1;
+        border: none;
+        border-radius: 999px;
+        background: var(--line);
+        cursor: pointer;
+        padding: 0;
+        transition: background 0.2s ease;
+    }
+
+    .phw__dot--done {
+        background: var(--clay-ring);
+    }
+
+    .phw__dot--active {
+        background: var(--clay);
+    }
+
+    /* ── Section ── */
+    .phw__section-head {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .phw__section-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.6rem;
+        height: 2.6rem;
+        border-radius: 12px;
+        background: var(--clay-soft);
+        color: var(--clay);
+        flex-shrink: 0;
+    }
+
+    .phw__section-icon .mud-icon-root {
+        color: var(--clay);
+    }
+
+    .phw__step-count {
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+    }
+
+    .phw__section-title {
+        font-family: var(--font-display);
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: var(--ink);
+        line-height: 1.25;
+    }
+
+    .phw__lead {
+        font-size: 0.92rem;
+        line-height: 1.6;
+        color: var(--ink-soft);
+        margin: 0 0 0.85rem;
+    }
+
+    .phw__points {
+        margin: 0;
+        padding-left: 1.2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+    }
+
+    .phw__points li {
+        font-size: 0.9rem;
+        line-height: 1.5;
+        color: var(--ink);
+    }
+
+    .phw__points--ordered li::marker {
+        color: var(--clay);
+        font-weight: 700;
+    }
+
+    /* ── Actions ── */
+    .phw__actions {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        gap: 0.5rem;
+    }
+
+    .phw__skip {
+        color: var(--ink-faint) !important;
+    }
+
+    .phw__next {
+        background: var(--clay) !important;
+        color: #fff !important;
+    }
+
+    .phw__next:hover {
+        background: var(--clay-deep) !important;
+    }
+
+    .phw__back {
+        border-color: var(--line-strong) !important;
+        color: var(--ink-soft) !important;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public PageHelpGuide Guide { get; set; } = default!;
+
+    private int _step;
+
+    private void Next()
+    {
+        if (_step < Guide.Sections.Count - 1)
+        {
+            _step++;
+        }
+    }
+
+    private void Prev()
+    {
+        if (_step > 0)
+        {
+            _step--;
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}

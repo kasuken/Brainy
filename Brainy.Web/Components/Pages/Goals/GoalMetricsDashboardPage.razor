@@ -12,7 +12,10 @@
     <div class="gmd-header">
         <div>
             <p class="gmd-header__eyebrow">Strategic overview</p>
-            <h1 class="gmd-header__title">Goal Metrics</h1>
+            <div class="gmd-title-row">
+                <h1 class="gmd-header__title">Goal Metrics</h1>
+                <PageHelpButton Guide="HelpGuide" />
+            </div>
             <p class="gmd-header__sub">A calm command board for long-range progress across your active horizons.</p>
         </div>
         <MudButton Variant="Variant.Outlined"
@@ -145,6 +148,13 @@
         font-family: var(--font-display);
         font-size: clamp(1.9rem, 4vw, 2.8rem);
         color: var(--ink);
+    }
+
+    .gmd-title-row {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        flex-wrap: wrap;
     }
 
     .gmd-header__sub {
@@ -314,6 +324,53 @@
 </style>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "goals-metrics",
+        PageTitle = "Goal Metrics",
+        Tagline = "A portfolio view of progress, ratios, and area load",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Insights,
+                Lead = "Use this dashboard to read the health of your goal portfolio at a glance.",
+                Points =
+                [
+                    "Track active, achieved, abandoned, and average completion-rate KPIs.",
+                    "Review Goals by Area to see where long-range outcomes are concentrated.",
+                    "Use the Snapshot to compare total portfolio size, achievement ratio, and the most loaded area."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "Metrics keep the Second Brain honest by showing whether knowledge work is becoming outcomes, not just activity.",
+                Points =
+                [
+                    "Goals give direction to the Projects and Areas that organize your work.",
+                    "Area load reveals where ongoing responsibilities may need focus, pruning, or new projects.",
+                    "Outcome metrics reinforce actionability over storage."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Read the KPI cards first to understand active, achieved, abandoned, and completion-rate trends.",
+                    "Check Goals by Area to spot overloaded or under-supported responsibilities.",
+                    "Use Snapshot for the goal portfolio total, achievement ratio, and top area.",
+                    "Select Back to Goals when you want to create, filter, or open individual goals."
+                ]
+            }
+        ]
+    };
+
     private bool _loading = true;
     private GoalMetricsDto? _metrics;
 

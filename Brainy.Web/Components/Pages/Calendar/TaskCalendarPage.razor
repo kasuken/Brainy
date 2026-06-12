@@ -27,7 +27,11 @@
         <div class="cal-page">
             <div class="cal-header">
                 <p class="cal-eyebrow">Schedule</p>
-                <h1 class="cal-title">Tasks Calendar</h1>
+                <div class="d-flex align-center gap-2">
+                    <h1 class="cal-title">Tasks Calendar</h1>
+                    <MudSpacer />
+                    <PageHelpButton Guide="HelpGuide" />
+                </div>
             </div>
 
             @if (_loading)
@@ -200,15 +204,14 @@
                     <main class="cal-main">
                         <MudCalendar TItem="TaskCalendarItem"
                                      Items="@_calendarItems"
-                                     ShowDay="@_showDay"
-                                     ShowWeek="@_showWeek"
-                                     ShowWorkWeek="@_showWorkWeek"
-                                     ShowMonth="@_showMonth"
+                                     ShowDay="false"
+                                     ShowWeek="false"
+                                     ShowWorkWeek="false"
+                                     ShowMonth="true"
                                      EnableDragItems="true"
                                      ItemClicked="@(EventCallback.Factory.Create<TaskCalendarItem>(this, HandleItemClick))"
                                      ItemChanged="@(EventCallback.Factory.Create<TaskCalendarItem>(this, HandleItemChanged))"
-                                     CellClicked="HandleDateClick"
-                                     DayTimeInterval="CalendarTimeInterval.Minutes60">
+                                     CellClicked="HandleDateClick">
 
                             @* ── Month view card (compact) ── *@
                             <MonthTemplate Context="item">
@@ -278,15 +281,59 @@
 </AuthorizeView>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "tasks-calendar",
+        PageTitle = "Tasks Calendar",
+        Tagline = "Plan active project work on a calendar",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.CalendarMonth,
+                Lead = "The Tasks Calendar plots active tasks with due dates on a month calendar so deadlines, workload and priority are visible at a glance.",
+                Points =
+                [
+                    "Filter by search text, project, area, priority and status.",
+                    "Review overdue, today and this-week deadlines in the sidebar.",
+                    "Click a task for details or drag it to reschedule its due date.",
+                    "Click a day to create a new task for that date."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "Scheduling turns captured commitments into concrete action. Project context stays visible while dates reduce cognitive load and help you choose the next move.",
+                Points =
+                [
+                    "Tasks remain tied to Projects and Areas instead of becoming isolated calendar blocks.",
+                    "Due dates and workload summaries reveal when a plan needs adjustment.",
+                    "Archived tasks are excluded from active scheduling views to keep focus clean."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Use the Filters panel to narrow tasks by search, Project, Area, Priority or Status.",
+                    "Scan Upcoming Deadlines and Workload to understand the next two weeks.",
+                    "Read the calendar cards by priority color, status and project label.",
+                    "Click a task to open its details dialog.",
+                    "Drag a task to another day to reschedule its due date.",
+                    "Click a calendar day to create a quick task for that date."
+                ]
+            }
+        ]
+    };
+
     // ── State ────────────────────────────────────────────────────────────────────
     private bool _loading = true;
     private string? _loadError;
-
-    // Calendar view availability (mirrors the views shown in the toolbar switcher).
-    private bool _showDay = true;
-    private bool _showWeek = true;
-    private bool _showWorkWeek = true;
-    private bool _showMonth = true;
 
     private List<TaskCalendarItem> _calendarItems = [];
     private UpcomingDeadlinesDto? _deadlines;
@@ -334,7 +381,7 @@
             var filter = _filter.ToDto();
             var tasks  = await CalendarService.GetCalendarTasksAsync(filter);
 
-            _calendarItems = tasks.Select(ToCalendarItem).ToList();
+            _calendarItems = BuildCalendarItems(tasks);
             _deadlines     = await CalendarService.GetUpcomingDeadlinesAsync();
 
             var today = DateOnly.FromDateTime(DateTime.Today);
@@ -441,6 +488,9 @@
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
 
+    private static List<TaskCalendarItem> BuildCalendarItems(IEnumerable<CalendarTaskDto> tasks) =>
+        tasks.Select(ToCalendarItem).ToList();
+
     private static TaskCalendarItem ToCalendarItem(CalendarTaskDto t) => new()
     {
         TaskId      = t.Id,
@@ -504,5 +554,4 @@
             new(ProjectId, AreaId, Priority, Status, SearchTerm);
     }
 }
-
 

@@ -86,6 +86,12 @@
         margin: 0 0 0.5rem;
     }
 
+    .td-hero-title-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
     .td-date {
         font-size: 0.95rem;
         color: var(--mud-palette-text-secondary);
@@ -330,7 +336,11 @@
         <aside class="td-sidebar">
             <div class="td-hero">
                 <p class="td-eyebrow">Daily briefing</p>
-                <h1 class="td-greeting">Today</h1>
+                <div class="td-hero-title-row">
+                    <h1 class="td-greeting">Today</h1>
+                    <MudSpacer />
+                    <PageHelpButton Guide="HelpGuide" />
+                </div>
                 <p class="td-date">@DateTime.Now.ToString("dddd, MMMM d, yyyy")</p>
             </div>
 
@@ -458,6 +468,55 @@
     </div>
 </div>
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "today",
+        PageTitle = "Today",
+        Tagline = "Your daily command center for focused project work",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Today,
+                Lead = "Today keeps active execution in view: what to focus on now, what is due or overdue, and what should be handled next.",
+                Points =
+                [
+                    "Track your Current focus alongside a daily snapshot and Inbox reminder.",
+                    "Review overdue, due today, due this week, and next tasks in one execution flow.",
+                    "See high-priority project work, priority projects, and goal deadlines before they drift.",
+                    "Use quick actions to add a task, process the Inbox, or create a note."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "In BASB, Today turns organized knowledge into action instead of another place to store things.",
+                Points =
+                [
+                    "Tasks stay tied to projects so you see the outcome behind the work.",
+                    "The screen favors next actions, deadlines, and focus over browsing stored notes.",
+                    "Archived projects and tasks stay out of Today because this screen is for active execution."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Start with Current focus: mark it complete, clear it, switch tasks, or set the suggested task as focus.",
+                    "Use notifications and the Overdue section to clear anything already slipping.",
+                    "Work Due Today and High-priority project work before moving to lower-pressure items.",
+                    "Plan Due This Week and Next Tasks so upcoming work is visible early.",
+                    "Use New Task, Process Inbox, or New Note from quick actions when work needs to be captured."
+                ]
+            }
+        ]
+    };
+
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
 
@@ -593,4 +652,3 @@
         _                                  => Severity.Info,
     };
 }
-

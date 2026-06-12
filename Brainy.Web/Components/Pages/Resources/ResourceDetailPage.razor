@@ -48,6 +48,7 @@ else
             <div class="rd-title-block">
                 <div class="rd-title-top">
                     <h1 class="rd-title">@_detail.Name</h1>
+                    <PageHelpButton Guide="HelpGuide" />
                     @if (_detail.IsArchived)
                     {
                         <MudChip T="string" Color="Color.Warning" Size="Size.Small" Class="rd-archived-chip">
@@ -550,6 +551,54 @@ else
 </style>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "resource-detail",
+        PageTitle = "Resource Detail",
+        Tagline = "Keep one reference topic organized enough to reuse later",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.LibraryBooks,
+                Lead = "Use this detail view to manage a resource topic and the notes that make it useful later.",
+                Points =
+                [
+                    "Review its topic, description, tags, note count, and last-updated date.",
+                    "Link notes that belong to this reference topic and unlink ones that no longer fit.",
+                    "Edit, archive, or restore the resource as your library evolves."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "In PARA, a Resource is a topic of interest or reference material for the future — it should feed your projects later, so prioritize reuse over hoarding.",
+                Points =
+                [
+                    "Keep resources broad enough to collect useful references, but specific enough to find again.",
+                    "Prefer notes you can reuse in outputs, decisions, or future projects.",
+                    "Let linked notes carry source material while this resource provides the retrieval context."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Use Edit to update the resource name, topic, description, or tags.",
+                    "Use Archive or Restore to move it in or out of active resource views.",
+                    "Review Topic, Description, and Tags to confirm this reference is findable.",
+                    "Click Link Note, choose an unlinked note, and confirm Link.",
+                    "Open linked note titles to read source material; use the unlink icon to remove outdated connections."
+                ]
+            }
+        ]
+    };
+
     [Parameter] public Guid ResourceId { get; set; }
 
     private bool _loading = true;

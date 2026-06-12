@@ -68,6 +68,13 @@
         margin: 0 0 0.5rem;
     }
 
+    .ip-title-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+
     .ip-meta {
         font-size: 0.85rem;
         color: var(--mud-palette-text-secondary);
@@ -272,7 +279,10 @@
         @* ── Sidebar ── *@
         <aside class="ip-sidebar">
             <p class="ip-eyebrow">Inspiration</p>
-            <h1 class="ip-title">Ideas</h1>
+            <div class="ip-title-row">
+                <h1 class="ip-title">Ideas</h1>
+                <PageHelpButton Guide="HelpGuide" />
+            </div>
             <p class="ip-meta">@(_ideas?.Count ?? 0) ideas total · @(_filtered?.Count ?? 0) shown</p>
 
             <MudButton Variant="Variant.Filled" Color="Color.Primary"
@@ -459,6 +469,54 @@
 </div>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "ideas",
+        PageTitle = "Ideas",
+        Tagline = "Capture sparks of inspiration before they disappear",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.EmojiObjects,
+                Lead = "Ideas is your incubator for raw inspiration — the sparks that might become projects, outputs, or useful reference later.",
+                Points =
+                [
+                    "Create quick ideas without forcing them into a project too early.",
+                    "Scan each idea's area, priority, status, and last update date.",
+                    "Filter the list so the best sparks are easy to revisit and develop."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "Capture inspiration freely; an idea is raw material to incubate and later turn into projects or outputs.",
+                Points =
+                [
+                    "Treat capture as low-friction collecting, not commitment.",
+                    "Use priority and status to decide which ideas deserve attention now.",
+                    "Archive or reject ideas that no longer support actionability."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Click New Idea to capture a fresh spark.",
+                    "Use Search ideas to find matching idea text.",
+                    "Select Priority or Status chips to narrow the active list.",
+                    "Turn on Show Archived when you need to review or restore old ideas.",
+                    "Use row actions to edit, archive, restore, delete, or convert a promising idea to a project."
+                ]
+            }
+        ]
+    };
+
     private bool _loading = true;
     private List<IdeaDto>? _ideas;
     private List<IdeaDto>? _filtered;
@@ -657,4 +715,3 @@
         _ => status.ToString()
     };
 }
-

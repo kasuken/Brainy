@@ -68,6 +68,18 @@
         margin: 0 0 0.5rem;
     }
 
+    .gp-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin: 0 0 0.5rem;
+    }
+
+    .gp-title-row .gp-title {
+        margin: 0;
+    }
+
     .gp-meta {
         font-size: 0.85rem;
         color: var(--mud-palette-text-secondary);
@@ -302,7 +314,10 @@
         @* ── Sidebar ── *@
         <aside class="gp-sidebar">
             <p class="gp-eyebrow">North-Star Ledger</p>
-            <h1 class="gp-title">Goals</h1>
+            <div class="gp-title-row">
+                <h1 class="gp-title">Goals</h1>
+                <PageHelpButton Guide="HelpGuide" />
+            </div>
             <p class="gp-meta">@(_goals.Count) goals total · @(_filtered.Count) shown</p>
 
             <div class="gp-actions">
@@ -439,6 +454,54 @@
 </div>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "goals",
+        PageTitle = "Goals",
+        Tagline = "Turn long-range outcomes into visible project direction",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.TrackChanges,
+                Lead = "Use Goals to define higher-level outcomes that projects and areas can serve.",
+                Points =
+                [
+                    "Create a new goal from the sidebar, then open a goal card to inspect its milestones and linked projects.",
+                    "Search by title and filter by status to keep planned, active, achieved, or abandoned goals in focus.",
+                    "Scan progress bars, target dates, areas, and milestone counts without leaving the list."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "Goals give your Second Brain direction so capture and organization point toward useful outcomes.",
+                Points =
+                [
+                    "Projects are short-term, deadline-driven work that can roll up to a goal.",
+                    "Areas are ongoing responsibilities that can support a goal without becoming projects.",
+                    "Track outcomes and decisions, not just activity or stored notes."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Select New Goal to capture a higher-level outcome with a title, area, description, target date, and status.",
+                    "Use Search goals… to narrow the list by goal title.",
+                    "Toggle the status chips to focus on planned, active, achieved, or abandoned goals.",
+                    "Open any goal card to review details, milestones, timeline, linked projects, and related outputs.",
+                    "Choose Metrics Dashboard to inspect progress across your goal portfolio."
+                ]
+            }
+        ]
+    };
+
     private static readonly GoalStatus[] StatusFilters =
         [GoalStatus.Planned, GoalStatus.Active, GoalStatus.Achieved, GoalStatus.Abandoned];
 
@@ -547,6 +610,5 @@
         _ => "#9a9180"
     };
 }
-
 
 

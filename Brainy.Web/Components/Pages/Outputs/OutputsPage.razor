@@ -68,6 +68,13 @@
         margin: 0 0 0.5rem;
     }
 
+    .op-title-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+
     .op-meta {
         font-size: 0.85rem;
         color: var(--mud-palette-text-secondary);
@@ -273,7 +280,10 @@
         @* ── Sidebar ── *@
         <aside class="op-sidebar">
             <p class="op-eyebrow">Express</p>
-            <h1 class="op-title">Outputs</h1>
+            <div class="op-title-row">
+                <h1 class="op-title">Outputs</h1>
+                <PageHelpButton Guide="HelpGuide" />
+            </div>
             <p class="op-meta">@(_outputs?.Count ?? 0) active · @(_filtered?.Count ?? 0) shown</p>
 
             <MudButton Variant="Variant.Filled" Color="Color.Primary"
@@ -518,6 +528,54 @@
 </div>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "outputs",
+        PageTitle = "Outputs",
+        Tagline = "Turn your knowledge into finished deliverables",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Output,
+                Lead = "Outputs lists the deliverables you create from your knowledge — blog posts, reports, specs, proposals, and other finished work.",
+                Points =
+                [
+                    "Create and track outputs by type, status, area, and project.",
+                    "Search and filter active deliverables so next work is obvious.",
+                    "Publish, archive, restore, edit, or delete outputs from row actions."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "This is the EXPRESS phase of CODE — knowledge is only valuable when reused to CREATE something; assemble distilled notes into real deliverables.",
+                Points =
+                [
+                    "Outputs turn stored notes into practical work products.",
+                    "Source knowledge stays useful when it is shaped into something others can read or use.",
+                    "Archiving finished or inactive outputs protects focus without losing context."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Click New Output to start a deliverable.",
+                    "Use Search outputs to find a draft or published piece.",
+                    "Select Type and Status chips to narrow the active list.",
+                    "Open a row with View, or use Edit, Publish, Archive, Restore, and Delete actions as needed.",
+                    "Turn on Show Archived and expand the archived section when you need older outputs."
+                ]
+            }
+        ]
+    };
+
     private bool _loading = true;
     private List<OutputDto>? _outputs;
     private List<OutputDto>? _filtered;

@@ -25,8 +25,20 @@ public static class DependencyInjection
         services.AddDbContext<BrainyDbContext>(options =>
             options.UseSqlServer(connectionString));
 
-        // Expose the concrete context via the Application-layer abstraction.
-        services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<BrainyDbContext>());
+        // Register a scoped factory so individual DbContext instances can be
+        // created on demand, independent of the scoped context used by Identity
+        // stores.  A scoped lifetime avoids the lifetime conflict with the
+        // scoped DbContextOptions registered by AddDbContext above.
+        services.AddDbContextFactory<BrainyDbContext>(options =>
+            options.UseSqlServer(connectionString), ServiceLifetime.Scoped);
+
+        // In Blazor Server, the DI scope lives for the entire circuit lifetime.
+        // Multiple components can concurrently await DB operations, which would
+        // cause EF Core's "second operation started" error if they all share one
+        // scoped DbContext.  Registering IApplicationDbContext as transient gives
+        // each injected service its own DbContext instance, eliminating that race.
+        services.AddTransient<IApplicationDbContext>(
+            sp => sp.GetRequiredService<IDbContextFactory<BrainyDbContext>>().CreateDbContext());
 
         return services;
     }

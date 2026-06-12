@@ -31,6 +31,8 @@
                         {
                             <span class="inbox-hero__badge">@_notes.Count</span>
                         }
+                        <MudSpacer />
+                        <PageHelpButton Guide="HelpGuide" />
                     </div>
                     <MudText Typo="Typo.body1" Class="mud-text-secondary">
                         @if (_loading)
@@ -630,6 +632,54 @@
 
 </style>
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "inbox",
+        PageTitle = "Inbox",
+        Tagline = "Where every captured thought lands before it finds a home",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Inbox,
+                Lead = "The Inbox holds everything you captured but haven't organised yet — quick notes, links, ideas and clippings. It is a temporary staging area, not a storage place.",
+                Points =
+                [
+                    "See every unprocessed note in one list.",
+                    "Decide where each item belongs, one at a time or in bulk.",
+                    "Keep it moving toward empty so nothing important gets buried."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "In Tiago Forte's CODE method, the Inbox is the bridge between Capture and Organize. You capture freely without judging, then later decide where each note lives using PARA.",
+                Points =
+                [
+                    "Capture should be frictionless — judge later, not now.",
+                    "Organize close to action: send each note to a Project, Area, Resource or Archive.",
+                    "An empty inbox means your thinking is up to date and trustworthy."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Open a note to review what you captured.",
+                    "Choose its PARA category and an optional destination.",
+                    "Distil it: add a title, highlights or a short summary if useful.",
+                    "Process single notes, or select several and process them in bulk.",
+                    "Repeat until the inbox is clear."
+                ]
+            }
+        ]
+    };
+
     private IReadOnlyList<NoteDto> _notes = [];
     private InboxMetricsDto? _metrics;
     private bool _loading = true;

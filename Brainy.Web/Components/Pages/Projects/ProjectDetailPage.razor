@@ -63,7 +63,10 @@ else
                         @PriorityLabel(_detail.Priority)
                     </span>
                 </div>
-                <h1 class="pd-title">@_detail.Name</h1>
+                <div class="pd-heading-row">
+                    <h1 class="pd-title">@_detail.Name</h1>
+                    <PageHelpButton Guide="HelpGuide" />
+                </div>
                 @if (!string.IsNullOrWhiteSpace(_detail.DesiredOutcome))
                 {
                     <p class="pd-outcome">
@@ -446,6 +449,18 @@ else
 .pd-ribbon--low      { background: var(--sage); }
 
 .pd-title-block { flex: 1; min-width: 0; }
+
+.pd-heading-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem;
+}
+
+.pd-heading-row .pd-title {
+    flex: 1;
+    min-width: 0;
+}
 
 .pd-badges { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .6rem; }
 
@@ -933,6 +948,54 @@ else
 </style>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "project-detail",
+        PageTitle = "Project Detail",
+        Tagline = "Keep one outcome's tasks, notes, and outputs moving together",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.FolderSpecial,
+                Lead = "Project detail is the workbench for one outcome, collecting the actions and knowledge needed to finish it.",
+                Points =
+                [
+                    "Review project status, priority, due date, open tasks, notes, resources, outputs, and progress in one place.",
+                    "Manage the project's task list or board without losing the surrounding context.",
+                    "Link notes, review related resources and outputs, then edit, complete, or archive the project when needed."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "In PARA, a Project is a short-term outcome with a deadline — the most actionable bucket in your Second Brain.",
+                Points =
+                [
+                    "Use this page as the active context for one outcome so tasks, notes, resources, and outputs stay connected.",
+                    "Finished projects get archived so active work stays light while the supporting material remains retrievable.",
+                    "Tasks live in project context because each next action should move a concrete outcome forward."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Review the header badges, desired outcome, due date, open task count, and progress before changing work.",
+                    "Use Add task on the Tasks tab to break the outcome into next actions, or switch to Board to manage flow.",
+                    "Use Notes to link project notes, then check Resources and Outputs for supporting material and produced work.",
+                    "Use Edit when scope, priority, or dates change.",
+                    "Use Complete when the outcome is done, then Archive to remove it from active views."
+                ]
+            }
+        ]
+    };
+
     [Parameter] public Guid ProjectId { get; set; }
 
     private bool _loading = true;

@@ -219,4 +219,206 @@
     flex: 1;
 }
 
+.cal-deadline-group {
+    margin: 0.6rem 0 0.35rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--mud-palette-text-secondary);
+}
+
+.cal-deadline-group--overdue {
+    color: #b71c1c;
+}
+
+.cal-deadline-item {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 0.6rem;
+    padding: 0.2rem 0;
+}
+
+.cal-deadline-item--overdue .cal-deadline-title,
+.cal-deadline-item--overdue .cal-deadline-date {
+    color: #8e1b1b;
+}
+
+.cal-deadline-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--mud-palette-text-disabled);
+}
+
+.cal-dot--critical { background: #d32f2f; }
+.cal-dot--high { background: #ed6c02; }
+.cal-dot--medium { background: #fbc02d; }
+.cal-dot--low { background: #2e7d32; }
+
+.cal-deadline-title {
+    font-size: 0.98rem;
+    line-height: 1.2;
+    color: var(--mud-palette-text-primary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cal-deadline-date {
+    font-size: 0.92rem;
+    color: var(--mud-palette-text-secondary);
+    white-space: nowrap;
+}
+
+.cal-deadline-more,
+.cal-empty {
+    margin: 0.45rem 0 0;
+    font-size: 0.9rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.cal-workload-bars {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.6rem;
+    align-items: end;
+    min-height: 82px;
+}
+
+.cal-workload-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.cal-workload-bar {
+    width: 100%;
+    max-width: 22px;
+    min-height: 4px;
+    border-radius: 99px;
+    background: linear-gradient(180deg, #c0561d 0%, #e38a4a 100%);
+    box-shadow: 0 3px 10px rgba(192, 86, 29, 0.2);
+}
+
+.cal-workload-label {
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+    letter-spacing: 0.02em;
+}
+
+.ev {
+    display: grid;
+    grid-template-columns: 3px minmax(0, 1fr);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--mud-palette-lines-default);
+    background: var(--mud-palette-surface);
+}
+
+.ev-bar { background: #999; }
+.ev-bar--critical { background: #d32f2f; }
+.ev-bar--high { background: #ed6c02; }
+.ev-bar--medium { background: #fbc02d; }
+.ev-bar--low { background: #2e7d32; }
+
+.ev-month__body,
+.ev-week__body,
+.ev-day__body {
+    padding: 0.3rem 0.45rem;
+    min-width: 0;
+}
+
+.ev-month__title,
+.ev-week__title,
+.ev-day__title {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--mud-palette-text-primary);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ev-month__project {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.7rem;
+    color: var(--mud-palette-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ev-overdue-dot {
+    position: absolute;
+    right: 4px;
+    top: 4px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #d32f2f;
+}
+
+.ev-month,
+.ev-week,
+.ev-day {
+    position: relative;
+}
+
+.ev-week__meta,
+.ev-day__tags,
+.ev-day__pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.2rem;
+}
+
+.ev-tag,
+.ev-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0.2rem 0.4rem;
+}
+
+.ev-tag--project {
+    background: rgba(25, 118, 210, 0.12);
+    color: #0d47a1;
+}
+
+.ev-tag--area {
+    background: rgba(56, 142, 60, 0.12);
+    color: #1b5e20;
+}
+
+.ev-pill--critical { background: rgba(211, 47, 47, 0.12); color: #8e1b1b; }
+.ev-pill--high { background: rgba(237, 108, 2, 0.12); color: #9a3f02; }
+.ev-pill--medium { background: rgba(251, 192, 45, 0.18); color: #7a5d00; }
+.ev-pill--low { background: rgba(56, 142, 60, 0.12); color: #1b5e20; }
+
+.ev-pill--status.ev-pill--todo { background: rgba(117, 117, 117, 0.15); color: #424242; }
+.ev-pill--status.ev-pill--inprogress { background: rgba(25, 118, 210, 0.15); color: #0d47a1; }
+.ev-pill--status.ev-pill--waiting { background: rgba(123, 31, 162, 0.15); color: #4a148c; }
+.ev-pill--status.ev-pill--done { background: rgba(56, 142, 60, 0.15); color: #1b5e20; }
+
+.ev-status-icon {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.ev-status--todo { background: #757575; }
+.ev-status--inprogress { background: #1976d2; }
+.ev-status--waiting { background: #7b1fa2; }
+.ev-status--done { background: #2e7d32; }
+
 

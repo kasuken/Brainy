@@ -74,6 +74,12 @@
         margin: 0 0 1.5rem;
     }
 
+    .td-hero-title-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
     .td-sidebar-widgets {
         display: flex;
         flex-direction: column;
@@ -337,7 +343,11 @@
         <aside class="td-sidebar">
             <div class="td-hero">
                 <p class="td-eyebrow">Task management</p>
-                <h1 class="td-greeting">Tasks Hub</h1>
+                <div class="td-hero-title-row">
+                    <h1 class="td-greeting">Tasks Hub</h1>
+                    <MudSpacer />
+                    <PageHelpButton Guide="HelpGuide" />
+                </div>
             </div>
 
             @if (!_loading && _loadError is null)
@@ -464,6 +474,55 @@
 </AuthorizeView>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "tasks-hub",
+        PageTitle = "Tasks Hub",
+        Tagline = "One command center for active project work",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.TaskAlt,
+                Lead = "Tasks Hub gathers active tasks from across your projects so you can see what needs action without opening every project.",
+                Points =
+                [
+                    "Search tasks across projects and clear the results when you are done.",
+                    "Review My Tasks, High-Priority, Overdue, Needing Attention, On Hold and No Due Date groups.",
+                    "Use Task Health and Status Summary to spot bottlenecks.",
+                    "Complete tasks or resume paused work directly from the hub."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "In a Second Brain, tasks stay connected to project outcomes; the hub surfaces active work so actionability stays ahead of storage.",
+                Points =
+                [
+                    "PARA keeps tasks anchored to Projects, not floating in a generic checklist.",
+                    "Health and due-date views show what needs a decision next.",
+                    "Archived tasks stay out of active views so old context does not add noise."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Use Search tasks to find a specific task across active projects.",
+                    "Scan Status Summary and Task Health before choosing what to act on.",
+                    "Work through Needing Attention, Overdue, High-Priority, On Hold, No Due Date and My Tasks.",
+                    "Click the check action to mark a task complete when the work is done.",
+                    "Resume on-hold tasks here; open the task in its project when you need to set a due date."
+                ]
+            }
+        ]
+    };
+
     private bool _loading = true;
     private string? _loadError;
     private TasksHubAggregateDto? _aggregate;
@@ -577,4 +636,3 @@
         _                     => "td-task--low",
     };
 }
-

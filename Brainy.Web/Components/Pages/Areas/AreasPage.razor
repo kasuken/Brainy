@@ -67,6 +67,17 @@
         margin: 0 0 0.5rem;
     }
 
+    .ap-title-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .ap-title-row .ap-title {
+        margin: 0;
+    }
+
     .ap-meta {
         font-size: 0.85rem;
         color: var(--mud-palette-text-secondary);
@@ -278,7 +289,11 @@
         @* ── Sidebar ── *@
         <aside class="ap-sidebar">
             <p class="ap-eyebrow">Portfolio</p>
-            <h1 class="ap-title">Areas</h1>
+            <div class="ap-title-row">
+                <h1 class="ap-title">Areas</h1>
+                <MudSpacer />
+                <PageHelpButton Guide="HelpGuide" />
+            </div>
             <p class="ap-meta">@(_areas?.Count ?? 0) areas total · @(_filtered?.Count ?? 0) shown</p>
 
             <MudButton Variant="Variant.Filled" Color="Color.Primary"
@@ -419,6 +434,54 @@
 </div>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "areas",
+        PageTitle = "Areas",
+        Tagline = "Keep ongoing responsibilities visible without turning them into projects",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Category,
+                Lead = "Use Areas to track ongoing responsibilities you maintain over time, like health, finances, team, or home.",
+                Points =
+                [
+                    "See every active area as a card with its description and last-updated date.",
+                    "Create a new area, open an existing one, or use card actions to edit, archive, restore, or delete it.",
+                    "Search, show archived areas, and sort by name or created date."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "In PARA, an Area is an ongoing responsibility to maintain over time with no deadline — unlike Projects, areas hold standards, not outcomes.",
+                Points =
+                [
+                    "Use areas for roles and responsibilities that should stay healthy indefinitely.",
+                    "Move time-bound work into Projects; keep the area as the container for standards and context.",
+                    "Archive an area only when that responsibility is no longer active."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Click New Area to define an ongoing responsibility.",
+                    "Use Search areas… to narrow cards by name, description, or purpose.",
+                    "Toggle Show Archived when you need to review or restore inactive areas.",
+                    "Use Sort By to switch between Name and Created, clicking again to reverse the order.",
+                    "Open a card to manage its projects, ideas, and notes, or use the hover actions to edit, archive, restore, or delete."
+                ]
+            }
+        ]
+    };
+
     private bool _loading = true;
     private List<AreaDto>? _areas;
     private List<AreaDto>? _filtered;
@@ -564,4 +627,3 @@
         }
     }
 }
-

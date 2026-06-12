@@ -67,6 +67,17 @@
         margin: 0 0 0.5rem;
     }
 
+    .rep-title-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .rep-title-row .rep-title {
+        margin: 0;
+    }
+
     .rep-meta {
         font-size: 0.85rem;
         color: var(--mud-palette-text-secondary);
@@ -313,7 +324,11 @@
         @* ── Sidebar ── *@
         <aside class="rep-sidebar">
             <p class="rep-eyebrow">Library</p>
-            <h1 class="rep-title">Resources</h1>
+            <div class="rep-title-row">
+                <h1 class="rep-title">Resources</h1>
+                <MudSpacer />
+                <PageHelpButton Guide="HelpGuide" />
+            </div>
             <p class="rep-meta">@(_resources?.Count ?? 0) @(_showArchived ? "archived resources total" : "resources total") · @(_filtered?.Count ?? 0) shown</p>
 
             <MudButton Variant="Variant.Filled" Color="Color.Primary"
@@ -500,6 +515,55 @@
 </div>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "resources",
+        PageTitle = "Resources",
+        Tagline = "Build a reusable library of topics that can feed future work",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.LibraryBooks,
+                Lead = "Use Resources to collect topics of interest and reference material that may support future projects.",
+                Points =
+                [
+                    "Browse active resources as cards with topic, description, tags, and last-updated date.",
+                    "Create a resource or open a card to manage its linked reference notes.",
+                    "Filter by topic or status, search, sort, and archive or restore resources without losing them."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "In PARA, a Resource is a topic of interest or reference material for the future — it should feed your projects later, so prioritize reuse over hoarding.",
+                Points =
+                [
+                    "Store material by reusable topic, not by a one-off task.",
+                    "Use topics and tags to make future retrieval faster.",
+                    "Archive resources when they stop helping active or likely future work."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Click New Resource to create a reference topic.",
+                    "Use Search resources… to find by name, topic, or description.",
+                    "Choose a topic chip or All Topics to filter the library.",
+                    "Toggle Show Archived to review stored-away resources.",
+                    "Use Sort By to order by Name, Topic, Created, or Updated, clicking again to reverse direction.",
+                    "Open a card for details, or use hover actions to edit, archive, restore, or delete."
+                ]
+            }
+        ]
+    };
+
     private bool _loading = true;
     private List<ResourceDto>? _resources;
     private List<ResourceDto>? _filtered;
@@ -763,4 +827,3 @@
         }
     }
 }
-

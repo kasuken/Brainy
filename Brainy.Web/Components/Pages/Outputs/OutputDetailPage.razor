@@ -51,6 +51,7 @@ else
             <div class="od-title-block">
                 <div class="od-title-top">
                     <h1 class="od-title">@_detail.Title</h1>
+                    <PageHelpButton Guide="HelpGuide" />
                     <span class="od-badge od-badge-type">@OutputEditorDialog.FormatType(_detail.Type)</span>
                     <span class="od-badge od-status--@_detail.Status.ToString().ToLowerInvariant()">
                         @OutputEditorDialog.FormatStatus(_detail.Status)
@@ -400,6 +401,55 @@ body { font-family: var(--font-body); }
 </style>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "output-detail",
+        PageTitle = "Output Detail",
+        Tagline = "Shape one deliverable from source notes to published work",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Output,
+                Lead = "Output Detail is the workspace for shaping one deliverable from content and linked source notes through publishable status.",
+                Points =
+                [
+                    "Review type, status, AI-generated marker, and project or area context.",
+                    "Read the description and current content in focused panels.",
+                    "Connect source notes so the output remains grounded in your second brain.",
+                    "Edit, publish, archive, or restore the output from the header."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "This is the EXPRESS phase of CODE — knowledge is only valuable when reused to CREATE something; assemble distilled notes into real deliverables.",
+                Points =
+                [
+                    "Use source notes as ingredients, not an archive to admire.",
+                    "Keep provenance visible by linking the notes that informed the output.",
+                    "Publishing marks when reused knowledge becomes a finished contribution."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Use Edit to update the output title, description, type, status, and content.",
+                    "Read Content to check the current draft or final text.",
+                    "Search Add source note and click Add to link supporting notes.",
+                    "Remove a source note if it no longer belongs in the deliverable.",
+                    "Publish when ready, or Archive and Restore to manage the output lifecycle."
+                ]
+            }
+        ]
+    };
+
     [Parameter] public Guid Id { get; set; }
 
     private bool _loading = true;

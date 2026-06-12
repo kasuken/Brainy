@@ -1,0 +1,79 @@
+@namespace Brainy.Web.Components.Help
+@inject IDialogService DialogService
+@inject IJSRuntime JS
+
+<MudTooltip Text="How this page works" Placement="Placement.Bottom">
+    <MudIconButton Icon="@Icons.Material.Outlined.HelpOutline"
+                   Color="Color.Default"
+                   Size="@Size"
+                   OnClick="OpenAsync"
+                   Class="page-help-btn"
+                   aria-label="Open the help guide for this page" />
+</MudTooltip>
+
+<style>
+    .page-help-btn {
+        color: var(--ink-soft) !important;
+        border: 1px solid var(--line) !important;
+        background: var(--paper-raised) !important;
+    }
+
+    .page-help-btn:hover {
+        color: var(--clay) !important;
+        border-color: var(--clay-ring) !important;
+    }
+</style>
+
+@code {
+    /// <summary>The guide rendered by the wizard when the button is clicked.</summary>
+    [Parameter, EditorRequired]
+    public PageHelpGuide Guide { get; set; } = default!;
+
+    /// <summary>When true (default) the wizard opens automatically the first time the user visits the page.</summary>
+    [Parameter]
+    public bool AutoShowOnce { get; set; } = true;
+
+    /// <summary>Size of the help icon button.</summary>
+    [Parameter]
+    public Size Size { get; set; } = Size.Medium;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !AutoShowOnce)
+        {
+            return;
+        }
+
+        try
+        {
+            var seen = await JS.InvokeAsync<bool>("brainyHelp.hasSeen", Guide.Key);
+            if (!seen)
+            {
+                await JS.InvokeVoidAsync("brainyHelp.markSeen", Guide.Key);
+                await OpenAsync();
+            }
+        }
+        catch (JSException)
+        {
+            // Help auto-show is non-critical; ignore environments where localStorage is unavailable.
+        }
+    }
+
+    private async Task OpenAsync()
+    {
+        var parameters = new DialogParameters<PageHelpWizardDialog>
+        {
+            { x => x.Guide, Guide }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseOnEscapeKey = true,
+            BackdropClick = true
+        };
+
+        await DialogService.ShowAsync<PageHelpWizardDialog>(null, parameters, options);
+    }
+}

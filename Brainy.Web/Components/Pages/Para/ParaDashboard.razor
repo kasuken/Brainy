@@ -60,6 +60,12 @@
         margin: 0 0 1.5rem;
     }
 
+    .para-title-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
     .para-lead {
         font-size: 1.15rem;
         line-height: 1.5;
@@ -203,7 +209,10 @@
 
         <aside class="para-sidebar">
             <p class="para-eyebrow">Second Brain Architecture</p>
-            <h1 class="para-title">Your PARA Overview</h1>
+            <div class="para-title-row">
+                <h1 class="para-title">Your PARA Overview</h1>
+                <PageHelpButton Guide="HelpGuide" />
+            </div>
             <p class="para-lead">
                 Four categories that organize everything you capture into clear, actionable knowledge.
             </p>
@@ -286,6 +295,53 @@
 </div>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "para",
+        PageTitle = "PARA Overview",
+        Tagline = "See how your Second Brain is organized by actionability",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Dashboard,
+                Lead = "The PARA Overview summarizes the four core buckets that hold your active and archived knowledge.",
+                Points =
+                [
+                    "See counts for Projects, Areas, Resources, and Archives in one place.",
+                    "Jump directly into any PARA bucket from its dashboard card.",
+                    "Spot archived totals without mixing inactive material into active views."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "PARA organizes knowledge by actionability, not by where something came from.",
+                Points =
+                [
+                    "Project = a short-term outcome with a deadline.",
+                    "Area = an ongoing responsibility with no fixed end.",
+                    "Resource = a topic or reference you may reuse later; Archive = inactive material kept for context."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Review the count on each card to understand where your knowledge currently lives.",
+                    "Open Projects when you need work tied to short-term outcomes and next actions.",
+                    "Open Areas or Resources when you need responsibilities or reference topics.",
+                    "Open Archives when you need inactive material that should stay out of active views."
+                ]
+            }
+        ]
+    };
+
     private ParaSummaryDto? _summary;
     private bool _loading = true;
 
@@ -295,4 +351,3 @@
         _loading = false;
     }
 }
-

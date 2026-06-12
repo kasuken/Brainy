@@ -18,11 +18,14 @@
             <h1 class="idash-header__title">Idea Dashboard</h1>
             <p class="idash-header__sub">Overview &amp; review of your idea pipeline</p>
         </div>
-        <MudButton Variant="Variant.Outlined"
-                   StartIcon="@Icons.Material.Outlined.List"
-                   OnClick='() => Nav.NavigateTo("/ideas")'>
-            All Ideas
-        </MudButton>
+        <div class="idash-header__actions">
+            <PageHelpButton Guide="HelpGuide" />
+            <MudButton Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Outlined.List"
+                       OnClick='() => Nav.NavigateTo("/ideas")'>
+                All Ideas
+            </MudButton>
+        </div>
     </div>
 
     @if (_loading)
@@ -358,6 +361,54 @@
 </div>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "ideas-dashboard",
+        PageTitle = "Idea Dashboard",
+        Tagline = "See the health and momentum of your idea pipeline",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Insights,
+                Lead = "The Idea Dashboard gives you a pipeline-level view of idea health, momentum, and review needs.",
+                Points =
+                [
+                    "Read totals for active, archived, converted, and rejected ideas.",
+                    "See how ideas distribute by area and status.",
+                    "Spot recently updated, stale, and high-priority ideas that need review."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "Capture inspiration freely; an idea is raw material to incubate and later turn into projects or outputs.",
+                Points =
+                [
+                    "A dashboard turns scattered sparks into a visible pipeline.",
+                    "Review cadence helps decide what to nurture, convert, reject, or archive.",
+                    "Stale and high-priority signals keep incubation connected to action."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Start with Metrics Overview to understand the size and movement of your idea pipeline.",
+                    "Use Ideas by Area and Ideas by Status to find imbalances or neglected categories.",
+                    "Open Recently Updated Ideas rows to continue work on a specific idea.",
+                    "Expand Review Panel sections to inspect stale, recently active, or high-priority ideas.",
+                    "Click All Ideas when you need the full list and row actions."
+                ]
+            }
+        ]
+    };
+
     bool _loading = true;
     IdeaMetricsDto? _metrics;
     IdeaReviewDto? _reviewData;
@@ -461,6 +512,14 @@
     margin: 0;
     letter-spacing: .04em;
     text-transform: uppercase;
+}
+
+.idash-header__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: .75rem;
+    flex-wrap: wrap;
 }
 
 /* ── Loading ─────────────────────────────────────────────────────────────── */

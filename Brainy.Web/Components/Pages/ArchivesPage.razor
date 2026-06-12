@@ -78,6 +78,12 @@
         margin: 0 0 0.5rem;
     }
 
+    .arc-title-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
     .arc-meta {
         font-size: 0.85rem;
         color: var(--mud-palette-text-secondary);
@@ -311,7 +317,10 @@
         @* ── Sidebar ── *@
         <aside class="arc-sidebar">
             <p class="arc-eyebrow">Vault</p>
-            <h1 class="arc-title">Archives</h1>
+            <div class="arc-title-row">
+                <h1 class="arc-title">Archives</h1>
+                <PageHelpButton Guide="HelpGuide" />
+            </div>
             
             <p class="arc-meta">
                 @if (_loading)
@@ -581,6 +590,54 @@
 </div>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "archives",
+        PageTitle = "Archives",
+        Tagline = "Keep inactive work available without letting it crowd today",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Archive,
+                Lead = "Archives hold inactive projects, areas, resources, notes, and goals so you can restore or review them later.",
+                Points =
+                [
+                    "Browse preserved material that no longer belongs in active work views.",
+                    "Search and filter archived items by type and archived date range.",
+                    "Restore items when they become active again, or view them for context."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "Archives protect focus through actionability over storage — inactive material is set aside, not lost.",
+                Points =
+                [
+                    "Active screens stay clear because completed or paused work moves out of the way.",
+                    "Archived knowledge remains available when old context becomes useful again.",
+                    "Retention rules help decide what stays forever and what can eventually be removed."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Use Search archives to narrow the list by title or description.",
+                    "Choose an Entity Type chip when you only want projects, areas, resources, notes, or all items.",
+                    "Set Archived from or Archived to dates to focus on a time window.",
+                    "Select View to open an archived item, or Restore to return it to active views.",
+                    "Expand Retention Rules if you need to save keep-for-days settings or purge expired archived data."
+                ]
+            }
+        ]
+    };
+
     private static readonly string[] EntityTypes = ["Project", "Area", "Resource", "Note"];
     private static readonly string[] TypeFilters = ["All", "Project", "Area", "Resource", "Note"];
 
@@ -1119,4 +1176,3 @@
         DateTime? ArchivedAtUtc,
         DateTime UpdatedAtUtc);
 }
-

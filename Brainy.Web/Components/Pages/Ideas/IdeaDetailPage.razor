@@ -50,6 +50,7 @@ else
             <div class="id-title-block">
                 <div class="id-title-top">
                     <h1 class="id-title">@_detail.Title</h1>
+                    <PageHelpButton Guide="HelpGuide" />
                     <MudChip T="string" Size="Size.Small" Class=@($"id-status-chip id-status--{_detail.Status.ToString().ToLower()}")>
                         @StatusLabel(_detail.Status)
                     </MudChip>
@@ -486,6 +487,55 @@ else
 </style>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "idea-detail",
+        PageTitle = "Idea Detail",
+        Tagline = "Develop one spark into something actionable",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.EmojiObjects,
+                Lead = "Idea Detail is the workspace for developing one captured spark into something clearer, validated, and actionable.",
+                Points =
+                [
+                    "Review status, priority, area, and timestamps in the header.",
+                    "Edit title, description, priority, status, and area from Details.",
+                    "Build supporting research, competitor notes, and observations in the tabs.",
+                    "Convert a ready idea to a project, or archive it when it is no longer active."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "Capture inspiration freely; an idea is raw material to incubate and later turn into projects or outputs.",
+                Points =
+                [
+                    "Keep the raw spark visible while adding evidence and context.",
+                    "Move from Capture toward Organize and Distill as the idea matures.",
+                    "Convert only when the idea has enough actionability to become work."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Review the badges and metadata to understand the idea's current state.",
+                    "Open Details, update the fields, and click Save Details.",
+                    "Use Research, Competitors, and Notes tabs to add development context.",
+                    "Save each tab after editing so the idea remains current.",
+                    "Use Convert to Project when the idea is ready for execution, or Archive or Restore to manage its lifecycle."
+                ]
+            }
+        ]
+    };
+
     [Parameter] public Guid Id { get; set; }
 
     private bool _loading = true;

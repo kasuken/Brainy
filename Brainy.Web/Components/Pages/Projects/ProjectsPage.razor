@@ -68,6 +68,18 @@
         margin: 0 0 0.5rem;
     }
 
+    .pp-title-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+
+    .pp-title-row .pp-title {
+        flex: 1;
+        min-width: 0;
+    }
+
     .pp-meta {
         font-size: 0.85rem;
         color: var(--mud-palette-text-secondary);
@@ -156,7 +168,10 @@
         @* ── Sidebar ── *@
         <aside class="pp-sidebar">
             <p class="pp-eyebrow">Portfolio</p>
-            <h1 class="pp-title">Projects</h1>
+            <div class="pp-title-row">
+                <h1 class="pp-title">Projects</h1>
+                <PageHelpButton Guide="HelpGuide" />
+            </div>
             <p class="pp-meta">@(_summaries?.Count ?? 0) projects total · @(_filtered?.Count ?? 0) shown</p>
 
             <MudButton Variant="Variant.Filled" Color="Color.Primary"
@@ -277,6 +292,54 @@
 </div>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "projects",
+        PageTitle = "Projects",
+        Tagline = "Turn active outcomes into visible progress before the deadline",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.FolderSpecial,
+                Lead = "Projects is your portfolio of active outcomes with deadlines, showing what needs attention now.",
+                Points =
+                [
+                    "Create new projects with a desired outcome, priority, status, and dates.",
+                    "Search, filter, and sort the project list by status, priority, due date, progress, or name.",
+                    "Open each project card to manage its tasks and notes, or complete, edit, and archive it from the card."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "In PARA, a Project is a short-term outcome with a deadline — the most actionable bucket in your Second Brain.",
+                Points =
+                [
+                    "Keep work attached to the outcome it moves forward, not buried in generic storage.",
+                    "Finished projects get archived so active views stay focused without losing context.",
+                    "Tasks live inside their project context, where progress and next actions are visible."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Use New Project to capture the outcome, deadline, priority, and supporting context.",
+                    "Filter by Status or Priority when you need a focused view of current commitments.",
+                    "Search by name, desired outcome, or description to find a project quickly.",
+                    "Sort by Priority, Due Date, Progress, or Name to decide what to open next.",
+                    "Use each project card to open details, edit metadata, complete the outcome, or archive it."
+                ]
+            }
+        ]
+    };
+
     private bool _loading = true;
     private List<ProjectSummaryDto>? _summaries;
     private List<ProjectSummaryDto>? _filtered;
@@ -467,5 +530,4 @@
         }
     }
 }
-
 

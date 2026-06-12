@@ -15,7 +15,10 @@
 <div class="goals-kanban-page">
     <div class="goals-kanban-header">
         <div>
-            <MudText Typo="Typo.h3" Class="goals-kanban-header__title">Goals Kanban</MudText>
+            <div class="goals-kanban-title-row">
+                <MudText Typo="Typo.h3" Class="goals-kanban-header__title">Goals Kanban</MudText>
+                <PageHelpButton Guide="HelpGuide" />
+            </div>
             <MudText Typo="Typo.body1" Class="goals-kanban-header__subtitle">
                 @_filteredGoals.Count goals across @_lanes.Count lanes
             </MudText>
@@ -130,6 +133,54 @@
 </div>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "goals-kanban",
+        PageTitle = "Goals Kanban",
+        Tagline = "See goal ownership and area alignment as a movable board",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.ViewKanban,
+                Lead = "This board groups goals into area lanes so you can see where outcomes are anchored.",
+                Points =
+                [
+                    "Drag a goal card between lanes to change its linked Area, including No Area.",
+                    "Use status chips, search, and Show Archived to control which goals are on the board.",
+                    "Open a card to move from board planning into the goal detail view."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "Goals give your Second Brain direction by showing which responsibilities support the outcomes that matter.",
+                Points =
+                [
+                    "Projects are short-term, deadline-driven work; Areas are ongoing responsibilities that sustain goals.",
+                    "Moving a goal to an Area clarifies where that outcome belongs in your PARA system.",
+                    "Keep actionability high by reviewing lanes for overloaded or unowned goals."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Choose a Status chip to view all goals or focus on planned, active, achieved, or abandoned work.",
+                    "Search goals by title, description, or area name.",
+                    "Turn on Show Archived when you need historical context from archived goals.",
+                    "Drag a goal card into another Area lane, or No Area, to update its placement.",
+                    "Select List View to return to the goals list, or open a card for detail."
+                ]
+            }
+        ]
+    };
+
     private const string NoAreaIdentifier = "no-area";
 
     private readonly List<StatusFilterOption> _statusFilters =
@@ -388,6 +439,13 @@
         margin: 0;
         font-family: var(--font-display);
         color: var(--ink);
+    }
+
+    .goals-kanban-title-row {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        flex-wrap: wrap;
     }
 
     .goals-kanban-header__subtitle {

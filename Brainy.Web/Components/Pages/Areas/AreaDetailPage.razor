@@ -54,6 +54,7 @@ else
             <div class="ad-title-block">
                 <div class="ad-title-top">
                     <h1 class="ad-title">@_detail.Name</h1>
+                    <PageHelpButton Guide="HelpGuide" />
                     @if (_detail.IsArchived)
                     {
                         <MudChip T="string" Color="Color.Warning" Size="Size.Small"
@@ -681,6 +682,54 @@ else
 </style>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "area-detail",
+        PageTitle = "Area Detail",
+        Tagline = "Keep one ongoing responsibility connected to its projects, ideas, and notes",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Category,
+                Lead = "Use this detail view to manage one area's standards, active project context, ideas, and supporting notes.",
+                Points =
+                [
+                    "Review its purpose, description, active project count, open task count, and note count.",
+                    "Assign projects to keep time-bound outcomes connected to the responsibility they support.",
+                    "Link notes and browse related ideas so area context stays reusable."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "In PARA, an Area is an ongoing responsibility to maintain over time with no deadline — unlike Projects, areas hold standards, not outcomes.",
+                Points =
+                [
+                    "Use the area to preserve standards, reference context, and recurring responsibilities.",
+                    "Keep project work time-bound, then let completed outcomes enrich the area over time.",
+                    "Review linked material periodically so the area supports active decisions."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Use Edit to update the area name, purpose, or description.",
+                    "Use Archive or Restore to move the responsibility in or out of active views.",
+                    "Click Assign Project, choose a project, and confirm Assign to connect current outcomes.",
+                    "Review Ideas or use View All Ideas to jump to the idea workspace.",
+                    "Click Link Note, choose an unlinked note, and confirm Link; use the unlink icon to remove stale note connections."
+                ]
+            }
+        ]
+    };
+
     [Parameter] public Guid AreaId { get; set; }
 
     private bool _loading = true;

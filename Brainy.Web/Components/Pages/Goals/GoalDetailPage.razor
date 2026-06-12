@@ -62,7 +62,10 @@ else
                     }
                 </div>
 
-                <h1 class="god-title">@_detail.Title</h1>
+                <div class="god-title-row">
+                    <h1 class="god-title">@_detail.Title</h1>
+                    <PageHelpButton Guide="HelpGuide" />
+                </div>
 
                 @if (!string.IsNullOrWhiteSpace(_detail.Description))
                 {
@@ -331,6 +334,17 @@ else
     color: var(--ink);
 }
 
+.god-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem;
+}
+
+.god-title-row .god-title {
+    flex: 1;
+}
+
 .god-description {
     margin: .7rem 0 0;
     color: var(--ink-soft);
@@ -520,6 +534,55 @@ else
 </style>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "goal-detail",
+        PageTitle = "Goal Detail",
+        Tagline = "The focused command room for one long-range outcome",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.TrackChanges,
+                Lead = "Use this page to inspect one goal, its progress, milestones, timeline, linked projects, and outputs.",
+                Points =
+                [
+                    "Edit, archive, or review the goal's status, area, target date, and description.",
+                    "Track milestone completion and the chronological pulse of goal progress.",
+                    "See which projects and outputs are already aligned to this outcome."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "A goal names the outcome your Second Brain is helping you create.",
+                Points =
+                [
+                    "Projects deliver short-term, deadline-driven progress toward the goal.",
+                    "Areas sustain the ongoing responsibility behind the goal.",
+                    "Milestones, linked projects, and outputs keep the goal actionable instead of just stored."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Use Edit to update the goal's metadata, status, area, target date, or description.",
+                    "Use the Milestone progress area and milestone list to review and update progress.",
+                    "Read the Timeline to understand what changed and when.",
+                    "Open Linked Projects to continue work in the project context.",
+                    "Review Related Outputs to see what the goal has helped produce.",
+                    "Archive the goal when it should leave active views but remain available as context."
+                ]
+            }
+        ]
+    };
+
     [Parameter] public Guid GoalId { get; set; }
 
     private bool _loading = true;

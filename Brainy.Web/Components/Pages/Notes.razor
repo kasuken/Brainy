@@ -212,7 +212,11 @@
                 <aside class="nn-sidebar">
                     <div class="nn-hero">
                         <p class="nn-eyebrow">Knowledge Base</p>
-                        <h1 class="nn-title">Notes</h1>
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <h1 class="nn-title">Notes</h1>
+                            <MudSpacer />
+                            <PageHelpButton Guide="HelpGuide" />
+                        </div>
                     </div>
 
                     <MudTextField @bind-Value="_searchText"
@@ -410,6 +414,55 @@
 </AuthorizeView>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "notes",
+        PageTitle = "Notes",
+        Tagline = "Your organised knowledge base — every note you have captured",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Notes,
+                Lead = "Notes is the home of all your knowledge. Browse, search and open everything you have captured and distilled across projects, areas and resources.",
+                Points =
+                [
+                    "Search your whole knowledge base from one place.",
+                    "Pin the notes you reach for most as favourites.",
+                    "Open any note to read, refine or link it.",
+                    "Create a fresh note whenever an idea is worth keeping."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "Notes are the building blocks of your Second Brain. In Tiago Forte's CODE method they hold what you Capture and what you Distill — the raw material you later reuse to create.",
+                Points =
+                [
+                    "Keep the original source so insights stay trustworthy.",
+                    "Distil with progressive summarisation: highlight, then summarise the highlights.",
+                    "Link related notes so ideas connect instead of sitting in isolation."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Use the search box to find a note by title.",
+                    "Click a note to open it for reading or editing.",
+                    "Mark important notes as favourites for quick access.",
+                    "Create a new note when you have something worth capturing.",
+                    "Distil and link notes over time so they stay useful months later."
+                ]
+            }
+        ]
+    };
+
     private IReadOnlyList<NoteDto> _notes = [];
     private string _searchText = string.Empty;
     private bool _loading = true;

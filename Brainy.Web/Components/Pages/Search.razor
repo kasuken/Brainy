@@ -18,9 +18,12 @@
 
     @* ── Hero search bar ── *@
     <div class="search-hero">
-        <MudText Typo="Typo.h4" Class="search-hero__heading mb-1">
-            Search your knowledge
-        </MudText>
+        <div class="search-hero__title-row">
+            <MudText Typo="Typo.h4" Class="search-hero__heading mb-1">
+                Search your knowledge
+            </MudText>
+            <PageHelpButton Guide="HelpGuide" />
+        </div>
         <MudText Typo="Typo.body1" Class="mud-text-secondary mb-5">
             Find notes and goals by title or content — results ordered by relevance.
         </MudText>
@@ -268,6 +271,13 @@
         letter-spacing: -0.5px;
     }
 
+    .search-hero__title-row {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
     .search-input-wrap {
         position: relative;
         max-width: 620px;
@@ -422,6 +432,54 @@
 </style>
 
 @code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "search",
+        PageTitle = "Search",
+        Tagline = "Retrieve the right note, goal, or output when you need it",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Search,
+                Lead = "Search helps you retrieve knowledge fast across notes, outputs, and active goals.",
+                Points =
+                [
+                    "Find notes and outputs by title or content.",
+                    "Find active goals by title or description.",
+                    "Use relevance hints, dates, categories, and status chips to pick the right result."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "A trustworthy Second Brain pays off when you can retrieve what you captured and reuse it in real work.",
+                Points =
+                [
+                    "Search reduces the time between remembering something exists and using it.",
+                    "Fast retrieval keeps knowledge actionable instead of buried in storage.",
+                    "Result context helps you choose the right note, goal, or output without opening everything."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Type a word or phrase in the search box; results update after a short pause.",
+                    "Scan the Notes, Outputs, and Goals sections for the result type you need.",
+                    "Use title-match badges, PARA category chips, output statuses, goal statuses, and dates to judge relevance.",
+                    "Click a note card to open the note, or click an output or goal card to open its detail page.",
+                    "Clear the search box to reset the page."
+                ]
+            }
+        ]
+    };
+
     private string _query = string.Empty;
     private string _lastQuery = string.Empty;
     private IReadOnlyList<SearchResultDto> _results = [];
