@@ -5,6 +5,7 @@
 @inject ICurrentTaskRecommendationService RecommendationService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject IDialogService DialogService
 
 <div class="td-widget td-section">
     <div class="td-section-head">
@@ -58,7 +59,8 @@
                     </MudButton>
                     <MudButton Variant="Variant.Text" Size="Size.Small"
                                StartIcon="@Icons.Material.Outlined.SwapHoriz"
-                               OnClick="@(() => Nav.NavigateTo($"/projects/{Task.ProjectId}"))">
+                               OnClick="OpenFocusPickerAsync"
+                               Disabled="_busy">
                         Switch Task
                     </MudButton>
                 </div>
@@ -67,35 +69,120 @@
         }
         else if (_recommendation is not null)
         {
-            <div class="td-task @PriorityClass(_recommendation.Priority)">
-                <div class="td-task-body">
-                    <p class="td-task-title" style="font-family:var(--font-display); font-style:italic;">
-                        Suggested: @_recommendation.Title
-                    </p>
-                    <div class="td-task-meta">
-                        <span class="td-task-project">@_recommendation.ProjectName</span>
-                        @if (_recommendation.DueDate.HasValue)
-                        {
-                            <span class="td-task-due">@_recommendation.DueDate.Value.ToString("MMM d")</span>
-                        }
-                        <MudChip T="string" Size="Size.Small" Color="@PriorityColor(_recommendation.Priority)" Variant="Variant.Outlined">
-                            @_recommendation.Priority.ToString()
-                        </MudChip>
-                    </div>
+            <div class="td-focus-card td-focus-card--suggested">
+
+                <div class="td-focus-card-head">
+                    <span class="td-focus-suggested-label">Suggested</span>
+                    <MudChip T="string" Size="Size.Small" Color="@PriorityColor(_recommendation.Priority)" Variant="Variant.Outlined">
+                        @_recommendation.Priority.ToString()
+                    </MudChip>
                 </div>
-                <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary"
-                           OnClick="HandleSetFocusAsync"
-                           Disabled="_busy">
-                    Set as Focus
-                </MudButton>
+
+                <h2 class="td-focus-card-title">@_recommendation.Title</h2>
+
+                <div class="td-task-meta td-focus-card-meta">
+                    <span class="td-task-project">@_recommendation.ProjectName</span>
+                    @if (_recommendation.DueDate.HasValue)
+                    {
+                        <span class="td-task-due @(_recommendation.DueDate.Value.Date < DateTime.Today ? "td-task-due--overdue" : "")">
+                            Due @_recommendation.DueDate.Value.ToString("MMM d")
+                        </span>
+                    }
+                </div>
+
+                <div class="td-rec-actions">
+                    <MudButton Variant="Variant.Filled" Size="Size.Small" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Outlined.CenterFocusStrong"
+                               OnClick="HandleSetFocusAsync"
+                               Disabled="_busy">
+                        Set as Focus
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small"
+                               StartIcon="@Icons.Material.Outlined.SwapHoriz"
+                               OnClick="OpenFocusPickerAsync"
+                               Disabled="_busy">
+                        Choose another
+                    </MudButton>
+                </div>
             </div>
         }
         else if (!_loadingRecommendation)
         {
-            <p class="td-empty">Nothing in focus. Set a task as your current focus.</p>
+            <div class="td-focus-empty">
+                <p class="td-empty">Nothing in focus. Pick a task to work on now.</p>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Outlined.CenterFocusStrong"
+                           OnClick="OpenFocusPickerAsync"
+                           Disabled="_busy">
+                    Choose Focus Task
+                </MudButton>
+            </div>
         }
     }
 </div>
+
+<style>
+    .td-focus-card {
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--clay);
+        border-radius: 8px;
+        background: var(--paper-raised);
+        padding: 1.1rem 1.25rem;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .td-focus-card--suggested {
+        border-style: dashed;
+        border-left-style: solid;
+        background: var(--paper);
+        box-shadow: none;
+    }
+
+    .td-focus-card-head {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .td-focus-suggested-label {
+        font-family: var(--font-display);
+        font-style: italic;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--clay);
+    }
+
+    .td-focus-card-title {
+        font-family: var(--font-display);
+        font-style: italic;
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: var(--ink);
+        margin: 0 0 0.5rem;
+        line-height: 1.25;
+        word-break: break-word;
+    }
+
+    .td-focus-card-meta {
+        margin-bottom: 0.9rem;
+    }
+
+    .td-rec-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .td-focus-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+</style>
 
 @code {
     /// <summary>The current task in progress, or null when none is set.</summary>
@@ -185,19 +272,30 @@
         finally { _busy = false; }
     }
 
+    private async Task OpenFocusPickerAsync()
+    {
+        var parameters = new DialogParameters<FocusPickerDialog>
+        {
+            { d => d.CurrentTaskId, Task?.Id }
+        };
+
+        var dialog = await DialogService.ShowAsync<FocusPickerDialog>(
+            "Choose your current focus",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await OnChanged.InvokeAsync();
+        }
+    }
+
     private static Color PriorityColor(TaskPriority p) => p switch
     {
         TaskPriority.Critical => Color.Error,
         TaskPriority.High     => Color.Warning,
         TaskPriority.Medium   => Color.Info,
         _                     => Color.Default,
-    };
-
-    private static string PriorityClass(TaskPriority p) => p switch
-    {
-        TaskPriority.Critical => "td-task--critical",
-        TaskPriority.High     => "td-task--high",
-        TaskPriority.Medium   => "td-task--medium",
-        _                     => "td-task--low",
     };
 }

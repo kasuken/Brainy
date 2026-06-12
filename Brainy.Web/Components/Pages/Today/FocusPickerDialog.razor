@@ -1,0 +1,270 @@
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject ITasksHubService TasksHubService
+@inject ITaskService TaskService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <div class="fp-search">
+            <MudTextField @bind-Value="_search"
+                          Immediate="true"
+                          DebounceInterval="150"
+                          Placeholder="Search active tasks…"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Outlined.Search"
+                          Clearable="true" />
+        </div>
+
+        <div class="fp-list">
+            @if (_loading)
+            {
+                <div class="fp-state">
+                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Default" />
+                    <span>Loading tasks…</span>
+                </div>
+            }
+            else if (FilteredTasks.Count == 0)
+            {
+                <div class="fp-state">
+                    <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Large" Style="color:var(--ink-faint);" />
+                    <span>@(string.IsNullOrWhiteSpace(_search) ? "No active tasks to focus on." : "No tasks match your search.")</span>
+                </div>
+            }
+            else
+            {
+                @foreach (var task in FilteredTasks)
+                {
+                    var t = task;
+                    var isCurrent = t.Id == CurrentTaskId;
+                    var overdue = t.DueDate.HasValue && t.DueDate.Value.Date < DateTime.Today;
+                    <button type="button"
+                            class=@($"fp-row{(isCurrent ? " fp-row--current" : string.Empty)}")
+                            disabled="@_busy"
+                            @onclick="@(() => SelectAsync(t))">
+                        <span class=@($"fp-dot fp-dot--{t.Priority.ToString().ToLowerInvariant()}")></span>
+                        <span class="fp-row-body">
+                            <span class="fp-row-title">@t.Title</span>
+                            <span class="fp-row-meta">
+                                <span class="fp-row-project">@t.ProjectName</span>
+                                @if (t.DueDate.HasValue)
+                                {
+                                    <span class=@($"fp-row-due{(overdue ? " fp-row-due--overdue" : string.Empty)}")>
+                                        @(overdue ? "Overdue · " : "Due ")@t.DueDate.Value.ToString("MMM d")
+                                    </span>
+                                }
+                                @if (t.Status == TaskItemStatus.Waiting)
+                                {
+                                    <span class="fp-row-waiting">Waiting</span>
+                                }
+                            </span>
+                        </span>
+                        @if (isCurrent)
+                        {
+                            <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Small" Color="Color.Success" />
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@PriorityColor(t.Priority)">
+                                @t.Priority.ToString()
+                            </MudChip>
+                        }
+                    </button>
+                }
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_busy">Cancel</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .fp-search { margin-bottom: 0.75rem; }
+
+    .fp-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        max-height: 55vh;
+        overflow-y: auto;
+        padding-right: 0.25rem;
+    }
+
+    .fp-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 2rem 1rem;
+        color: var(--ink-faint);
+        text-align: center;
+    }
+
+    .fp-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        width: 100%;
+        text-align: left;
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.7rem 0.85rem;
+        cursor: pointer;
+        font: inherit;
+        color: inherit;
+        transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+    }
+
+    .fp-row:hover:not(:disabled) {
+        border-color: var(--clay);
+        background: var(--paper);
+    }
+
+    .fp-row:active:not(:disabled) { transform: translateY(1px); }
+
+    .fp-row:disabled { opacity: 0.6; cursor: default; }
+
+    .fp-row--current {
+        border-left: 4px solid var(--clay);
+        background: var(--paper);
+    }
+
+    .fp-dot {
+        flex: 0 0 auto;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--ink-faint);
+    }
+
+    .fp-dot--low { background: #9a9180; }
+    .fp-dot--medium { background: #3a7bcd; }
+    .fp-dot--high { background: #c0561d; }
+    .fp-dot--critical { background: #b91c1c; }
+
+    .fp-row-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .fp-row-title {
+        font-weight: 600;
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .fp-row-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8rem;
+        color: var(--ink-faint);
+    }
+
+    .fp-row-project { color: var(--ink-muted, var(--ink-faint)); }
+
+    .fp-row-due--overdue { color: #b91c1c; font-weight: 600; }
+
+    .fp-row-waiting {
+        color: #8a6d1f;
+        font-weight: 600;
+    }
+</style>
+
+@code {
+    /// <summary>The id of the task currently set as focus, so it can be flagged in the list.</summary>
+    [Parameter] public Guid? CurrentTaskId { get; set; }
+
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private bool _loading = true;
+    private bool _busy;
+    private string _search = string.Empty;
+    private IReadOnlyList<TasksHubTaskDto> _tasks = [];
+
+    private List<TasksHubTaskDto> FilteredTasks
+    {
+        get
+        {
+            IEnumerable<TasksHubTaskDto> query = _tasks;
+
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var term = _search.Trim();
+                query = query.Where(t =>
+                    t.Title.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    || (t.Description?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || t.ProjectName.Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Order by urgency: overdue/dated first (soonest first), undated last, then priority desc.
+            return query
+                .OrderBy(t => t.DueDate.HasValue ? 0 : 1)
+                .ThenBy(t => t.DueDate ?? DateTime.MaxValue)
+                .ThenByDescending(t => (int)t.Priority)
+                .ThenBy(t => t.Title)
+                .ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _tasks = await TasksHubService.GetActiveTasksAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not load tasks.", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SelectAsync(TasksHubTaskDto task)
+    {
+        if (_busy) return;
+
+        if (task.Id == CurrentTaskId)
+        {
+            MudDialog.Cancel();
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await TaskService.SetCurrentTaskAsync(task.Id);
+            Snackbar.Add($"Focus set: {task.Title}", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(task.Id));
+        }
+        catch
+        {
+            Snackbar.Add("Could not set focus.", Severity.Error);
+            _busy = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private static Color PriorityColor(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => Color.Error,
+        TaskPriority.High => Color.Warning,
+        TaskPriority.Medium => Color.Info,
+        _ => Color.Default,
+    };
+}
