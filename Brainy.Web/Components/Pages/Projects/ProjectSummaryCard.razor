@@ -27,7 +27,10 @@
         </div>
 
         
-        <h3 class="psc__name">@Project.Name</h3>
+        <h3 class="psc__name">
+            <span class="psc__emoji">@Project.Emoji</span>
+            @Project.Name
+        </h3>
 
         
         @if (!Compact && !string.IsNullOrWhiteSpace(Project.DesiredOutcome))
@@ -165,6 +168,9 @@
 
     /* Name */
     .psc__name {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
         font-family: var(--font-display);
         font-size: 1rem;
         font-weight: 500;
@@ -174,6 +180,12 @@
         overflow: hidden;
         text-overflow: ellipsis;
         letter-spacing: -0.01em;
+    }
+
+    .psc__emoji {
+        font-size: 1.05rem;
+        line-height: 1;
+        flex: none;
     }
 
     .psc--compact .psc__name { font-size: 0.9rem; }

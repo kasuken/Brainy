@@ -2,6 +2,7 @@ using Brainy.Application.DTOs.Projects;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Common;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -35,6 +36,7 @@ internal sealed class ProjectPrioritizationService(
                 p.Id, p.Name, p.Description, p.DesiredOutcome, p.Status, p.Priority,
                 p.StartDate, p.DueDate, p.CompletedDate, p.IsArchived, p.AreaId,
                 p.CreatedAtUtc, p.UpdatedAtUtc, p.ArchivedAtUtc,
+                p.Emoji,
                 TotalTasks = p.Tasks.Count(t => !t.IsArchived),
                 OpenTasks = p.Tasks.Count(t => !t.IsArchived && !_inactiveStatuses.Contains(t.Status)),
                 DoneTasks = p.Tasks.Count(t => !t.IsArchived && t.Status == TaskItemStatus.Done),
@@ -99,7 +101,8 @@ internal sealed class ProjectPrioritizationService(
                 x.Data.TotalTasks > 0
                     ? Math.Round((double)x.Data.DoneTasks / x.Data.TotalTasks * 100, 1)
                     : 0.0,
-                x.Data.OverdueTasks))
+                x.Data.OverdueTasks,
+                string.IsNullOrWhiteSpace(x.Data.Emoji) ? ProjectEmojiDefaults.DefaultEmoji : x.Data.Emoji))
             .ToList();
     }
 }

@@ -6,4 +6,5 @@ public record CreateResourceDto(
     string? Description = null,
     string? Topic = null,
     Guid? AreaId = null,
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    string? Emoji = null);

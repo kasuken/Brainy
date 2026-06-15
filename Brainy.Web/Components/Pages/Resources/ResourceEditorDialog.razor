@@ -1,5 +1,7 @@
 @using Brainy.Application.DTOs.Resources
 @using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Common
+@using System.Globalization
 @inject IResourceService ResourceService
 @inject ISnackbar Snackbar
 
@@ -24,6 +26,16 @@
                     <MudTextField @bind-Value="_name" Label="Name" Required="true"
                                   RequiredError="Name is required"
                                   Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                    <MudTextField T="string"
+                                  Value="@_emoji"
+                                  ValueChanged="OnEmojiChanged"
+                                  Label="Emoji (optional)"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Class="red-emoji-input"
+                                  MaxLength="16"
+                                  HelperText="@EmojiHelperText" />
 
                     <MudTextField @bind-Value="_topic" Label="Topic"
                                   HelperText="The domain or subject area"
@@ -70,6 +82,9 @@
     padding-top: .25rem;
 }
 
+.red-emoji-input { max-width: 170px; }
+.red-emoji-input .mud-input-helper-text { white-space: nowrap; }
+
 .red-loading {
     min-height: 10rem;
     display: flex;
@@ -108,8 +123,11 @@
     private bool _valid;
     private bool _loading;
     private bool _saving;
+    private static string EmojiHelperText =>
+        $"Win + . (Windows) / Ctrl + Cmd + Space (macOS). Default: {ResourceEmojiDefaults.DefaultEmoji}.";
 
     private string _name = "";
+    private string _emoji = "";
     private string? _topic;
     private string? _description;
     private string _tagsInput = "";
@@ -141,6 +159,7 @@
             }
 
             _name = dto.Name;
+            _emoji = dto.Emoji == ResourceEmojiDefaults.DefaultEmoji ? string.Empty : dto.Emoji;
             _topic = dto.Topic;
             _description = dto.Description;
             _tagsInput = string.Join(", ", dto.Tags);
@@ -176,7 +195,8 @@
                     NullIfWhiteSpace(_description),
                     NullIfWhiteSpace(_topic),
                     null,
-                    ParsedTags));
+                    ParsedTags,
+                    _emoji));
 
                 Snackbar.Add($"\"{_name}\" updated.", Severity.Success);
             }
@@ -187,7 +207,8 @@
                     NullIfWhiteSpace(_description),
                     NullIfWhiteSpace(_topic),
                     null,
-                    ParsedTags));
+                    ParsedTags,
+                    _emoji));
 
                 Snackbar.Add($"\"{_name}\" created.", Severity.Success);
             }
@@ -205,6 +226,19 @@
     }
 
     private void Cancel() => MudDialog.Cancel();
+
+    private Task OnEmojiChanged(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            _emoji = string.Empty;
+            return Task.CompletedTask;
+        }
+
+        var enumerator = StringInfo.GetTextElementEnumerator(value.Trim());
+        _emoji = enumerator.MoveNext() ? enumerator.GetTextElement() : string.Empty;
+        return Task.CompletedTask;
+    }
 
     private static string? NullIfWhiteSpace(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

@@ -1,5 +1,7 @@
 namespace Brainy.Application.DTOs.Areas;
 
+using Brainy.Domain.Common;
+
 /// <summary>Full area detail including related-entity counts, used by the Area Detail page.</summary>
 public record AreaDetailDto(
     Guid Id,
@@ -12,4 +14,5 @@ public record AreaDetailDto(
     DateTime UpdatedAtUtc,
     int ActiveProjectCount,
     int OpenTaskCount,
-    int RecentNoteCount);
+    int RecentNoteCount,
+    string Emoji = AreaEmojiDefaults.DefaultEmoji);

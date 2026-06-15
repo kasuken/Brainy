@@ -14,6 +14,9 @@ public class Project : BaseEntity, IUserOwnedEntity
 
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>Visual identifier chosen by the user (for example: 🎯, 🚀).</summary>
+    public string Emoji { get; set; } = ProjectEmojiDefaults.DefaultEmoji;
+
     public string? Description { get; set; }
 
     /// <summary>The intended end state — what "done" looks like for this project.</summary>

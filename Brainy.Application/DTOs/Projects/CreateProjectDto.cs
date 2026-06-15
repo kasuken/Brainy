@@ -12,4 +12,5 @@ public record CreateProjectDto(
     ProjectPriority Priority = ProjectPriority.Medium,
     DateTime? StartDate = null,
     DateTime? DueDate = null,
-    Guid? GoalId = null);
+    Guid? GoalId = null,
+    string? Emoji = null);

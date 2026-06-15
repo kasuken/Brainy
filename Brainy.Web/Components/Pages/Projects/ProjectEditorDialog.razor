@@ -2,7 +2,9 @@
 @using Brainy.Application.DTOs.Goals
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Common
 @using Brainy.Domain.Enums
+@using System.Globalization
 @inject IProjectService ProjectService
 @inject IAreaService AreaService
 @inject IGoalService GoalService
@@ -20,6 +22,16 @@
                 <MudTextField @bind-Value="_name" Label="Name" Required="true"
                               RequiredError="Name is required"
                               Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                <MudTextField T="string"
+                              Value="@_emoji"
+                              ValueChanged="OnEmojiChanged"
+                              Label="Emoji (optional)"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Class="ped-emoji-input"
+                              MaxLength="16"
+                              HelperText="@EmojiHelperText" />
 
                 <MudSelect @bind-Value="_areaId" Label="Area" Required="true"
                            RequiredError="Area is required"
@@ -92,6 +104,8 @@
 <style>
 .ped-fields { display: flex; flex-direction: column; gap: .85rem; padding-top: .25rem; }
 .ped-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.ped-emoji-input { max-width: 170px; }
+.ped-emoji-input .mud-input-helper-text { white-space: nowrap; }
 @@media (max-width: 480px) { .ped-row { grid-template-columns: 1fr; } }
 </style>
 
@@ -103,8 +117,11 @@
     private MudForm _form = null!;
     private bool _valid;
     private bool _saving;
+    private static string EmojiHelperText =>
+        $"Win + . (Windows) / Ctrl + Cmd + Space (macOS). Default: {ProjectEmojiDefaults.DefaultEmoji}.";
 
     private string _name = "";
+    private string _emoji = "";
     private Guid _areaId;
     private Guid? _goalId;
     private string? _desiredOutcome;
@@ -128,6 +145,7 @@
             if (dto is not null)
             {
                 _name           = dto.Name;
+                _emoji          = dto.Emoji == ProjectEmojiDefaults.DefaultEmoji ? string.Empty : dto.Emoji;
                 _areaId         = dto.AreaId ?? Guid.Empty;
                 if (_areaId == Guid.Empty)
                     Snackbar.Add("This project has no area assigned. Please select an area before saving.", Severity.Warning);
@@ -160,12 +178,12 @@
             {
                 await ProjectService.UpdateAsync(new UpdateProjectDto(
                     ProjectId.Value, _name, _areaId, _description, _desiredOutcome,
-                    _status, _priority, _startDate, _dueDate, _goalId));
+                    _status, _priority, _startDate, _dueDate, _goalId, _emoji));
             }
             else
             {
                 await ProjectService.CreateAsync(new CreateProjectDto(
-                    _name, _areaId, _description, _desiredOutcome, _status, _priority, _startDate, _dueDate, _goalId));
+                    _name, _areaId, _description, _desiredOutcome, _status, _priority, _startDate, _dueDate, _goalId, _emoji));
             }
             MudDialog.Close(DialogResult.Ok(true));
         }
@@ -180,6 +198,19 @@
     }
 
     private void Cancel() => MudDialog.Cancel();
+
+    private Task OnEmojiChanged(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            _emoji = string.Empty;
+            return Task.CompletedTask;
+        }
+
+        var enumerator = StringInfo.GetTextElementEnumerator(value.Trim());
+        _emoji = enumerator.MoveNext() ? enumerator.GetTextElement() : string.Empty;
+        return Task.CompletedTask;
+    }
 
     private static string StatusLabel(ProjectStatus s) => s switch
     {

@@ -22,7 +22,7 @@
             <div class="pcd-project-header">
                 <div class="pcd-ribbon pcd-ribbon--@Project.Priority.ToString().ToLower()"></div>
                 <div class="pcd-project-info">
-                    <p class="pcd-project-name">@Project.Name</p>
+                    <p class="pcd-project-name">@Project.Emoji @Project.Name</p>
                     @if (!string.IsNullOrWhiteSpace(Project.DesiredOutcome))
                     {
                         <p class="pcd-project-outcome">@Project.DesiredOutcome</p>

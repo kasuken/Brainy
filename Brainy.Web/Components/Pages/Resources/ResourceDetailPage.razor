@@ -41,13 +41,13 @@ else
                 Resources
             </button>
             <span class="rd-breadcrumb__sep">›</span>
-            <span class="rd-breadcrumb__current">@_detail.Name</span>
+            <span class="rd-breadcrumb__current">@_detail.Emoji @_detail.Name</span>
         </div>
 
         <div class="rd-title-row">
             <div class="rd-title-block">
                 <div class="rd-title-top">
-                    <h1 class="rd-title">@_detail.Name</h1>
+                    <h1 class="rd-title">@_detail.Emoji @_detail.Name</h1>
                     <PageHelpButton Guide="HelpGuide" />
                     @if (_detail.IsArchived)
                     {

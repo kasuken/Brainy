@@ -4,6 +4,7 @@ using Brainy.Application.DTOs.Tasks;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Common;
 using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -78,6 +79,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
                 p.Id, p.Name, p.Description, p.DesiredOutcome, p.Status, p.Priority,
                 p.StartDate, p.DueDate, p.CompletedDate, p.IsArchived, p.AreaId,
                 p.CreatedAtUtc, p.UpdatedAtUtc, p.ArchivedAtUtc,
+                p.Emoji,
                 TotalTasks   = p.Tasks.Count(t => !t.IsArchived),
                 OpenTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status != TaskItemStatus.Done),
                 DoneTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status == TaskItemStatus.Done),
@@ -97,7 +99,8 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             x.CreatedAtUtc, x.UpdatedAtUtc, x.ArchivedAtUtc,
             x.TotalTasks, x.OpenTasks, x.DoneTasks,
             x.TotalTasks > 0 ? Math.Round((double)x.DoneTasks / x.TotalTasks * 100, 1) : 0,
-            x.OverdueTasks))
+            x.OverdueTasks,
+            NormalizeEmoji(x.Emoji)))
             .ToList();
     }
 
@@ -202,7 +205,8 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             project.CreatedAtUtc, project.UpdatedAtUtc, project.ArchivedAtUtc,
             totalTasks, openTasks, doneTasks,
             totalTasks > 0 ? Math.Round((double)doneTasks / totalTasks * 100, 1) : 0,
-            taskDtos, notes, resourceNotes);
+            taskDtos, notes, resourceNotes,
+            NormalizeEmoji(project.Emoji));
     }
 
     public async Task<ProjectProgressDto?> GetProjectProgressAsync(Guid id, CancellationToken cancellationToken = default)
@@ -274,6 +278,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             Id = Guid.NewGuid(),
             UserId = userId,
             Name = dto.Name,
+            Emoji = NormalizeEmoji(dto.Emoji),
             Description = dto.Description,
             DesiredOutcome = dto.DesiredOutcome,
             Status = dto.Status,
@@ -318,6 +323,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             ?? throw new KeyNotFoundException($"Project '{dto.Id}' was not found.");
 
         project.Name = dto.Name;
+        project.Emoji = NormalizeEmoji(dto.Emoji);
         project.Description = dto.Description;
         project.DesiredOutcome = dto.DesiredOutcome;
         project.Status = dto.Status;
@@ -475,7 +481,20 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         p.UpdatedAtUtc,
         p.ArchivedAtUtc,
         p.GoalId,
-        p.Goal?.Title);
+        p.Goal?.Title,
+        NormalizeEmoji(p.Emoji));
+
+    private static string NormalizeEmoji(string? emoji)
+    {
+        var normalized = string.IsNullOrWhiteSpace(emoji)
+            ? ProjectEmojiDefaults.DefaultEmoji
+            : emoji.Trim();
+
+        if (normalized.Length > ProjectEmojiDefaults.MaxLength)
+            throw new ArgumentException($"Project emoji cannot exceed {ProjectEmojiDefaults.MaxLength} characters.", nameof(emoji));
+
+        return normalized;
+    }
 
     // ── Deadline monitoring ──────────────────────────────────────────────────
 
@@ -544,6 +563,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             {
                 Id           = p.Id,
                 Name         = p.Name,
+                Emoji        = p.Emoji,
                 Description  = p.Description,
                 DesiredOutcome = p.DesiredOutcome,
                 Status       = p.Status,
@@ -571,13 +591,15 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         x.CreatedAtUtc, x.UpdatedAtUtc, x.ArchivedAtUtc,
         x.TotalTasks, x.OpenTasks, x.DoneTasks,
         x.TotalTasks > 0 ? Math.Round((double)x.DoneTasks / x.TotalTasks * 100, 1) : 0,
-        x.OverdueTasks);
+        x.OverdueTasks,
+        NormalizeEmoji(x.Emoji));
 
     /// <summary>Anonymous-type-equivalent for EF projection in deadline queries.</summary>
     private sealed class DeadlineProjection
     {
         public Guid Id { get; init; }
         public string Name { get; init; } = string.Empty;
+        public string? Emoji { get; init; }
         public string? Description { get; init; }
         public string? DesiredOutcome { get; init; }
         public ProjectStatus Status { get; init; }

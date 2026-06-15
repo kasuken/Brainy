@@ -1,5 +1,6 @@
 using Brainy.Application.DTOs.Notes;
 using Brainy.Application.DTOs.Tasks;
+using Brainy.Domain.Common;
 using Brainy.Domain.Enums;
 
 namespace Brainy.Application.DTOs.Projects;
@@ -31,4 +32,5 @@ public record ProjectDetailDto(
     double ProgressPercent,
     IReadOnlyList<TaskItemDto> Tasks,
     IReadOnlyList<NoteDto> Notes,
-    IReadOnlyList<NoteDto> ResourceNotes);
+    IReadOnlyList<NoteDto> ResourceNotes,
+    string Emoji = ProjectEmojiDefaults.DefaultEmoji);

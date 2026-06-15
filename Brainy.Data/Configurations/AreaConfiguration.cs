@@ -18,6 +18,9 @@ public class AreaConfiguration : IEntityTypeConfiguration<Area>
             .IsRequired()
             .HasMaxLength(200);
 
+        builder.Property(a => a.Emoji)
+            .HasMaxLength(16);
+
         builder.Property(a => a.Description)
             .HasMaxLength(2000);
 

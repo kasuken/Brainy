@@ -48,7 +48,7 @@ else
                 Projects
             </button>
             <span class="pd-breadcrumb__sep">›</span>
-            <span class="pd-breadcrumb__current">@_detail.Name</span>
+            <span class="pd-breadcrumb__current">@_detail.Emoji @_detail.Name</span>
         </div>
 
         <div class="pd-title-row">
@@ -64,7 +64,7 @@ else
                     </span>
                 </div>
                 <div class="pd-heading-row">
-                    <h1 class="pd-title">@_detail.Name</h1>
+                    <h1 class="pd-title">@_detail.Emoji @_detail.Name</h1>
                     <PageHelpButton Guide="HelpGuide" />
                 </div>
                 @if (!string.IsNullOrWhiteSpace(_detail.DesiredOutcome))
@@ -1134,7 +1134,7 @@ else
             _detail.CompletedDate, _detail.IsArchived, _detail.AreaId,
             _detail.CreatedAtUtc, _detail.UpdatedAtUtc, _detail.ArchivedAtUtc,
             _detail.TotalTaskCount, _detail.OpenTaskCount, _detail.DoneTaskCount,
-            _detail.ProgressPercent, overdueTasks);
+            _detail.ProgressPercent, overdueTasks, _detail.Emoji);
 
         var parameters = new DialogParameters<ProjectCompletionDialog>();
         parameters.Add(x => x.Project, summary);

@@ -7,4 +7,5 @@ public record UpdateResourceDto(
     string? Description,
     string? Topic,
     Guid? AreaId,
-    IReadOnlyList<string>? Tags);
+    IReadOnlyList<string>? Tags,
+    string? Emoji = null);

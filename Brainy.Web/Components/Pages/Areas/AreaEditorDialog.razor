@@ -1,5 +1,7 @@
 @using Brainy.Application.DTOs.Areas
 @using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Common
+@using System.Globalization
 @inject IAreaService AreaService
 @inject ISnackbar Snackbar
 
@@ -15,6 +17,16 @@
                 <MudTextField @bind-Value="_name" Label="Name" Required="true"
                               RequiredError="Name is required"
                               Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                <MudTextField T="string"
+                              Value="@_emoji"
+                              ValueChanged="OnEmojiChanged"
+                              Label="Emoji (optional)"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Class="aed-emoji-input"
+                              MaxLength="16"
+                              HelperText="@EmojiHelperText" />
 
                 <MudTextField @bind-Value="_purpose" Label="Purpose"
                               HelperText="The ongoing responsibility this area represents"
@@ -37,6 +49,8 @@
 
 <style>
 .aed-fields { display: flex; flex-direction: column; gap: .85rem; padding-top: .25rem; }
+.aed-emoji-input { max-width: 170px; }
+.aed-emoji-input .mud-input-helper-text { white-space: nowrap; }
 </style>
 
 @code {
@@ -47,8 +61,11 @@
     private MudForm _form = null!;
     private bool _valid;
     private bool _saving;
+    private static string EmojiHelperText =>
+        $"Win + . (Windows) / Ctrl + Cmd + Space (macOS). Default: {AreaEmojiDefaults.DefaultEmoji}.";
 
     private string _name = "";
+    private string _emoji = "";
     private string? _purpose;
     private string? _description;
 
@@ -60,6 +77,7 @@
             if (dto is not null)
             {
                 _name        = dto.Name;
+                _emoji       = dto.Emoji == AreaEmojiDefaults.DefaultEmoji ? string.Empty : dto.Emoji;
                 _purpose     = dto.Purpose;
                 _description = dto.Description;
             }
@@ -77,11 +95,11 @@
             if (AreaId.HasValue)
             {
                 await AreaService.UpdateAsync(new UpdateAreaDto(
-                    AreaId.Value, _name, _description, _purpose));
+                    AreaId.Value, _name, _description, _purpose, _emoji));
             }
             else
             {
-                await AreaService.CreateAsync(new CreateAreaDto(_name, _description, _purpose));
+                await AreaService.CreateAsync(new CreateAreaDto(_name, _description, _purpose, _emoji));
             }
             MudDialog.Close(DialogResult.Ok(true));
         }
@@ -96,4 +114,17 @@
     }
 
     private void Cancel() => MudDialog.Cancel();
+
+    private Task OnEmojiChanged(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            _emoji = string.Empty;
+            return Task.CompletedTask;
+        }
+
+        var enumerator = StringInfo.GetTextElementEnumerator(value.Trim());
+        _emoji = enumerator.MoveNext() ? enumerator.GetTextElement() : string.Empty;
+        return Task.CompletedTask;
+    }
 }

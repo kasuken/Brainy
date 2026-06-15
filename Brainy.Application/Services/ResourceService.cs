@@ -2,6 +2,7 @@ using Brainy.Application.DTOs.Resources;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Common;
 using Brainy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -117,7 +118,8 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
             resource.UpdatedAtUtc,
             resource.Tags.Select(t => t.Name).OrderBy(n => n).ToList(),
             notes.Count,
-            notes);
+            notes,
+            NormalizeEmoji(resource.Emoji));
     }
 
     public async Task<ResourceDto> CreateAsync(CreateResourceDto dto, CancellationToken cancellationToken = default)
@@ -131,6 +133,7 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
             Id = Guid.NewGuid(),
             UserId = userId,
             Name = dto.Name,
+            Emoji = NormalizeEmoji(dto.Emoji),
             Description = dto.Description,
             Topic = dto.Topic,
             AreaId = dto.AreaId
@@ -160,6 +163,7 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
             ?? throw new KeyNotFoundException($"Resource '{dto.Id}' was not found.");
 
         resource.Name = dto.Name;
+        resource.Emoji = NormalizeEmoji(dto.Emoji);
         resource.Description = dto.Description;
         resource.Topic = dto.Topic;
         resource.AreaId = dto.AreaId;
@@ -308,5 +312,18 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
         r.AreaId,
         r.CreatedAtUtc,
         r.UpdatedAtUtc,
-        r.Tags.Select(t => t.Name).OrderBy(n => n).ToList());
+        r.Tags.Select(t => t.Name).OrderBy(n => n).ToList(),
+        NormalizeEmoji(r.Emoji));
+
+    private static string NormalizeEmoji(string? emoji)
+    {
+        var normalized = string.IsNullOrWhiteSpace(emoji)
+            ? ResourceEmojiDefaults.DefaultEmoji
+            : emoji.Trim();
+
+        if (normalized.Length > ResourceEmojiDefaults.MaxLength)
+            throw new ArgumentException($"Resource emoji cannot exceed {ResourceEmojiDefaults.MaxLength} characters.", nameof(emoji));
+
+        return normalized;
+    }
 }

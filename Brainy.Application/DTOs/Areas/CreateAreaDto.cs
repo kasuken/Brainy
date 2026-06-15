@@ -4,4 +4,5 @@ namespace Brainy.Application.DTOs.Areas;
 public record CreateAreaDto(
     string Name,
     string? Description = null,
-    string? Purpose = null);
+    string? Purpose = null,
+    string? Emoji = null);

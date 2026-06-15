@@ -19,6 +19,9 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .IsRequired()
             .HasMaxLength(200);
 
+        builder.Property(p => p.Emoji)
+            .HasMaxLength(16);
+
         builder.Property(p => p.Description)
             .HasMaxLength(2000);
 

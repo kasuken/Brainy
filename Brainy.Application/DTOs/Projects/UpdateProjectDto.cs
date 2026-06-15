@@ -13,4 +13,5 @@ public record UpdateProjectDto(
     ProjectPriority Priority,
     DateTime? StartDate,
     DateTime? DueDate,
-    Guid? GoalId = null);
+    Guid? GoalId = null,
+    string? Emoji = null);

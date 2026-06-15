@@ -1,4 +1,5 @@
 using Brainy.Domain.Enums;
+using Brainy.Domain.Common;
 
 namespace Brainy.Application.DTOs.Projects;
 
@@ -24,4 +25,5 @@ public record ProjectSummaryDto(
     int OpenTaskCount,
     int DoneTaskCount,
     double ProgressPercent,
-    int OverdueTaskCount = 0);
+    int OverdueTaskCount = 0,
+    string Emoji = ProjectEmojiDefaults.DefaultEmoji);

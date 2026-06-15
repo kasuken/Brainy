@@ -1,4 +1,5 @@
 using Brainy.Domain.Enums;
+using Brainy.Domain.Common;
 
 namespace Brainy.Application.DTOs.Projects;
 
@@ -19,4 +20,5 @@ public record ProjectDto(
     DateTime UpdatedAtUtc,
     DateTime? ArchivedAtUtc,
     Guid? GoalId = null,
-    string? GoalTitle = null);
+    string? GoalTitle = null,
+    string Emoji = ProjectEmojiDefaults.DefaultEmoji);

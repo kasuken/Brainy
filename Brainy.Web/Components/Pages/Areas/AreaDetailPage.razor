@@ -47,13 +47,13 @@ else
                 Areas
             </button>
             <span class="ad-breadcrumb__sep">›</span>
-            <span class="ad-breadcrumb__current">@_detail.Name</span>
+            <span class="ad-breadcrumb__current">@_detail.Emoji @_detail.Name</span>
         </div>
 
         <div class="ad-title-row">
             <div class="ad-title-block">
                 <div class="ad-title-top">
-                    <h1 class="ad-title">@_detail.Name</h1>
+                    <h1 class="ad-title">@_detail.Emoji @_detail.Name</h1>
                     <PageHelpButton Guide="HelpGuide" />
                     @if (_detail.IsArchived)
                     {

@@ -18,6 +18,9 @@ public class ResourceConfiguration : IEntityTypeConfiguration<Resource>
             .IsRequired()
             .HasMaxLength(200);
 
+        builder.Property(r => r.Emoji)
+            .HasMaxLength(16);
+
         builder.Property(r => r.Description)
             .HasMaxLength(2000);
 

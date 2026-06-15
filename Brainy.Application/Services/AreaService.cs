@@ -2,6 +2,7 @@ using Brainy.Application.DTOs.Areas;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Common;
 using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -64,7 +65,8 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
 
         return new AreaDetailDto(area.Id, area.Name, area.Description, area.Purpose,
             area.IsArchived, area.ArchivedAtUtc, area.CreatedAtUtc, area.UpdatedAtUtc,
-            activeProjectCount, openTaskCount, recentNoteCount);
+            activeProjectCount, openTaskCount, recentNoteCount,
+            NormalizeEmoji(area.Emoji));
     }
 
     public async Task<AreaDto> CreateAsync(CreateAreaDto dto, CancellationToken cancellationToken = default)
@@ -80,6 +82,7 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
             Id = Guid.NewGuid(),
             UserId = userId,
             Name = dto.Name.Trim(),
+            Emoji = NormalizeEmoji(dto.Emoji),
             Description = dto.Description?.Trim(),
             Purpose = dto.Purpose?.Trim()
         };
@@ -102,6 +105,7 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
             ?? throw new KeyNotFoundException($"Area '{dto.Id}' was not found.");
 
         area.Name = dto.Name.Trim();
+        area.Emoji = NormalizeEmoji(dto.Emoji);
         area.Description = dto.Description?.Trim();
         area.Purpose = dto.Purpose?.Trim();
 
@@ -210,5 +214,18 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
     private static AreaDto ToDto(Area a) => new(
         a.Id, a.Name, a.Description, a.Purpose,
         a.IsArchived, a.ArchivedAtUtc,
-        a.CreatedAtUtc, a.UpdatedAtUtc);
+        a.CreatedAtUtc, a.UpdatedAtUtc,
+        NormalizeEmoji(a.Emoji));
+
+    private static string NormalizeEmoji(string? emoji)
+    {
+        var normalized = string.IsNullOrWhiteSpace(emoji)
+            ? AreaEmojiDefaults.DefaultEmoji
+            : emoji.Trim();
+
+        if (normalized.Length > AreaEmojiDefaults.MaxLength)
+            throw new ArgumentException($"Area emoji cannot exceed {AreaEmojiDefaults.MaxLength} characters.", nameof(emoji));
+
+        return normalized;
+    }
 }

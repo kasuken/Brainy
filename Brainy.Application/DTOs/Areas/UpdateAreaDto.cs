@@ -5,4 +5,5 @@ public record UpdateAreaDto(
     Guid Id,
     string Name,
     string? Description,
-    string? Purpose);
+    string? Purpose,
+    string? Emoji = null);
