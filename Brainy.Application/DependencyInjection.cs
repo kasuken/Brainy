@@ -88,6 +88,16 @@ public static class DependencyInjection
         return services;
     }
 
+    /// <summary>
+    /// Registers a disabled AI assistant implementation regardless of configuration.
+    /// Use this to temporarily turn off all AI-powered features without removing AI code.
+    /// </summary>
+    public static IServiceCollection AddDisabledAiAssistant(this IServiceCollection services)
+    {
+        services.AddSingleton<IAiAssistant, NullAiAssistant>();
+        return services;
+    }
+
     private static IChatClient CreateAzureOpenAIChatClient(AiAssistantOptions options)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(options.Endpoint, nameof(options.Endpoint));

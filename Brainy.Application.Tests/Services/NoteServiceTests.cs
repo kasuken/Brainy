@@ -252,4 +252,41 @@ public class NoteServiceTests
         var stored = await context.Notes.SingleAsync(n => n.Id == created.Id);
         stored.UserId.Should().Be("owner-123");
     }
+
+    [Fact]
+    public async Task ProcessNoteAsync_WhenArchived_SetsArchiveFlags()
+    {
+        var sut = BuildService(nameof(ProcessNoteAsync_WhenArchived_SetsArchiveFlags));
+        var created = await sut.CreateAsync(new CreateNoteDto("Inbox item"));
+
+        var updated = await sut.ProcessNoteAsync(new ProcessNoteDto(
+            created.Id,
+            ParaCategory.Archive,
+            NoteStatus.Archived));
+
+        updated.Status.Should().Be(NoteStatus.Archived);
+        updated.IsArchived.Should().BeTrue();
+        updated.ArchivedAtUtc.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetAllArchivedAsync_IncludesLegacyStatusArchivedNotes()
+    {
+        var dbName = nameof(GetAllArchivedAsync_IncludesLegacyStatusArchivedNotes);
+        var sut = BuildService(dbName);
+        var created = await sut.CreateAsync(new CreateNoteDto("Legacy archived note"));
+
+        var options = new DbContextOptionsBuilder<BrainyDbContext>().UseInMemoryDatabase(dbName).Options;
+        await using (var context = new BrainyDbContext(options))
+        {
+            var stored = await context.Notes.SingleAsync(n => n.Id == created.Id);
+            stored.Status = NoteStatus.Archived;
+            stored.IsArchived = false;
+            stored.ArchivedAtUtc = null;
+            await context.SaveChangesAsync();
+        }
+
+        var archived = await sut.GetAllArchivedAsync();
+        archived.Select(n => n.Id).Should().Contain(created.Id);
+    }
 }

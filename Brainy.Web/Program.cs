@@ -49,8 +49,8 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 // Application-layer services.
 builder.Services.AddBrainyApplication();
 
-// AI assistant (provider is configured via AiAssistant:Provider in appsettings.json).
-builder.Services.AddAiAssistant(builder.Configuration);
+// Temporarily disable all AI features while preserving implementation for future re-enable.
+builder.Services.AddDisabledAiAssistant();
 
 var app = builder.Build();
 

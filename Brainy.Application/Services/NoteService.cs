@@ -107,6 +107,17 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         note.AreaId = dto.AreaId;
         note.ResourceId = dto.ResourceId;
 
+        if (dto.Status == NoteStatus.Archived)
+        {
+            note.IsArchived = true;
+            note.ArchivedAtUtc ??= DateTime.UtcNow;
+        }
+        else if (note.IsArchived)
+        {
+            note.IsArchived = false;
+            note.ArchivedAtUtc = null;
+        }
+
         // SourceUrl == null  → leave existing source untouched
         // SourceUrl == ""    → clear the source link
         // SourceUrl has value → create or update the linked Source entity
@@ -151,7 +162,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
 
         return await context.Notes
             .AsNoTracking()
-            .Where(n => n.UserId == userId && n.Status == NoteStatus.Inbox)
+            .Where(n => n.UserId == userId && n.Status == NoteStatus.Inbox && !n.IsArchived)
             .OrderBy(n => n.CreatedAtUtc)
             .Select(n => new NoteDto(
                 n.Id, n.Title, n.Content, n.AiSummary, n.Status, n.IsArchived,
@@ -183,6 +194,17 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         note.ResourceId      = dto.ResourceId;
         note.ProcessedAtUtc  = DateTime.UtcNow;
 
+        if (dto.Status == NoteStatus.Archived)
+        {
+            note.IsArchived = true;
+            note.ArchivedAtUtc ??= DateTime.UtcNow;
+        }
+        else if (note.IsArchived)
+        {
+            note.IsArchived = false;
+            note.ArchivedAtUtc = null;
+        }
+
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return ToDto(note);
@@ -203,6 +225,8 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         if (idList.Count == 0) return 0;
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var now = DateTime.UtcNow;
+        var isArchived = status == NoteStatus.Archived;
 
         return await context.Notes
             .Where(n => n.UserId == userId && idList.Contains(n.Id))
@@ -213,6 +237,8 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
                     .SetProperty(n => n.ProjectId, projectId)
                     .SetProperty(n => n.AreaId, areaId)
                     .SetProperty(n => n.ResourceId, resourceId)
+                    .SetProperty(n => n.IsArchived, isArchived)
+                    .SetProperty(n => n.ArchivedAtUtc, isArchived ? now : (DateTime?)null)
                     .SetProperty(n => n.ProcessedAtUtc, DateTime.UtcNow)
                     .SetProperty(n => n.UpdatedAtUtc, DateTime.UtcNow),
                 cancellationToken)
@@ -315,8 +341,8 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         return await context.Notes
             .AsNoTracking()
-            .Where(n => n.UserId == userId && n.IsArchived)
-            .OrderByDescending(n => n.ArchivedAtUtc)
+            .Where(n => n.UserId == userId && (n.IsArchived || n.Status == NoteStatus.Archived))
+            .OrderByDescending(n => n.ArchivedAtUtc ?? n.UpdatedAtUtc)
             .Select(n => new NoteDto(
                 n.Id, n.Title, n.Content, n.AiSummary, n.Status, n.IsArchived,
                 n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId,
@@ -336,6 +362,8 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{id}' was not found.");
         note.IsArchived = true;
+        note.Status = NoteStatus.Archived;
+        note.ParaCategory = ParaCategory.Archive;
         note.ArchivedAtUtc = DateTime.UtcNow;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -348,6 +376,10 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{id}' was not found.");
         note.IsArchived = false;
+        if (note.Status == NoteStatus.Archived)
+        {
+            note.Status = NoteStatus.Active;
+        }
         note.ArchivedAtUtc = null;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
