@@ -24,4 +24,6 @@ public record NoteDto(
     /// <summary>URL of the linked <see cref="Domain.Entities.Source"/>, if any.</summary>
     string? SourceUrl = null,
     /// <summary>Display title of the linked <see cref="Domain.Entities.Source"/>, if any.</summary>
-    string? SourceTitle = null);
+    string? SourceTitle = null,
+    /// <summary>Concurrency token captured at load time; pass back on update to detect conflicts.</summary>
+    byte[]? RowVersion = null);

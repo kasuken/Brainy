@@ -199,28 +199,8 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         context.Outputs.Add(output);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        // Resolve navigation names for the returned DTO.
-        string? projectTitle = null;
-        string? areaName     = null;
-        string? goalTitle    = null;
-
-        if (output.ProjectId.HasValue)
-            projectTitle = await context.Projects.AsNoTracking()
-                .Where(p => p.Id == output.ProjectId.Value)
-                .Select(p => p.Name)
-                .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-
-        if (output.AreaId.HasValue)
-            areaName = await context.Areas.AsNoTracking()
-                .Where(a => a.Id == output.AreaId.Value)
-                .Select(a => a.Name)
-                .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-
-        if (output.GoalId.HasValue)
-            goalTitle = await context.Goals.AsNoTracking()
-                .Where(g => g.Id == output.GoalId.Value)
-                .Select(g => g.Title)
-                .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        var (projectTitle, areaName, goalTitle) =
+            await ResolveLinkedNamesAsync(output, cancellationToken).ConfigureAwait(false);
 
         return ToDtoWithNames(output, projectTitle, areaName, goalTitle);
     }
@@ -248,27 +228,8 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        string? projectTitle = null;
-        string? areaName     = null;
-        string? goalTitle    = null;
-
-        if (output.ProjectId.HasValue)
-            projectTitle = await context.Projects.AsNoTracking()
-                .Where(p => p.Id == output.ProjectId.Value)
-                .Select(p => p.Name)
-                .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-
-        if (output.AreaId.HasValue)
-            areaName = await context.Areas.AsNoTracking()
-                .Where(a => a.Id == output.AreaId.Value)
-                .Select(a => a.Name)
-                .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-
-        if (output.GoalId.HasValue)
-            goalTitle = await context.Goals.AsNoTracking()
-                .Where(g => g.Id == output.GoalId.Value)
-                .Select(g => g.Title)
-                .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        var (projectTitle, areaName, goalTitle) =
+            await ResolveLinkedNamesAsync(output, cancellationToken).ConfigureAwait(false);
 
         return ToDtoWithNames(output, projectTitle, areaName, goalTitle);
     }
@@ -387,6 +348,29 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         o.ArchivedDate,
         o.CreatedAtUtc,
         o.UpdatedAtUtc);
+
+    /// <summary>
+    /// Resolves the linked project/area/goal display names for the returned DTO in a
+    /// single projection query instead of one round-trip per navigation.
+    /// </summary>
+    private async Task<(string? ProjectTitle, string? AreaName, string? GoalTitle)> ResolveLinkedNamesAsync(
+        Output output, CancellationToken cancellationToken)
+    {
+        if (output.ProjectId is null && output.AreaId is null && output.GoalId is null)
+            return (null, null, null);
+
+        var names = await context.Outputs.AsNoTracking()
+            .Where(o => o.Id == output.Id)
+            .Select(o => new
+            {
+                ProjectTitle = o.Project != null ? o.Project.Name : null,
+                AreaName     = o.Area != null ? o.Area.Name : null,
+                GoalTitle    = o.Goal != null ? o.Goal.Title : null
+            })
+            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+
+        return (names?.ProjectTitle, names?.AreaName, names?.GoalTitle);
+    }
 
     // Used after mutation where navigations are not loaded but names are resolved separately.
     private static OutputDto ToDtoWithNames(Output o, string? projectTitle, string? areaName, string? goalTitle) => new(

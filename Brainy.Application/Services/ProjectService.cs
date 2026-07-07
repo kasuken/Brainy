@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Notes;
 using Brainy.Application.DTOs.Projects;
 using Brainy.Application.DTOs.Tasks;
@@ -14,7 +15,10 @@ namespace Brainy.Application.Services;
 /// Handles CRUD operations for <see cref="Project"/> entities, scoped to the current user.
 /// Active projects exclude archived entries; reads use <c>AsNoTracking</c>.
 /// </summary>
-internal sealed class ProjectService(IApplicationDbContext context, ICurrentUserService currentUser) : IProjectService
+internal sealed class ProjectService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    TimeProvider timeProvider) : IProjectService
 {
     public async Task<IReadOnlyList<ProjectDto>> GetAllActiveAsync(CancellationToken cancellationToken = default)
     {
@@ -69,7 +73,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var today = DateTime.Today;
+        var today = timeProvider.GetUserToday();
 
         var data = await context.Projects
             .AsNoTracking()
@@ -322,6 +326,11 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Project '{dto.Id}' was not found.");
 
+        // Optimistic concurrency: compare against the token captured when the caller
+        // loaded the project so edits made elsewhere since then are detected.
+        if (dto.RowVersion is not null)
+            context.Entry(project).Property(p => p.RowVersion).OriginalValue = dto.RowVersion;
+
         project.Name = dto.Name;
         project.Emoji = NormalizeEmoji(dto.Emoji);
         project.Description = dto.Description;
@@ -338,7 +347,14 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         else if (dto.Status != ProjectStatus.Completed)
             project.CompletedDate = null;
 
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException("project", ex);
+        }
 
         return ToDto(project);
     }
@@ -482,7 +498,8 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
         p.ArchivedAtUtc,
         p.GoalId,
         p.Goal?.Title,
-        NormalizeEmoji(p.Emoji));
+        NormalizeEmoji(p.Emoji),
+        RowVersion: p.RowVersion);
 
     private static string NormalizeEmoji(string? emoji)
     {
@@ -501,7 +518,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
     public async Task<IReadOnlyList<ProjectSummaryDto>> GetDueTodayProjectsAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today  = DateTime.Today;
+        var today  = timeProvider.GetUserToday();
 
         var data = await BuildDeadlineSummaryQuery(userId, today)
             .Where(p => p.DueDate.HasValue && p.DueDate.Value.Date == today)
@@ -516,7 +533,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
     public async Task<IReadOnlyList<ProjectSummaryDto>> GetDueThisWeekProjectsAsync(CancellationToken cancellationToken = default)
     {
         var userId   = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today    = DateTime.Today;
+        var today    = timeProvider.GetUserToday();
         var tomorrow = today.AddDays(1);
         var weekEnd  = today.AddDays(6);
 
@@ -535,7 +552,7 @@ internal sealed class ProjectService(IApplicationDbContext context, ICurrentUser
     public async Task<IReadOnlyList<ProjectSummaryDto>> GetOverdueProjectsAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today  = DateTime.Today;
+        var today  = timeProvider.GetUserToday();
 
         var data = await BuildDeadlineSummaryQuery(userId, today)
             .Where(p => p.DueDate.HasValue && p.DueDate.Value.Date < today)

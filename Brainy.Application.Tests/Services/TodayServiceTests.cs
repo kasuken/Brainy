@@ -20,6 +20,11 @@ public class TodayServiceTests
 {
     private const string DefaultUserId = "u1";
 
+    // Deterministic clock: the service resolves "today" from this anchor, so tests
+    // never race the real calendar (midnight/time-zone boundaries).
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTime Today = FixedNow.UtcDateTime.Date;
+
     private static (ITodayService sut, BrainyDbContext db) BuildService(string dbName, string userId = DefaultUserId)
     {
         var services = new ServiceCollection();
@@ -31,6 +36,7 @@ public class TodayServiceTests
             sp.GetRequiredService<BrainyDbContext>());
 
         services.AddSingleton<ICurrentUserService>(new FakeCurrentUserService(userId));
+        services.AddSingleton<TimeProvider>(new FixedTimeProvider(FixedNow));
 
         services.AddBrainyApplication();
 
@@ -85,7 +91,7 @@ public class TodayServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetOverdueAsync_WithOverdueTask_ReturnsIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1));
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1));
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -104,7 +110,7 @@ public class TodayServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetOverdueAsync_WithFutureTask_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(1));
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(1));
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -122,7 +128,7 @@ public class TodayServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetOverdueAsync_WithArchivedTask_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1), isArchived: true);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1), isArchived: true);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -140,7 +146,7 @@ public class TodayServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetOverdueAsync_WithArchivedProject_ExcludesIt));
         var project = CreateProject(DefaultUserId, isArchived: true);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1));
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1));
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -158,7 +164,7 @@ public class TodayServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetOverdueAsync_WithDoneTask_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1), status: TaskItemStatus.Done);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1), status: TaskItemStatus.Done);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -178,7 +184,7 @@ public class TodayServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetDueTodayAsync_WithTaskDueToday_ReturnsIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -197,7 +203,7 @@ public class TodayServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetDueTodayAsync_WithYesterdayTask_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1));
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1));
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -215,7 +221,7 @@ public class TodayServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetDueTodayAsync_WithArchivedTask_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today, isArchived: true);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today, isArchived: true);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -235,7 +241,7 @@ public class TodayServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetDueThisWeekAsync_WithTaskDueTomorrow_ReturnsIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(1));
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(1));
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -254,7 +260,7 @@ public class TodayServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetDueThisWeekAsync_WithTaskDueToday_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -272,7 +278,7 @@ public class TodayServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetDueThisWeekAsync_WithArchivedTask_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(2), isArchived: true);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(2), isArchived: true);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -372,7 +378,7 @@ public class TodayServiceTests
         var (sut, db) = BuildService(nameof(GetNextTasksAsync_ExcludesArchivedProjects));
         // Due in 8 days falls in the 7–21 day "next" window
         var project = CreateProject(DefaultUserId, isArchived: true);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(8));
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(8));
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -393,7 +399,7 @@ public class TodayServiceTests
         var (sut, db) = BuildService(nameof(GetOverdueAsync_WhenSubtaskOverdue_SurfacesParent));
         var project = CreateProject(DefaultUserId);
         var parent = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.InProgress);
-        var subtask = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1));
+        var subtask = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1));
         subtask.ParentTaskId = parent.Id;
         db.Projects.Add(project);
         db.Tasks.AddRange(parent, subtask);
@@ -413,7 +419,7 @@ public class TodayServiceTests
         var (sut, db) = BuildService(nameof(GetDueTodayAsync_WhenSubtaskDueToday_SurfacesParent));
         var project = CreateProject(DefaultUserId);
         var parent = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.InProgress);
-        var subtask = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today);
+        var subtask = CreateTask(project.Id, DefaultUserId, dueDate: Today);
         subtask.ParentTaskId = parent.Id;
         db.Projects.Add(project);
         db.Tasks.AddRange(parent, subtask);
@@ -433,7 +439,7 @@ public class TodayServiceTests
         var (sut, db) = BuildService(nameof(GetDueTodayAsync_WhenSubtaskDoneAndDueToday_DoesNotSurfaceParent));
         var project = CreateProject(DefaultUserId);
         var parent = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.InProgress);
-        var subtask = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today, status: TaskItemStatus.Done);
+        var subtask = CreateTask(project.Id, DefaultUserId, dueDate: Today, status: TaskItemStatus.Done);
         subtask.ParentTaskId = parent.Id;
         db.Projects.Add(project);
         db.Tasks.AddRange(parent, subtask);

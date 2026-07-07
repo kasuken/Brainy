@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Areas;
 using Brainy.Application.DTOs.Projects;
 using Brainy.Application.Interfaces.Identity;
@@ -113,5 +114,23 @@ public class ProjectServiceTests
             ProjectStatus.Active, ProjectPriority.Medium, null, null));
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException()
+    {
+        var (projects, areas) = BuildServices(nameof(UpdateAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException));
+        var area = await areas.CreateAsync(new CreateAreaDto("Work"));
+        var created = await projects.CreateAsync(new CreateProjectDto("My project", area.Id));
+
+        // The InMemory provider validates concurrency tokens but does not regenerate
+        // them on update, so a mismatched token simulates the stale value a second
+        // tab would hold after SQL Server bumps the rowversion.
+        var act = () => projects.UpdateAsync(new UpdateProjectDto(
+            created.Id, "My stale edit", area.Id, null, null,
+            ProjectStatus.Active, ProjectPriority.Medium, null, null,
+            RowVersion: [1, 2, 3]));
+
+        await act.Should().ThrowAsync<ConcurrencyConflictException>();
     }
 }

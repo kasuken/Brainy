@@ -1,3 +1,4 @@
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Tasks
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
@@ -318,6 +319,8 @@
     private TaskComplexity? _complexity;
     private DateTime? _dueDate;
     private bool _saving;
+    // Concurrency token captured when the task was loaded; passed back on update.
+    private byte[]? _rowVersion;
     private bool _isSubtask;
 
     // Recurrence fields
@@ -356,6 +359,7 @@
                 _recurrenceInterval   = task.RecurrenceInterval ?? 1;
                 _recurrenceEndDate    = task.RecurrenceEndDate;
                 _nextOccurrenceDate   = task.NextOccurrenceDate;
+                _rowVersion           = task.RowVersion;
             }
         }
     }
@@ -390,7 +394,8 @@
             {
                 await TaskService.UpdateAsync(new UpdateTaskDto(
                     TaskId.Value, _title, _description, _status, _priority, _dueDate, _complexity,
-                    _isRecurring, _recurrenceType, _recurrenceInterval, _recurrenceEndDate, _nextOccurrenceDate));
+                    _isRecurring, _recurrenceType, _recurrenceInterval, _recurrenceEndDate, _nextOccurrenceDate,
+                    RowVersion: _rowVersion));
                 parentId = TaskId.Value;
             }
             else
@@ -410,6 +415,11 @@
             }
 
             MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            // Keep the dialog open so the user's edits are not lost.
+            Snackbar.Add(ex.Message, Severity.Warning);
         }
         catch (Exception ex)
         {

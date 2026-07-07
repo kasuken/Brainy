@@ -18,6 +18,13 @@ internal sealed class RelatedNotesService(
 {
     private const int MinScore = 0; // keep notes with any overlap
 
+    /// <summary>
+    /// Upper bound on candidate notes loaded for similarity scoring. Full note content
+    /// is materialized per candidate, so the query is capped to the most recently
+    /// updated notes to keep memory bounded for large knowledge bases.
+    /// </summary>
+    private const int MaxCandidates = 500;
+
     public async Task<IReadOnlyList<RelatedNoteDto>> GetRelatedAsync(
         Guid noteId,
         int topN = 5,
@@ -53,6 +60,8 @@ internal sealed class RelatedNotesService(
         var candidates = await context.Notes
             .AsNoTracking()
             .Where(n => n.UserId == userId && n.Id != excludeNoteId)
+            .OrderByDescending(n => n.UpdatedAtUtc)
+            .Take(MaxCandidates)
             .Select(n => new
             {
                 n.Id,

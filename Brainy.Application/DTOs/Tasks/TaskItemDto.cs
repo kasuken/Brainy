@@ -26,4 +26,6 @@ public record TaskItemDto(
     RecurrenceType? RecurrenceType = null,
     int? RecurrenceInterval = null,
     DateTime? RecurrenceEndDate = null,
-    DateTime? NextOccurrenceDate = null);
+    DateTime? NextOccurrenceDate = null,
+    /// <summary>Concurrency token captured at load time; pass back on update to detect conflicts.</summary>
+    byte[]? RowVersion = null);

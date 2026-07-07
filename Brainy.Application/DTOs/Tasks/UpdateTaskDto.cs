@@ -15,4 +15,9 @@ public record UpdateTaskDto(
     RecurrenceType? RecurrenceType = null,
     int? RecurrenceInterval = null,
     DateTime? RecurrenceEndDate = null,
-    DateTime? NextOccurrenceDate = null);
+    DateTime? NextOccurrenceDate = null,
+    /// <summary>
+    /// Concurrency token from the loaded task. When provided, the update fails with a
+    /// <see cref="Common.ConcurrencyConflictException"/> if the task changed since it was loaded.
+    /// </summary>
+    byte[]? RowVersion = null);

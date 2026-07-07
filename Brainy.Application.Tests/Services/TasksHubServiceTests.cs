@@ -21,9 +21,15 @@ public class TasksHubServiceTests
 {
     private const string DefaultUserId = "u1";
 
+    // Deterministic clock: the service resolves "today" from this anchor, so tests
+    // never race the real calendar (midnight/time-zone boundaries).
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTime Today = FixedNow.UtcDateTime.Date;
+
     private static (ITasksHubService sut, BrainyDbContext db) BuildService(
         string dbName,
-        string userId = DefaultUserId)
+        string userId = DefaultUserId,
+        TimeProvider? clock = null)
     {
         var services = new ServiceCollection();
 
@@ -34,6 +40,7 @@ public class TasksHubServiceTests
             sp.GetRequiredService<BrainyDbContext>());
 
         services.AddSingleton<ICurrentUserService>(new FakeCurrentUserService(userId));
+        services.AddSingleton<TimeProvider>(clock ?? new FixedTimeProvider(FixedNow));
 
         services.AddBrainyApplication();
 
@@ -373,7 +380,7 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetOverdueTasksAsync_WithYesterdayDueDate_ReturnsIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1));
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1));
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -392,7 +399,7 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetOverdueTasksAsync_WithTodayDueDate_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -410,7 +417,7 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetOverdueTasksAsync_WithFutureDueDate_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(1));
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(1));
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -428,7 +435,7 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetOverdueTasksAsync_WithDoneTask_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1), status: TaskItemStatus.Done);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1), status: TaskItemStatus.Done);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -446,7 +453,7 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetOverdueTasksAsync_WithArchivedTask_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1), isArchived: true);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1), isArchived: true);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -464,8 +471,8 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetOverdueTasksAsync_OrderedByDueDateAscending));
         var project = CreateProject(DefaultUserId);
-        var older = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-5));
-        var newer = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1));
+        var older = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-5));
+        var newer = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1));
         db.Projects.Add(project);
         db.Tasks.AddRange(older, newer);
         await db.SaveChangesAsync();
@@ -487,7 +494,7 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetTasksNeedingAttentionAsync_WithOverdueTask_IncludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1));
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1));
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -506,7 +513,7 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetTasksNeedingAttentionAsync_WithTaskDueToday_IncludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -526,7 +533,7 @@ public class TasksHubServiceTests
         var (sut, db) = BuildService(nameof(GetTasksNeedingAttentionAsync_WithCriticalPriorityTask_IncludesIt));
         var project = CreateProject(DefaultUserId);
         // Future due date but critical priority — should still appear
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(7), priority: TaskPriority.Critical);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(7), priority: TaskPriority.Critical);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -545,7 +552,7 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetTasksNeedingAttentionAsync_WhenTaskIsOverdueAndCritical_NoDuplicates));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-2), priority: TaskPriority.Critical);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-2), priority: TaskPriority.Critical);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -564,8 +571,8 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetTasksNeedingAttentionAsync_WithDoneArchivedTask_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var doneTask = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(-1), status: TaskItemStatus.Done);
-        var archivedTask = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today, priority: TaskPriority.Critical, isArchived: true);
+        var doneTask = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1), status: TaskItemStatus.Done);
+        var archivedTask = CreateTask(project.Id, DefaultUserId, dueDate: Today, priority: TaskPriority.Critical, isArchived: true);
         db.Projects.Add(project);
         db.Tasks.AddRange(doneTask, archivedTask);
         await db.SaveChangesAsync();
@@ -604,7 +611,7 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetTasksWithoutDueDateAsync_WithDueDateSet_ExcludesIt));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(3));
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(3));
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -639,10 +646,13 @@ public class TasksHubServiceTests
     [Fact]
     public async Task GetStaleTasksAsync_WithTaskNotUpdatedFor31Days_ReturnsIt()
     {
-        // Arrange
-        var (sut, db) = BuildService(nameof(GetStaleTasksAsync_WithTaskNotUpdatedFor31Days_ReturnsIt));
+        // Arrange — SaveChanges audit-stamps UpdatedAtUtc with the real "now", so
+        // staleness is exercised by moving the service clock 31 days past the save.
+        var (sut, db) = BuildService(
+            nameof(GetStaleTasksAsync_WithTaskNotUpdatedFor31Days_ReturnsIt),
+            clock: new FixedTimeProvider(DateTimeOffset.UtcNow.AddDays(31)));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, updatedAt: DateTime.UtcNow.AddDays(-31));
+        var task = CreateTask(project.Id, DefaultUserId);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -658,10 +668,12 @@ public class TasksHubServiceTests
     [Fact]
     public async Task GetStaleTasksAsync_WithTaskUpdated29DaysAgo_ExcludesIt()
     {
-        // Arrange
-        var (sut, db) = BuildService(nameof(GetStaleTasksAsync_WithTaskUpdated29DaysAgo_ExcludesIt));
+        // Arrange — clock 29 days after the save: inside the 30-day freshness window.
+        var (sut, db) = BuildService(
+            nameof(GetStaleTasksAsync_WithTaskUpdated29DaysAgo_ExcludesIt),
+            clock: new FixedTimeProvider(DateTimeOffset.UtcNow.AddDays(29)));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, updatedAt: DateTime.UtcNow.AddDays(-29));
+        var task = CreateTask(project.Id, DefaultUserId);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -676,10 +688,12 @@ public class TasksHubServiceTests
     [Fact]
     public async Task GetStaleTasksAsync_WithDoneTask_ExcludesIt()
     {
-        // Arrange
-        var (sut, db) = BuildService(nameof(GetStaleTasksAsync_WithDoneTask_ExcludesIt));
+        // Arrange — stale by clock (31 days past save) but Done, so it must be excluded.
+        var (sut, db) = BuildService(
+            nameof(GetStaleTasksAsync_WithDoneTask_ExcludesIt),
+            clock: new FixedTimeProvider(DateTimeOffset.UtcNow.AddDays(31)));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Done, updatedAt: DateTime.UtcNow.AddDays(-31));
+        var task = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Done);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -694,10 +708,12 @@ public class TasksHubServiceTests
     [Fact]
     public async Task GetStaleTasksAsync_WithArchivedTask_ExcludesIt()
     {
-        // Arrange
-        var (sut, db) = BuildService(nameof(GetStaleTasksAsync_WithArchivedTask_ExcludesIt));
+        // Arrange — stale by clock (31 days past save) but archived, so it must be excluded.
+        var (sut, db) = BuildService(
+            nameof(GetStaleTasksAsync_WithArchivedTask_ExcludesIt),
+            clock: new FixedTimeProvider(DateTimeOffset.UtcNow.AddDays(31)));
         var project = CreateProject(DefaultUserId);
-        var task = CreateTask(project.Id, DefaultUserId, isArchived: true, updatedAt: DateTime.UtcNow.AddDays(-31));
+        var task = CreateTask(project.Id, DefaultUserId, isArchived: true);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -792,7 +808,7 @@ public class TasksHubServiceTests
         var task = new TasksHubTaskDto(
             Guid.NewGuid(), "Overdue Task", null,
             TaskItemStatus.Todo, TaskPriority.Medium,
-            DueDate: DateTime.Today.AddDays(-3),
+            DueDate: Today.AddDays(-3),
             Guid.NewGuid(), "Project",
             DateTime.UtcNow, DateTime.UtcNow);
 
@@ -811,7 +827,7 @@ public class TasksHubServiceTests
         var task = new TasksHubTaskDto(
             Guid.NewGuid(), "Due Today", null,
             TaskItemStatus.Todo, TaskPriority.Low,
-            DueDate: DateTime.Today,
+            DueDate: Today,
             Guid.NewGuid(), "Project",
             DateTime.UtcNow, DateTime.UtcNow);
 
@@ -827,9 +843,10 @@ public class TasksHubServiceTests
     {
         // Arrange
         var (sut, _) = BuildService(nameof(ComputeAttentionScore_WithCriticalPriority_Adds20Points));
+        // Low priority contributes 0 points, so the delta isolates the Critical bonus.
         var baseTask = new TasksHubTaskDto(
             Guid.NewGuid(), "Base Task", null,
-            TaskItemStatus.Todo, TaskPriority.Medium,
+            TaskItemStatus.Todo, TaskPriority.Low,
             DueDate: null,
             Guid.NewGuid(), "Project",
             DateTime.UtcNow, DateTime.UtcNow);
@@ -853,7 +870,7 @@ public class TasksHubServiceTests
         var task = new TasksHubTaskDto(
             Guid.NewGuid(), "Extremely Critical", null,
             TaskItemStatus.Todo, TaskPriority.Critical,
-            DueDate: DateTime.Today.AddDays(-365),
+            DueDate: Today.AddDays(-365),
             Guid.NewGuid(), "Project",
             DateTime.UtcNow, DateTime.UtcNow);
 
@@ -1060,14 +1077,14 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetFilteredTasksAsync_FilterByDueBefore_ReturnsTasksDueBeforeDate));
         var project = CreateProject(DefaultUserId);
-        var dueEarly = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(2));
-        var dueLate = CreateTask(project.Id, DefaultUserId, dueDate: DateTime.Today.AddDays(10));
+        var dueEarly = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(2));
+        var dueLate = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(10));
         db.Projects.Add(project);
         db.Tasks.AddRange(dueEarly, dueLate);
         await db.SaveChangesAsync();
 
         // Act
-        var result = await sut.GetFilteredTasksAsync(new TasksHubFilterDto(DueBefore: DateTime.Today.AddDays(5)));
+        var result = await sut.GetFilteredTasksAsync(new TasksHubFilterDto(DueBefore: Today.AddDays(5)));
 
         // Assert
         result.Items.Should().ContainSingle()
@@ -1205,7 +1222,7 @@ public class TasksHubServiceTests
         db.Tasks.AddRange(
             // Active section — overdue, high priority, on hold, stale, no due date, attention
             CreateTask(project.Id, DefaultUserId,
-                dueDate: DateTime.Today.AddDays(-1), priority: TaskPriority.Critical,
+                dueDate: Today.AddDays(-1), priority: TaskPriority.Critical,
                 status: TaskItemStatus.Waiting, isArchived: true,
                 updatedAt: DateTime.UtcNow.AddDays(-31)));
         await db.SaveChangesAsync();

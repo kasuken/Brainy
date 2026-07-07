@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Notes;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
@@ -98,6 +99,12 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{dto.Id}' was not found.");
 
+        // Optimistic concurrency: compare against the token captured when the caller
+        // loaded the note, not the freshly loaded one, so edits made in another
+        // tab/circuit since then are detected instead of silently overwritten.
+        if (dto.RowVersion is not null)
+            context.Entry(note).Property(n => n.RowVersion).OriginalValue = dto.RowVersion;
+
         note.Title = dto.Title;
         note.Content = dto.Content;
         note.AiSummary = dto.AiSummary;
@@ -151,7 +158,14 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             }
         }
 
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException("note", ex);
+        }
 
         return ToDto(note);
     }
@@ -332,6 +346,14 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{id}' was not found.");
 
+        // Incoming relationship links use Restrict delete behaviour, so links in both
+        // directions must be removed explicitly before the note can be deleted.
+        var relationshipLinks = await context.NoteRelationships
+            .Where(r => r.SourceNoteId == id || r.TargetNoteId == id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        context.NoteRelationships.RemoveRange(relationshipLinks);
+
         context.Notes.Remove(note);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -403,7 +425,8 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         n.IsFavorite,
         n.Images.Count > 0,
         SourceUrl: n.Source?.Url,
-        SourceTitle: n.Source?.Title);
+        SourceTitle: n.Source?.Title,
+        RowVersion: n.RowVersion);
 
     public async Task<NoteDto> ToggleFavoriteAsync(Guid id, CancellationToken cancellationToken = default)
     {

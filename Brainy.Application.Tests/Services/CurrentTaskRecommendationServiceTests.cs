@@ -20,6 +20,11 @@ public class CurrentTaskRecommendationServiceTests
 {
     private const string DefaultUserId = "u1";
 
+    // Deterministic clock: the service resolves "today" from this anchor, so tests
+    // never race the real calendar (midnight/time-zone boundaries).
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTime Today = FixedNow.UtcDateTime.Date;
+
     private static (ICurrentTaskRecommendationService sut, BrainyDbContext db) BuildService(
         string dbName,
         string userId = DefaultUserId)
@@ -33,6 +38,7 @@ public class CurrentTaskRecommendationServiceTests
             sp.GetRequiredService<BrainyDbContext>());
 
         services.AddSingleton<ICurrentUserService>(new FakeCurrentUserService(userId));
+        services.AddSingleton<TimeProvider>(new FixedTimeProvider(FixedNow));
 
         services.AddBrainyApplication();
 
@@ -104,12 +110,12 @@ public class CurrentTaskRecommendationServiceTests
 
         // Overdue critical = score 100
         var overdueCritical = CreateTask(project.Id, DefaultUserId,
-            dueDate: DateTime.Today.AddDays(-2),
+            dueDate: Today.AddDays(-2),
             priority: TaskPriority.Critical);
 
         // Future medium = score 10
         var futureMedium = CreateTask(project.Id, DefaultUserId,
-            dueDate: DateTime.Today.AddDays(10),
+            dueDate: Today.AddDays(10),
             priority: TaskPriority.Medium);
 
         db.Projects.Add(project);
@@ -133,12 +139,12 @@ public class CurrentTaskRecommendationServiceTests
 
         // Due-today high = score 60
         var dueTodayHigh = CreateTask(project.Id, DefaultUserId,
-            dueDate: DateTime.Today,
+            dueDate: Today,
             priority: TaskPriority.High);
 
         // Overdue medium = score 50
         var overdueMedium = CreateTask(project.Id, DefaultUserId,
-            dueDate: DateTime.Today.AddDays(-1),
+            dueDate: Today.AddDays(-1),
             priority: TaskPriority.Medium);
 
         db.Projects.Add(project);
@@ -160,7 +166,7 @@ public class CurrentTaskRecommendationServiceTests
         var (sut, db) = BuildService(nameof(GetRecommendationAsync_ExcludesArchivedTasks));
         var project = CreateProject(DefaultUserId);
         var archivedTask = CreateTask(project.Id, DefaultUserId,
-            dueDate: DateTime.Today.AddDays(-1),
+            dueDate: Today.AddDays(-1),
             priority: TaskPriority.Critical,
             isArchived: true);
 
@@ -187,7 +193,7 @@ public class CurrentTaskRecommendationServiceTests
 
         // Subtask: should be excluded because ParentTaskId is set
         var subtask = CreateTask(project.Id, DefaultUserId,
-            dueDate: DateTime.Today.AddDays(-1),
+            dueDate: Today.AddDays(-1),
             priority: TaskPriority.Critical,
             parentTaskId: parentTask.Id);
 

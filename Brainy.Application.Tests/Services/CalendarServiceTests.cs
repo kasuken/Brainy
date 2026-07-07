@@ -22,6 +22,12 @@ public class CalendarServiceTests
     private const string DefaultUserId = "u1";
     private const string OtherUserId   = "u2";
 
+    // Deterministic clock: the service resolves "today" from this anchor, so tests
+    // never race the real calendar (midnight/time-zone boundaries). Anchored to a
+    // Monday so the Mon-Sun "due this week" window always has days after today.
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTime Today = FixedNow.UtcDateTime.Date;
+
     // ── DI builder ────────────────────────────────────────────────────────────
 
     private static (ICalendarService sut, BrainyDbContext db) BuildService(
@@ -37,6 +43,7 @@ public class CalendarServiceTests
             sp.GetRequiredService<BrainyDbContext>());
 
         services.AddSingleton<ICurrentUserService>(new FakeCurrentUserService(userId));
+        services.AddSingleton<TimeProvider>(new FixedTimeProvider(FixedNow));
 
         services.AddBrainyApplication();
 
@@ -101,7 +108,7 @@ public class CalendarServiceTests
         var (sut, db) = BuildService(nameof(GetCalendarTasks_ReturnsOnlyTasksWithDueDate));
         var project   = CreateProject(DefaultUserId);
         db.Projects.Add(project);
-        db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: DateTime.UtcNow.Date));
+        db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: Today));
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: null));
         await db.SaveChangesAsync();
 
@@ -119,7 +126,7 @@ public class CalendarServiceTests
         var (sut, db) = BuildService(nameof(GetCalendarTasks_ExcludesArchivedTasks));
         var project   = CreateProject(DefaultUserId);
         db.Projects.Add(project);
-        db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: DateTime.UtcNow.Date, isArchived: true));
+        db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: Today, isArchived: true));
         await db.SaveChangesAsync();
 
         // Act
@@ -136,7 +143,7 @@ public class CalendarServiceTests
         var (sut, db)       = BuildService(nameof(GetCalendarTasks_ExcludesTasksFromArchivedProjects));
         var archivedProject = CreateProject(DefaultUserId, isArchived: true);
         db.Projects.Add(archivedProject);
-        db.Tasks.Add(CreateTask(DefaultUserId, archivedProject.Id, dueDate: DateTime.UtcNow.Date));
+        db.Tasks.Add(CreateTask(DefaultUserId, archivedProject.Id, dueDate: Today));
         await db.SaveChangesAsync();
 
         // Act
@@ -152,7 +159,7 @@ public class CalendarServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetCalendarTasks_ExcludesDoneAndArchivedStatusTasks));
         var project   = CreateProject(DefaultUserId);
-        var today     = DateTime.UtcNow.Date;
+        var today     = Today;
         db.Projects.Add(project);
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: today, status: TaskItemStatus.Done));
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: today, status: TaskItemStatus.Archived));
@@ -172,7 +179,7 @@ public class CalendarServiceTests
         var (sut, db)     = BuildService(nameof(GetCalendarTasks_FilterByProject_ReturnsMatchingOnly));
         var targetProject = CreateProject(DefaultUserId);
         var otherProject  = CreateProject(DefaultUserId);
-        var today         = DateTime.UtcNow.Date;
+        var today         = Today;
         db.Projects.AddRange(targetProject, otherProject);
         db.Tasks.Add(CreateTask(DefaultUserId, targetProject.Id, dueDate: today, title: "Target"));
         db.Tasks.Add(CreateTask(DefaultUserId, otherProject.Id,  dueDate: today, title: "Other"));
@@ -194,7 +201,7 @@ public class CalendarServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetCalendarTasks_FilterByPriority_ReturnsMatchingOnly));
         var project   = CreateProject(DefaultUserId);
-        var today     = DateTime.UtcNow.Date;
+        var today     = Today;
         db.Projects.Add(project);
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: today, priority: TaskPriority.High,   title: "High"));
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: today, priority: TaskPriority.Medium, title: "Medium"));
@@ -216,7 +223,7 @@ public class CalendarServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetCalendarTasks_FilterBySearchTerm_ReturnsMatchingOnly));
         var project   = CreateProject(DefaultUserId);
-        var today     = DateTime.UtcNow.Date;
+        var today     = Today;
         db.Projects.Add(project);
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: today, title: "Deploy release"));
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: today, title: "Write docs"));
@@ -240,7 +247,7 @@ public class CalendarServiceTests
         var area          = CreateArea(DefaultUserId);
         var projectInArea = CreateProject(DefaultUserId, areaId: area.Id);
         var projectNoArea = CreateProject(DefaultUserId);
-        var today         = DateTime.UtcNow.Date;
+        var today         = Today;
         db.Areas.Add(area);
         db.Projects.AddRange(projectInArea, projectNoArea);
         db.Tasks.Add(CreateTask(DefaultUserId, projectInArea.Id, dueDate: today, title: "In area"));
@@ -263,7 +270,7 @@ public class CalendarServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetCalendarTasks_SetsIsOverdue_WhenDueDateIsInPast));
         var project   = CreateProject(DefaultUserId);
-        var yesterday = DateTime.UtcNow.Date.AddDays(-1);
+        var yesterday = Today.AddDays(-1);
         db.Projects.Add(project);
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: yesterday));
         await db.SaveChangesAsync();
@@ -282,7 +289,7 @@ public class CalendarServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetCalendarTasks_DoesNotSetIsOverdue_WhenDueDateIsFuture));
         var project   = CreateProject(DefaultUserId);
-        var tomorrow  = DateTime.UtcNow.Date.AddDays(1);
+        var tomorrow  = Today.AddDays(1);
         db.Projects.Add(project);
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: tomorrow));
         await db.SaveChangesAsync();
@@ -302,7 +309,7 @@ public class CalendarServiceTests
         var (sut, db)    = BuildService(nameof(GetCalendarTasks_ExcludesOtherUsersData));
         var ownProject   = CreateProject(DefaultUserId);
         var otherProject = CreateProject(OtherUserId);
-        var today        = DateTime.UtcNow.Date;
+        var today        = Today;
         db.Projects.AddRange(ownProject, otherProject);
         db.Tasks.Add(CreateTask(DefaultUserId, ownProject.Id,   dueDate: today, title: "Mine"));
         db.Tasks.Add(CreateTask(OtherUserId,   otherProject.Id, dueDate: today, title: "Others"));
@@ -324,7 +331,7 @@ public class CalendarServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetUpcomingDeadlines_GroupsTasksCorrectly));
         var project   = CreateProject(DefaultUserId);
-        var today     = DateTime.UtcNow.Date;
+        var today     = Today;
 
         // Compute the Sunday of the current Mon–Sun week (mirrors the service logic)
         var dayOfWeek    = (int)today.DayOfWeek;
@@ -360,7 +367,7 @@ public class CalendarServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetUpcomingDeadlines_ExcludesArchivedTasks));
         var project   = CreateProject(DefaultUserId);
-        var today     = DateTime.UtcNow.Date;
+        var today     = Today;
         db.Projects.Add(project);
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: today,             isArchived: true, title: "ArchivedToday"));
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: today.AddDays(-1), isArchived: true, title: "ArchivedOverdue"));
@@ -383,8 +390,8 @@ public class CalendarServiceTests
         // Arrange
         var (sut, db)  = BuildService(nameof(RescheduleDueDate_UpdatesTaskDueDate));
         var project    = CreateProject(DefaultUserId);
-        var task       = CreateTask(DefaultUserId, project.Id, dueDate: DateTime.UtcNow.Date);
-        var newDueDate = DateTime.UtcNow.Date.AddDays(7);
+        var task       = CreateTask(DefaultUserId, project.Id, dueDate: Today);
+        var newDueDate = Today.AddDays(7);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
@@ -405,7 +412,7 @@ public class CalendarServiceTests
         var unknownId = Guid.NewGuid();
 
         // Act
-        var act = () => sut.RescheduleDueDateAsync(unknownId, DateTime.UtcNow.Date.AddDays(1));
+        var act = () => sut.RescheduleDueDateAsync(unknownId, Today.AddDays(1));
 
         // Assert
         await act.Should().ThrowAsync<KeyNotFoundException>();
@@ -417,13 +424,13 @@ public class CalendarServiceTests
         // Arrange
         var (sut, db)  = BuildService(nameof(RescheduleDueDate_ThrowsKeyNotFoundException_WhenTaskBelongsToOtherUser));
         var project    = CreateProject(OtherUserId);
-        var otherTask  = CreateTask(OtherUserId, project.Id, dueDate: DateTime.UtcNow.Date);
+        var otherTask  = CreateTask(OtherUserId, project.Id, dueDate: Today);
         db.Projects.Add(project);
         db.Tasks.Add(otherTask);
         await db.SaveChangesAsync();
 
         // Act — sut is scoped to DefaultUserId, not OtherUserId
-        var act = () => sut.RescheduleDueDateAsync(otherTask.Id, DateTime.UtcNow.Date.AddDays(1));
+        var act = () => sut.RescheduleDueDateAsync(otherTask.Id, Today.AddDays(1));
 
         // Assert
         await act.Should().ThrowAsync<KeyNotFoundException>();
@@ -437,7 +444,7 @@ public class CalendarServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetWorkload_ReturnsCountsPerDate));
         var project   = CreateProject(DefaultUserId);
-        var today     = DateTime.UtcNow.Date;
+        var today     = Today;
         db.Projects.Add(project);
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: today));
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: today));
@@ -461,7 +468,7 @@ public class CalendarServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetWorkload_ExcludesArchivedTasks));
         var project   = CreateProject(DefaultUserId);
-        var today     = DateTime.UtcNow.Date;
+        var today     = Today;
         db.Projects.Add(project);
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: today, isArchived: true));
         await db.SaveChangesAsync();
@@ -481,7 +488,7 @@ public class CalendarServiceTests
         // Arrange
         var (sut, db)   = BuildService(nameof(GetWorkload_ExcludesTasksOutsideRange));
         var project     = CreateProject(DefaultUserId);
-        var today       = DateTime.UtcNow.Date;
+        var today       = Today;
         var insideDate  = today.AddDays(1);
         var outsideDate = today.AddDays(5);
         db.Projects.Add(project);

@@ -1,8 +1,10 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Notes;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
+using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -192,6 +194,51 @@ public class NoteServiceTests
         var act = () => sut.DeleteAsync(Guid.NewGuid());
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException()
+    {
+        var sut = BuildService(nameof(UpdateAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException));
+        var created = await sut.CreateAsync(new CreateNoteDto("Original"));
+
+        // The InMemory provider validates concurrency tokens but does not regenerate
+        // them on update, so a mismatched token simulates the stale value a second
+        // tab would hold after SQL Server bumps the rowversion.
+        var act = () => sut.UpdateAsync(new UpdateNoteDto(
+            created.Id, "My stale edit", "", null,
+            created.Status, created.ParaCategory, null, null, null,
+            RowVersion: [1, 2, 3]));
+
+        await act.Should().ThrowAsync<ConcurrencyConflictException>();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenNoteIsRelationshipTarget_RemovesRelationshipLinks()
+    {
+        var dbName = nameof(DeleteAsync_WhenNoteIsRelationshipTarget_RemovesRelationshipLinks);
+        var sut = BuildService(dbName);
+        var source = await sut.CreateAsync(new CreateNoteDto("Source note"));
+        var target = await sut.CreateAsync(new CreateNoteDto("Target note"));
+
+        var options = new DbContextOptionsBuilder<BrainyDbContext>().UseInMemoryDatabase(dbName).Options;
+        await using (var seedContext = new BrainyDbContext(options))
+        {
+            seedContext.NoteRelationships.Add(new NoteRelationship
+            {
+                Id = Guid.NewGuid(),
+                SourceNoteId = source.Id,
+                TargetNoteId = target.Id,
+                Type = RelationshipType.Related
+            });
+            await seedContext.SaveChangesAsync();
+        }
+
+        await sut.DeleteAsync(target.Id);
+
+        await using var verifyContext = new BrainyDbContext(options);
+        (await verifyContext.NoteRelationships.CountAsync()).Should().Be(0);
+        (await verifyContext.Notes.CountAsync(n => n.Id == source.Id)).Should().Be(1);
     }
 
     // ── Per-user isolation ────────────────────────────────────────────────────

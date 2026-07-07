@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Calendar;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
@@ -12,7 +13,10 @@ namespace Brainy.Application.Services;
 /// All queries exclude archived tasks and tasks belonging to archived projects.
 /// Read-only queries use <c>AsNoTracking</c> for performance.
 /// </summary>
-internal sealed class CalendarService(IApplicationDbContext context, ICurrentUserService currentUser) : ICalendarService
+internal sealed class CalendarService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    TimeProvider timeProvider) : ICalendarService
 {
     // ── Public API ──────────────────────────────────────────────────────────────
 
@@ -21,7 +25,7 @@ internal sealed class CalendarService(IApplicationDbContext context, ICurrentUse
         CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today  = DateTime.UtcNow.Date;
+        var today  = timeProvider.GetUserToday();
 
         var query = ActiveBase(userId).Where(t => t.DueDate != null);
 
@@ -67,7 +71,7 @@ internal sealed class CalendarService(IApplicationDbContext context, ICurrentUse
     public async Task<UpcomingDeadlinesDto> GetUpcomingDeadlinesAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today  = DateTime.UtcNow.Date;
+        var today  = timeProvider.GetUserToday();
 
         // Monday of current week
         var dayOfWeek    = (int)today.DayOfWeek;

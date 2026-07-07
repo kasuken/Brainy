@@ -19,4 +19,9 @@ public record UpdateNoteDto(
     /// </summary>
     string? SourceUrl = null,
     /// <summary>Human-readable title for the source. Ignored when <see cref="SourceUrl"/> is null.</summary>
-    string? SourceTitle = null);
+    string? SourceTitle = null,
+    /// <summary>
+    /// Concurrency token from the loaded note. When provided, the update fails with a
+    /// <see cref="Common.ConcurrencyConflictException"/> if the note changed since it was loaded.
+    /// </summary>
+    byte[]? RowVersion = null);

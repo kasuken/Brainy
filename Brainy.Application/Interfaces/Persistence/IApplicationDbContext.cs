@@ -1,6 +1,7 @@
 using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Brainy.Application.Interfaces.Persistence;
 
@@ -31,6 +32,12 @@ public interface IApplicationDbContext
     DbSet<Goal> Goals { get; }
     DbSet<GoalMilestone> GoalMilestones { get; }
     DbSet<GoalActivity> GoalActivities { get; }
+
+    /// <summary>
+    /// Change-tracker entry for <paramref name="entity"/>; used to set the original
+    /// <see cref="BaseEntity.RowVersion"/> for optimistic concurrency checks.
+    /// </summary>
+    EntityEntry<TEntity> Entry<TEntity>(TEntity entity) where TEntity : class;
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Tasks;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
@@ -14,7 +15,8 @@ namespace Brainy.Application.Services;
 /// </summary>
 internal sealed class CurrentTaskRecommendationService(
     IApplicationDbContext context,
-    ICurrentUserService currentUser) : ICurrentTaskRecommendationService
+    ICurrentUserService currentUser,
+    TimeProvider timeProvider) : ICurrentTaskRecommendationService
 {
     private static readonly TaskItemStatus[] _excludedStatuses =
         [TaskItemStatus.Done, TaskItemStatus.Archived];
@@ -22,7 +24,7 @@ internal sealed class CurrentTaskRecommendationService(
     public async Task<TodayTaskItemDto?> GetRecommendationAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today = DateTime.Today;
+        var today = timeProvider.GetUserToday();
         var weekEnd = today.AddDays(7);
 
         // Fetch all eligible candidates in one query; scoring is done in memory

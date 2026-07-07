@@ -8,6 +8,7 @@ using Brainy.Application.Services;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenAI.Chat;
 
 namespace Brainy.Application;
@@ -22,6 +23,10 @@ public static class DependencyInjection
     /// </summary>
     public static IServiceCollection AddBrainyApplication(this IServiceCollection services)
     {
+        // Single source of "now"/"today" for due-date logic; tests and hosts may
+        // register their own TimeProvider before calling this to override it.
+        services.TryAddSingleton(TimeProvider.System);
+
         services.AddScoped<INoteService, NoteService>();
         services.AddScoped<INoteImageService, NoteImageService>();
         services.AddScoped<IProjectService, ProjectService>();

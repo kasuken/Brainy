@@ -1,3 +1,4 @@
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Tasks
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
@@ -583,7 +584,8 @@ else
         {
             var updated = await TaskService.UpdateAsync(new UpdateTaskDto(
                 taskId, source.Title, source.Description,
-                targetStatus, source.Priority, source.DueDate, source.Complexity));
+                targetStatus, source.Priority, source.DueDate, source.Complexity,
+                RowVersion: source.RowVersion));
 
             // Reload when the moved card has subtasks so its progress indicator survives the move.
             if (source.SubtaskCount > 0)
@@ -595,6 +597,12 @@ else
                 _tasksByStatus[source.Status].RemoveAll(t => t.Id == taskId);
                 _tasksByStatus[targetStatus].Add(updated);
             }
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            // Another session changed this task; reload the board to show the latest state.
+            Snackbar.Add(ex.Message, Severity.Warning);
+            await LoadTasksAsync();
         }
         catch (Exception ex)
         {

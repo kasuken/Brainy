@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Goals;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
@@ -12,7 +13,10 @@ namespace Brainy.Application.Services;
 /// Manages <see cref="Goal"/> entities scoped to the current user.
 /// All reads use <c>AsNoTracking</c>; all operations are async.
 /// </summary>
-internal sealed class GoalService(IApplicationDbContext context, ICurrentUserService currentUser) : IGoalService
+internal sealed class GoalService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    TimeProvider timeProvider) : IGoalService
 {
     public async Task<IReadOnlyList<GoalDto>> GetAllActiveAsync(CancellationToken cancellationToken = default)
     {
@@ -369,7 +373,7 @@ internal sealed class GoalService(IApplicationDbContext context, ICurrentUserSer
     public async Task<IReadOnlyList<GoalDto>> GetDueSoonAsync(int daysAhead = 7, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today = DateTime.UtcNow.Date;
+        var today = timeProvider.GetUserToday();
         var cutoff = today.AddDays(daysAhead);
 
         var goals = await context.Goals
@@ -393,7 +397,7 @@ internal sealed class GoalService(IApplicationDbContext context, ICurrentUserSer
     public async Task<IReadOnlyList<GoalDto>> GetOverdueAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today = DateTime.UtcNow.Date;
+        var today = timeProvider.GetUserToday();
 
         var goals = await context.Goals
             .AsNoTracking()

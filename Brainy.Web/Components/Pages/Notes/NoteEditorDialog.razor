@@ -1,5 +1,6 @@
 @implements IAsyncDisposable
 
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Highlights
 @using Brainy.Application.DTOs.Notes
 @using Brainy.Application.DTOs.NoteRelationships
@@ -735,8 +736,10 @@
     private bool _dupChecked;
     private List<(Guid Id, string Title)> _duplicates = [];
 
+    // DisableHtml is required: note content is user/web-captured text rendered via
+    // MarkupString, and Markdig passes raw HTML through by default (stored-XSS risk).
     private static readonly MarkdownPipeline _pipeline =
-        new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+        new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
 
     protected override async Task OnInitializedAsync()
     {
@@ -956,7 +959,8 @@
                     _originalNote.AreaId,
                     _originalNote.ResourceId,
                     SourceUrl: _model.SourceUrl,
-                    SourceTitle: _model.SourceTitle));
+                    SourceTitle: _model.SourceTitle,
+                    RowVersion: _originalNote.RowVersion));
                 _originalNote = saved;
             }
             else
@@ -982,6 +986,11 @@
 
             Snackbar.Add(NoteId.HasValue ? "Note saved." : "Note created.", Severity.Success);
             MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            // Keep the dialog open so the user's edits are not lost.
+            Snackbar.Add(ex.Message, Severity.Warning);
         }
         catch (Exception ex)
         {

@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Tasks;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
@@ -306,5 +307,73 @@ public class TaskServiceTests
 
         var refreshed = await db.Tasks.AsNoTracking().FirstAsync(t => t.Id == sub.Id);
         refreshed.CompletedDate.Should().NotBeNull();
+    }
+
+    // ── Optimistic concurrency ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException()
+    {
+        var (sut, db) = BuildService(nameof(UpdateAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException));
+        var project = CreateProject(DefaultUserId);
+        var task = CreateTask(project.Id, DefaultUserId);
+        db.Projects.Add(project);
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync();
+
+        // The InMemory provider validates concurrency tokens but does not regenerate
+        // them on update, so a mismatched token simulates the stale value a second
+        // tab would hold after SQL Server bumps the rowversion.
+        var act = () => sut.UpdateAsync(new UpdateTaskDto(
+            task.Id, "My stale edit", RowVersion: [1, 2, 3]));
+
+        await act.Should().ThrowAsync<ConcurrencyConflictException>();
+    }
+
+    // ── Delete with dependency links ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteAsync_WhenTaskIsDependedOnByAnotherTask_RemovesDependencyLinks()
+    {
+        var (sut, db) = BuildService(nameof(DeleteAsync_WhenTaskIsDependedOnByAnotherTask_RemovesDependencyLinks));
+        var project = CreateProject(DefaultUserId);
+        var prerequisite = CreateTask(project.Id, DefaultUserId);
+        var dependent = CreateTask(project.Id, DefaultUserId);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(prerequisite, dependent);
+        db.TaskDependencies.Add(new TaskDependency
+        {
+            Id = Guid.NewGuid(),
+            TaskId = dependent.Id,
+            DependsOnTaskId = prerequisite.Id
+        });
+        await db.SaveChangesAsync();
+
+        await sut.DeleteAsync(prerequisite.Id);
+
+        (await db.TaskDependencies.AsNoTracking().CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenSubtaskHasDependencyLink_RemovesDependencyLinks()
+    {
+        var (sut, db) = BuildService(nameof(DeleteAsync_WhenSubtaskHasDependencyLink_RemovesDependencyLinks));
+        var project = CreateProject(DefaultUserId);
+        var parent = CreateTask(project.Id, DefaultUserId);
+        var subtask = CreateTask(project.Id, DefaultUserId, parentTaskId: parent.Id);
+        var other = CreateTask(project.Id, DefaultUserId);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(parent, subtask, other);
+        db.TaskDependencies.Add(new TaskDependency
+        {
+            Id = Guid.NewGuid(),
+            TaskId = subtask.Id,
+            DependsOnTaskId = other.Id
+        });
+        await db.SaveChangesAsync();
+
+        await sut.DeleteAsync(parent.Id);
+
+        (await db.TaskDependencies.AsNoTracking().CountAsync()).Should().Be(0);
     }
 }

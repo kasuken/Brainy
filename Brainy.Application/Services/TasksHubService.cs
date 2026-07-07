@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Brainy.Application.Common;
 using Brainy.Application.DTOs;
 using Brainy.Application.DTOs.Tasks;
 using Brainy.Application.Interfaces.Identity;
@@ -14,7 +15,10 @@ namespace Brainy.Application.Services;
 /// Provides all aggregated task data and operations for the Tasks Hub dashboard.
 /// All active-task queries enforce: non-archived task, non-archived project, top-level only.
 /// </summary>
-internal sealed class TasksHubService(IApplicationDbContext context, ICurrentUserService currentUser) : ITasksHubService
+internal sealed class TasksHubService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    TimeProvider timeProvider) : ITasksHubService
 {
     private static readonly TaskItemStatus[] _inactiveStatuses = [TaskItemStatus.Done, TaskItemStatus.Archived];
 
@@ -89,7 +93,7 @@ internal sealed class TasksHubService(IApplicationDbContext context, ICurrentUse
     public async Task<IReadOnlyList<TasksHubTaskDto>> GetOverdueTasksAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today = DateTime.UtcNow.Date;
+        var today = timeProvider.GetUserToday();
 
         return await ActiveBase(userId)
             .Where(t => t.DueDate.HasValue && t.DueDate.Value.Date < today
@@ -103,7 +107,7 @@ internal sealed class TasksHubService(IApplicationDbContext context, ICurrentUse
     public async Task<IReadOnlyList<TasksHubTaskDto>> GetTasksNeedingAttentionAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today = DateTime.UtcNow.Date;
+        var today = timeProvider.GetUserToday();
 
         // Fetch overdue, due-today, and critical tasks separately then union by Id.
         var overdue = await ActiveBase(userId)
@@ -153,7 +157,7 @@ internal sealed class TasksHubService(IApplicationDbContext context, ICurrentUse
     public async Task<IReadOnlyList<TasksHubTaskDto>> GetStaleTasksAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var staleThreshold = DateTime.UtcNow.AddDays(-30);
+        var staleThreshold = timeProvider.GetUtcNow().UtcDateTime.AddDays(-30);
 
         return await ActiveBase(userId)
             .Where(t => t.UpdatedAtUtc < staleThreshold && !_inactiveStatuses.Contains(t.Status))
@@ -190,7 +194,7 @@ internal sealed class TasksHubService(IApplicationDbContext context, ICurrentUse
     {
         ArgumentNullException.ThrowIfNull(task);
 
-        var today = DateTime.UtcNow.Date;
+        var today = timeProvider.GetUserToday();
         int score = 0;
 
         if (task.DueDate.HasValue)
@@ -234,11 +238,14 @@ internal sealed class TasksHubService(IApplicationDbContext context, ICurrentUse
             return new PagedResult<TasksHubTaskDto>([], 0, page, pageSize);
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var term = searchTerm.Trim();
+        // Explicit lower-casing keeps the match case-insensitive regardless of the
+        // database collation (and on the InMemory provider used in tests).
+        var term = searchTerm.Trim().ToLower();
 
         var query = ActiveBase(userId)
             .Where(t => !_inactiveStatuses.Contains(t.Status)
-                        && (t.Title.Contains(term) || (t.Description != null && t.Description.Contains(term))));
+                        && (t.Title.ToLower().Contains(term)
+                            || (t.Description != null && t.Description.ToLower().Contains(term))));
 
         var totalCount = await query.CountAsync(cancellationToken).ConfigureAwait(false);
         var items = await query

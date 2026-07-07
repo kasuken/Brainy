@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Tasks;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
@@ -47,7 +48,8 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             RecurrenceType: task.RecurrenceType,
             RecurrenceInterval: task.RecurrenceInterval,
             RecurrenceEndDate: task.RecurrenceEndDate,
-            NextOccurrenceDate: task.NextOccurrenceDate);
+            NextOccurrenceDate: task.NextOccurrenceDate,
+            RowVersion: task.RowVersion);
     }
 
     public async Task<IReadOnlyList<TaskItemDto>> GetByProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
@@ -68,10 +70,16 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
                     .Select(s => new TaskItemDto(
                         s.Id, s.Title, s.Description, s.Status, s.Priority,
                         s.DueDate, s.CompletedDate, s.IsArchived, s.IsCurrentTask, s.ProjectId, s.ParentTaskId,
-                        s.CreatedAtUtc, s.UpdatedAtUtc, 0, 0, null, s.Complexity, s.SortOrder))
+                        s.CreatedAtUtc, s.UpdatedAtUtc, 0, 0, null, s.Complexity, s.SortOrder)
+                    {
+                        RowVersion = s.RowVersion
+                    })
                     .ToList(),
                 t.Complexity, t.SortOrder,
-                t.IsRecurring, t.RecurrenceType, t.RecurrenceInterval, t.RecurrenceEndDate, t.NextOccurrenceDate))
+                t.IsRecurring, t.RecurrenceType, t.RecurrenceInterval, t.RecurrenceEndDate, t.NextOccurrenceDate)
+            {
+                RowVersion = t.RowVersion
+            })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -166,6 +174,11 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Task '{dto.Id}' was not found.");
 
+        // Optimistic concurrency: compare against the token captured when the caller
+        // loaded the task so edits made elsewhere since then are detected.
+        if (dto.RowVersion is not null)
+            context.Entry(task).Property(t => t.RowVersion).OriginalValue = dto.RowVersion;
+
         task.Title       = dto.Title.Trim();
         task.Description = dto.Description?.Trim();
         task.Priority    = dto.Priority;
@@ -190,7 +203,14 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
 
         task.Status = dto.Status;
 
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException("task", ex);
+        }
 
         if (statusChanged && task.ParentTaskId.HasValue)
         {
@@ -304,6 +324,15 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Task '{id}' was not found.");
+
+        // Dependency links use Restrict delete behaviour on both sides, so any link
+        // referencing this task or its subtasks must be removed before the delete.
+        var taskIds = task.Subtasks.Select(s => s.Id).Append(task.Id).ToList();
+        var dependencyLinks = await context.TaskDependencies
+            .Where(d => taskIds.Contains(d.TaskId) || taskIds.Contains(d.DependsOnTaskId))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        context.TaskDependencies.RemoveRange(dependencyLinks);
 
         // Remove subtasks first (EF Restrict delete behaviour on self-reference)
         context.Tasks.RemoveRange(task.Subtasks);
@@ -531,5 +560,5 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         SubtaskCount: 0, DoneSubtaskCount: 0, Complexity: t.Complexity, SortOrder: t.SortOrder,
         IsRecurring: t.IsRecurring, RecurrenceType: t.RecurrenceType,
         RecurrenceInterval: t.RecurrenceInterval, RecurrenceEndDate: t.RecurrenceEndDate,
-        NextOccurrenceDate: t.NextOccurrenceDate);
+        NextOccurrenceDate: t.NextOccurrenceDate, RowVersion: t.RowVersion);
 }

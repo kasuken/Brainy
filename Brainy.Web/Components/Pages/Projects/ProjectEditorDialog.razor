@@ -1,3 +1,4 @@
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Areas
 @using Brainy.Application.DTOs.Goals
 @using Brainy.Application.DTOs.Projects
@@ -117,6 +118,8 @@
     private MudForm _form = null!;
     private bool _valid;
     private bool _saving;
+    // Concurrency token captured when the project was loaded; passed back on update.
+    private byte[]? _rowVersion;
     private static string EmojiHelperText =>
         $"Win + . (Windows) / Ctrl + Cmd + Space (macOS). Default: {ProjectEmojiDefaults.DefaultEmoji}.";
 
@@ -156,6 +159,7 @@
                 _priority       = dto.Priority;
                 _startDate      = dto.StartDate;
                 _dueDate        = dto.DueDate;
+                _rowVersion     = dto.RowVersion;
             }
         }
     }
@@ -178,7 +182,8 @@
             {
                 await ProjectService.UpdateAsync(new UpdateProjectDto(
                     ProjectId.Value, _name, _areaId, _description, _desiredOutcome,
-                    _status, _priority, _startDate, _dueDate, _goalId, _emoji));
+                    _status, _priority, _startDate, _dueDate, _goalId, _emoji,
+                    RowVersion: _rowVersion));
             }
             else
             {
@@ -186,6 +191,11 @@
                     _name, _areaId, _description, _desiredOutcome, _status, _priority, _startDate, _dueDate, _goalId, _emoji));
             }
             MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            // Keep the dialog open so the user's edits are not lost.
+            Snackbar.Add(ex.Message, Severity.Warning);
         }
         catch (Exception ex)
         {

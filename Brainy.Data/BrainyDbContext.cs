@@ -60,6 +60,19 @@ public class BrainyDbContext(DbContextOptions<BrainyDbContext> options)
         // Configure Identity schema first, then apply Brainy entity configurations.
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(BrainyDbContext).Assembly);
+
+        // Optimistic concurrency: every BaseEntity-derived table gets a rowversion
+        // token so concurrent edits (multiple tabs/circuits) fail with
+        // DbUpdateConcurrencyException instead of silently overwriting each other.
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            if (typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))
+            {
+                modelBuilder.Entity(entityType.ClrType)
+                    .Property(nameof(BaseEntity.RowVersion))
+                    .IsRowVersion();
+            }
+        }
     }
 
     public override int SaveChanges()

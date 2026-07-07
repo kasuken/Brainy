@@ -14,4 +14,9 @@ public record UpdateProjectDto(
     DateTime? StartDate,
     DateTime? DueDate,
     Guid? GoalId = null,
-    string? Emoji = null);
+    string? Emoji = null,
+    /// <summary>
+    /// Concurrency token from the loaded project. When provided, the update fails with a
+    /// <see cref="Common.ConcurrencyConflictException"/> if the project changed since it was loaded.
+    /// </summary>
+    byte[]? RowVersion = null);

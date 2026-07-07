@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Brainy.Application.Services;
 
 /// <summary>
-/// Fetches PARA category counts in parallel for efficient dashboard display.
+/// Fetches PARA category counts for the dashboard: one grouped query per entity type.
 /// All queries use <c>AsNoTracking</c> and are scoped to the current user.
 /// </summary>
 internal sealed class ParaSummaryService(IApplicationDbContext context, ICurrentUserService currentUser)
@@ -17,20 +17,32 @@ internal sealed class ParaSummaryService(IApplicationDbContext context, ICurrent
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        // One GROUP BY query per entity type (3 round-trips instead of 6 counts).
         // EF Core DbContext is not thread-safe; queries must run sequentially.
-        var activeProjects   = await context.Projects.AsNoTracking().CountAsync(p => p.UserId == userId && !p.IsArchived, cancellationToken).ConfigureAwait(false);
-        var archivedProjects = await context.Projects.AsNoTracking().CountAsync(p => p.UserId == userId && p.IsArchived, cancellationToken).ConfigureAwait(false);
-        var activeAreas      = await context.Areas.AsNoTracking().CountAsync(a => a.UserId == userId && !a.IsArchived, cancellationToken).ConfigureAwait(false);
-        var archivedAreas    = await context.Areas.AsNoTracking().CountAsync(a => a.UserId == userId && a.IsArchived, cancellationToken).ConfigureAwait(false);
-        var activeResources  = await context.Resources.AsNoTracking().CountAsync(r => r.UserId == userId && !r.IsArchived, cancellationToken).ConfigureAwait(false);
-        var archivedResources = await context.Resources.AsNoTracking().CountAsync(r => r.UserId == userId && r.IsArchived, cancellationToken).ConfigureAwait(false);
+        var projectCounts = await context.Projects.AsNoTracking()
+            .Where(p => p.UserId == userId)
+            .GroupBy(p => p.IsArchived)
+            .Select(g => new { Archived = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        var areaCounts = await context.Areas.AsNoTracking()
+            .Where(a => a.UserId == userId)
+            .GroupBy(a => a.IsArchived)
+            .Select(g => new { Archived = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        var resourceCounts = await context.Resources.AsNoTracking()
+            .Where(r => r.UserId == userId)
+            .GroupBy(r => r.IsArchived)
+            .Select(g => new { Archived = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
 
         return new ParaSummaryDto(
-            ActiveProjectCount:    activeProjects,
-            ArchivedProjectCount:  archivedProjects,
-            ActiveAreaCount:       activeAreas,
-            ArchivedAreaCount:     archivedAreas,
-            ActiveResourceCount:   activeResources,
-            ArchivedResourceCount: archivedResources);
+            ActiveProjectCount:    projectCounts.FirstOrDefault(c => !c.Archived)?.Count ?? 0,
+            ArchivedProjectCount:  projectCounts.FirstOrDefault(c => c.Archived)?.Count ?? 0,
+            ActiveAreaCount:       areaCounts.FirstOrDefault(c => !c.Archived)?.Count ?? 0,
+            ArchivedAreaCount:     areaCounts.FirstOrDefault(c => c.Archived)?.Count ?? 0,
+            ActiveResourceCount:   resourceCounts.FirstOrDefault(c => !c.Archived)?.Count ?? 0,
+            ArchivedResourceCount: resourceCounts.FirstOrDefault(c => c.Archived)?.Count ?? 0);
     }
 }
