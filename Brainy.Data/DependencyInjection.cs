@@ -22,15 +22,18 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException(
                 $"Connection string '{connectionStringName}' was not found.");
 
+        // EnableRetryOnFailure handles transient errors, including the brief
+        // connection failures that occur while the serverless database resumes
+        // from auto-pause.
         services.AddDbContext<BrainyDbContext>(options =>
-            options.UseSqlServer(connectionString));
+            options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure()));
 
         // Register a scoped factory so individual DbContext instances can be
         // created on demand, independent of the scoped context used by Identity
         // stores.  A scoped lifetime avoids the lifetime conflict with the
         // scoped DbContextOptions registered by AddDbContext above.
         services.AddDbContextFactory<BrainyDbContext>(options =>
-            options.UseSqlServer(connectionString), ServiceLifetime.Scoped);
+            options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure()), ServiceLifetime.Scoped);
 
         // In Blazor Server, the DI scope lives for the entire circuit lifetime.
         // Multiple components can concurrently await DB operations, which would

@@ -52,6 +52,10 @@ builder.Services.AddBrainyApplication();
 // Temporarily disable all AI features while preserving implementation for future re-enable.
 builder.Services.AddDisabledAiAssistant();
 
+// Liveness endpoint for the App Service health check. Intentionally has no
+// database check so the probe does not keep the serverless SQL database awake.
+builder.Services.AddHealthChecks();
+
 var app = builder.Build();
 
 // Apply any pending EF Core migrations on startup.
@@ -78,5 +82,7 @@ app.MapAdditionalIdentityEndpoints();
 
 // Serve note images stored in the database.
 app.MapNoteImageEndpoints();
+
+app.MapHealthChecks("/health");
 
 app.Run();
