@@ -226,7 +226,51 @@
                                   Clearable="true"
                                   Immediate="true"
                                   Variant="Variant.Outlined"
-                                  Class="mb-5" />
+                                  Class="mb-3" />
+
+                    <MudSelect T="ParaCategory" @bind-SelectedValues="_selectedCategories"
+                               MultiSelection="true"
+                               Label="Category"
+                               Placeholder="All categories"
+                               Variant="Variant.Outlined"
+                               Clearable="true"
+                               Dense="true"
+                               Class="mb-3">
+                        @foreach (var category in Enum.GetValues<ParaCategory>())
+                        {
+                            <MudSelectItem T="ParaCategory" Value="@category">@category</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudSelect T="NoteStatus" @bind-SelectedValues="_selectedStatuses"
+                               MultiSelection="true"
+                               Label="Status"
+                               Placeholder="All statuses"
+                               Variant="Variant.Outlined"
+                               Clearable="true"
+                               Dense="true"
+                               Class="mb-3">
+                        @foreach (var status in Enum.GetValues<NoteStatus>())
+                        {
+                            <MudSelectItem T="NoteStatus" Value="@status">@status</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudSwitch T="bool" @bind-Value="_favoritesOnly"
+                               Color="Color.Warning"
+                               Label="Favorites only"
+                               Class="mb-3" />
+
+                    @if (HasActiveFilters)
+                    {
+                        <MudButton Variant="Variant.Text"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.FilterAltOff"
+                                   OnClick="ClearFilters"
+                                   Class="mb-2">
+                            Clear filters
+                        </MudButton>
+                    }
 
                     <div class="nn-action-container">
                         <MudButton Variant="Variant.Filled"
@@ -316,9 +360,9 @@
                                 <ToolBarContent>
                                     <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
                                         @FilteredNotes.Count() note@(FilteredNotes.Count() == 1 ? "" : "s")
-                                        @if (!string.IsNullOrWhiteSpace(_searchText))
+                                        @if (HasActiveFilters)
                                         {
-                                            <span> matching <strong>"@_searchText"</strong></span>
+                                            <span> matching current filters</span>
                                         }
                                     </MudText>
                                     <MudSpacer />
@@ -393,9 +437,9 @@
                                 <NoRecordsContent>
                                     <MudStack Class="pa-6" AlignItems="AlignItems.Center" Spacing="2">
                                         <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Style="font-size:3rem;" Color="Color.Secondary" />
-                                        <MudText Typo="Typo.subtitle1">No notes match your search</MudText>
+                                                        <MudText Typo="Typo.subtitle1">No notes match your filters</MudText>
                                         <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                                            Try different keywords or <MudLink @onclick="ClearSearch">clear the search</MudLink>.
+                                                            Try different keywords or <MudLink @onclick="ClearFilters">clear all filters</MudLink>.
                                         </MudText>
                                     </MudStack>
                                 </NoRecordsContent>
@@ -467,14 +511,25 @@
     private string _searchText = string.Empty;
     private bool _loading = true;
     private HashSet<NoteDto> _selectedNotes = [];
+    private IEnumerable<ParaCategory> _selectedCategories = [];
+    private IEnumerable<NoteStatus> _selectedStatuses = [];
+    private bool _favoritesOnly;
 
     private IEnumerable<NoteDto> FavoriteNotes =>
         _notes.Where(n => n.IsFavorite);
 
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(_searchText)
+        || _selectedCategories.Any()
+        || _selectedStatuses.Any()
+        || _favoritesOnly;
+
     private IEnumerable<NoteDto> FilteredNotes =>
-        string.IsNullOrWhiteSpace(_searchText)
-            ? _notes
-            : _notes.Where(n => n.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+        _notes.Where(n =>
+            (string.IsNullOrWhiteSpace(_searchText) || n.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+            && (!_selectedCategories.Any() || _selectedCategories.Contains(n.ParaCategory))
+            && (!_selectedStatuses.Any() || _selectedStatuses.Contains(n.Status))
+            && (!_favoritesOnly || n.IsFavorite));
 
     private static readonly DialogOptions _dialogOptions = new()
     {
@@ -563,7 +618,13 @@
         }
     }
 
-    private void ClearSearch() => _searchText = string.Empty;
+    private void ClearFilters()
+    {
+        _searchText = string.Empty;
+        _selectedCategories = [];
+        _selectedStatuses = [];
+        _favoritesOnly = false;
+    }
 
     private static string TruncateSummary(string summary) =>
         summary.Length <= 120 ? summary : summary[..120] + "…";
