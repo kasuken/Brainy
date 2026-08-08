@@ -31,16 +31,21 @@
                       value="@_text"
                       @oninput="OnTextInput"></textarea>
 
-            @if (_attachment is not null)
+            @if (_attachments.Count > 0)
             {
-                <div class="qcd__attachment">
-                    <span class="qcd__attachment-icon" aria-hidden="true">
-                        <MudIcon Icon="@(_attachmentIsImage ? Icons.Material.Outlined.Image : Icons.Material.Outlined.Description)" Size="Size.Small" />
-                    </span>
-                    <span class="qcd__attachment-name">@_attachment.Name</span>
-                    <button type="button" class="qcd__attachment-remove" title="Remove attachment" @onclick="RemoveAttachment">
-                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
-                    </button>
+                <div class="qcd__attachments">
+                    @foreach (var attachment in _attachments)
+                    {
+                        <div class="qcd__attachment">
+                            <span class="qcd__attachment-icon" aria-hidden="true">
+                                <MudIcon Icon="@(IsImage(attachment) ? Icons.Material.Outlined.Image : Icons.Material.Outlined.Description)" Size="Size.Small" />
+                            </span>
+                            <span class="qcd__attachment-name">@attachment.Name</span>
+                            <button type="button" class="qcd__attachment-remove" title="Remove attachment" @onclick="() => RemoveAttachment(attachment)">
+                                <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                            </button>
+                        </div>
+                    }
                 </div>
             }
             else if (_detectedKind is not null)
@@ -57,9 +62,10 @@
                     <span>Attach</span>
                     <InputFile id="qcd-attach-input"
                                OnChange="HandleAttach"
+                               multiple
                                accept="image/*,.txt,.md,.pdf,.docx,.csv,.mp3,.mp4,.wav,.m4a"
                                class="qcd__file-hidden"
-                               aria-label="Attach a file or image" />
+                               aria-label="Attach files or images" />
                 </label>
 
                 @if (_speechSupported)
@@ -212,7 +218,13 @@
         flex: none;
     }
 
-    /* ── Attachment chip ── */
+    /* ── Attachment chips ── */
+    .qcd__attachments {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
     .qcd__attachment {
         display: flex;
         align-items: center;
@@ -410,8 +422,10 @@
     private bool _speechSupported;
     private bool _listening;
 
-    private IBrowserFile? _attachment;
-    private bool _attachmentIsImage;
+    private readonly List<IBrowserFile> _attachments = [];
+
+    // Maximum number of files that can be attached to a single capture.
+    private const int MaxAttachments = 10;
 
     // Extensions whose content can be read inline as plain text.
     private static readonly HashSet<string> TextExtensions =
@@ -421,7 +435,12 @@
         new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg" };
 
     private bool _valid =>
-        !string.IsNullOrWhiteSpace(_text) || _attachment is not null;
+        !string.IsNullOrWhiteSpace(_text) || _attachments.Count > 0;
+
+    /// <summary>True when the given attachment's content type or extension identifies it as an image.</summary>
+    private static bool IsImage(IBrowserFile file) =>
+        file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+        ImageExtensions.Contains(Path.GetExtension(file.Name));
 
     /// <summary>The type Brainy inferred for the current capture, shown as a hint.</summary>
     private string? _detectedKind =>
@@ -447,21 +466,20 @@
 
     private void ToggleDetails() => _showDetails = !_showDetails;
 
-    private void RemoveAttachment()
-    {
-        _attachment = null;
-        _attachmentIsImage = false;
-    }
+    private void RemoveAttachment(IBrowserFile file) => _attachments.Remove(file);
 
-    /// <summary>Stores a chosen, pasted or dropped file and decides whether it is an image.</summary>
+    /// <summary>Stores chosen, pasted or dropped files, up to the attachment limit.</summary>
     private void HandleAttach(InputFileChangeEventArgs e)
     {
-        var file = e.File;
-        var ext = Path.GetExtension(file.Name);
-        _attachmentIsImage =
-            file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
-            ImageExtensions.Contains(ext);
-        _attachment = file;
+        foreach (var file in e.GetMultipleFiles(MaxAttachments))
+        {
+            if (_attachments.Count >= MaxAttachments)
+            {
+                Snackbar.Add($"You can attach up to {MaxAttachments} files.", Severity.Warning);
+                break;
+            }
+            _attachments.Add(file);
+        }
     }
 
     // ── Voice capture ───────────────────────────────────────────────────────────
@@ -527,10 +545,8 @@
         _saving = true;
         try
         {
-            if (_attachment is not null && _attachmentIsImage)
-                await SaveImageCaptureAsync();
-            else if (_attachment is not null)
-                await SaveFileCaptureAsync();
+            if (_attachments.Count > 0)
+                await SaveAttachmentsCaptureAsync();
             else if (IsSingleUrl(_text, out var url))
                 await SaveUrlCaptureAsync(url);
             else
@@ -565,45 +581,55 @@
             title, "", ParaCategory.Project, Status: NoteStatus.Inbox, SourceUrl: url));
     }
 
-    /// <summary>A non-image file attachment. Text files are inlined; others get a placeholder.</summary>
-    private async Task SaveFileCaptureAsync()
+    /// <summary>
+    /// Handles one or more attachments of any mix of images and files. Images are uploaded and
+    /// embedded as Markdown references (then linked to the note so the serving endpoint can
+    /// enforce ownership); other files are inlined as text when possible or noted by name.
+    /// </summary>
+    private async Task SaveAttachmentsCaptureAsync()
     {
-        var file = _attachment!;
-        var fileText = await ReadFileTextOrPlaceholderAsync(file);
         var caption = _text.Trim();
-        var content = string.IsNullOrWhiteSpace(caption) ? fileText : $"{caption}\n\n{fileText}";
-        var title = ResolveAttachmentTitle(file, caption);
+        var contentParts = new List<string>();
+        var imageIds = new List<Guid>();
 
-        await NoteService.CreateAsync(new CreateNoteDto(
+        foreach (var file in _attachments)
+        {
+            if (IsImage(file))
+            {
+                var imageId = await UploadImageAsync(file);
+                imageIds.Add(imageId);
+                contentParts.Add($"![{file.Name}](/api/note-images/{imageId})");
+            }
+            else
+            {
+                contentParts.Add(await ReadFileTextOrPlaceholderAsync(file));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(caption))
+            contentParts.Add(caption);
+
+        var content = string.Join("\n\n", contentParts);
+        var title = ResolveAttachmentTitle(_attachments[0], caption);
+
+        var created = await NoteService.CreateAsync(new CreateNoteDto(
             title, content, ParaCategory.Project, Status: NoteStatus.Inbox));
+
+        if (imageIds.Count > 0)
+            await NoteImageService.AssociateWithNoteAsync(created.Id, imageIds);
     }
 
-    /// <summary>
-    /// Uploads the image, creates the note with an embedded Markdown reference and any caption,
-    /// then links the stored image to the note so the serving endpoint can enforce ownership.
-    /// </summary>
-    private async Task SaveImageCaptureAsync()
+    /// <summary>Uploads a single image attachment and returns its stored id.</summary>
+    private async Task<Guid> UploadImageAsync(IBrowserFile file)
     {
-        var file = _attachment!;
-        var fileName = file.Name;
-
         await using var stream = file.OpenReadStream(INoteImageService.MaxSizeBytes);
         using var ms = new MemoryStream();
         await stream.CopyToAsync(ms);
         var bytes = ms.ToArray();
 
         var imageDto = await NoteImageService.UploadAsync(
-            new UploadNoteImageDto(bytes, file.ContentType, fileName));
-
-        var imageMarkdown = $"![{fileName}](/api/note-images/{imageDto.Id})";
-        var caption = _text.Trim();
-        var content = string.IsNullOrWhiteSpace(caption) ? imageMarkdown : $"{imageMarkdown}\n\n{caption}";
-        var title = ResolveAttachmentTitle(file, caption);
-
-        var created = await NoteService.CreateAsync(new CreateNoteDto(
-            title, content, ParaCategory.Project, Status: NoteStatus.Inbox));
-
-        await NoteImageService.AssociateWithNoteAsync(created.Id, [imageDto.Id]);
+            new UploadNoteImageDto(bytes, file.ContentType, file.Name));
+        return imageDto.Id;
     }
 
     private static async Task<string> ReadFileTextOrPlaceholderAsync(IBrowserFile file)

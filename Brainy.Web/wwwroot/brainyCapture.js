@@ -49,19 +49,20 @@ window.brainyCapture = {
             };
             textarea.addEventListener('keydown', this._onKeyDown);
 
-            // Paste a screenshot or copied image straight into the capture.
+            // Paste one or more screenshots/copied images straight into the capture.
             this._onPaste = (e) => {
                 const items = e.clipboardData && e.clipboardData.items;
                 if (!items) return;
+                const files = [];
                 for (const item of items) {
                     if (item.type && item.type.indexOf('image/') === 0) {
                         const file = item.getAsFile();
-                        if (file) {
-                            this._routeFile(file);
-                            e.preventDefault();
-                        }
-                        return;
+                        if (file) files.push(file);
                     }
+                }
+                if (files.length) {
+                    this._routeFiles(files);
+                    e.preventDefault();
                 }
             };
             textarea.addEventListener('paste', this._onPaste);
@@ -82,7 +83,7 @@ window.brainyCapture = {
                 root.classList.remove('qcd__body--drag');
                 const files = e.dataTransfer && e.dataTransfer.files;
                 if (files && files.length) {
-                    this._routeFile(files[0]);
+                    this._routeFiles(Array.from(files));
                 }
             };
             root.addEventListener('dragover', this._onDragOver);
@@ -92,23 +93,27 @@ window.brainyCapture = {
     },
 
     /**
-     * Pushes a File into the hidden Blazor InputFile and notifies it via a change
-     * event so Blazor streams the bytes through its normal pipeline.
-     * @param {File} file
+     * Pushes one or more Files into the hidden Blazor InputFile and notifies it via a change
+     * event so Blazor streams the bytes through its normal pipeline. Each call replaces the
+     * input's file list with just the newly captured files; Blazor appends them to its own
+     * running attachment list, so repeated pastes/drops accumulate without duplication.
+     * @param {File[]} files
      */
-    _routeFile(file) {
+    _routeFiles(files) {
         const input = document.getElementById(this._fileInputId);
         if (!input) return;
 
-        // Clipboard screenshots often arrive as the generic "image.png"; give them a
-        // unique, friendlier name so saved notes are easy to tell apart.
-        let toAdd = file;
-        if (!file.name || file.name === 'image.png') {
-            toAdd = new File([file], 'screenshot-' + Date.now() + '.png', { type: file.type || 'image/png' });
-        }
-
         const dt = new DataTransfer();
-        dt.items.add(toAdd);
+        files.forEach((file, i) => {
+            // Clipboard screenshots often arrive as the generic "image.png"; give them a
+            // unique, friendlier name so saved notes are easy to tell apart.
+            let toAdd = file;
+            if (!file.name || file.name === 'image.png') {
+                toAdd = new File([file], 'screenshot-' + Date.now() + '-' + i + '.png', { type: file.type || 'image/png' });
+            }
+            dt.items.add(toAdd);
+        });
+
         input.files = dt.files;
         input.dispatchEvent(new Event('change', { bubbles: true }));
     },
