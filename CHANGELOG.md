@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0] - 2026-08-10
+
+### Fixed
+
+- Completing a task now automatically clears its `IsCurrentTask` flag so it no longer appears as the user's active focus on the Today screen.
+
+---
+
 ## [1.1.0] - 2026-08-10
 
 ### Added

@@ -203,6 +203,12 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
 
         task.Status = dto.Status;
 
+        // A completed task can no longer be the user's current focus.
+        if (dto.Status == TaskItemStatus.Done && task.IsCurrentTask)
+        {
+            task.IsCurrentTask = false;
+        }
+
         try
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -237,6 +243,13 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         {
             task.Status        = TaskItemStatus.Done;
             task.CompletedDate = now;
+            changed = true;
+        }
+
+        // A completed task can no longer be the user's current focus.
+        if (task.IsCurrentTask)
+        {
+            task.IsCurrentTask = false;
             changed = true;
         }
 
