@@ -4,6 +4,7 @@
 @using Brainy.Application.DTOs.Resources
 @using Brainy.Application.DTOs.Notes
 @using Brainy.Application.Interfaces.Services
+@using Brainy.Web.Components.Pages.Notes
 @inject IResourceService ResourceService
 @inject INoteService NoteService
 @inject IDialogService DialogService
@@ -208,7 +209,7 @@ else
                 {
                     <div class="rd-row">
                         <div class="rd-row__info">
-                            <a class="rd-row__name" href="/notes/@note.Id">@note.Title</a>
+                            <a class="rd-row__name" href="javascript:void(0)" @onclick="() => OpenNoteAsync(note.Id)" @onclick:preventDefault>@note.Title</a>
                             <span class="rd-row__meta">Updated @FormatDate(note.UpdatedAtUtc)</span>
                         </div>
                         <MudIconButton Icon="@Icons.Material.Filled.LinkOff"
@@ -636,6 +637,26 @@ else
         };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<ResourceEditorDialog>("Edit Resource", parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await LoadAsync();
+    }
+
+    private async Task OpenNoteAsync(Guid noteId)
+    {
+        var parameters = new DialogParameters<NoteEditorDialog>
+        {
+            { x => x.NoteId, noteId }
+        };
+        var options = new DialogOptions
+        {
+            MaxWidth        = MaxWidth.Large,
+            FullWidth       = true,
+            BackdropClick   = false,
+            CloseOnEscapeKey = false,
+            CloseButton     = false,
+        };
+        var dialog = await DialogService.ShowAsync<NoteEditorDialog>("", parameters, options);
         var result = await dialog.Result;
         if (result is { Canceled: false })
             await LoadAsync();
