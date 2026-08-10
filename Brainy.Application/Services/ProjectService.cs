@@ -387,6 +387,7 @@ internal sealed class ProjectService(
                 {
                     task.Status        = Domain.Enums.TaskItemStatus.Done;
                     task.CompletedDate = now;
+                    task.IsCurrentTask = false;
                 }
                 break;
 
@@ -395,6 +396,7 @@ internal sealed class ProjectService(
                 {
                     task.IsArchived    = true;
                     task.ArchivedAtUtc = now;
+                    task.IsCurrentTask = false;
                 }
                 break;
 

@@ -340,6 +340,7 @@ internal sealed class TasksHubService(
             {
                 task.IsArchived    = true;
                 task.ArchivedAtUtc = now;
+                task.IsCurrentTask = false;
                 continue;
             }
 
@@ -351,6 +352,10 @@ internal sealed class TasksHubService(
                     task.CompletedDate = null;
 
                 task.Status = dto.NewStatus.Value;
+
+                // A completed task can no longer be the user's current focus.
+                if (dto.NewStatus.Value == TaskItemStatus.Done)
+                    task.IsCurrentTask = false;
             }
 
             if (dto.NewPriority.HasValue)

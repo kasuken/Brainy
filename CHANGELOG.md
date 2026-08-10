@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.3.0] - 2026-08-10
+
+### Fixed
+
+- Archiving a task now clears its `IsCurrentTask` flag (`TaskService`, `TasksHubService`).
+- Completing or archiving a project now clears `IsCurrentTask` on all affected tasks (`ProjectService`).
+- Auto-completing a parent task when all subtasks finish now clears its `IsCurrentTask` flag (`TaskService`).
+- Completing a task via the Tasks Hub bulk-update path now clears `IsCurrentTask` (`TasksHubService`).
+
+---
+
 ## [1.2.0] - 2026-08-10
 
 ### Fixed

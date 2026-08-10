@@ -311,6 +311,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         var now = DateTime.UtcNow;
         task.IsArchived    = true;
         task.ArchivedAtUtc = now;
+        task.IsCurrentTask = false;
 
         // Cascade archive to subtasks
         foreach (var sub in task.Subtasks.Where(s => !s.IsArchived))
@@ -551,6 +552,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         {
             parent.Status        = TaskItemStatus.Done;
             parent.CompletedDate = DateTime.UtcNow;
+            parent.IsCurrentTask = false;
             changed = true;
         }
         else if (!allDone && parent.Status == TaskItemStatus.Done)
