@@ -26,11 +26,24 @@ public class IdeaConfiguration : IEntityTypeConfiguration<Idea>
         builder.Property(i => i.Competitors);
         builder.Property(i => i.Notes);
 
+        // Commitment criteria — free-form nvarchar(max), no length cap needed.
+        builder.Property(i => i.TargetUserAndProblem);
+        builder.Property(i => i.SuitabilityReason);
+        builder.Property(i => i.Evidence);
+        builder.Property(i => i.ValidationExperiment);
+        builder.Property(i => i.ReplacedCommitment);
+
         builder.HasIndex(i => i.Title);
 
         builder.HasOne(i => i.Area)
             .WithMany(a => a.Ideas)
             .HasForeignKey(i => i.AreaId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Link to the project created when the idea was committed. No reverse navigation.
+        builder.HasOne<Domain.Entities.Project>()
+            .WithMany()
+            .HasForeignKey(i => i.CommittedProjectId)
             .OnDelete(DeleteBehavior.SetNull);
     }
 }

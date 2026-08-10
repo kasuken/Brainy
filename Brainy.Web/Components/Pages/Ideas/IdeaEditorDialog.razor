@@ -42,10 +42,15 @@
                 @if (IdeaId.HasValue)
                 {
                     <MudSelect @bind-Value="_status" Label="Status"
-                               Variant="Variant.Outlined" Margin="Margin.Dense">
+                               Variant="Variant.Outlined" Margin="Margin.Dense"
+                               Disabled="_status == IdeaStatus.Committed"
+                               HelperText="@(_status == IdeaStatus.Committed ? "Committed ideas cannot be edited here; manage the linked project instead." : null)">
                         @foreach (IdeaStatus s in Enum.GetValues<IdeaStatus>())
                         {
-                            <MudSelectItem Value="@s">@FormatStatus(s)</MudSelectItem>
+                            @if (s != IdeaStatus.Committed || _status == IdeaStatus.Committed)
+                            {
+                                <MudSelectItem Value="@s">@FormatStatus(s)</MudSelectItem>
+                            }
                         }
                     </MudSelect>
                 }
@@ -140,7 +145,7 @@
 
     private static string FormatStatus(IdeaStatus status) => status switch
     {
-        IdeaStatus.ConvertedToProject => "Converted to Project",
+        IdeaStatus.Committed => "Committed",
         _ => status.ToString()
     };
 }

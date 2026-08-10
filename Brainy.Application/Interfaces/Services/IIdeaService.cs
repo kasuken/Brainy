@@ -39,33 +39,24 @@ public interface IIdeaService
     /// <summary>Updates the mutable fields of an existing idea.</summary>
     Task<IdeaDto> UpdateAsync(UpdateIdeaDto dto, CancellationToken cancellationToken = default);
 
-    /// <summary>Soft-archives the idea. Sets IsArchived = true, ArchivedAtUtc = UtcNow, Status = Archived.</summary>
+    /// <summary>Soft-archives the idea. Sets IsArchived = true, ArchivedAtUtc = UtcNow. Status is left unchanged.</summary>
     Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>Restores an archived idea. Clears IsArchived and ArchivedAtUtc; resets Status to Captured.</summary>
+    /// <summary>Restores an archived idea. Clears IsArchived and ArchivedAtUtc. Status is left unchanged.</summary>
     Task RestoreAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Permanently deletes an idea.</summary>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Converts the idea into a new project (Issue #103).
-    /// Creates a project from the idea's title, description, and area, then marks the idea as ConvertedToProject.
+    /// Commits the idea to a new project. Requires all five commitment criteria to already be
+    /// recorded on the idea: a specific user and problem, a suitability reason, one piece of real
+    /// evidence, a small validation experiment, and a conscious replaced-commitment decision.
+    /// Throws <see cref="InvalidOperationException"/> if any criterion is missing or the idea is
+    /// already committed. Creates a project from the idea's title, description, and area; sets
+    /// the idea's status to Committed and clears its bulky content (Description, Research,
+    /// Competitors, Notes), leaving only a link to the project and the decision record
+    /// (the five criteria fields) in the Ideas database.
     /// </summary>
-    Task<IdeaDto> ConvertToProjectAsync(Guid id, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Converts the idea into a new Resource note.
-    /// Creates a note from the idea's title and description, marks the idea as ConvertedToNote,
-    /// and returns the new note's <see cref="Guid"/>. The idea itself is kept as-is.
-    /// </summary>
-    Task<Guid> ConvertToNoteAsync(Guid ideaId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Converts the idea into a new task inside the specified project.
-    /// Creates a task from the idea's title and description with Normal priority,
-    /// marks the idea as ConvertedToTask, and returns the new task's <see cref="Guid"/>.
-    /// The idea itself is kept as-is.
-    /// </summary>
-    Task<Guid> ConvertToTaskAsync(Guid ideaId, Guid projectId, CancellationToken cancellationToken = default);
+    Task<IdeaDto> CommitToProjectAsync(Guid id, CancellationToken cancellationToken = default);
 }

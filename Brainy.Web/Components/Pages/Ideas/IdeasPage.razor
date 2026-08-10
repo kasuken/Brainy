@@ -225,10 +225,12 @@
     .ip-priority--medium { color: #ed6c02; background: rgba(237, 108, 2, 0.1); border: 1px solid rgba(237, 108, 2, 0.2); }
     .ip-priority--low { color: var(--mud-palette-text-secondary); background: var(--mud-palette-table-lines); border: 1px solid var(--mud-palette-lines-default); }
 
-    .ip-status--new { background: var(--mud-palette-table-lines); color: var(--mud-palette-text-secondary); }
-    .ip-status--reviewing { background: rgba(111,122,90,.14); color: #4a5c38; }
-    .ip-status--convertedtoproject { background: rgba(192,86,29,.10); color: var(--clay-deep, #c0561d); }
-    .ip-status--archived { background: var(--mud-palette-table-lines); color: var(--mud-palette-text-disabled); }
+    .ip-status--captured { background: var(--mud-palette-table-lines); color: var(--mud-palette-text-secondary); }
+    .ip-status--evaluating { background: rgba(205,154,58,.18); color: #7a5c0e; }
+    .ip-status--incubated { background: rgba(111,122,90,.14); color: #4a5c38; }
+    .ip-status--committed { background: rgba(192,86,29,.10); color: var(--clay-deep, #c0561d); }
+    .ip-status--rejected { background: rgba(176,58,24,.10); color: #b03a18; }
+    .ip-status--shipped { background: rgba(58,123,205,.14); color: #1a5aa0; }
 
     .ip-actions {
         display: flex;
@@ -323,7 +325,7 @@
                 {
                     <div class="ip-filter-label">Status</div>
                     <div class="ip-filter-group">
-                        @foreach (IdeaStatus s in Enum.GetValues<IdeaStatus>().Where(s => s != IdeaStatus.Archived))
+                        @foreach (IdeaStatus s in Enum.GetValues<IdeaStatus>())
                         {
                             <button class="ip-chip @(_statusFilter == s ? "ip-chip--on" : "")"
                                     @onclick="() => SetStatusFilter(s)">
@@ -426,10 +428,10 @@
                                                 <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
                                             </button>
 
-                                            <!-- Convert to Project -->
-                                            @if (!idea.IsArchived && idea.Status != IdeaStatus.ConvertedToProject)
+                                            <!-- Commit to Project -->
+                                            @if (!idea.IsArchived && idea.Status != IdeaStatus.Committed)
                                             {
-                                                <button class="ip-btn-action ip-btn-action--convert" title="Convert to Project"
+                                                <button class="ip-btn-action ip-btn-action--convert" title="Commit to Project"
                                                         @onclick="() => ConfirmConvert(idea)">
                                                     <MudIcon Icon="@Icons.Material.Outlined.AccountTree" Size="Size.Small" />
                                                 </button>
@@ -683,35 +685,37 @@
     private async Task ConfirmConvert(IdeaDto idea)
     {
         var confirmed = await DialogService.ShowMessageBox(
-            "Convert to Project",
-            $"Convert \"{idea.Title}\" into a new project?",
-            yesText: "Convert", cancelText: "Cancel");
+            "Commit to Project",
+            $"Commit \"{idea.Title}\" into a new project? The idea's bulky content will move to the project — only a link and the decision record will remain here.",
+            yesText: "Commit", cancelText: "Cancel");
 
         if (confirmed == true)
         {
-            await IdeaService.ConvertToProjectAsync(idea.Id);
-            Snackbar.Add($"\"{idea.Title}\" converted to a project.", Severity.Success);
-            await LoadAsync();
+            try
+            {
+                await IdeaService.CommitToProjectAsync(idea.Id);
+                Snackbar.Add($"\"{idea.Title}\" committed to a project.", Severity.Success);
+                await LoadAsync();
+            }
+            catch (InvalidOperationException ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
         }
     }
 
     /// <summary>Returns a CSS key for the status badge class.</summary>
     private static string StatusCssKey(IdeaStatus status) => status switch
     {
-        IdeaStatus.Captured           => "captured",
-        IdeaStatus.Researching        => "researching",
-        IdeaStatus.Validating         => "validating",
-        IdeaStatus.Planned            => "planned",
-        IdeaStatus.Rejected           => "rejected",
-        IdeaStatus.ConvertedToProject => "converted",
-        IdeaStatus.Archived           => "archived",
-        _                             => "captured"
+        IdeaStatus.Captured   => "captured",
+        IdeaStatus.Evaluating => "evaluating",
+        IdeaStatus.Incubated  => "incubated",
+        IdeaStatus.Committed  => "committed",
+        IdeaStatus.Rejected   => "rejected",
+        IdeaStatus.Shipped    => "shipped",
+        _                     => "captured"
     };
 
     /// <summary>Returns a human-readable label for an idea status.</summary>
-    private static string FormatStatus(IdeaStatus status) => status switch
-    {
-        IdeaStatus.ConvertedToProject => "Converted",
-        _ => status.ToString()
-    };
+    private static string FormatStatus(IdeaStatus status) => status.ToString();
 }

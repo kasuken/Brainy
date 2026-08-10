@@ -14,4 +14,5 @@ public record IdeaDto(
     bool IsArchived,
     DateTime? ArchivedAtUtc,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    Guid? CommittedProjectId);

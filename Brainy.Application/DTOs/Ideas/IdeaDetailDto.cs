@@ -20,4 +20,11 @@ public record IdeaDetailDto(
     DateTime UpdatedAtUtc,
     string? Research,
     string? Competitors,
-    string? Notes);
+    string? Notes,
+    string? TargetUserAndProblem,
+    string? SuitabilityReason,
+    string? Evidence,
+    string? ValidationExperiment,
+    string? ReplacedCommitment,
+    Guid? CommittedProjectId,
+    DateTime? CommittedAtUtc);

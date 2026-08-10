@@ -5,8 +5,9 @@ public record IdeaMetricsDto(
     int TotalIdeas,
     int ActiveIdeas,
     int ArchivedIdeas,
-    int ConvertedIdeas,
+    int CommittedIdeas,
     int RejectedIdeas,
+    int ShippedIdeas,
     IReadOnlyList<IdeasByAreaDto> ByArea);
 
 /// <summary>Idea count for a single area (or ideas with no area when <see cref="AreaId"/> is null).</summary>

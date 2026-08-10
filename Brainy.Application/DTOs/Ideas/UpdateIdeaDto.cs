@@ -12,4 +12,9 @@ public record UpdateIdeaDto(
     IdeaStatus Status,
     string? Research,
     string? Competitors,
-    string? Notes);
+    string? Notes,
+    string? TargetUserAndProblem = null,
+    string? SuitabilityReason = null,
+    string? Evidence = null,
+    string? ValidationExperiment = null,
+    string? ReplacedCommitment = null);

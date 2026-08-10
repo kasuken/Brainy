@@ -40,4 +40,28 @@ public class Idea : BaseEntity, IUserOwnedEntity
 
     /// <summary>General notes that do not fit in Research or Competitors.</summary>
     public string? Notes { get; set; }
+
+    // ── Commitment criteria ─────────────────────────────────────────────────
+    // All five must be filled in before the idea can move to IdeaStatus.Committed.
+
+    /// <summary>The specific user and the problem they have — required to commit.</summary>
+    public string? TargetUserAndProblem { get; set; }
+
+    /// <summary>Why the owner is suited to build or write this — required to commit.</summary>
+    public string? SuitabilityReason { get; set; }
+
+    /// <summary>One piece of real evidence supporting the idea — required to commit.</summary>
+    public string? Evidence { get; set; }
+
+    /// <summary>A small validation experiment to run — required to commit.</summary>
+    public string? ValidationExperiment { get; set; }
+
+    /// <summary>The existing commitment this idea will consciously replace — required to commit.</summary>
+    public string? ReplacedCommitment { get; set; }
+
+    /// <summary>Id of the project created when this idea was committed. Null until committed.</summary>
+    public Guid? CommittedProjectId { get; set; }
+
+    /// <summary>When the idea was committed and its project was created. Null until committed.</summary>
+    public DateTime? CommittedAtUtc { get; set; }
 }

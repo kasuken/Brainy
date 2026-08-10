@@ -16,7 +16,7 @@ namespace Brainy.Application.Tests.Services;
 /// <summary>
 /// Unit tests for <see cref="IIdeaService"/> resolved via the real DI container
 /// with an EF Core InMemory database. Each test uses a unique database name for isolation.
-/// Focuses on capture, archive lifecycle, and the three conversion flows.
+/// Focuses on capture, archive lifecycle, and the commit-to-project flow.
 /// </summary>
 public class IdeaServiceTests
 {
@@ -47,11 +47,29 @@ public class IdeaServiceTests
         string userId,
         string title = "Idea",
         IdeaStatus status = IdeaStatus.Captured,
-        bool isArchived = false)
-        => new() { Id = Guid.NewGuid(), UserId = userId, Title = title, Status = status, IsArchived = isArchived };
+        bool isArchived = false,
+        bool withCommitCriteria = false)
+    {
+        var idea = new Idea
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Title = title,
+            Status = status,
+            IsArchived = isArchived
+        };
 
-    private static Project CreateProject(string userId)
-        => new() { Id = Guid.NewGuid(), UserId = userId, Name = "P" };
+        if (withCommitCriteria)
+        {
+            idea.TargetUserAndProblem = "Solo founders who lose track of newsletter ideas";
+            idea.SuitabilityReason = "I've built two newsletters before";
+            idea.Evidence = "Three people asked me for this in the last week";
+            idea.ValidationExperiment = "Ship a landing page and collect signups for a week";
+            idea.ReplacedCommitment = "Pausing the podcast side project";
+        }
+
+        return idea;
+    }
 
     // ── Create ────────────────────────────────────────────────────────────────
 
@@ -140,94 +158,67 @@ public class IdeaServiceTests
         stored.ArchivedAtUtc.Should().BeNull();
     }
 
-    // ── Convert to project ────────────────────────────────────────────────────
+    // ── Commit to project ─────────────────────────────────────────────────────
 
     [Fact]
-    public async Task ConvertToProjectAsync_CreatesProjectAndMarksIdeaConverted()
+    public async Task CommitToProjectAsync_WithAllCriteriaFilled_CreatesProjectAndMarksIdeaCommitted()
     {
-        var (sut, db) = BuildService(nameof(ConvertToProjectAsync_CreatesProjectAndMarksIdeaConverted));
-        var idea = CreateIdea(DefaultUserId, "Launch newsletter");
+        var (sut, db) = BuildService(nameof(CommitToProjectAsync_WithAllCriteriaFilled_CreatesProjectAndMarksIdeaCommitted));
+        var idea = CreateIdea(DefaultUserId, "Launch newsletter", withCommitCriteria: true);
+        idea.Description = "A weekly roundup";
+        idea.Research = "Some research";
+        idea.Competitors = "Some competitors";
+        idea.Notes = "Some notes";
         db.Ideas.Add(idea);
         await db.SaveChangesAsync();
 
-        await sut.ConvertToProjectAsync(idea.Id);
+        await sut.CommitToProjectAsync(idea.Id);
 
         var project = await db.Projects.AsNoTracking().SingleAsync();
         project.Name.Should().Be("Launch newsletter");
         project.UserId.Should().Be(DefaultUserId);
         project.Status.Should().Be(ProjectStatus.NotStarted);
-        (await db.Ideas.AsNoTracking().SingleAsync()).Status.Should().Be(IdeaStatus.ConvertedToProject);
+
+        var stored = await db.Ideas.AsNoTracking().SingleAsync();
+        stored.Status.Should().Be(IdeaStatus.Committed);
+        stored.CommittedProjectId.Should().Be(project.Id);
+        stored.CommittedAtUtc.Should().NotBeNull();
+
+        // Only a link and the decision record remain; bulky content is cleared.
+        stored.Description.Should().BeNull();
+        stored.Research.Should().BeNull();
+        stored.Competitors.Should().BeNull();
+        stored.Notes.Should().BeNull();
+        stored.TargetUserAndProblem.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
-    public async Task ConvertToProjectAsync_WhenAlreadyConverted_ThrowsInvalidOperationException()
+    public async Task CommitToProjectAsync_WhenAlreadyCommitted_ThrowsInvalidOperationException()
     {
-        var (sut, db) = BuildService(nameof(ConvertToProjectAsync_WhenAlreadyConverted_ThrowsInvalidOperationException));
-        var idea = CreateIdea(DefaultUserId, status: IdeaStatus.ConvertedToProject);
+        var (sut, db) = BuildService(nameof(CommitToProjectAsync_WhenAlreadyCommitted_ThrowsInvalidOperationException));
+        var idea = CreateIdea(DefaultUserId, status: IdeaStatus.Committed, withCommitCriteria: true);
         db.Ideas.Add(idea);
         await db.SaveChangesAsync();
 
-        var act = () => sut.ConvertToProjectAsync(idea.Id);
+        var act = () => sut.CommitToProjectAsync(idea.Id);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
-    // ── Convert to note ───────────────────────────────────────────────────────
-
     [Fact]
-    public async Task ConvertToNoteAsync_CreatesActiveResourceNoteAndMarksIdeaConverted()
+    public async Task CommitToProjectAsync_WhenCriteriaMissing_ThrowsInvalidOperationException()
     {
-        var (sut, db) = BuildService(nameof(ConvertToNoteAsync_CreatesActiveResourceNoteAndMarksIdeaConverted));
-        var idea = CreateIdea(DefaultUserId, "Reading list app");
-        idea.Description = "Track books";
+        var (sut, db) = BuildService(nameof(CommitToProjectAsync_WhenCriteriaMissing_ThrowsInvalidOperationException));
+        var idea = CreateIdea(DefaultUserId); // No commitment criteria filled.
         db.Ideas.Add(idea);
         await db.SaveChangesAsync();
 
-        var noteId = await sut.ConvertToNoteAsync(idea.Id);
+        var act = () => sut.CommitToProjectAsync(idea.Id);
 
-        var note = await db.Notes.AsNoTracking().SingleAsync(n => n.Id == noteId);
-        note.Title.Should().Be("Reading list app");
-        note.Content.Should().Be("Track books");
-        note.Status.Should().Be(NoteStatus.Active);
-        note.ParaCategory.Should().Be(ParaCategory.Resource);
-        (await db.Ideas.AsNoTracking().SingleAsync()).Status.Should().Be(IdeaStatus.ConvertedToNote);
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        (await db.Projects.CountAsync()).Should().Be(0);
     }
 
-    // ── Convert to task ───────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task ConvertToTaskAsync_CreatesTodoTaskInProjectAndMarksIdeaConverted()
-    {
-        var (sut, db) = BuildService(nameof(ConvertToTaskAsync_CreatesTodoTaskInProjectAndMarksIdeaConverted));
-        var idea = CreateIdea(DefaultUserId, "Add dark mode");
-        var project = CreateProject(DefaultUserId);
-        db.Ideas.Add(idea);
-        db.Projects.Add(project);
-        await db.SaveChangesAsync();
-
-        var taskId = await sut.ConvertToTaskAsync(idea.Id, project.Id);
-
-        var task = await db.Tasks.AsNoTracking().SingleAsync(t => t.Id == taskId);
-        task.Title.Should().Be("Add dark mode");
-        task.ProjectId.Should().Be(project.Id);
-        task.Status.Should().Be(TaskItemStatus.Todo);
-        (await db.Ideas.AsNoTracking().SingleAsync()).Status.Should().Be(IdeaStatus.ConvertedToTask);
-    }
-
-    [Fact]
-    public async Task ConvertToTaskAsync_WhenProjectBelongsToAnotherUser_ThrowsKeyNotFoundException()
-    {
-        var (sut, db) = BuildService(nameof(ConvertToTaskAsync_WhenProjectBelongsToAnotherUser_ThrowsKeyNotFoundException));
-        var idea = CreateIdea(DefaultUserId);
-        var foreignProject = CreateProject(OtherUserId);
-        db.Ideas.Add(idea);
-        db.Projects.Add(foreignProject);
-        await db.SaveChangesAsync();
-
-        var act = () => sut.ConvertToTaskAsync(idea.Id, foreignProject.Id);
-
-        await act.Should().ThrowAsync<KeyNotFoundException>();
-    }
 
     // ── Delete ────────────────────────────────────────────────────────────────
 

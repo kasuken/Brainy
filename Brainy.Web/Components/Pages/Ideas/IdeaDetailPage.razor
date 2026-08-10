@@ -9,8 +9,6 @@
 @using Brainy.Domain.Enums
 @inject IIdeaService IdeaService
 @inject IAreaService AreaService
-@inject IProjectService ProjectService
-@inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 
@@ -81,10 +79,17 @@ else
                             Archived @_detail.ArchivedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy")
                         </span>
                     }
+                    @if (_detail.CommittedProjectId.HasValue)
+                    {
+                        <span class="id-meta-item">
+                            Committed @(_detail.CommittedAtUtc?.ToLocalTime().ToString("MMM d, yyyy")) —
+                            <a href="@($"/projects/{_detail.CommittedProjectId}")">View Project</a>
+                        </span>
+                    }
                 </div>
             </div>
             <div class="id-actions">
-                @if (_detail.Status != IdeaStatus.ConvertedToProject && !_detail.IsArchived)
+                @if (_detail.Status != IdeaStatus.Committed && !_detail.IsArchived)
                 {
                     <MudButton Variant="Variant.Filled"
                                Color="Color.Secondary"
@@ -96,34 +101,7 @@ else
                         {
                             <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
                         }
-                        Convert to Project
-                    </MudButton>
-                }
-                @if (!_detail.IsArchived)
-                {
-                    <MudButton Variant="Variant.Outlined"
-                               Color="Color.Info"
-                               StartIcon="@Icons.Material.Outlined.NoteAdd"
-                               Size="Size.Small"
-                               Disabled="_convertingNote"
-                               OnClick="ConfirmConvertToNoteAsync">
-                        @if (_convertingNote)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
-                        }
-                        Convert to Note
-                    </MudButton>
-                    <MudButton Variant="Variant.Outlined"
-                               Color="Color.Tertiary"
-                               StartIcon="@Icons.Material.Outlined.AssignmentTurnedIn"
-                               Size="Size.Small"
-                               Disabled="_convertingTask"
-                               OnClick="ConfirmConvertToTaskAsync">
-                        @if (_convertingTask)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
-                        }
-                        Convert to Task
+                        Commit to Project
                     </MudButton>
                 }
                 @if (_detail.IsArchived)
@@ -182,7 +160,10 @@ else
                                Class="id-field">
                         @foreach (IdeaStatus s in Enum.GetValues<IdeaStatus>())
                         {
-                            <MudSelectItem T="IdeaStatus" Value="s">@StatusLabel(s)</MudSelectItem>
+                            @if (s != IdeaStatus.Committed || _editStatus == IdeaStatus.Committed)
+                            {
+                                <MudSelectItem T="IdeaStatus" Value="s">@StatusLabel(s)</MudSelectItem>
+                            }
                         }
                     </MudSelect>
                 </div>
@@ -289,6 +270,58 @@ else
             </div>
         </MudTabPanel>
 
+        <!-- Tab 4: Commit Readiness -->
+        <MudTabPanel Text="Commit Readiness" Icon="@Icons.Material.Outlined.Flag">
+            <div class="id-tab-content">
+                <p class="id-commit-hint">
+                    An idea can only be committed to a project once all five criteria below are filled in.
+                </p>
+                <MudTextField @bind-Value="_editTargetUserAndProblem"
+                              Label="Specific user and problem"
+                              HelperText="Who exactly has this problem, and what is it?"
+                              Variant="Variant.Outlined" Lines="2"
+                              Disabled="_detail?.Status == IdeaStatus.Committed"
+                              Class="id-textarea" />
+                <MudTextField @bind-Value="_editSuitabilityReason"
+                              Label="Why you're suited to build or write it"
+                              Variant="Variant.Outlined" Lines="2"
+                              Disabled="_detail?.Status == IdeaStatus.Committed"
+                              Class="id-textarea" />
+                <MudTextField @bind-Value="_editEvidence"
+                              Label="One piece of real evidence"
+                              HelperText="A conversation, data point, or signal that this is worth pursuing"
+                              Variant="Variant.Outlined" Lines="2"
+                              Disabled="_detail?.Status == IdeaStatus.Committed"
+                              Class="id-textarea" />
+                <MudTextField @bind-Value="_editValidationExperiment"
+                              Label="Small validation experiment"
+                              Variant="Variant.Outlined" Lines="2"
+                              Disabled="_detail?.Status == IdeaStatus.Committed"
+                              Class="id-textarea" />
+                <MudTextField @bind-Value="_editReplacedCommitment"
+                              Label="What existing commitment this will replace"
+                              HelperText="A conscious decision about what you will stop or scale back"
+                              Variant="Variant.Outlined" Lines="2"
+                              Disabled="_detail?.Status == IdeaStatus.Committed"
+                              Class="id-textarea" />
+                @if (_detail?.Status != IdeaStatus.Committed)
+                {
+                    <div class="id-tab-footer">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   Size="Size.Small"
+                                   Disabled="_savingCommitCriteria"
+                                   OnClick="SaveCommitCriteriaAsync">
+                            @if (_savingCommitCriteria)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                            }
+                            Save Commit Criteria
+                        </MudButton>
+                    </div>
+                }
+            </div>
+        </MudTabPanel>
+
     </MudTabs>
 }
 
@@ -312,28 +345,16 @@ else
     </YesButton>
 </MudMessageBox>
 
-<!-- Convert-to-Project confirmation -->
-<MudMessageBox @ref="_convertMsgBox" Title="Convert to Project?" CancelText="Cancel">
+<!-- Commit-to-Project confirmation -->
+<MudMessageBox @ref="_convertMsgBox" Title="Commit to Project?" CancelText="Cancel">
     <MessageContent>
-        Convert this idea to a project? A new project will be created with the idea's title, description, and area.
+        Commit this idea to a project? A new project will be created with the idea's title, description, and area,
+        and the idea's bulky content will move to the project — only a link and the decision record will remain here.
     </MessageContent>
     <YesButton>
         <MudButton Color="Color.Secondary" Variant="Variant.Filled"
                    StartIcon="@Icons.Material.Filled.Transform">
-            Convert
-        </MudButton>
-    </YesButton>
-</MudMessageBox>
-
-<!-- Convert-to-Note confirmation -->
-<MudMessageBox @ref="_convertNoteMsgBox" Title="Convert to Note?" CancelText="Cancel">
-    <MessageContent>
-        A new Resource note will be created from this idea's title and description. The idea will be kept.
-    </MessageContent>
-    <YesButton>
-        <MudButton Color="Color.Info" Variant="Variant.Filled"
-                   StartIcon="@Icons.Material.Outlined.NoteAdd">
-            Create Note
+            Commit
         </MudButton>
     </YesButton>
 </MudMessageBox>
@@ -455,15 +476,12 @@ else
 }
 
 /* Status colors */
-.id-status--captured           { background: var(--paper-sunk) !important; color: var(--ink-soft) !important; }
-.id-status--researching        { background: rgba(205,154,58,.18) !important; color: #7a5c0e !important; }
-.id-status--validating         { background: rgba(111,122,90,.18) !important; color: #4a5c38 !important; }
-.id-status--planned            { background: rgba(192,86,29,.12) !important; color: var(--clay-deep) !important; }
-.id-status--rejected           { background: rgba(176,58,24,.10) !important; color: #b03a18 !important; }
-.id-status--convertedtoproject { background: rgba(111,122,90,.25) !important; color: #354a28 !important; }
-.id-status--archived           { background: var(--paper-sunk) !important; color: var(--ink-faint) !important; }
-.id-status--convertedtonote    { background: rgba(58,123,205,.14) !important; color: #1a5aa0 !important; }
-.id-status--convertedtotask    { background: rgba(111,58,205,.13) !important; color: #5a2aa0 !important; }
+.id-status--captured   { background: var(--paper-sunk) !important; color: var(--ink-soft) !important; }
+.id-status--evaluating { background: rgba(205,154,58,.18) !important; color: #7a5c0e !important; }
+.id-status--incubated  { background: rgba(111,122,90,.18) !important; color: #4a5c38 !important; }
+.id-status--committed  { background: rgba(111,122,90,.25) !important; color: #354a28 !important; }
+.id-status--rejected   { background: rgba(176,58,24,.10) !important; color: #b03a18 !important; }
+.id-status--shipped    { background: rgba(58,123,205,.14) !important; color: #1a5aa0 !important; }
 
 /* Priority colors */
 .id-priority--critical { background: rgba(176,58,24,.12) !important; color: #b03a18 !important; }
@@ -518,6 +536,11 @@ else
     gap: .75rem;
 }
 .id-textarea { width: 100%; }
+.id-commit-hint {
+    margin: 0;
+    font-size: .85rem;
+    color: var(--ink-soft);
+}
 .id-tab-footer {
     display: flex;
     justify-content: flex-end;
@@ -549,7 +572,7 @@ else
                     "Review status, priority, area, and timestamps in the header.",
                     "Edit title, description, priority, status, and area from Details.",
                     "Build supporting research, competitor notes, and observations in the tabs.",
-                    "Convert a ready idea to a project, or archive it when it is no longer active."
+                    "Fill in the five Commit Readiness criteria, then commit a ready idea to a project, or archive it when it is no longer active."
                 ]
             },
             new PageHelpSection
@@ -560,8 +583,8 @@ else
                 Points =
                 [
                     "Keep the raw spark visible while adding evidence and context.",
-                    "Move from Capture toward Organize and Distill as the idea matures.",
-                    "Convert only when the idea has enough actionability to become work."
+                    "Move from Captured through Evaluating and Incubated as the idea matures.",
+                    "Commit only when the idea has a specific user/problem, a reason you're suited to build it, real evidence, a validation experiment, and a decision about what it replaces."
                 ]
             },
             new PageHelpSection
@@ -575,7 +598,7 @@ else
                     "Open Details, update the fields, and click Save Details.",
                     "Use Research, Competitors, and Notes tabs to add development context.",
                     "Save each tab after editing so the idea remains current.",
-                    "Use Convert to Project when the idea is ready for execution, or Archive or Restore to manage its lifecycle."
+                    "Fill in the Commit Readiness tab, then click Commit to Project when the idea is ready for execution, or Archive/Restore to manage its lifecycle."
                 ]
             }
         ]
@@ -604,15 +627,20 @@ else
     private bool    _savingCompetitors;
     private bool    _savingNotes;
 
+    // Commit-readiness criteria
+    private string? _editTargetUserAndProblem;
+    private string? _editSuitabilityReason;
+    private string? _editEvidence;
+    private string? _editValidationExperiment;
+    private string? _editReplacedCommitment;
+    private bool    _savingCommitCriteria;
+
     // Confirmation dialogs
     private MudMessageBox _archiveMsgBox     = null!;
     private MudMessageBox _restoreMsgBox     = null!;
     private MudMessageBox _convertMsgBox     = null!;
-    private MudMessageBox _convertNoteMsgBox = null!;
 
     private bool _converting;
-    private bool _convertingNote;
-    private bool _convertingTask;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -640,6 +668,12 @@ else
         _editResearch    = d.Research;
         _editCompetitors = d.Competitors;
         _editNotes       = d.Notes;
+
+        _editTargetUserAndProblem  = d.TargetUserAndProblem;
+        _editSuitabilityReason     = d.SuitabilityReason;
+        _editEvidence              = d.Evidence;
+        _editValidationExperiment  = d.ValidationExperiment;
+        _editReplacedCommitment    = d.ReplacedCommitment;
     }
 
     // ── Save helpers ───────────────────────────────────────────────────────
@@ -653,7 +687,12 @@ else
         Status:      _editStatus,
         Research:    _editResearch,
         Competitors: _editCompetitors,
-        Notes:       _editNotes);
+        Notes:       _editNotes,
+        TargetUserAndProblem: _editTargetUserAndProblem,
+        SuitabilityReason:    _editSuitabilityReason,
+        Evidence:             _editEvidence,
+        ValidationExperiment: _editValidationExperiment,
+        ReplacedCommitment:   _editReplacedCommitment);
 
     private async Task SaveDetailsAsync()
     {
@@ -733,6 +772,25 @@ else
         }
     }
 
+    private async Task SaveCommitCriteriaAsync()
+    {
+        _savingCommitCriteria = true;
+        try
+        {
+            await IdeaService.UpdateAsync(BuildUpdateDto());
+            Snackbar.Add("Commit criteria saved.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingCommitCriteria = false;
+        }
+    }
+
     // ── Archive / Restore ──────────────────────────────────────────────────
 
     private async Task ConfirmArchiveAsync()
@@ -779,7 +837,7 @@ else
         }
     }
 
-    // ── Convert to Project ─────────────────────────────────────────────────
+    // ── Commit to Project ───────────────────────────────────────────────────
 
     private async Task ConfirmConvertAsync()
     {
@@ -789,8 +847,8 @@ else
         _converting = true;
         try
         {
-            await IdeaService.ConvertToProjectAsync(Id);
-            Snackbar.Add("Idea converted to project!", Severity.Success);
+            await IdeaService.CommitToProjectAsync(Id);
+            Snackbar.Add("Idea committed to project!", Severity.Success);
             await LoadAsync();
         }
         catch (Exception ex)
@@ -803,92 +861,17 @@ else
         }
     }
 
-    // ── Convert to Note ────────────────────────────────────────────────────
-
-    private async Task ConfirmConvertToNoteAsync()
-    {
-        bool? confirmed = await _convertNoteMsgBox.ShowAsync();
-        if (confirmed is not true) return;
-
-        _convertingNote = true;
-        try
-        {
-            await IdeaService.ConvertToNoteAsync(Id);
-            Snackbar.Add("Note created from idea.", Severity.Success);
-            await LoadAsync();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
-        }
-        finally
-        {
-            _convertingNote = false;
-        }
-    }
-
-    // ── Convert to Task ────────────────────────────────────────────────────
-
-    private static readonly DialogOptions _taskDialogOptions = new()
-    {
-        MaxWidth      = MaxWidth.ExtraSmall,
-        FullWidth     = true,
-        BackdropClick = true,
-        CloseButton   = false
-    };
-
-    private async Task ConfirmConvertToTaskAsync()
-    {
-        var projects = await ProjectService.GetAllNonArchivedAsync();
-
-        if (projects.Count == 0)
-        {
-            Snackbar.Add("No projects available. Create a project first.", Severity.Warning);
-            return;
-        }
-
-        var parameters = new DialogParameters<ConvertIdeaToTaskDialog>
-        {
-            { d => d.Projects, projects }
-        };
-
-        var dialog = await DialogService.ShowAsync<ConvertIdeaToTaskDialog>("", parameters, _taskDialogOptions);
-        var result = await dialog.Result;
-
-        if (result is { Canceled: false, Data: Guid projectId } && projectId != Guid.Empty)
-        {
-            _convertingTask = true;
-            try
-            {
-                await IdeaService.ConvertToTaskAsync(Id, projectId);
-                Snackbar.Add("Task created from idea.", Severity.Success);
-                await LoadAsync();
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add(ex.Message, Severity.Error);
-            }
-            finally
-            {
-                _convertingTask = false;
-            }
-        }
-    }
-
     // ── Label helpers ──────────────────────────────────────────────────────
 
     private static string StatusLabel(IdeaStatus s) => s switch
     {
-        IdeaStatus.Captured            => "Captured",
-        IdeaStatus.Researching         => "Researching",
-        IdeaStatus.Validating          => "Validating",
-        IdeaStatus.Planned             => "Planned",
-        IdeaStatus.Rejected            => "Rejected",
-        IdeaStatus.ConvertedToProject  => "Converted to Project",
-        IdeaStatus.Archived            => "Archived",
-        IdeaStatus.ConvertedToNote     => "Converted to Note",
-        IdeaStatus.ConvertedToTask     => "Converted to Task",
-        _                              => s.ToString()
+        IdeaStatus.Captured   => "Captured",
+        IdeaStatus.Evaluating => "Evaluating",
+        IdeaStatus.Incubated  => "Incubated",
+        IdeaStatus.Committed  => "Committed",
+        IdeaStatus.Rejected   => "Rejected",
+        IdeaStatus.Shipped    => "Shipped",
+        _                     => s.ToString()
     };
 
     private static string PriorityLabel(IdeaPriority p) => p switch

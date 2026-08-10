@@ -9,9 +9,11 @@ using Microsoft.EntityFrameworkCore;
 namespace Brainy.Application.Services;
 
 /// <summary>
-/// Handles CRUD, archiving, review, and project-conversion operations for
+/// Handles CRUD, archiving, review, and commit-to-project operations for
 /// <see cref="Idea"/> entities, scoped to the current user.
 /// Active ideas exclude archived entries; reads use <c>AsNoTracking</c>.
+/// An idea may only move to <see cref="IdeaStatus.Committed"/> via <see cref="CommitToProjectAsync"/>,
+/// which validates the five commitment criteria before creating the linked project.
 /// </summary>
 internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserService currentUser) : IIdeaService
 {
@@ -77,14 +79,14 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var now = DateTime.UtcNow;
 
-        // Stale: not updated in 30+ days; still actionable (not archived/rejected/converted).
+        // Stale: not updated in 30+ days; still actionable (not rejected/committed/shipped).
         var staleThreshold = now.AddDays(-30);
         var stale = await context.Ideas.AsNoTracking()
             .Where(i => i.UserId == userId
                      && !i.IsArchived
-                     && i.Status != IdeaStatus.Archived
                      && i.Status != IdeaStatus.Rejected
-                     && i.Status != IdeaStatus.ConvertedToProject
+                     && i.Status != IdeaStatus.Committed
+                     && i.Status != IdeaStatus.Shipped
                      && i.UpdatedAtUtc < staleThreshold)
             .OrderBy(i => i.UpdatedAtUtc)
             .Select(i => ToDto(i, i.Area != null ? i.Area.Name : null))
@@ -103,9 +105,9 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         var highPriority = await context.Ideas.AsNoTracking()
             .Where(i => i.UserId == userId
                      && !i.IsArchived
-                     && i.Status != IdeaStatus.Archived
                      && i.Status != IdeaStatus.Rejected
-                     && i.Status != IdeaStatus.ConvertedToProject
+                     && i.Status != IdeaStatus.Committed
+                     && i.Status != IdeaStatus.Shipped
                      && (i.Priority == IdeaPriority.High || i.Priority == IdeaPriority.Critical)
                      && i.UpdatedAtUtc < activityThreshold)
             .OrderByDescending(i => i.Priority)
@@ -123,8 +125,9 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         var total     = await context.Ideas.CountAsync(i => i.UserId == userId, cancellationToken).ConfigureAwait(false);
         var active    = await context.Ideas.CountAsync(i => i.UserId == userId && !i.IsArchived, cancellationToken).ConfigureAwait(false);
         var archived  = await context.Ideas.CountAsync(i => i.UserId == userId && i.IsArchived, cancellationToken).ConfigureAwait(false);
-        var converted = await context.Ideas.CountAsync(i => i.UserId == userId && i.Status == IdeaStatus.ConvertedToProject, cancellationToken).ConfigureAwait(false);
+        var committed = await context.Ideas.CountAsync(i => i.UserId == userId && i.Status == IdeaStatus.Committed, cancellationToken).ConfigureAwait(false);
         var rejected  = await context.Ideas.CountAsync(i => i.UserId == userId && i.Status == IdeaStatus.Rejected, cancellationToken).ConfigureAwait(false);
+        var shipped   = await context.Ideas.CountAsync(i => i.UserId == userId && i.Status == IdeaStatus.Shipped, cancellationToken).ConfigureAwait(false);
 
         var byArea = await context.Ideas.AsNoTracking()
             .Where(i => i.UserId == userId)
@@ -135,7 +138,7 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
                 g.Count()))
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
-        return new IdeaMetricsDto(total, active, archived, converted, rejected, byArea);
+        return new IdeaMetricsDto(total, active, archived, committed, rejected, shipped, byArea);
     }
 
     public async Task<IReadOnlyList<IdeaDto>> SearchAsync(string query, CancellationToken cancellationToken = default)
@@ -208,14 +211,23 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
             .FirstOrDefaultAsync(i => i.Id == dto.Id && i.UserId == userId, cancellationToken).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Idea '{dto.Id}' was not found.");
 
-        idea.Title       = dto.Title.Trim();
-        idea.Description = dto.Description?.Trim();
-        idea.AreaId      = dto.AreaId;
-        idea.Priority    = dto.Priority;
-        idea.Status      = dto.Status;
-        idea.Research    = dto.Research?.Trim();
-        idea.Competitors = dto.Competitors?.Trim();
-        idea.Notes       = dto.Notes?.Trim();
+        if (dto.Status == IdeaStatus.Committed && idea.Status != IdeaStatus.Committed)
+            throw new InvalidOperationException(
+                "An idea can only become Committed through CommitToProjectAsync, which validates the commitment criteria and creates the project.");
+
+        idea.Title                = dto.Title.Trim();
+        idea.Description          = dto.Description?.Trim();
+        idea.AreaId               = dto.AreaId;
+        idea.Priority             = dto.Priority;
+        idea.Status               = dto.Status;
+        idea.Research             = dto.Research?.Trim();
+        idea.Competitors          = dto.Competitors?.Trim();
+        idea.Notes                = dto.Notes?.Trim();
+        idea.TargetUserAndProblem = dto.TargetUserAndProblem?.Trim();
+        idea.SuitabilityReason    = dto.SuitabilityReason?.Trim();
+        idea.Evidence             = dto.Evidence?.Trim();
+        idea.ValidationExperiment = dto.ValidationExperiment?.Trim();
+        idea.ReplacedCommitment   = dto.ReplacedCommitment?.Trim();
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -231,6 +243,7 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         return ToDto(idea, areaName);
     }
 
+    /// <summary>Soft-archives the idea. Sets IsArchived = true, ArchivedAtUtc = UtcNow. Status is left unchanged.</summary>
     public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
@@ -241,11 +254,11 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
 
         idea.IsArchived    = true;
         idea.ArchivedAtUtc = DateTime.UtcNow;
-        idea.Status        = IdeaStatus.Archived;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Restores an archived idea. Clears IsArchived and ArchivedAtUtc. Status is left unchanged.</summary>
     public async Task RestoreAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
@@ -256,7 +269,6 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
 
         idea.IsArchived    = false;
         idea.ArchivedAtUtc = null;
-        idea.Status        = IdeaStatus.Captured;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -273,7 +285,7 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<IdeaDto> ConvertToProjectAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<IdeaDto> CommitToProjectAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
@@ -281,8 +293,19 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
             .FirstOrDefaultAsync(i => i.Id == id && i.UserId == userId, cancellationToken).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Idea '{id}' was not found.");
 
-        if (idea.Status == IdeaStatus.ConvertedToProject)
-            throw new InvalidOperationException($"Idea '{id}' has already been converted to a project.");
+        if (idea.Status == IdeaStatus.Committed)
+            throw new InvalidOperationException($"Idea '{id}' has already been committed.");
+
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(idea.TargetUserAndProblem)) missing.Add("a specific user and problem");
+        if (string.IsNullOrWhiteSpace(idea.SuitabilityReason)) missing.Add("a reason you are suited to build or write it");
+        if (string.IsNullOrWhiteSpace(idea.Evidence)) missing.Add("one piece of real evidence");
+        if (string.IsNullOrWhiteSpace(idea.ValidationExperiment)) missing.Add("a small validation experiment");
+        if (string.IsNullOrWhiteSpace(idea.ReplacedCommitment)) missing.Add("what existing commitment it will replace");
+
+        if (missing.Count > 0)
+            throw new InvalidOperationException(
+                $"Idea '{id}' cannot be committed yet. Missing: {string.Join("; ", missing)}.");
 
         var project = new Project
         {
@@ -297,7 +320,15 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
 
         context.Projects.Add(project);
 
-        idea.Status = IdeaStatus.ConvertedToProject;
+        idea.Status             = IdeaStatus.Committed;
+        idea.CommittedProjectId = project.Id;
+        idea.CommittedAtUtc     = DateTime.UtcNow;
+
+        // Move bulky content to the project; the idea keeps only a link and its decision record.
+        idea.Description = null;
+        idea.Research     = null;
+        idea.Competitors  = null;
+        idea.Notes        = null;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -313,78 +344,18 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         return ToDto(idea, areaName);
     }
 
-    /// <inheritdoc/>
-    public async Task<Guid> ConvertToNoteAsync(Guid ideaId, CancellationToken cancellationToken = default)
-    {
-        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-
-        var idea = await context.Ideas
-            .FirstOrDefaultAsync(i => i.Id == ideaId && i.UserId == userId, cancellationToken).ConfigureAwait(false)
-            ?? throw new KeyNotFoundException($"Idea '{ideaId}' was not found.");
-
-        var note = new Note
-        {
-            Id             = Guid.NewGuid(),
-            UserId         = userId,
-            Title          = idea.Title,
-            Content        = idea.Description ?? string.Empty,
-            ParaCategory   = ParaCategory.Resource,
-            Status         = NoteStatus.Active,
-            ProcessedAtUtc = DateTime.UtcNow
-        };
-
-        context.Notes.Add(note);
-        idea.Status = IdeaStatus.ConvertedToNote;
-
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-        return note.Id;
-    }
-
-    /// <inheritdoc/>
-    public async Task<Guid> ConvertToTaskAsync(Guid ideaId, Guid projectId, CancellationToken cancellationToken = default)
-    {
-        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-
-        var idea = await context.Ideas
-            .FirstOrDefaultAsync(i => i.Id == ideaId && i.UserId == userId, cancellationToken).ConfigureAwait(false)
-            ?? throw new KeyNotFoundException($"Idea '{ideaId}' was not found.");
-
-        var projectExists = await context.Projects
-            .AnyAsync(p => p.Id == projectId && p.UserId == userId, cancellationToken).ConfigureAwait(false);
-
-        if (!projectExists)
-            throw new KeyNotFoundException($"Project '{projectId}' was not found.");
-
-        var task = new TaskItem
-        {
-            Id          = Guid.NewGuid(),
-            UserId      = userId,
-            ProjectId   = projectId,
-            Title       = idea.Title,
-            Description = idea.Description,
-            Priority    = TaskPriority.Medium,
-            Status      = TaskItemStatus.Todo
-        };
-
-        context.Tasks.Add(task);
-        idea.Status = IdeaStatus.ConvertedToTask;
-
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-        return task.Id;
-    }
-
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static IdeaDto ToDto(Idea i, string? areaName) => new(
         i.Id, i.Title, i.Description, i.AreaId, areaName,
         i.Priority, i.Status, i.IsArchived, i.ArchivedAtUtc,
-        i.CreatedAtUtc, i.UpdatedAtUtc);
+        i.CreatedAtUtc, i.UpdatedAtUtc, i.CommittedProjectId);
 
     private static IdeaDetailDto ToDetailDto(Idea i, string? areaName) => new(
         i.Id, i.Title, i.Description, i.AreaId, areaName,
         i.Priority, i.Status, i.IsArchived, i.ArchivedAtUtc,
         i.CreatedAtUtc, i.UpdatedAtUtc,
-        i.Research, i.Competitors, i.Notes);
+        i.Research, i.Competitors, i.Notes,
+        i.TargetUserAndProblem, i.SuitabilityReason, i.Evidence, i.ValidationExperiment, i.ReplacedCommitment,
+        i.CommittedProjectId, i.CommittedAtUtc);
 }

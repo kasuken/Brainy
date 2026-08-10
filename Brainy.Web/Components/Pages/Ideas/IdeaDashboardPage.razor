@@ -78,14 +78,25 @@
                     </div>
                 </div>
 
-                <!-- Converted -->
+                <!-- Committed -->
                 <div class="idash-kpi-card idash-kpi-card--converted">
                     <div class="idash-kpi-card__icon">
                         <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" />
                     </div>
                     <div class="idash-kpi-card__body">
-                        <span class="idash-kpi-card__value">@(_metrics?.ConvertedIdeas ?? 0)</span>
-                        <span class="idash-kpi-card__label">Converted to Project</span>
+                        <span class="idash-kpi-card__value">@(_metrics?.CommittedIdeas ?? 0)</span>
+                        <span class="idash-kpi-card__label">Committed to Project</span>
+                    </div>
+                </div>
+
+                <!-- Shipped -->
+                <div class="idash-kpi-card idash-kpi-card--converted">
+                    <div class="idash-kpi-card__icon">
+                        <MudIcon Icon="@Icons.Material.Outlined.RocketLaunch" />
+                    </div>
+                    <div class="idash-kpi-card__body">
+                        <span class="idash-kpi-card__value">@(_metrics?.ShippedIdeas ?? 0)</span>
+                        <span class="idash-kpi-card__label">Shipped</span>
                     </div>
                 </div>
 
@@ -444,26 +455,24 @@
 
     static string StatusLabel(IdeaStatus s) => s switch
     {
-        IdeaStatus.Captured           => "Captured",
-        IdeaStatus.Researching        => "Researching",
-        IdeaStatus.Validating         => "Validating",
-        IdeaStatus.Planned            => "Planned",
-        IdeaStatus.Rejected           => "Rejected",
-        IdeaStatus.ConvertedToProject => "Converted",
-        IdeaStatus.Archived           => "Archived",
-        _                             => s.ToString()
+        IdeaStatus.Captured   => "Captured",
+        IdeaStatus.Evaluating => "Evaluating",
+        IdeaStatus.Incubated  => "Incubated",
+        IdeaStatus.Committed  => "Committed",
+        IdeaStatus.Rejected   => "Rejected",
+        IdeaStatus.Shipped    => "Shipped",
+        _                     => s.ToString()
     };
 
     static string StatusColor(IdeaStatus s) => s switch
     {
-        IdeaStatus.Captured           => "var(--ink-soft)",
-        IdeaStatus.Researching        => "var(--gold)",
-        IdeaStatus.Validating         => "#5c9bd6",
-        IdeaStatus.Planned            => "var(--sage)",
-        IdeaStatus.Rejected           => "#c94040",
-        IdeaStatus.ConvertedToProject => "#3d9c6b",
-        IdeaStatus.Archived           => "var(--ink-faint)",
-        _                             => "var(--ink-soft)"
+        IdeaStatus.Captured   => "var(--ink-soft)",
+        IdeaStatus.Evaluating => "var(--gold)",
+        IdeaStatus.Incubated  => "#5c9bd6",
+        IdeaStatus.Committed  => "#3d9c6b",
+        IdeaStatus.Rejected   => "#c94040",
+        IdeaStatus.Shipped    => "#1a5aa0",
+        _                     => "var(--ink-soft)"
     };
 
     static string PriorityColor(IdeaPriority p) => p switch
