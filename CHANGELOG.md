@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.0] - 2026-08-11
+
+### Added
+
+- **In Progress widget on Today page** — tasks whose status is *In Progress* now appear at the top of the execution flow, above Overdue and Due Today, so active work is always visible at a glance.
+- `InProgress` list added to `TodayAggregateDto` and populated by `TodayService`.
+- New `InProgressWidget` Blazor component with collapsible section, task count, and quick-action buttons (complete, edit).
+- On wide screens (≥ 1 200 px) the In Progress section spans all grid columns for maximum visibility.
+- Today empty-state check updated to account for the new In Progress section.
+- Help tip updated to mention the In Progress section in the onboarding overlay.
+
+---
+
 ## [1.3.0] - 2026-08-10
 
 ### Fixed

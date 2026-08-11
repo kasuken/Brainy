@@ -151,6 +151,7 @@ internal sealed class TodayService(
         // DbContext is not thread-safe, so queries must run sequentially even though
         // the intent is to gather all data in a single pass.
         var currentTask         = await GetCurrentTaskByFlagAsync(userId, cancellationToken).ConfigureAwait(false);
+        var inProgress          = await GetCurrentTasksAsync(cancellationToken).ConfigureAwait(false);
         var highPriorityWork    = await GetHighPriorityTasksAsync(cancellationToken).ConfigureAwait(false);
         var overdue             = await GetOverdueAsync(cancellationToken).ConfigureAwait(false);
         var dueToday            = await GetDueTodayAsync(cancellationToken).ConfigureAwait(false);
@@ -171,6 +172,7 @@ internal sealed class TodayService(
 
         return new TodayAggregateDto(
             currentTask,
+            inProgress,
             highPriorityWork,
             overdue,
             dueToday,

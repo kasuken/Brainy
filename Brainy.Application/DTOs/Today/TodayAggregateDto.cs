@@ -9,6 +9,7 @@ namespace Brainy.Application.DTOs.Today;
 /// </summary>
 public record TodayAggregateDto(
     TodayTaskItemDto? CurrentTask,
+    IReadOnlyList<TodayTaskItemDto> InProgress,
     IReadOnlyList<TodayTaskItemDto> HighPriorityWork,
     IReadOnlyList<TodayTaskItemDto> Overdue,
     IReadOnlyList<TodayTaskItemDto> DueToday,

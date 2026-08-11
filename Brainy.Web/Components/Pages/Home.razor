@@ -219,6 +219,10 @@
     .td-section-label--week    { color: #f57f17; }
     .td-section-label--next    { color: #388e3c; }
 
+    @@media (min-width: 1200px) {
+        .td-section--inprogress { grid-column: 1 / -1; }
+    }
+
     .td-section-count { 
         font-size: 0.72rem; 
         color: var(--mud-palette-text-disabled); 
@@ -429,6 +433,10 @@
                 @* ── Task sections ── *@
                 <div class="td-sections">
 
+                    <InProgressWidget Tasks="_aggregate?.InProgress ?? []"
+                                      OnComplete="HandleCompleted"
+                                      OnEdit="OpenEditTaskDialogAsync" />
+
                     <OverdueWidget Tasks="_aggregate?.Overdue ?? []"
                                    OnComplete="HandleCompleted"
                                    OnEdit="OpenEditTaskDialogAsync" />
@@ -453,6 +461,7 @@
 
                     @* Empty state — only shown when there is truly nothing to act on *@
                     @if ((_aggregate?.CurrentTask == null)
+                         && !(_aggregate?.InProgress?.Any() ?? false)
                          && !(_aggregate?.Overdue?.Any() ?? false)
                          && !(_aggregate?.DueToday?.Any() ?? false)
                          && !(_aggregate?.HighPriorityWork?.Any() ?? false)
@@ -483,6 +492,7 @@
                 Points =
                 [
                     "Track your Current focus alongside a daily snapshot and Inbox reminder.",
+                    "See every task marked In Progress at the top of the execution flow.",
                     "Review overdue, due today, due this week, and next tasks in one execution flow.",
                     "See high-priority project work, priority projects, and goal deadlines before they drift.",
                     "Use quick actions to add a task, process the Inbox, or create a note."
