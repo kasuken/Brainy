@@ -601,6 +601,7 @@
 
 body {
     background: var(--paper);
+    overflow-x: hidden;
 }
 
 .brainy-appbar {

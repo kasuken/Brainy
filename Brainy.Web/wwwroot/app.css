@@ -1,5 +1,6 @@
 html, body {
     font-family: 'Hanken Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    overflow-x: hidden;
 }
 
 a, .btn-link {
