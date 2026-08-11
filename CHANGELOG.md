@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.7.0] - 2026-08-11
+
+### Fixed
+
+- **Horizontal scroll eliminated** — `overflow-x: hidden` added to `body` in both `app.css` and `brainy-design.css` so wide content no longer causes a horizontal scrollbar on any page.
+- **Task metadata wraps correctly on narrow screens** — `.td-task-meta` on the Today page now has `flex-wrap: wrap` and `min-width: 0` so project badges and due-date chips stack instead of overflowing.
+- **Project label text truncated with ellipsis** — the project chip inside task rows now has `white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%` so long project names are clipped cleanly rather than breaking layout.
+
+---
+
 ## [1.6.0] - 2026-08-11
 
 ### Fixed
