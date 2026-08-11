@@ -15,7 +15,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents()
+    .AddHubOptions(options =>
+    {
+        // The note editor sends the full textarea content on every input event.
+        // The SignalR default (32 KB) silently drops large pastes and kills the
+        // circuit, so notes end up saved without content. Allow up to 512 KB.
+        options.MaximumReceiveMessageSize = 512 * 1024;
+    });
 
 builder.Services.AddMudServices();
 

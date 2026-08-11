@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0] - 2026-08-11
+
+### Fixed
+
+- **SignalR message size limit increased to 512 KB** — the default SignalR hub limit (32 KB) was silently dropping large note pastes and crashing the circuit, causing notes to be saved without their content. `MaximumReceiveMessageSize` is now set to 512 KB on the Blazor Server hub so large notes are reliably transmitted.
+
+---
+
 ## [1.5.0] - 2026-08-11
 
 ### Added
