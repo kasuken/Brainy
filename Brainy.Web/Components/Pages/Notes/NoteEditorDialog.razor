@@ -252,24 +252,24 @@
                             }
                         </div>
 
+                        <div class="note-editor__sidebar-section">
+                            <h3 class="note-editor__sidebar-heading">Status</h3>
+                            <MudSelect T="NoteStatus"
+                                       Value="_model.Status"
+                                       ValueChanged="OnStatusChanged"
+                                       Variant="Variant.Outlined"
+                                       Dense="true"
+                                       Margin="Margin.Dense"
+                                       AnchorOrigin="Origin.BottomLeft">
+                                @foreach (var status in Enum.GetValues<NoteStatus>())
+                                {
+                                    <MudSelectItem Value="status">@status.ToString()</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </div>
+
                         @if (NoteId.HasValue)
                         {
-                            <div class="note-editor__sidebar-section">
-                                <h3 class="note-editor__sidebar-heading">Status</h3>
-                                <MudSelect T="NoteStatus"
-                                           Value="_model.Status"
-                                           ValueChanged="OnStatusChanged"
-                                           Variant="Variant.Outlined"
-                                           Dense="true"
-                                           Margin="Margin.Dense"
-                                           AnchorOrigin="Origin.BottomLeft">
-                                    @foreach (var status in Enum.GetValues<NoteStatus>())
-                                    {
-                                        <MudSelectItem Value="status">@status.ToString()</MudSelectItem>
-                                    }
-                                </MudSelect>
-                            </div>
-
                             @if (_originalNote is not null)
                             {
                                 @* ── Linked Notes ── *@
@@ -640,9 +640,18 @@
                                     Use <strong>Write</strong> to author with Markdown, then
                                     <strong>Preview</strong> to see it rendered.
                                 </p>
-                                <p class="note-editor__sidebar-tip">
-                                    New notes land in your <strong>Inbox</strong>.
-                                </p>
+                                @if (ProjectId.HasValue)
+                                {
+                                    <p class="note-editor__sidebar-tip">
+                                        This note will be linked to the current <strong>project</strong>.
+                                    </p>
+                                }
+                                else
+                                {
+                                    <p class="note-editor__sidebar-tip">
+                                        New notes land in your <strong>Inbox</strong> unless you pick another status.
+                                    </p>
+                                }
                             </div>
                         }
 
@@ -683,6 +692,9 @@
 
     /// <summary>When set the dialog is in edit mode; null means create mode.</summary>
     [Parameter] public Guid? NoteId { get; set; }
+
+    /// <summary>Optional project to link a newly created note to. Ignored in edit mode.</summary>
+    [Parameter] public Guid? ProjectId { get; set; }
 
     private sealed class NoteFormModel
     {
@@ -969,6 +981,8 @@
                     _model.Title,
                     _model.Content,
                     _model.ParaCategory,
+                    ProjectId: ProjectId,
+                    Status: _model.Status,
                     SourceUrl: string.IsNullOrWhiteSpace(_model.SourceUrl) ? null : _model.SourceUrl,
                     SourceTitle: string.IsNullOrWhiteSpace(_model.SourceTitle) ? null : _model.SourceTitle));
             }

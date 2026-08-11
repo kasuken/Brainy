@@ -540,7 +540,22 @@
         CloseButton     = false,
     };
 
+    /// <summary>Note id from a deep link (e.g. /notes/{id} redirect); opens the editor on load.</summary>
+    [SupplyParameterFromQuery(Name = "open")]
+    public Guid? OpenNoteId { get; set; }
+
+    private bool _deepLinkHandled;
+
     protected override async Task OnInitializedAsync() => await LoadNotesAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && OpenNoteId.HasValue && !_deepLinkHandled)
+        {
+            _deepLinkHandled = true;
+            await OpenEditDialogAsync(OpenNoteId.Value);
+        }
+    }
 
     private async Task LoadNotesAsync()
     {

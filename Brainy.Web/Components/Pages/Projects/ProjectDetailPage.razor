@@ -6,6 +6,7 @@
 @using Brainy.Application.DTOs.Outputs
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
+@using Brainy.Web.Components.Pages.Notes
 @attribute [Authorize]
 @implements IAsyncDisposable
 @inject IProjectService ProjectService
@@ -183,11 +184,18 @@ else
                      BadgeColor="Color.Secondary">
             <div class="pd-section-header">
                 <h2 class="pd-section-title">Notes</h2>
-                <MudButton Variant="Variant.Text" Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Add" Size="Size.Small"
-                           OnClick="OpenAddNoteDialog">
-                    Add note
-                </MudButton>
+                <div class="d-flex gap-1">
+                    <MudButton Variant="Variant.Text" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Add" Size="Size.Small"
+                               OnClick="OpenNewNoteDialog">
+                        New note
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Outlined.AddLink" Size="Size.Small"
+                               OnClick="OpenLinkNoteDialog">
+                        Link existing
+                    </MudButton>
+                </div>
             </div>
 
             @if (!_detail.Notes.Any())
@@ -1075,7 +1083,17 @@ else
         _timer?.Dispose();
     }
 
-    private void OpenNote(Guid noteId) => Nav.NavigateTo($"/notes/{noteId}");
+    private async Task OpenNote(Guid noteId)
+    {
+        var parameters = new DialogParameters<NoteEditorDialog>
+        {
+            { x => x.NoteId, noteId }
+        };
+        var dialog = await DialogService.ShowAsync<NoteEditorDialog>("", parameters, NoteEditorOptions);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await LoadAsync();
+    }
 
     private async Task OpenAddTaskDialog()
     {
@@ -1093,12 +1111,33 @@ else
         await LoadAsync();
     }
 
-    private async Task OpenAddNoteDialog()
+    private static DialogOptions NoteEditorOptions => new()
+    {
+        MaxWidth         = MaxWidth.Large,
+        FullWidth        = true,
+        BackdropClick    = false,
+        CloseOnEscapeKey = false,
+        CloseButton      = false,
+    };
+
+    private async Task OpenNewNoteDialog()
+    {
+        var parameters = new DialogParameters<NoteEditorDialog>
+        {
+            { x => x.ProjectId, ProjectId }
+        };
+        var dialog = await DialogService.ShowAsync<NoteEditorDialog>("", parameters, NoteEditorOptions);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task OpenLinkNoteDialog()
     {
         var parameters = new DialogParameters<ProjectNoteDialog>();
         parameters.Add(x => x.ProjectId, ProjectId);
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
-        var dialog = await DialogService.ShowAsync<ProjectNoteDialog>("Add Note", parameters, options);
+        var dialog = await DialogService.ShowAsync<ProjectNoteDialog>("Link Existing Note", parameters, options);
         var result = await dialog.Result;
         if (result is not null && !result.Canceled)
             await LoadAsync();

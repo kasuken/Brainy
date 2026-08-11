@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.5.0] - 2026-08-11
+
+### Added
+
+- **Create note directly from a project** — the Project Detail page now has two separate note actions: **New note** (opens the full note editor pre-linked to the project) and **Link existing** (links an already-existing note). Previously there was a single modal with two tabs.
+- `ProjectId` parameter on `NoteEditorDialog`: when set, a newly created note is automatically linked to that project on save.
+- Note status can now be selected when **creating** a note (the status dropdown was previously only shown in edit mode).
+- Contextual help tip in `NoteEditorDialog`: shows "This note will be linked to the current project" when opened from a project, and the standard inbox tip otherwise.
+
+### Changed
+
+- **Note editing from Project Detail page** now opens inline in `NoteEditorDialog` instead of navigating to a separate page; the page reloads after closing so changes are immediately visible.
+- **Note editing from Search page** now opens `NoteEditorDialog` as a dialog instead of navigating away, keeping the user in context.
+- `ProjectNoteDialog` simplified to a focused "Link Existing Note" dialog; the "New Note" tab was removed in favour of the dedicated `NoteEditorDialog` flow.
+- `/notes/{id:guid}` route now redirects to `/notes?open={id}` (previously redirected to `/notes` without preserving the note id), enabling deep-link support for direct note access from external links, search results, and notifications.
+- `Notes` page auto-opens the editor dialog when the `open` query parameter is present, completing the deep-link flow.
+
+---
+
 ## [1.4.0] - 2026-08-11
 
 ### Added

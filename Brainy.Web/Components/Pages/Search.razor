@@ -7,10 +7,12 @@
 @using Brainy.Application.DTOs.Goals
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
+@using Brainy.Web.Components.Pages.Notes
 
 @inject ISearchService SearchService
 @inject IGoalService GoalService
 @inject NavigationManager Nav
+@inject IDialogService DialogService
 
 <PageTitle>Search – Brainy</PageTitle>
 
@@ -650,7 +652,22 @@
         }
     }
 
-    private void OpenNote(Guid id) => Nav.NavigateTo($"/notes/{id}");
+    private async Task OpenNote(Guid id)
+    {
+        var parameters = new DialogParameters<NoteEditorDialog>
+        {
+            { x => x.NoteId, id }
+        };
+        var options = new DialogOptions
+        {
+            MaxWidth         = MaxWidth.Large,
+            FullWidth        = true,
+            BackdropClick    = false,
+            CloseOnEscapeKey = false,
+            CloseButton      = false,
+        };
+        await DialogService.ShowAsync<NoteEditorDialog>("", parameters, options);
+    }
 
     private static Color CategoryColor(ParaCategory category) => category switch
     {

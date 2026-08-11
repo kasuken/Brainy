@@ -7,95 +7,70 @@
 <MudDialog Class="pnd-dialog">
     <TitleContent>
         <div class="pnd-header">
-            <span class="pnd-header__glyph">📝</span>
-            <span class="pnd-header__title">Add Note to Project</span>
+            <span class="pnd-header__glyph">🔗</span>
+            <span class="pnd-header__title">Link Existing Note</span>
         </div>
     </TitleContent>
     <DialogContent>
-        <MudTabs Elevation="0" Rounded="false" Class="pnd-tabs" PanelClass="pnd-panel">
+        <MudStack Spacing="2" Class="pnd-form">
+            <MudTextField @bind-Value="_search"
+                          Label="Search notes…"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          FullWidth="true"
+                          AutoFocus="true"
+                          Immediate="true" />
 
-            <!-- ── Create new note ──────────────────────────────── -->
-            <MudTabPanel Text="New Note">
-                <MudStack Spacing="3" Class="pnd-form">
-                    <MudTextField @bind-Value="_newTitle"
-                                  Label="Title"
-                                  Required="true"
-                                  Variant="Variant.Outlined"
-                                  AutoFocus="true"
-                                  FullWidth="true" />
-                    <MudTextField @bind-Value="_newContent"
-                                  Label="Content"
-                                  Lines="5"
-                                  Variant="Variant.Outlined"
-                                  FullWidth="true" />
-                    <MudSelect @bind-Value="_newCategory" Label="Type" Variant="Variant.Outlined" FullWidth="true">
-                        <MudSelectItem Value="ParaCategory.Project">📌 Project Note</MudSelectItem>
-                        <MudSelectItem Value="ParaCategory.Resource">📚 Resource Note</MudSelectItem>
-                    </MudSelect>
-                </MudStack>
-            </MudTabPanel>
-
-            <!-- ── Link existing note ──────────────────────────── -->
-            <MudTabPanel Text="Link Existing">
-                <MudStack Spacing="2" Class="pnd-form">
-                    <MudTextField @bind-Value="_search"
-                                  Label="Search notes…"
-                                  Variant="Variant.Outlined"
-                                  Adornment="Adornment.Start"
-                                  AdornmentIcon="@Icons.Material.Filled.Search"
-                                  FullWidth="true"
-                                  Immediate="true" />
-
-                    @if (_loadingNotes)
+            @if (_loadingNotes)
+            {
+                <div class="pnd-loading">
+                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+                </div>
+            }
+            else if (!FilteredAvailableNotes.Any())
+            {
+                <div class="pnd-empty">
+                    <span>No notes available to link.</span>
+                </div>
+            }
+            else
+            {
+                <div class="pnd-note-list">
+                    @foreach (var note in FilteredAvailableNotes)
                     {
-                        <div class="pnd-loading">
-                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
-                        </div>
-                    }
-                    else if (!FilteredAvailableNotes.Any())
-                    {
-                        <div class="pnd-empty">
-                            <span>No notes available to link.</span>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="pnd-note-list">
-                            @foreach (var note in FilteredAvailableNotes)
+                        <div class="pnd-note-item @(_selectedNoteId == note.Id ? "pnd-note-item--selected" : "")"
+                             @onclick="() => SelectNote(note.Id)">
+                            <div class="pnd-note-item__info">
+                                <span class="pnd-note-item__title">@note.Title</span>
+                                @if (!string.IsNullOrWhiteSpace(note.Content))
+                                {
+                                    <span class="pnd-note-item__preview">
+                                        @(note.Content.Length > 80 ? note.Content[..80] + "…" : note.Content)
+                                    </span>
+                                }
+                            </div>
+                            <div class="pnd-note-item__meta">
+                                <span class="pnd-cat pnd-cat--@note.ParaCategory.ToString().ToLower()">
+                                    @note.ParaCategory
+                                </span>
+                                <span class="pnd-note-item__date">@note.UpdatedAtUtc.ToString("MMM d")</span>
+                            </div>
+                            @if (_selectedNoteId == note.Id)
                             {
-                                <div class="pnd-note-item @(_selectedNoteId == note.Id ? "pnd-note-item--selected" : "")"
-                                     @onclick="() => SelectNote(note.Id)">
-                                    <div class="pnd-note-item__info">
-                                        <span class="pnd-note-item__title">@note.Title</span>
-                                        @if (!string.IsNullOrWhiteSpace(note.Content))
-                                        {
-                                            <span class="pnd-note-item__preview">
-                                                @(note.Content.Length > 80 ? note.Content[..80] + "…" : note.Content)
-                                            </span>
-                                        }
-                                    </div>
-                                    <div class="pnd-note-item__meta">
-                                        <span class="pnd-cat pnd-cat--@note.ParaCategory.ToString().ToLower()">
-                                            @note.ParaCategory
-                                        </span>
-                                        <span class="pnd-note-item__date">@note.UpdatedAtUtc.ToString("MMM d")</span>
-                                    </div>
-                                    @if (_selectedNoteId == note.Id)
-                                    {
-                                        <span class="pnd-check">✓</span>
-                                    }
-                                </div>
+                                <span class="pnd-check">✓</span>
                             }
                         </div>
                     }
-                </MudStack>
-            </MudTabPanel>
-        </MudTabs>
+                </div>
+            }
+        </MudStack>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_saving">
-            @(_saving ? "Saving…" : "Add to Project")
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync"
+                   Disabled="@(_saving || _selectedNoteId is null)">
+            @(_saving ? "Linking…" : "Link to Project")
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -115,13 +90,6 @@
     color: var(--ink);
 }
 
-.pnd-tabs .mud-tab {
-    font-family: var(--font-body);
-    font-size: .82rem;
-    font-weight: 600;
-    text-transform: none;
-}
-.pnd-panel { padding: 1rem 0 .25rem; }
 .pnd-form { padding: .1rem 0; }
 
 .pnd-loading, .pnd-empty {
@@ -212,12 +180,6 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid ProjectId { get; set; }
 
-    // New note fields
-    private string _newTitle = string.Empty;
-    private string _newContent = string.Empty;
-    private ParaCategory _newCategory = ParaCategory.Project;
-
-    // Link existing fields
     private IReadOnlyList<NoteDto> _availableNotes = [];
     private Guid? _selectedNoteId;
     private string _search = string.Empty;
@@ -243,45 +205,23 @@
 
     private async Task SubmitAsync()
     {
-        // Determine which tab is "active" by checking state
-        if (_selectedNoteId.HasValue)
+        if (!_selectedNoteId.HasValue)
         {
-            // Link existing
-            _saving = true;
-            try
-            {
-                await NoteService.LinkToProjectAsync(_selectedNoteId.Value, ProjectId);
-                MudDialog.Close(DialogResult.Ok(true));
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add(ex.Message, Severity.Error);
-            }
-            finally { _saving = false; }
+            Snackbar.Add("Please select a note to link.", Severity.Warning);
+            return;
         }
-        else if (!string.IsNullOrWhiteSpace(_newTitle))
+
+        _saving = true;
+        try
         {
-            // Create new
-            _saving = true;
-            try
-            {
-                await NoteService.CreateAsync(new CreateNoteDto(
-                    _newTitle.Trim(),
-                    _newContent.Trim(),
-                    _newCategory,
-                    ProjectId));
-                MudDialog.Close(DialogResult.Ok(true));
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add(ex.Message, Severity.Error);
-            }
-            finally { _saving = false; }
+            await NoteService.LinkToProjectAsync(_selectedNoteId.Value, ProjectId);
+            MudDialog.Close(DialogResult.Ok(true));
         }
-        else
+        catch (Exception ex)
         {
-            Snackbar.Add("Please create a new note or select an existing one to link.", Severity.Warning);
+            Snackbar.Add(ex.Message, Severity.Error);
         }
+        finally { _saving = false; }
     }
 
     private void Cancel() => MudDialog.Cancel();

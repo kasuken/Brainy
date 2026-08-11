@@ -1,5 +1,6 @@
-@* Note editing is now handled via a MudBlazor dialog opened from /notes.
-   This route exists only for backwards compatibility and redirects gracefully. *@
+@* Note editing is handled via a MudBlazor dialog opened from /notes.
+   This route exists for deep links (e.g. search results) and forwards
+   the note id so the editor dialog opens automatically. *@
 @page "/notes/{id:guid}"
 @rendermode InteractiveServer
 @inject NavigationManager Nav
@@ -8,5 +9,5 @@
     [Parameter] public Guid Id { get; set; }
 
     protected override void OnInitialized() =>
-        Nav.NavigateTo("/notes", replace: true);
+        Nav.NavigateTo($"/notes?open={Id}", replace: true);
 }
