@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.0] - 2026-08-12
+
+### Added
+
+- **Pulse metrics grouped by domain area** — the flat metric tile grid on the Pulse page is replaced with labelled groups (Notes, Tasks, Projects, Outputs, Ideas, Goals). Each group shows a header with an icon, title, and a pill badge with the group total, followed by its own metric tile grid. New `MetricGroup` and `MetricTile` record types drive the data model.
+
+### Changed
+
+- **Task widget action button order standardised** — in `OverdueWidget`, `DueTodayWidget`, `DueThisWeekWidget`, and `HighPriorityProjectWorkWidget` the "Set In Progress" button now appears after "Edit task" and before "Mark complete", giving a consistent Edit → Set In Progress → Complete order across all Today widgets.
+
+---
+
 ## [2.0.0] - 2026-08-12
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "name": "brainy",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A SaaS second-brain app built on .NET 10, Blazor, MudBlazor, and SQL Server.  \r Inspired by Tiago Forte's PARA method and CODE workflow.",
   "main": "index.js",
   "scripts": {
