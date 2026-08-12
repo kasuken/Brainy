@@ -1,5 +1,24 @@
 # Changelog
 
+## [3.1.0] - 2026-08-12
+
+### Added
+
+- **Runtime theme switching** — users can now switch between two themes from a palette icon in the app bar:
+  - **Brainy Theme** — the existing warm editorial design (clay accent `#c0561d`, Fraunces serifs for headings, Hanken Grotesk for body text, `12px` border radius).
+  - **Minimal Theme** — a clean, neutral design (black/white palette, Inter font throughout, `4px` border radius) inspired by distraction-free writing environments.
+- **`ThemeService`** — new scoped service (`Brainy.Web.Themes.ThemeService`) that holds the active theme state and fires an `OnThemeChanged` event consumed by `MainLayout`.
+- **`AppThemes`** — new static class exposing `BrainyTheme` and `MinimalTheme` as `MudTheme` instances; the inline theme definition previously embedded in `MainLayout` is now centralised here.
+- **`data-theme="minimal"` CSS attribute** — a small inline JS helper (`window.brainyTheme.setTheme`) toggles the attribute on `<html>`, driving a `:root[data-theme="minimal"]` block in `brainy-design.css` that overrides all CSS custom properties for the Minimal palette.
+- **Inter font** — the Google Fonts stylesheet in `App.razor` now includes the `Inter` family required by the Minimal theme.
+
+### Changed
+
+- `MainLayout` refactored to use `ThemeService` and `AppThemes` instead of the inline `_theme` field; implements `IDisposable` to unsubscribe from theme-change events.
+- `app.css` body font-family and background/colour now use `var(--font-body)`, `var(--paper)`, and `var(--ink)` tokens so both themes apply correctly without hard-coded values.
+
+---
+
 ## [3.0.0] - 2026-08-12
 
 ### Changed
