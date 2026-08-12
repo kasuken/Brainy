@@ -274,6 +274,30 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         return ToDto(task);
     }
 
+    public async Task<TaskItemDto> SetInProgressAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var task = await context.Tasks
+            .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Task '{id}' was not found.");
+
+        if (task.Status != TaskItemStatus.InProgress)
+        {
+            task.Status        = TaskItemStatus.InProgress;
+            task.CompletedDate = null;
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            if (task.ParentTaskId.HasValue)
+            {
+                await SyncParentProgressAsync(task.ParentTaskId.Value, userId, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return ToDto(task);
+    }
+
     public async Task<TaskItemDto> ReopenAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);

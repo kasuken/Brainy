@@ -16,12 +16,15 @@
     @if (!_collapsed)
     {
         <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
-            @* In Focus *@
+            @* In Progress *@
+            @{
+                var inProgressCount = Aggregate?.InProgress?.Count ?? 0;
+            }
             <div style="flex:1; min-width:100px; background:var(--paper-raised); border:1px solid var(--line); border-radius:10px; padding:0.85rem 1rem; box-shadow:var(--shadow-sm); text-align:center;">
                 <div style="font-family:var(--font-display); font-size:2rem; font-weight:700; line-height:1; color:var(--espresso); margin-bottom:0.2rem;">
-                    @(Aggregate?.CurrentTask is not null ? 1 : 0)
+                    @inProgressCount
                 </div>
-                <div style="font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint);">In Focus</div>
+                <div style="font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint);">In Progress</div>
             </div>
 
             @* Overdue *@

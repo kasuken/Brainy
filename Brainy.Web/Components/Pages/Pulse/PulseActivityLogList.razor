@@ -1,0 +1,238 @@
+@using Brainy.Application.DTOs.Pulse
+@using Brainy.Domain.Enums
+
+@* ─────────────────────────────────────────────────────────────────────────────
+   PulseActivityLogList — chronological, day-grouped activity log for Pulse.
+   Renders most-recent-first; each entry links to its underlying item when a
+   Link is available.
+───────────────────────────────────────────────────────────────────────────── *@
+
+@if (_groups.Count == 0)
+{
+    <div class="pulse-log-empty">
+        <MudIcon Icon="@Icons.Material.Outlined.HourglassEmpty" Class="pulse-log-empty__icon" />
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">No activity recorded for this period.</MudText>
+    </div>
+}
+else
+{
+    @foreach (var group in _groups)
+    {
+        <div class="pulse-log-day">
+            <div class="pulse-log-day__header">
+                <span class="pulse-log-day__label">@group.Label</span>
+                <span class="pulse-log-day__count">@group.Entries.Count activit@(group.Entries.Count == 1 ? "y" : "ies")</span>
+            </div>
+
+            <div class="pulse-log-day__items">
+                @foreach (var entry in group.Entries)
+                {
+                    @if (entry.Link is not null)
+                    {
+                        <a class="pulse-log-entry pulse-log-entry--link" href="@entry.Link">
+                            @RenderEntryContent(entry)
+                        </a>
+                    }
+                    else
+                    {
+                        <div class="pulse-log-entry">
+                            @RenderEntryContent(entry)
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public IReadOnlyList<PulseActivityLogEntryDto> Entries { get; set; } = [];
+
+    private sealed record DayGroup(string Label, IReadOnlyList<PulseActivityLogEntryDto> Entries);
+
+    private IReadOnlyList<DayGroup> _groups = [];
+
+    protected override void OnParametersSet() => RebuildGroups();
+
+    private void RebuildGroups()
+    {
+        var today = DateTime.Now.Date;
+
+        _groups = Entries
+            .OrderByDescending(e => e.OccurredAtUtc)
+            .GroupBy(e => e.OccurredAtUtc.ToLocalTime().Date)
+            .OrderByDescending(g => g.Key)
+            .Select(g => new DayGroup(FormatDayLabel(g.Key, today), g.ToList()))
+            .ToList();
+    }
+
+    private static string FormatDayLabel(DateTime date, DateTime today)
+    {
+        if (date == today) return "Today";
+        if (date == today.AddDays(-1)) return "Yesterday";
+        return date.ToString("dddd, MMMM d, yyyy");
+    }
+
+    private RenderFragment RenderEntryContent(PulseActivityLogEntryDto entry) => builder =>
+    {
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", "pulse-log-entry__icon");
+        builder.AddContent(2, EntryIcon(entry.ActivityType));
+        builder.CloseElement();
+
+        builder.OpenElement(3, "div");
+        builder.AddAttribute(4, "class", "pulse-log-entry__body");
+
+        builder.OpenElement(5, "div");
+        builder.AddAttribute(6, "class", "pulse-log-entry__title");
+        builder.AddContent(7, entry.Title);
+        builder.CloseElement();
+
+        if (!string.IsNullOrWhiteSpace(entry.Context))
+        {
+            builder.OpenElement(8, "div");
+            builder.AddAttribute(9, "class", "pulse-log-entry__context");
+            builder.AddContent(10, entry.Context);
+            builder.CloseElement();
+        }
+
+        builder.CloseElement();
+
+        builder.OpenElement(11, "span");
+        builder.AddAttribute(12, "class", "pulse-log-entry__time");
+        builder.AddContent(13, entry.OccurredAtUtc.ToLocalTime().ToString("h:mm tt"));
+        builder.CloseElement();
+    };
+
+    private static string EntryIcon(PulseActivityType type) => type switch
+    {
+        PulseActivityType.NoteCaptured => "📝",
+        PulseActivityType.NoteProcessed => "📥",
+        PulseActivityType.NoteArchived => "📁",
+        PulseActivityType.HighlightAdded => "🖍️",
+        PulseActivityType.SummaryCreated => "✨",
+        PulseActivityType.TaskCreated => "☑️",
+        PulseActivityType.TaskCompleted => "✅",
+        PulseActivityType.TaskArchived => "📦",
+        PulseActivityType.ProjectCreated => "🌱",
+        PulseActivityType.ProjectCompleted => "🏁",
+        PulseActivityType.ProjectArchived => "📦",
+        PulseActivityType.OutputCreated => "🧩",
+        PulseActivityType.OutputPublished => "🚀",
+        PulseActivityType.IdeaCaptured => "💡",
+        PulseActivityType.IdeaCommitted => "🔥",
+        PulseActivityType.GoalAchieved => "🎯",
+        _ => "•",
+    };
+}
+
+<style>
+    .pulse-log-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .5rem;
+        min-height: 140px;
+        border-radius: 16px;
+        border: 1px dashed var(--line);
+        color: var(--ink-faint);
+        background: rgba(255,255,255,.28);
+    }
+
+    .pulse-log-empty__icon {
+        font-size: 2.2rem !important;
+        width: 2.2rem !important;
+        height: 2.2rem !important;
+        opacity: .55;
+    }
+
+    .pulse-log-day + .pulse-log-day {
+        margin-top: 1.4rem;
+    }
+
+    .pulse-log-day__header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: .75rem;
+        margin-bottom: .6rem;
+        padding-bottom: .35rem;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .pulse-log-day__label {
+        font-family: var(--font-display);
+        font-size: .95rem;
+        font-weight: 600;
+        color: var(--ink);
+    }
+
+    .pulse-log-day__count {
+        font-size: .72rem;
+        color: var(--ink-faint);
+    }
+
+    .pulse-log-day__items {
+        display: flex;
+        flex-direction: column;
+        gap: .5rem;
+    }
+
+    .pulse-log-entry {
+        display: flex;
+        align-items: flex-start;
+        gap: .75rem;
+        padding: .65rem .9rem;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--paper-raised);
+        text-decoration: none;
+        color: inherit;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+    }
+
+    .pulse-log-entry--link {
+        cursor: pointer;
+    }
+
+    .pulse-log-entry--link:hover {
+        border-color: var(--clay);
+        box-shadow: 0 2px 10px rgba(192,86,29,0.12);
+        transform: translateY(-1px);
+    }
+
+    .pulse-log-entry__icon {
+        font-size: 1.05rem;
+        line-height: 1;
+        margin-top: .1rem;
+        flex-shrink: 0;
+    }
+
+    .pulse-log-entry__body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .pulse-log-entry__title {
+        font-size: .9rem;
+        font-weight: 600;
+        color: var(--ink);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .pulse-log-entry__context {
+        font-size: .76rem;
+        color: var(--ink-soft);
+        margin-top: .1rem;
+    }
+
+    .pulse-log-entry__time {
+        font-size: .74rem;
+        color: var(--ink-faint);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+</style>

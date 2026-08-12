@@ -443,6 +443,7 @@
 
                     <OverdueWidget Tasks="_aggregate?.Overdue ?? []"
                                    OnComplete="HandleCompleted"
+                                   OnSetInProgress="HandleSetInProgress"
                                    OnEdit="OpenEditTaskDialogAsync" />
 
                     <GoalDeadlineWidget OverdueGoals="_overdueGoals"
@@ -450,17 +451,21 @@
 
                     <DueTodayWidget Tasks="_aggregate?.DueToday ?? []"
                                     OnComplete="HandleCompleted"
+                                    OnSetInProgress="HandleSetInProgress"
                                     OnEdit="OpenEditTaskDialogAsync" />
 
                     <HighPriorityProjectWorkWidget Tasks="_aggregate?.HighPriorityWork ?? []"
                                                    OnComplete="HandleCompleted"
+                                                   OnSetInProgress="HandleSetInProgress"
                                                    OnEdit="OpenEditTaskDialogAsync" />
 
                     <DueThisWeekWidget Tasks="_aggregate?.DueThisWeek ?? []"
                                        OnComplete="HandleCompleted"
+                                       OnSetInProgress="HandleSetInProgress"
                                        OnEdit="OpenEditTaskDialogAsync" />
 
                     <NextTasksWidget Tasks="_aggregate?.NextTasks ?? []"
+                                     OnSetInProgress="HandleSetInProgress"
                                      OnEdit="OpenEditTaskDialogAsync" />
 
                     @* Empty state — only shown when there is truly nothing to act on *@
@@ -601,6 +606,20 @@
         catch
         {
             Snackbar.Add("Could not complete task.", Severity.Error);
+        }
+    }
+
+    private async Task HandleSetInProgress(Guid taskId)
+    {
+        try
+        {
+            await TaskService.SetInProgressAsync(taskId);
+            Snackbar.Add("Task moved to In Progress.", Severity.Info);
+            await LoadAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not update task.", Severity.Error);
         }
     }
 

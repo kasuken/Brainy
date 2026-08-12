@@ -45,6 +45,11 @@
                             </div>
                         }
                     </div>
+                    <MudTooltip Text="Set In Progress">
+                        <MudIconButton Icon="@Icons.Material.Outlined.PlayArrow"
+                                       Size="Size.Small" Color="Color.Info"
+                                       OnClick="() => OnSetInProgress.InvokeAsync(t.Id)" />
+                    </MudTooltip>
                     <MudTooltip Text="Edit task">
                         <MudIconButton Icon="@Icons.Material.Outlined.Edit"
                                        Size="Size.Small" Color="Color.Default"
@@ -67,6 +72,9 @@
 
     /// <summary>Raised with the task ID when the user marks a task complete.</summary>
     [Parameter] public EventCallback<Guid> OnComplete { get; set; }
+
+    /// <summary>Raised with the task ID when the user sets a task as In Progress.</summary>
+    [Parameter] public EventCallback<Guid> OnSetInProgress { get; set; }
 
     /// <summary>Raised with the selected task when the user wants to edit it.</summary>
     [Parameter] public EventCallback<TodayTaskItemDto> OnEdit { get; set; }

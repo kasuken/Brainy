@@ -25,6 +25,11 @@ public interface ITaskService
     Task<TaskItemDto> CompleteAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Marks a task as <see cref="Domain.Enums.TaskItemStatus.InProgress"/>.
+    /// </summary>
+    Task<TaskItemDto> SetInProgressAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Reopens a completed task: sets status back to <see cref="Domain.Enums.TaskItemStatus.Todo"/>
     /// and clears <c>CompletedDate</c>.
     /// </summary>

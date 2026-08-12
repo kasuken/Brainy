@@ -1,0 +1,439 @@
+@page "/pulse"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@using Brainy.Application.DTOs.Pulse
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+
+@inject IPulseService PulseService
+
+<PageTitle>Pulse – Brainy</PageTitle>
+
+<div class="pulse-page">
+
+    @* ── Hero + period selector ── *@
+    <div class="pulse-hero">
+        <div class="pulse-hero__title-row">
+            <MudText Typo="Typo.h4" Class="pulse-hero__heading mb-1">Pulse</MudText>
+            <PageHelpButton Guide="HelpGuide" />
+        </div>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary mb-5">
+            A snapshot of what you captured, processed, and completed — pick a period to see your activity.
+        </MudText>
+
+        <div class="pulse-period-bar">
+            @foreach (var option in PeriodOptions)
+            {
+                <button type="button"
+                        class="pulse-period-chip @(option.Period == _period ? "pulse-period-chip--active" : "")"
+                        @onclick="() => SelectPeriodAsync(option.Period)">
+                    @option.Label
+                </button>
+            }
+        </div>
+
+        @if (_period == PulsePeriod.Custom)
+        {
+            <div class="pulse-custom-range">
+                <MudDatePicker Label="From"
+                               Date="_customStart"
+                               DateChanged="OnCustomStartChanged"
+                               Clearable="true"
+                               Editable="false"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense" />
+
+                <MudDatePicker Label="To"
+                               Date="_customEnd"
+                               DateChanged="OnCustomEndChanged"
+                               Clearable="true"
+                               Editable="false"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense" />
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@(_customStart is null || _customEnd is null || _loading)"
+                           OnClick="ApplyCustomRangeAsync">
+                    Apply
+                </MudButton>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_customRangeError))
+            {
+                <MudText Typo="Typo.caption" Color="Color.Error" Class="mt-2">@_customRangeError</MudText>
+            }
+        }
+    </div>
+
+    @* ── Report body ── *@
+    @if (_loading)
+    {
+        <div class="pulse-state">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Medium" />
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">Gathering your activity…</MudText>
+        </div>
+    }
+    else if (_report is not null)
+    {
+        <div class="pulse-range-meta mb-4">
+            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
+                @_report.PeriodStartUtc.ToLocalTime().ToString("MMM d, yyyy")
+                –
+                @_report.PeriodEndUtc.AddDays(-1).ToLocalTime().ToString("MMM d, yyyy")
+            </MudText>
+        </div>
+
+        @* ── Headline stats ── *@
+        <div class="pulse-headline-row">
+            <div class="pulse-headline-tile">
+                <div class="pulse-headline-tile__value">@_report.Summary.TotalActivities</div>
+                <div class="pulse-headline-tile__label">Total Activities</div>
+            </div>
+            <div class="pulse-headline-tile">
+                <div class="pulse-headline-tile__value">@_report.Summary.ActiveDays</div>
+                <div class="pulse-headline-tile__label">Active Days</div>
+            </div>
+        </div>
+
+        @* ── Metric grid ── *@
+        <div class="pulse-metrics-grid">
+            @foreach (var metric in MetricTiles)
+            {
+                var value = metric.Selector(_report.Summary);
+                <div class="pulse-metric-tile @(value == 0 ? "pulse-metric-tile--empty" : "")">
+                    <MudIcon Icon="@metric.Icon" Class="pulse-metric-tile__icon" />
+                    <div class="pulse-metric-tile__value">@value</div>
+                    <div class="pulse-metric-tile__label">@metric.Label</div>
+                </div>
+            }
+        </div>
+
+        @* ── Activity log ── *@
+        <div class="pulse-log-section">
+            <div class="pulse-log-section__head">
+                <MudText Typo="Typo.h6" Class="pulse-log-section__title">Activity Log</MudText>
+            </div>
+            <PulseActivityLogList Entries="_report.Log" />
+        </div>
+    }
+
+</div>
+
+<style>
+    /* ── Page layout ── */
+    .pulse-page {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    /* ── Hero ── */
+    .pulse-hero {
+        text-align: center;
+        padding: 2.5rem 0 1.5rem;
+    }
+
+    .pulse-hero__heading {
+        font-family: 'Fraunces', serif;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.5px;
+    }
+
+    .pulse-hero__title-row {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    /* ── Period selector ── */
+    .pulse-period-bar {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.4rem;
+    }
+
+    .pulse-period-chip {
+        padding: 0.4rem 0.9rem;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        border: 1.5px solid var(--mud-palette-lines-default);
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-secondary);
+        transition: border-color 0.15s, background 0.15s, color 0.15s, box-shadow 0.15s;
+        white-space: nowrap;
+    }
+
+    .pulse-period-chip:hover {
+        border-color: var(--mud-palette-primary);
+        color: var(--mud-palette-primary);
+        box-shadow: 0 1px 6px rgba(192,86,29,0.12);
+    }
+
+    .pulse-period-chip--active {
+        background: var(--mud-palette-primary);
+        border-color: var(--mud-palette-primary);
+        color: #fff !important;
+        box-shadow: 0 2px 8px rgba(192,86,29,0.22);
+    }
+
+    .pulse-custom-range {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 0.75rem;
+        max-width: 560px;
+        margin: 1.25rem auto 0;
+    }
+
+    /* ── State screens ── */
+    .pulse-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 1rem;
+        text-align: center;
+        gap: 0.5rem;
+    }
+
+    .pulse-range-meta {
+        text-align: center;
+    }
+
+    /* ── Headline stats ── */
+    .pulse-headline-row {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    .pulse-headline-tile {
+        min-width: 160px;
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 1.25rem 1.75rem;
+        box-shadow: var(--shadow-sm);
+        text-align: center;
+    }
+
+    .pulse-headline-tile__value {
+        font-family: var(--font-display);
+        font-size: 2.4rem;
+        font-weight: 700;
+        line-height: 1;
+        color: var(--clay);
+        margin-bottom: 0.3rem;
+    }
+
+    .pulse-headline-tile__label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+    }
+
+    /* ── Metric grid ── */
+    .pulse-metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 2rem;
+    }
+
+    .pulse-metric-tile {
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 0.9rem 1rem;
+        text-align: center;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .pulse-metric-tile--empty {
+        opacity: 0.55;
+    }
+
+    .pulse-metric-tile__icon {
+        color: var(--clay);
+        font-size: 1.3rem !important;
+        margin-bottom: 0.3rem;
+    }
+
+    .pulse-metric-tile__value {
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1;
+        color: var(--ink);
+        margin-bottom: 0.2rem;
+    }
+
+    .pulse-metric-tile__label {
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--ink-faint);
+    }
+
+    /* ── Log section ── */
+    .pulse-log-section__head {
+        margin-bottom: 0.75rem;
+    }
+
+    .pulse-log-section__title {
+        font-family: var(--font-display);
+        color: var(--ink);
+    }
+</style>
+
+@code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "pulse",
+        PageTitle = "Pulse",
+        Tagline = "See what you've been doing across your second brain",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Insights,
+                Lead = "Pulse reports on the activity across your notes, tasks, projects, outputs, ideas, and goals for a chosen period.",
+                Points =
+                [
+                    "Choose a preset period or a custom date range.",
+                    "Scan headline stats and per-category counts at a glance.",
+                    "Review the day-by-day activity log for full detail."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "Reviewing your activity regularly reinforces the CODE habit loop — capture, organize, distill, express.",
+                Points =
+                [
+                    "Seeing what you processed vs. captured highlights backlog building up in your Inbox.",
+                    "Completed tasks, projects, and outputs show real progress, not just storage growth.",
+                    "A regular Pulse review keeps knowledge reuse — not hoarding — front of mind."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Pick a period preset, or select Custom and choose a date range.",
+                    "Review the headline totals and metric tiles for the period.",
+                    "Scroll the activity log to see exactly what happened and when.",
+                    "Click any log entry to jump straight to that item."
+                ]
+            }
+        ]
+    };
+
+    // ── Period preset definitions ───────────────────────────────────────────
+    private static readonly (PulsePeriod Period, string Label)[] PeriodOptions =
+    [
+        (PulsePeriod.LastWeek, "Last Week"),
+        (PulsePeriod.LastTwoWeeks, "Last Two Weeks"),
+        (PulsePeriod.LastThreeWeeks, "Last Three Weeks"),
+        (PulsePeriod.LastMonth, "Last Month"),
+        (PulsePeriod.Custom, "Custom"),
+    ];
+
+    // ── Metric tile definitions, in the same order as PulseSummaryDto ──────
+    private static readonly (string Label, string Icon, Func<PulseSummaryDto, int> Selector)[] MetricTiles =
+    [
+        ("Notes Captured", Icons.Material.Outlined.NoteAdd, s => s.NotesCaptured),
+        ("Notes Processed", Icons.Material.Outlined.Inbox, s => s.NotesProcessed),
+        ("Notes Archived", Icons.Material.Outlined.Archive, s => s.NotesArchived),
+        ("Highlights Added", Icons.Material.Outlined.Highlight, s => s.HighlightsAdded),
+        ("Summaries Created", Icons.Material.Outlined.Summarize, s => s.SummariesCreated),
+        ("Tasks Created", Icons.Material.Outlined.AddTask, s => s.TasksCreated),
+        ("Tasks Completed", Icons.Material.Outlined.TaskAlt, s => s.TasksCompleted),
+        ("Tasks Archived", Icons.Material.Outlined.Inventory2, s => s.TasksArchived),
+        ("Projects Created", Icons.Material.Outlined.AccountTree, s => s.ProjectsCreated),
+        ("Projects Completed", Icons.Material.Outlined.CheckCircle, s => s.ProjectsCompleted),
+        ("Projects Archived", Icons.Material.Outlined.Archive, s => s.ProjectsArchived),
+        ("Outputs Created", Icons.Material.Outlined.Output, s => s.OutputsCreated),
+        ("Outputs Published", Icons.Material.Outlined.Publish, s => s.OutputsPublished),
+        ("Ideas Captured", Icons.Material.Outlined.Lightbulb, s => s.IdeasCaptured),
+        ("Ideas Committed", Icons.Material.Outlined.RocketLaunch, s => s.IdeasCommitted),
+        ("Goals Achieved", Icons.Material.Outlined.Flag, s => s.GoalsAchieved),
+    ];
+
+    private PulsePeriod _period = PulsePeriod.LastWeek;
+    private PulseReportDto? _report;
+    private bool _loading = true;
+    private DateTime? _customStart;
+    private DateTime? _customEnd;
+    private string? _customRangeError;
+
+    protected override async Task OnInitializedAsync() => await LoadReportAsync(_period);
+
+    private async Task SelectPeriodAsync(PulsePeriod period)
+    {
+        _customRangeError = null;
+        _period = period;
+
+        // Custom requires the user to pick dates and press Apply before we query.
+        if (period == PulsePeriod.Custom)
+        {
+            _report = null;
+            return;
+        }
+
+        await LoadReportAsync(period);
+    }
+
+    private void OnCustomStartChanged(DateTime? date) => _customStart = date;
+
+    private void OnCustomEndChanged(DateTime? date) => _customEnd = date;
+
+    private async Task ApplyCustomRangeAsync()
+    {
+        if (_customStart is null || _customEnd is null)
+        {
+            return;
+        }
+
+        if (_customEnd.Value.Date < _customStart.Value.Date)
+        {
+            _customRangeError = "The end date must be on or after the start date.";
+            return;
+        }
+
+        _customRangeError = null;
+        await LoadReportAsync(PulsePeriod.Custom, _customStart, _customEnd);
+    }
+
+    private async Task LoadReportAsync(PulsePeriod period, DateTime? customStart = null, DateTime? customEnd = null)
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            _report = await PulseService.GetReportAsync(period, customStart, customEnd);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

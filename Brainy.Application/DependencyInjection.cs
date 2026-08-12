@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<IOutputService, OutputService>();
         services.AddScoped<IHighlightService, HighlightService>();
         services.AddScoped<ISummaryService, SummaryService>();
+        services.AddScoped<IPulseService, PulseService>();
         return services;
     }
 
