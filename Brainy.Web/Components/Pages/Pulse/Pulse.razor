@@ -97,15 +97,28 @@
             </div>
         </div>
 
-        @* ── Metric grid ── *@
-        <div class="pulse-metrics-grid">
-            @foreach (var metric in MetricTiles)
+        @* ── Metric groups ── *@
+        <div class="pulse-metrics">
+            @foreach (var group in MetricGroups)
             {
-                var value = metric.Selector(_report.Summary);
-                <div class="pulse-metric-tile @(value == 0 ? "pulse-metric-tile--empty" : "")">
-                    <MudIcon Icon="@metric.Icon" Class="pulse-metric-tile__icon" />
-                    <div class="pulse-metric-tile__value">@value</div>
-                    <div class="pulse-metric-tile__label">@metric.Label</div>
+                var groupTotal = group.Tiles.Sum(t => t.Selector(_report.Summary));
+                <div class="pulse-metric-group">
+                    <div class="pulse-metric-group__head">
+                        <MudIcon Icon="@group.Icon" Class="pulse-metric-group__icon" />
+                        <MudText Typo="Typo.subtitle1" Class="pulse-metric-group__title">@group.Title</MudText>
+                        <span class="pulse-metric-group__total @(groupTotal == 0 ? "pulse-metric-group__total--empty" : "")">@groupTotal</span>
+                    </div>
+                    <div class="pulse-metrics-grid">
+                        @foreach (var metric in group.Tiles)
+                        {
+                            var value = metric.Selector(_report.Summary);
+                            <div class="pulse-metric-tile @(value == 0 ? "pulse-metric-tile--empty" : "")">
+                                <MudIcon Icon="@metric.Icon" Class="pulse-metric-tile__icon" />
+                                <div class="pulse-metric-tile__value">@value</div>
+                                <div class="pulse-metric-tile__label">@metric.Label</div>
+                            </div>
+                        }
+                    </div>
                 </div>
             }
         </div>
@@ -244,12 +257,56 @@
         color: var(--ink-faint);
     }
 
+    /* ── Metric groups ── */
+    .pulse-metrics {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .pulse-metric-group__head {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.6rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .pulse-metric-group__icon {
+        color: var(--clay);
+        font-size: 1.15rem !important;
+    }
+
+    .pulse-metric-group__title {
+        font-family: var(--font-display);
+        color: var(--ink);
+        flex: 1;
+    }
+
+    .pulse-metric-group__total {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: var(--clay-deep);
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        min-width: 2rem;
+        padding: 0.1rem 0.6rem;
+        text-align: center;
+    }
+
+    .pulse-metric-group__total--empty {
+        color: var(--ink-faint);
+    }
+
     /* ── Metric grid ── */
     .pulse-metrics-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: 0.75rem;
-        margin-bottom: 2rem;
     }
 
     .pulse-metric-tile {
@@ -356,25 +413,47 @@
         (PulsePeriod.Custom, "Custom"),
     ];
 
-    // ── Metric tile definitions, in the same order as PulseSummaryDto ──────
-    private static readonly (string Label, string Icon, Func<PulseSummaryDto, int> Selector)[] MetricTiles =
+    // ── Metric tiles, grouped by domain area (Notes, Tasks, Projects, …) ────
+    private sealed record MetricTile(string Label, string Icon, Func<PulseSummaryDto, int> Selector);
+
+    private sealed record MetricGroup(string Title, string Icon, MetricTile[] Tiles);
+
+    private static readonly MetricGroup[] MetricGroups =
     [
-        ("Notes Captured", Icons.Material.Outlined.NoteAdd, s => s.NotesCaptured),
-        ("Notes Processed", Icons.Material.Outlined.Inbox, s => s.NotesProcessed),
-        ("Notes Archived", Icons.Material.Outlined.Archive, s => s.NotesArchived),
-        ("Highlights Added", Icons.Material.Outlined.Highlight, s => s.HighlightsAdded),
-        ("Summaries Created", Icons.Material.Outlined.Summarize, s => s.SummariesCreated),
-        ("Tasks Created", Icons.Material.Outlined.AddTask, s => s.TasksCreated),
-        ("Tasks Completed", Icons.Material.Outlined.TaskAlt, s => s.TasksCompleted),
-        ("Tasks Archived", Icons.Material.Outlined.Inventory2, s => s.TasksArchived),
-        ("Projects Created", Icons.Material.Outlined.AccountTree, s => s.ProjectsCreated),
-        ("Projects Completed", Icons.Material.Outlined.CheckCircle, s => s.ProjectsCompleted),
-        ("Projects Archived", Icons.Material.Outlined.Archive, s => s.ProjectsArchived),
-        ("Outputs Created", Icons.Material.Outlined.Output, s => s.OutputsCreated),
-        ("Outputs Published", Icons.Material.Outlined.Publish, s => s.OutputsPublished),
-        ("Ideas Captured", Icons.Material.Outlined.Lightbulb, s => s.IdeasCaptured),
-        ("Ideas Committed", Icons.Material.Outlined.RocketLaunch, s => s.IdeasCommitted),
-        ("Goals Achieved", Icons.Material.Outlined.Flag, s => s.GoalsAchieved),
+        new("Notes", Icons.Material.Outlined.NoteAdd,
+        [
+            new("Notes Captured", Icons.Material.Outlined.NoteAdd, s => s.NotesCaptured),
+            new("Notes Processed", Icons.Material.Outlined.Inbox, s => s.NotesProcessed),
+            new("Notes Archived", Icons.Material.Outlined.Archive, s => s.NotesArchived),
+            new("Highlights Added", Icons.Material.Outlined.Highlight, s => s.HighlightsAdded),
+            new("Summaries Created", Icons.Material.Outlined.Summarize, s => s.SummariesCreated),
+        ]),
+        new("Tasks", Icons.Material.Outlined.TaskAlt,
+        [
+            new("Tasks Created", Icons.Material.Outlined.AddTask, s => s.TasksCreated),
+            new("Tasks Completed", Icons.Material.Outlined.TaskAlt, s => s.TasksCompleted),
+            new("Tasks Archived", Icons.Material.Outlined.Inventory2, s => s.TasksArchived),
+        ]),
+        new("Projects", Icons.Material.Outlined.AccountTree,
+        [
+            new("Projects Created", Icons.Material.Outlined.AccountTree, s => s.ProjectsCreated),
+            new("Projects Completed", Icons.Material.Outlined.CheckCircle, s => s.ProjectsCompleted),
+            new("Projects Archived", Icons.Material.Outlined.Archive, s => s.ProjectsArchived),
+        ]),
+        new("Outputs", Icons.Material.Outlined.Output,
+        [
+            new("Outputs Created", Icons.Material.Outlined.Output, s => s.OutputsCreated),
+            new("Outputs Published", Icons.Material.Outlined.Publish, s => s.OutputsPublished),
+        ]),
+        new("Ideas", Icons.Material.Outlined.Lightbulb,
+        [
+            new("Ideas Captured", Icons.Material.Outlined.Lightbulb, s => s.IdeasCaptured),
+            new("Ideas Committed", Icons.Material.Outlined.RocketLaunch, s => s.IdeasCommitted),
+        ]),
+        new("Goals", Icons.Material.Outlined.Flag,
+        [
+            new("Goals Achieved", Icons.Material.Outlined.Flag, s => s.GoalsAchieved),
+        ]),
     ];
 
     private PulsePeriod _period = PulsePeriod.LastWeek;

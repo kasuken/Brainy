@@ -42,15 +42,15 @@
                             }
                         </div>
                     </div>
-                    <MudTooltip Text="Set In Progress">
-                        <MudIconButton Icon="@Icons.Material.Outlined.PlayArrow"
-                                       Size="Size.Small" Color="Color.Info"
-                                       OnClick="() => OnSetInProgress.InvokeAsync(t.Id)" />
-                    </MudTooltip>
                     <MudTooltip Text="Edit task">
                         <MudIconButton Icon="@Icons.Material.Outlined.Edit"
                                        Size="Size.Small" Color="Color.Default"
                                        OnClick="() => OnEdit.InvokeAsync(t)" />
+                    </MudTooltip>
+                    <MudTooltip Text="Set In Progress">
+                        <MudIconButton Icon="@Icons.Material.Outlined.PlayArrow"
+                                       Size="Size.Small" Color="Color.Info"
+                                       OnClick="() => OnSetInProgress.InvokeAsync(t.Id)" />
                     </MudTooltip>
                     <MudTooltip Text="Mark complete">
                         <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
