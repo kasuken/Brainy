@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.9.0] - 2026-08-12
+
+### Changed
+
+- **Home page layout refactored to full-width top-dashboard** — the sticky sidebar (`<aside>`) is replaced with a `<section class="td-top-dashboard">` that spans the full width above the main content area. The outer `.td-layout` now uses `flex-direction: column` instead of a two-column CSS grid, removing the 1 024 px / 1 440 px grid breakpoints.
+- **Responsive header row** — hero text and navigation chips are placed in a new `.td-header-row` container that stacks vertically on mobile and switches to a row with space-between alignment at ≥ 768 px.
+- **Widgets area uses responsive CSS grid** — `.td-sidebar-widgets` changed from `flex-direction: column` to a 1 → 2 → 4 column CSS grid (breakpoints at 768 px and 1 200 px); the first widget spans two columns on the widest layout.
+- **Priority projects capped at two cards** — the priority-projects list on the Today dashboard now renders at most two `ProjectSummaryCard` items to avoid crowding the top area.
+- **Decorative separators removed** — `border-bottom` on `.td-nav` and `border-top` on `.td-priority-projects` are removed; spacing is handled by gap values alone.
+
+---
+
 ## [1.8.0] - 2026-08-12
 
 ### Fixed
