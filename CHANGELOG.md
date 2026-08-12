@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.2.0] - 2026-08-12
+
+### Added
+
+- **Theme persistence** — the active theme (Brainy or Minimal) is now saved to `localStorage` and restored on next load via a small inline JS helper in `MainLayout`; users no longer lose their theme choice on page refresh.
+
+### Changed
+
+- **Font tokens adopted site-wide** — hard-coded `'Fraunces'` font-family references across `ArchivesPage`, `AreasPage`, `GoalListPage`, `IdeasPage`, `InboxPage`, `Notes`, `ParaDashboard`, `ResourcesPage`, `TasksHubPage`, and related components replaced with `var(--font-display)`, so both themes apply their correct display typeface automatically.
+- **MinimalTheme refined** — `AppThemes.MinimalTheme` updated with a proper Inter-based font stack and a tightened neutral colour palette.
+- **Hardcoded Google Fonts import removed from OutputDetailPage** — the page-level `<link>` for Playfair Display / Lato is removed; fonts are now loaded once from `App.razor` via the theme-aware stylesheet.
+- **Minimal theme CSS consolidated** — the `:root[data-theme="minimal"]` block in `brainy-design.css` is reorganised to cover typography tokens, spacing, and palette overrides in a single coherent section.
+
+---
+
 ## [3.1.0] - 2026-08-12
 
 ### Added
