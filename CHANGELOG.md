@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.4.0] - 2026-08-13
+
+### Added
+
+- **Open Tasks section on Area detail page** — a new `ad-section` lists all open tasks across the area's linked projects, grouped with status (To Do / In Progress / …) and priority badges. When no projects are linked, or all tasks are complete, a contextual empty state is shown.
+- **Overdue task count stat tile** — the summary strip at the top of `AreaDetailPage` now includes an *Overdue* tile whose value turns red (`ad-stat-tile__value--red`) when overdue tasks exist.
+- **Ideas count stat tile** — an *Ideas* tile (clay accent when non-zero) is added to the summary strip alongside the existing Open Tasks and Notes tiles.
+
+### Changed
+
+- **Ideas section promoted to top-level** — the Related Ideas block was previously nested inside the Projects section; it is now a standalone `ad-section` rendered after Open Tasks, making it easier to scan at a glance.
+- `ITaskService` injected into `AreaDetailPage` to load per-area task data.
+
+---
+
 ## [3.3.0] - 2026-08-13
 
 ### Changed
