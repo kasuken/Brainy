@@ -59,7 +59,7 @@
     }
 
     .op-title {
-        font-family: 'Fraunces', serif;
+        font-family: var(--font-display);
         font-size: clamp(2.5rem, 6vw, 4rem);
         font-weight: 600;
         line-height: 1;
@@ -184,7 +184,7 @@
     }
 
     .op-row-title {
-        font-family: 'Fraunces', serif;
+        font-family: var(--font-display);
         font-size: 1.1rem;
         font-weight: 600;
         color: var(--mud-palette-text-primary);
@@ -354,7 +354,7 @@
             {
                 <div style="padding: 5rem 2rem; display: flex; flex-direction: column; align-items: center; text-align: center; border: 1px dashed var(--mud-palette-lines-default); border-radius: 16px; background: var(--mud-palette-table-lines);">
                     <MudIcon Icon="@Icons.Material.Outlined.Output" Style="font-size:4rem; color: var(--mud-palette-text-disabled); margin-bottom: 1.5rem;" />
-                    <h2 style="font-family: 'Fraunces', serif; font-size: 1.75rem; margin: 0 0 0.5rem; color: var(--mud-palette-text-primary);">
+                    <h2 style="font-family: var(--font-display); font-size: 1.75rem; margin: 0 0 0.5rem; color: var(--mud-palette-text-primary);">
                         @(_outputs?.Count == 0 ? "No outputs yet" : "Nothing matches")
                     </h2>
                     <p style="color: var(--mud-palette-text-secondary); margin: 0 0 2rem; max-width: 400px;">

@@ -137,10 +137,10 @@
     .gsb__trigger {
         -webkit-appearance: none;
         appearance: none;
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(255,255,255,0.15);
+        background: var(--appbar-chip-bg);
+        border: 1px solid var(--appbar-line);
         border-radius: 8px;
-        color: #f4ece0;
+        color: var(--appbar-text);
         padding: 0.37rem 0.6rem;
         cursor: pointer;
         align-items: center;
@@ -149,15 +149,15 @@
     }
 
     .gsb__trigger:hover {
-        background: rgba(255,255,255,0.14);
+        background: var(--appbar-chip-bg-hover);
     }
 
     /* ── Inline bar (md+) ── */
     .gsb__bar {
         align-items: center;
         gap: 0.45rem;
-        background: rgba(255,255,255,0.07);
-        border: 1px solid rgba(255,255,255,0.12);
+        background: var(--appbar-chip-bg);
+        border: 1px solid var(--appbar-line);
         border-radius: 10px;
         padding: 0.3rem 0.7rem;
         min-width: 200px;
@@ -167,13 +167,13 @@
     }
 
     .gsb__bar:focus-within {
-        background: rgba(255,255,255,0.11);
-        border-color: rgba(192, 86, 29, 0.65);
-        box-shadow: 0 0 0 3px rgba(192, 86, 29, 0.15);
+        background: var(--appbar-chip-bg-hover);
+        border-color: var(--clay-ring);
+        box-shadow: 0 0 0 3px var(--clay-soft);
     }
 
     .gsb__bar-icon {
-        color: rgba(244,236,224,0.45);
+        color: var(--appbar-text-faint);
         display: flex;
         align-items: center;
         flex-shrink: 0;
@@ -184,16 +184,16 @@
         background: transparent;
         border: none;
         outline: none;
-        color: #f4ece0;
+        color: var(--appbar-text);
         font-size: 0.865rem;
-        font-family: 'Hanken Grotesk', sans-serif;
+        font-family: var(--font-body);
         width: 100%;
         min-width: 0;
-        caret-color: #c0561d;
+        caret-color: var(--clay);
     }
 
     .gsb__input::placeholder {
-        color: rgba(244,236,224,0.38);
+        color: var(--appbar-text-faint);
     }
 
     .gsb__input::-webkit-search-cancel-button,
@@ -204,10 +204,10 @@
     .gsb__kbd {
         flex-shrink: 0;
         font-size: 0.6rem;
-        font-family: 'Hanken Grotesk', sans-serif;
+        font-family: var(--font-body);
         font-weight: 600;
-        color: rgba(244,236,224,0.32);
-        border: 1px solid rgba(244,236,224,0.18);
+        color: var(--appbar-text-faint);
+        border: 1px solid var(--appbar-line);
         border-radius: 4px;
         padding: 0.1rem 0.32rem;
         letter-spacing: 0.02em;
@@ -224,10 +224,10 @@
         transform: translateX(-50%);
         width: 400px;
         max-width: calc(100vw - 2rem);
-        background: #201a14;
-        border: 1px solid rgba(255,255,255,0.1);
+        background: var(--appbar-overlay-bg);
+        border: 1px solid var(--appbar-overlay-line);
         border-radius: 14px;
-        box-shadow: 0 20px 48px rgba(0,0,0,0.6), 0 4px 12px rgba(0,0,0,0.3);
+        box-shadow: var(--shadow-lg);
         z-index: 9999;
         overflow: hidden;
         animation: gsb-in 0.13s ease;
@@ -244,7 +244,7 @@
         align-items: center;
         gap: 0.6rem;
         padding: 0.95rem 1rem;
-        color: rgba(244,236,224,0.5);
+        color: var(--appbar-text-faint);
         font-size: 0.855rem;
     }
 
@@ -268,7 +268,7 @@
     }
 
     .gsb__group + .gsb__group {
-        border-top: 1px solid rgba(255,255,255,0.06);
+        border-top: 1px solid var(--appbar-overlay-line);
     }
 
     .gsb__group-header {
@@ -282,7 +282,7 @@
         font-size: 0.72rem !important;
         width: 0.72rem !important;
         height: 0.72rem !important;
-        color: rgba(192, 86, 29, 0.75);
+        color: var(--clay);
     }
 
     .gsb__group-label {
@@ -290,7 +290,7 @@
         font-weight: 700;
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: rgba(192, 86, 29, 0.75);
+        color: var(--clay);
     }
 
     /* ── Result rows ── */
@@ -307,14 +307,14 @@
 
     .gsb__item:hover,
     .gsb__item--active {
-        background: rgba(192, 86, 29, 0.14);
+        background: var(--clay-soft);
     }
 
     .gsb__item-title {
         display: block;
         font-size: 0.855rem;
         font-weight: 600;
-        color: #f4ece0;
+        color: var(--appbar-text);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -324,7 +324,7 @@
     .gsb__item-snippet {
         display: block;
         font-size: 0.755rem;
-        color: rgba(244,236,224,0.44);
+        color: var(--appbar-text-faint);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -341,10 +341,10 @@
         width: 100%;
         background: transparent;
         border: none;
-        border-top: 1px solid rgba(255,255,255,0.07);
-        color: rgba(192,86,29,0.8);
+        border-top: 1px solid var(--appbar-overlay-line);
+        color: var(--clay);
         font-size: 0.785rem;
-        font-family: 'Hanken Grotesk', sans-serif;
+        font-family: var(--font-body);
         font-weight: 600;
         padding: 0.6rem 1rem;
         cursor: pointer;
@@ -352,8 +352,8 @@
     }
 
     .gsb__more:hover {
-        background: rgba(192,86,29,0.1);
-        color: #c0561d;
+        background: var(--clay-soft);
+        color: var(--clay-deep);
     }
 
     .gsb__more-icon {

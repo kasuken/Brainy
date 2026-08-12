@@ -67,7 +67,7 @@
     }
 
     .td-greeting {
-        font-family: 'Fraunces', serif;
+        font-family: var(--font-display);
         font-size: clamp(2.5rem, 6vw, 4rem);
         font-weight: 600;
         line-height: 1;
@@ -203,7 +203,7 @@
     .td-task-body { flex: 1; min-width: 0; }
 
     .td-task-title {
-        font-family: 'Fraunces', serif;
+        font-family: var(--font-display);
         font-size: 1.05rem;
         font-weight: 600;
         color: var(--mud-palette-text-primary);
@@ -302,7 +302,7 @@
     }
 
     .th-stat-value {
-        font-family: 'Fraunces', serif;
+        font-family: var(--font-display);
         font-size: 2rem;
         font-weight: 500;
         line-height: 1;
@@ -558,7 +558,7 @@
                                             @if (t.Complexity.HasValue)
                                             {
                                                 <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Text"
-                                                         Style="font-family:'Fraunces',serif;font-weight:600;">
+                                                         Style="font-family: var(--font-display);font-weight:600;">
                                                     @t.Complexity.Value.ToString()
                                                 </MudChip>
                                             }
@@ -687,7 +687,7 @@
                                             @if (t.Complexity.HasValue)
                                             {
                                                 <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Text"
-                                                         Style="font-family:'Fraunces',serif;font-weight:600;">
+                                                         Style="font-family: var(--font-display);font-weight:600;">
                                                     @t.Complexity.Value.ToString()
                                                 </MudChip>
                                             }

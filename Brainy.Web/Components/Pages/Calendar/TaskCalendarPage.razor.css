@@ -52,7 +52,7 @@
 }
 
 .cal-title {
-    font-family: 'Fraunces', serif;
+    font-family: var(--font-display);
     font-size: clamp(2.5rem, 6vw, 4rem);
     font-weight: 600;
     line-height: 1;
@@ -123,7 +123,7 @@
 ::deep .mud-calendar-header {
     background-color: var(--mud-palette-table-lines) !important;
     color: var(--mud-palette-text-primary) !important;
-    font-family: 'Fraunces', serif !important;
+    font-family: var(--font-display) !important;
     font-weight: 600 !important;
     padding: 0.5rem;
 }

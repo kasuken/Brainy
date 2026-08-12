@@ -118,7 +118,29 @@
     {
         if (firstRender)
         {
-            await ApplyThemeToDomAsync();
+            // Restore the persisted theme (the head script has already set the
+            // data-theme attribute, so only the MudTheme needs syncing here).
+            var isMinimal = await GetPersistedThemeAsync();
+            if (isMinimal != ThemeService.IsMinimalTheme)
+            {
+                ThemeService.IsMinimalTheme = isMinimal;
+            }
+            else
+            {
+                await ApplyThemeToDomAsync();
+            }
+        }
+    }
+
+    private async Task<bool> GetPersistedThemeAsync()
+    {
+        try
+        {
+            return await JSRuntime.InvokeAsync<bool>("window.brainyTheme.getTheme");
+        }
+        catch (Exception)
+        {
+            return false;
         }
     }
 
