@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.3.0] - 2026-08-13
+
+### Changed
+
+- **Project names are now clickable links in all Today widgets** — `<span class="td-task-project">` replaced with `<a href="/projects/{id}">` in `CurrentTaskWidget`, `DueTodayWidget`, `OverdueWidget`, `InProgressWidget`, `NextTasksWidget`, and `HighPriorityProjectWorkWidget`, letting users navigate directly to a project from any task row.
+- **DueThisWeekWidget groups by project ID + name** — the `GroupBy` key changed from `ProjectName` (string) to `{ ProjectId, ProjectName }` so tasks from different projects with the same name are no longer merged; group headers are rendered as `<a>` links to the project page.
+- **Project link hover state** — `.td-task-project:hover` adds a subtle background tint and underline for clear affordance without disrupting the ambient typography.
+
+---
+
 ## [3.2.0] - 2026-08-12
 
 ### Added
