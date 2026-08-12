@@ -376,4 +376,5 @@ public class TaskServiceTests
 
         (await db.TaskDependencies.AsNoTracking().CountAsync()).Should().Be(0);
     }
+
 }

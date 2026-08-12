@@ -381,6 +381,12 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Task '{taskId}' was not found.");
 
+        if (task.Status != TaskItemStatus.InProgress)
+        {
+            task.Status = TaskItemStatus.InProgress;
+            task.CompletedDate = null;
+        }
+
         task.IsCurrentTask = true;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
