@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.0.0] - 2026-08-12
+
+### Added
+
+- **New Task shortcut in the header nav** — a primary-styled "New Task" button is now available in the top dashboard and opens the add-task dialog directly, making task creation faster and more visible from the home screen.
+
+### Changed
+
+- **Home dashboard flow redesigned for faster action** — the top dashboard was restructured to present the main daily view above the task list, with a cleaner navigation row and updated responsive layout.
+- **Priority projects moved below the task list** — the projects panel now appears after the execution sections, using a broader responsive card grid for easier scanning.
+- **Quick Actions toolbar removed** — task creation is now handled from the New Task button in the header rather than the previous standalone action area.
+
+---
+
 ## [1.10.0] - 2026-08-12
 
 ### Added

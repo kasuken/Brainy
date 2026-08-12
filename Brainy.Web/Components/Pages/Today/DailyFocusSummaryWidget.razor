@@ -5,63 +5,105 @@
    Shows: In Focus, Overdue, Due Today, Active Projects at a glance.
 ───────────────────────────────────────────────────────────────────────────── *@
 
-<div class="td-widget td-section">
-    <div class="td-section-head" style="margin-bottom:0.75rem;">
-        <span class="td-section-label">Daily snapshot</span>
-        <MudIconButton Icon="@(_collapsed ? Icons.Material.Outlined.ExpandMore : Icons.Material.Outlined.ExpandLess)"
-                       Size="Size.Small" Style="margin-left:auto; color:var(--ink-faint);"
-                       OnClick="() => _collapsed = !_collapsed" />
-    </div>
-
+<div class="td-daily-snapshot">
     @if (!_collapsed)
     {
-        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items: stretch;">
             @* In Progress *@
             @{
                 var inProgressCount = Aggregate?.InProgress?.Count ?? 0;
             }
-            <div style="flex:1; min-width:100px; background:var(--paper-raised); border:1px solid var(--line); border-radius:10px; padding:0.85rem 1rem; box-shadow:var(--shadow-sm); text-align:center;">
-                <div style="font-family:var(--font-display); font-size:2rem; font-weight:700; line-height:1; color:var(--espresso); margin-bottom:0.2rem;">
+            <div class="td-snap-item">
+                <div class="td-snap-val" style="color:var(--espresso);">
                     @inProgressCount
                 </div>
-                <div style="font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint);">In Progress</div>
+                <div class="td-snap-lbl">In Progress</div>
             </div>
 
             @* Overdue *@
             @{
                 var overdueCount = Aggregate?.Overdue.Count ?? 0;
             }
-            <div style="flex:1; min-width:100px; background:var(--paper-raised); border:1px solid @(overdueCount > 0 ? "rgba(185,28,28,0.3)" : "var(--line)"); border-radius:10px; padding:0.85rem 1rem; box-shadow:var(--shadow-sm); text-align:center;">
-                <div style="font-family:var(--font-display); font-size:2rem; font-weight:700; line-height:1; color:@(overdueCount > 0 ? "#b91c1c" : "var(--ink-soft)"); margin-bottom:0.2rem;">
+            <div class="td-snap-item @(overdueCount > 0 ? "td-snap-item--overdue" : "")">
+                <div class="td-snap-val @(overdueCount > 0 ? "td-snap-val--overdue" : "")">
                     @overdueCount
                 </div>
-                <div style="font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint);">Overdue</div>
+                <div class="td-snap-lbl">Overdue</div>
             </div>
 
             @* Due Today *@
             @{
                 var dueTodayCount = Aggregate?.DueToday.Count ?? 0;
             }
-            <div style="flex:1; min-width:100px; background:var(--paper-raised); border:1px solid @(dueTodayCount > 0 ? "rgba(192,86,29,0.3)" : "var(--line)"); border-radius:10px; padding:0.85rem 1rem; box-shadow:var(--shadow-sm); text-align:center;">
-                <div style="font-family:var(--font-display); font-size:2rem; font-weight:700; line-height:1; color:@(dueTodayCount > 0 ? "var(--clay)" : "var(--ink-soft)"); margin-bottom:0.2rem;">
+            <div class="td-snap-item @(dueTodayCount > 0 ? "td-snap-item--today" : "")">
+                <div class="td-snap-val @(dueTodayCount > 0 ? "td-snap-val--today" : "")">
                     @dueTodayCount
                 </div>
-                <div style="font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint);">Due Today</div>
+                <div class="td-snap-lbl">Due Today</div>
             </div>
 
             @* Active Projects *@
             @{
                 var projectCount = Aggregate?.PrioritizedProjects.Count ?? 0;
             }
-            <div style="flex:1; min-width:100px; background:var(--paper-raised); border:1px solid var(--line); border-radius:10px; padding:0.85rem 1rem; box-shadow:var(--shadow-sm); text-align:center;">
-                <div style="font-family:var(--font-display); font-size:2rem; font-weight:700; line-height:1; color:var(--sage); margin-bottom:0.2rem;">
+            <div class="td-snap-item">
+                <div class="td-snap-val" style="color:var(--sage);">
                     @projectCount
                 </div>
-                <div style="font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint);">Active Projects</div>
+                <div class="td-snap-lbl">Active Projects</div>
             </div>
         </div>
     }
 </div>
+
+<style>
+    .td-daily-snapshot {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .td-snap-item {
+        flex: 1;
+        min-width: 80px;
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.5rem 0.75rem;
+        box-shadow: var(--shadow-sm);
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .td-snap-item--overdue {
+        border-color: rgba(185,28,28,0.3);
+    }
+    
+    .td-snap-item--today {
+        border-color: rgba(192,86,29,0.3);
+    }
+
+    .td-snap-val {
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1;
+        margin-bottom: 0.15rem;
+        color: var(--ink-soft);
+    }
+    
+    .td-snap-val--overdue { color: #b91c1c; }
+    .td-snap-val--today   { color: var(--clay); }
+
+    .td-snap-lbl {
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+    }
+</style>
 
 @code {
     /// <summary>Aggregated Today data snapshot; renders zeroes when null.</summary>

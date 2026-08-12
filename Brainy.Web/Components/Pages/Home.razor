@@ -141,19 +141,16 @@
         gap: 1.5rem;
     }
 
+    /* Since we only have CurrentTaskWidget here now, let it span full width and rely on its max-width or layout */
     @@media (min-width: 768px) {
         .td-sidebar-widgets {
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: 1fr;
         }
     }
 
     @@media (min-width: 1200px) {
         .td-sidebar-widgets {
-            grid-template-columns: repeat(2, 1fr);
-        }
-        
-        .td-sidebar-widgets > :first-child {
-            grid-column: span 1;
+            grid-template-columns: 1fr;
         }
     }
 
@@ -375,25 +372,30 @@
                     </div>
                     <p class="td-date">@DateTime.Now.ToString("dddd, MMMM d, yyyy")</p>
                 </div>
-
-                <nav class="td-nav">
-                    <button class="td-nav-chip td-nav-chip-primary" @onclick="OpenAddTaskDialogAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" /> New Task
-                    </button>
-                    <a class="td-nav-chip" href="/inbox">
-                        <MudIcon Icon="@Icons.Material.Outlined.Inbox" Size="Size.Small" /> Inbox
-                    </a>
-                    <a class="td-nav-chip" href="/projects">
-                        <MudIcon Icon="@Icons.Material.Outlined.FolderSpecial" Size="Size.Small" /> Projects
-                    </a>
-                    <a class="td-nav-chip" href="/notes">
-                        <MudIcon Icon="@Icons.Material.Outlined.Notes" Size="Size.Small" /> Notes
-                    </a>
-                    <a class="td-nav-chip" href="/archives">
-                        <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" /> Archives
-                    </a>
-                </nav>
+                
+                @if (!_loading)
+                {
+                    <div class="td-top-snapshot">
+                        @* ── Daily snapshot strip ── *@
+                        <DailyFocusSummaryWidget Aggregate="_aggregate" />
+                    </div>
+                }
             </div>
+
+            <nav class="td-nav">
+                <button class="td-nav-chip td-nav-chip-primary" @onclick="OpenAddTaskDialogAsync">
+                    <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" /> New Task
+                </button>
+                <a class="td-nav-chip" href="/projects">
+                    <MudIcon Icon="@Icons.Material.Outlined.FolderSpecial" Size="Size.Small" /> Projects
+                </a>
+                <a class="td-nav-chip" href="/notes">
+                    <MudIcon Icon="@Icons.Material.Outlined.Notes" Size="Size.Small" /> Notes
+                </a>
+                <a class="td-nav-chip" href="/archives">
+                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" /> Archives
+                </a>
+            </nav>
 
             @if (!_loading)
             {
@@ -401,9 +403,6 @@
                     @* ── Current focus ── *@
                     <CurrentTaskWidget Task="_aggregate?.CurrentTask"
                                        OnChanged="LoadAsync" />
-
-                    @* ── Daily snapshot strip ── *@
-                    <DailyFocusSummaryWidget Aggregate="_aggregate" />
                 </div>
             }
         </section>
