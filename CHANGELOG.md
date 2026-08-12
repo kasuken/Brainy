@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0] - 2026-08-12
+
+### Fixed
+
+- **Setting a task as current now forces In Progress status** — calling `SetCurrentTaskAsync` on a task that is not already *In Progress* now automatically transitions its status to `InProgress` and clears any `CompletedDate`, preventing a completed task from appearing as the active focus item on the Today screen.
+
+---
+
 ## [1.7.0] - 2026-08-11
 
 ### Fixed
