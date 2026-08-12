@@ -35,36 +35,34 @@
     }
 
     .td-layout {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 2.5rem;
-    }
-
-    @@media (min-width: 1024px) {
-        .td-layout {
-            grid-template-columns: 360px 1fr;
-            align-items: start;
-            gap: 4rem;
-        }
-    }
-
-    @@media (min-width: 1440px) {
-        .td-layout {
-            grid-template-columns: 420px 1fr;
-            gap: 5rem;
-        }
-    }
-
-    /* ── Sidebar & Hero ── */
-    .td-sidebar {
-        position: sticky;
-        top: 2rem;
         display: flex;
         flex-direction: column;
+        gap: 3rem;
+    }
+
+    /* ── Top Dashboard Area ── */
+    .td-top-dashboard {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+    }
+
+    .td-header-row {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    @@media (min-width: 768px) {
+        .td-header-row {
+            flex-direction: row;
+            align-items: flex-end;
+            justify-content: space-between;
+        }
     }
 
     .td-hero {
-        margin-bottom: 2rem;
+        margin-bottom: 0;
     }
 
     .td-eyebrow {
@@ -102,9 +100,6 @@
         display: flex;
         gap: 0.5rem;
         flex-wrap: wrap;
-        margin-bottom: 2rem;
-        padding-bottom: 2rem;
-        border-bottom: 1px solid var(--mud-palette-lines-default);
     }
 
     .td-nav-chip {
@@ -130,15 +125,31 @@
     }
 
     .td-sidebar-widgets {
-        display: flex;
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: 1fr;
         gap: 1.5rem;
     }
 
+    @@media (min-width: 768px) {
+        .td-sidebar-widgets {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @@media (min-width: 1200px) {
+        .td-sidebar-widgets {
+            grid-template-columns: repeat(4, 1fr);
+        }
+        
+        .td-sidebar-widgets > :first-child {
+            grid-column: span 2;
+        }
+    }
+
     .td-priority-projects {
-        margin-top: 1rem;
-        padding-top: 2rem;
-        border-top: 1px dashed var(--mud-palette-lines-default);
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
     }
 
     .td-projects-list {
@@ -342,32 +353,33 @@
 <div class="td-page">
     <div class="td-layout">
 
-        @* ── Sidebar: Daily Briefing & Priority Context ── *@
-        <aside class="td-sidebar">
-            <div class="td-hero">
-                <p class="td-eyebrow">Daily briefing</p>
-                <div class="td-hero-title-row">
-                    <h1 class="td-greeting">Today</h1>
-                    <MudSpacer />
-                    <PageHelpButton Guide="HelpGuide" />
+        @* ── Top Dashboard Area ── *@
+        <section class="td-top-dashboard">
+            <div class="td-header-row">
+                <div class="td-hero">
+                    <p class="td-eyebrow">Daily briefing</p>
+                    <div class="td-hero-title-row">
+                        <h1 class="td-greeting">Today</h1>
+                        <PageHelpButton Guide="HelpGuide" />
+                    </div>
+                    <p class="td-date">@DateTime.Now.ToString("dddd, MMMM d, yyyy")</p>
                 </div>
-                <p class="td-date">@DateTime.Now.ToString("dddd, MMMM d, yyyy")</p>
-            </div>
 
-            <nav class="td-nav">
-                <a class="td-nav-chip" href="/inbox">
-                    <MudIcon Icon="@Icons.Material.Outlined.Inbox" Size="Size.Small" /> Inbox
-                </a>
-                <a class="td-nav-chip" href="/projects">
-                    <MudIcon Icon="@Icons.Material.Outlined.FolderSpecial" Size="Size.Small" /> Projects
-                </a>
-                <a class="td-nav-chip" href="/notes">
-                    <MudIcon Icon="@Icons.Material.Outlined.Notes" Size="Size.Small" /> Notes
-                </a>
-                <a class="td-nav-chip" href="/archives">
-                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" /> Archives
-                </a>
-            </nav>
+                <nav class="td-nav">
+                    <a class="td-nav-chip" href="/inbox">
+                        <MudIcon Icon="@Icons.Material.Outlined.Inbox" Size="Size.Small" /> Inbox
+                    </a>
+                    <a class="td-nav-chip" href="/projects">
+                        <MudIcon Icon="@Icons.Material.Outlined.FolderSpecial" Size="Size.Small" /> Projects
+                    </a>
+                    <a class="td-nav-chip" href="/notes">
+                        <MudIcon Icon="@Icons.Material.Outlined.Notes" Size="Size.Small" /> Notes
+                    </a>
+                    <a class="td-nav-chip" href="/archives">
+                        <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" /> Archives
+                    </a>
+                </nav>
+            </div>
 
             @if (!_loading)
             {
@@ -379,30 +391,29 @@
                     @* ── Daily snapshot strip ── *@
                     <DailyFocusSummaryWidget Aggregate="_aggregate" />
 
-                    @* ── Inbox reminder ── *@
-                    <InboxReminderWidget InboxCount="_aggregate?.InboxCount ?? 0"
-                                         WarningThreshold="_aggregate?.InboxWarningThreshold ?? 10"
-                                         ShowWarning="_aggregate?.InboxWarning ?? false" />
+                    @* ── Priority projects & Inbox reminder ── *@
+                    <div class="td-priority-projects">
+                        <InboxReminderWidget InboxCount="_aggregate?.InboxCount ?? 0"
+                                            WarningThreshold="_aggregate?.InboxWarningThreshold ?? 10"
+                                            ShowWarning="_aggregate?.InboxWarning ?? false" />
 
-                    @* ── Priority projects ── *@
-                    @if (_prioritizedProjects.Count > 0)
-                    {
-                        <div class="td-priority-projects">
-                            <div class="td-section-head" style="margin-bottom:0.75rem;">
+                        @if (_prioritizedProjects.Count > 0)
+                        {
+                            <div class="td-section-head" style="margin-bottom:0.25rem;">
                                 <span class="td-section-label" style="color:var(--ink-soft);">Priority Projects</span>
                                 <span class="td-section-count">@_prioritizedProjects.Count project@(_prioritizedProjects.Count == 1 ? "" : "s")</span>
                             </div>
                             <div class="td-projects-list">
-                                @foreach (var p in _prioritizedProjects)
+                                @foreach (var p in _prioritizedProjects.Take(2))
                                 {
                                     <ProjectSummaryCard Project="p" Compact="true" OnNavigate="OpenProject" />
                                 }
                             </div>
-                        </div>
-                    }
+                        }
+                    </div>
                 </div>
             }
-        </aside>
+        </section>
 
         @* ── Main Content: Execution view ── *@
         <main class="td-main">
