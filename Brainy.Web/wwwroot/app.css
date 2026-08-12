@@ -1,5 +1,7 @@
 html, body {
-    font-family: 'Hanken Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: var(--font-body, 'Hanken Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    background-color: var(--paper);
+    color: var(--ink);
     overflow-x: hidden;
 }
 

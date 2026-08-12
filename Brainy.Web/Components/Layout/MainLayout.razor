@@ -1,10 +1,14 @@
 @using Brainy.Application.DTOs.Notes
 @using Brainy.Web.Components.Pages.Inbox
+@using Brainy.Web.Themes
 @inherits LayoutComponentBase
+@implements IDisposable
 
 @inject IDialogService DialogService
+@inject ThemeService ThemeService
+@inject IJSRuntime JSRuntime
 
-<MudThemeProvider Theme="_theme" />
+<MudThemeProvider Theme="_currentTheme" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -20,6 +24,20 @@
         <AuthorizeView>
             <Authorized>
                 <GlobalSearchBar />
+                <MudMenu Icon="@Icons.Material.Filled.Palette" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="mr-2">
+                    <MudMenuItem OnClick="() => SetThemeAsync(false)">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.AutoStories" Size="Size.Small" />
+                            <span>Brainy Theme</span>
+                        </div>
+                    </MudMenuItem>
+                    <MudMenuItem OnClick="() => SetThemeAsync(true)">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.FormatPaint" Size="Size.Small" />
+                            <span>Minimal</span>
+                        </div>
+                    </MudMenuItem>
+                </MudMenu>
                 <div class="brainy-user">
                     <span class="brainy-user__avatar">@GetInitials(context.User.Identity?.Name)</span>
                     <span class="brainy-user__email d-none d-sm-flex">@context.User.Identity?.Name</span>
@@ -88,6 +106,56 @@
 
 @code {
     private bool _drawerOpen = true;
+    private MudTheme _currentTheme = AppThemes.BrainyTheme;
+
+    protected override void OnInitialized()
+    {
+        ThemeService.OnThemeChanged += HandleThemeChanged;
+        UpdateTheme();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await ApplyThemeToDomAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= HandleThemeChanged;
+    }
+
+    private void HandleThemeChanged()
+    {
+        UpdateTheme();
+        InvokeAsync(StateHasChanged);
+        _ = ApplyThemeToDomAsync();
+    }
+
+    private void UpdateTheme()
+    {
+        _currentTheme = ThemeService.IsMinimalTheme ? AppThemes.MinimalTheme : AppThemes.BrainyTheme;
+    }
+
+    private async Task SetThemeAsync(bool isMinimal)
+    {
+        ThemeService.IsMinimalTheme = isMinimal;
+        await ApplyThemeToDomAsync();
+    }
+
+    private async Task ApplyThemeToDomAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("window.brainyTheme.setTheme", ThemeService.IsMinimalTheme);
+        }
+        catch (Exception)
+        {
+            // Ignored if JS is not available (e.g., during pre-rendering)
+        }
+    }
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 
@@ -112,46 +180,4 @@
 
         return char.ToUpperInvariant(name.TrimStart()[0]).ToString();
     }
-
-    private readonly MudTheme _theme = new()
-    {
-        PaletteLight = new PaletteLight
-        {
-            Primary = "#c0561d",
-            PrimaryContrastText = "#fdf8f0",
-            Secondary = "#6f7a5a",
-            Tertiary = "#cd9a3a",
-            Background = "#f3ede1",
-            BackgroundGray = "#ece3d3",
-            Surface = "#fcfaf4",
-            AppbarBackground = "#1d1812",
-            AppbarText = "#f4ece0",
-            DrawerBackground = "#fbf7ef",
-            DrawerText = "#3a342b",
-            DrawerIcon = "#7a7163",
-            TextPrimary = "#211d17",
-            TextSecondary = "#6b6253",
-            ActionDefault = "#6b6253",
-            Divider = "#ded5c4",
-            LinesDefault = "#ded5c4",
-            LinesInputs = "#cabea8",
-        },
-        Typography = new Typography
-        {
-            Default = new DefaultTypography { FontFamily = new[] { "Hanken Grotesk", "sans-serif" } },
-            H1 = new H1Typography { FontFamily = new[] { "Fraunces", "serif" }, FontWeight = "500" },
-            H2 = new H2Typography { FontFamily = new[] { "Fraunces", "serif" }, FontWeight = "500" },
-            H3 = new H3Typography { FontFamily = new[] { "Fraunces", "serif" }, FontWeight = "500" },
-            H4 = new H4Typography { FontFamily = new[] { "Fraunces", "serif" }, FontWeight = "500" },
-            H5 = new H5Typography { FontFamily = new[] { "Fraunces", "serif" }, FontWeight = "600" },
-            H6 = new H6Typography { FontFamily = new[] { "Fraunces", "serif" }, FontWeight = "600" },
-            Subtitle1 = new Subtitle1Typography { FontFamily = new[] { "Hanken Grotesk", "sans-serif" } },
-            Subtitle2 = new Subtitle2Typography { FontFamily = new[] { "Hanken Grotesk", "sans-serif" } },
-            Button = new ButtonTypography { FontFamily = new[] { "Hanken Grotesk", "sans-serif" }, FontWeight = "600", TextTransform = "none" },
-        },
-        LayoutProperties = new LayoutProperties
-        {
-            DefaultBorderRadius = "12px",
-        },
-    };
 }

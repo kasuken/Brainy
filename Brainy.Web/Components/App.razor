@@ -8,7 +8,7 @@
     <ResourcePreloader />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <link href="_content/Heron.MudCalendar/Heron.MudCalendar.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
@@ -29,6 +29,17 @@
     <script src="@Assets["brainyHelp.js"]"></script>
     <script src="@Assets["brainySearch.js"]"></script>
     <script src="@Assets["brainyCapture.js"]"></script>
+    <script>
+        window.brainyTheme = {
+            setTheme: function (isMinimal) {
+                if (isMinimal) {
+                    document.documentElement.setAttribute('data-theme', 'minimal');
+                } else {
+                    document.documentElement.removeAttribute('data-theme');
+                }
+            }
+        };
+    </script>
 </body>
 
 </html>

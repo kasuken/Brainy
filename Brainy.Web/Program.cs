@@ -56,6 +56,8 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 // Application-layer services.
 builder.Services.AddBrainyApplication();
 
+builder.Services.AddScoped<Brainy.Web.Themes.ThemeService>();
+
 // Temporarily disable all AI features while preserving implementation for future re-enable.
 builder.Services.AddDisabledAiAssistant();
 

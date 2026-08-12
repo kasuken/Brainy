@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.0.0] - 2026-08-12
+
+### Changed
+
+- **Daily Focus Summary widget items wider** — `.td-snap-item` minimum width increased from `80px` to `140px` in `DailyFocusSummaryWidget` so the stat tiles no longer compress too tightly on mid-size screens, improving readability of the daily snapshot strip.
+
+---
+
 ## [2.1.0] - 2026-08-12
 
 ### Added
