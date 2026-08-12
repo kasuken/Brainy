@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.10.0] - 2026-08-12
+
+### Added
+
+- **New Task shortcut in the header nav** — a primary-styled "New Task" button (clay accent colour, `.td-nav-chip-primary`) is now the first chip in the navigation row and opens the add-task dialog directly, replacing the separate Quick Actions toolbar.
+
+### Changed
+
+- **Priority projects moved below the task list** — the projects panel is removed from the top-dashboard area and rendered at the bottom of the main execution column after all task sections. All priority projects are now shown (no two-card cap), laid out in a responsive `auto-fill minmax(320px, 1fr)` grid with full `ProjectSummaryCard` (non-compact).
+- **Inbox reminder widget removed from dashboard** — `InboxReminderWidget` and its `.td-priority-projects` wrapper are no longer shown in the top section.
+- **Wide-screen widgets grid narrowed** — at ≥ 1 200 px `.td-sidebar-widgets` now uses `repeat(2, 1fr)` instead of `repeat(4, 1fr)`, and the first child no longer spans extra columns, giving each widget equal width.
+- **Quick Actions toolbar removed** — `TodayQuickActions` and its `.td-quick-actions-wrap` wrapper are removed; task creation is now initiated from the New Task nav chip.
+
+---
+
 ## [1.9.0] - 2026-08-12
 
 ### Changed
