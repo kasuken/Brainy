@@ -35,7 +35,7 @@
                 </div>
 
                 <div class="td-task-meta" style="margin-bottom:0.9rem;">
-                    <span class="td-task-project">@Task.ProjectName</span>
+                    <a class="td-task-project" href="@($"/projects/{Task.ProjectId}")">@Task.ProjectName</a>
                     @if (Task.DueDate.HasValue)
                     {
                         <span class="td-task-due @(Task.DueDate.Value.Date < DateTime.Today ? "td-task-due--overdue" : "")">
@@ -81,7 +81,7 @@
                 <h2 class="td-focus-card-title">@_recommendation.Title</h2>
 
                 <div class="td-task-meta td-focus-card-meta">
-                    <span class="td-task-project">@_recommendation.ProjectName</span>
+                    <a class="td-task-project" href="@($"/projects/{_recommendation.ProjectId}")">@_recommendation.ProjectName</a>
                     @if (_recommendation.DueDate.HasValue)
                     {
                         <span class="td-task-due @(_recommendation.DueDate.Value.Date < DateTime.Today ? "td-task-due--overdue" : "")">

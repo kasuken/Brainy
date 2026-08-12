@@ -22,12 +22,13 @@
         }
         else
         {
-            @foreach (var group in Tasks.GroupBy(t => t.ProjectName))
+            @foreach (var group in Tasks.GroupBy(t => new { t.ProjectId, t.ProjectName }))
             {
                 <div style="margin-bottom:0.85rem;">
-                    <div style="font-size:0.7rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:0.35rem; padding-left:0.1rem;">
-                        @group.Key
-                    </div>
+                    <a href="@($"/projects/{group.Key.ProjectId}")"
+                       style="display:inline-block; font-size:0.7rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:0.35rem; padding-left:0.1rem; text-decoration:none;">
+                        @group.Key.ProjectName
+                    </a>
                     @foreach (var t in group)
                     {
                         <div class="td-task @PriorityClass(t.Priority)">

@@ -28,7 +28,7 @@
                     <div class="td-task-body">
                         <p class="td-task-title">@t.Title</p>
                         <div class="td-task-meta">
-                            <span class="td-task-project">@t.ProjectName</span>
+                            <a class="td-task-project" href="@($"/projects/{t.ProjectId}")">@t.ProjectName</a>
                             <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
                                 @t.Priority.ToString()
                             </MudChip>
