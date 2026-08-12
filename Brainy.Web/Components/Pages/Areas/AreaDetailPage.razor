@@ -5,12 +5,14 @@
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.DTOs.Notes
 @using Brainy.Application.DTOs.Ideas
+@using Brainy.Application.DTOs.Tasks
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @inject IAreaService AreaService
 @inject IProjectService ProjectService
 @inject INoteService NoteService
 @inject IIdeaService IdeaService
+@inject ITaskService TaskService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
@@ -105,10 +107,22 @@ else
             <span class="ad-stat-tile__label">Open Tasks</span>
         </div>
         <div class="ad-stat-tile">
+            <span class="ad-stat-tile__value @(_overdueTaskCount > 0 ? "ad-stat-tile__value--red" : "")">
+                @_overdueTaskCount
+            </span>
+            <span class="ad-stat-tile__label">Overdue</span>
+        </div>
+        <div class="ad-stat-tile">
             <span class="ad-stat-tile__value @(_detail.RecentNoteCount > 0 ? "ad-stat-tile__value--sage" : "")">
                 @_detail.RecentNoteCount
             </span>
             <span class="ad-stat-tile__label">Notes</span>
+        </div>
+        <div class="ad-stat-tile">
+            <span class="ad-stat-tile__value @(_areaIdeas.Count > 0 ? "ad-stat-tile__value--clay" : "")">
+                @_areaIdeas.Count
+            </span>
+            <span class="ad-stat-tile__label">Ideas</span>
         </div>
     </div>
 
@@ -210,51 +224,107 @@ else
                     </div>
                 }
             </div>
+        }
+    </div>
 
-            <!-- ── Related Ideas ────────────────────────────────────────── -->
-            <div class="ad-section">
-                <div class="ad-section-head">
-                    <div class="ad-section-head__left">
-                        <h2 class="ad-section-title">Ideas</h2>
-                        @if (_areaIdeas.Count > 0)
-                        {
-                            <span class="ad-count-badge">@_areaIdeas.Count</span>
-                        }
-                    </div>
-                    <MudButton Variant="Variant.Text" Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.EmojiObjects"
-                               Size="Size.Small"
-                               OnClick='() => Nav.NavigateTo("/ideas")'>
-                        View All Ideas
-                    </MudButton>
-                </div>
-
-                @if (_areaIdeas.Count == 0)
+    <!-- ── Open Tasks ───────────────────────────────────────────── -->
+    <div class="ad-section">
+        <div class="ad-section-head">
+            <div class="ad-section-head__left">
+                <h2 class="ad-section-title">Open Tasks</h2>
+                @if (_areaTasks.Count > 0)
                 {
-                    <div class="ad-empty">
-                        <span class="ad-empty__icon">💡</span>
-                        <p>No ideas linked to this area yet.</p>
+                    <span class="ad-count-badge">@_areaTasks.Count</span>
+                }
+            </div>
+        </div>
+
+        @if (_linkedProjects.Count == 0)
+        {
+            <div class="ad-empty">
+                <span class="ad-empty__icon">✅</span>
+                <p>Assign a project to this area to see its open tasks here.</p>
+            </div>
+        }
+        else if (_areaTasks.Count == 0)
+        {
+            <div class="ad-empty">
+                <span class="ad-empty__icon">✅</span>
+                <p>No open tasks across this area's projects — all caught up!</p>
+            </div>
+        }
+        else
+        {
+            <div class="ad-list">
+                @foreach (var row in _areaTasks)
+                {
+                    <div class="ad-row">
+                        <div class="ad-row__info">
+                            <a class="ad-row__name" href="/projects/@row.ProjectId">@row.Item.Title</a>
+                            <div class="ad-row__badges">
+                                <span class="ad-badge ad-badge--status ad-status--@row.Item.Status.ToString().ToLower()">
+                                    @TaskStatusLabel(row.Item.Status)
+                                </span>
+                                <span class="ad-badge ad-badge--priority ad-priority--@row.Item.Priority.ToString().ToLower()">
+                                    @TaskPriorityLabel(row.Item.Priority)
+                                </span>
+                                <span class="ad-badge ad-badge--project">@row.ProjectName</span>
+                                @if (row.Item.DueDate.HasValue)
+                                {
+                                    <span class="ad-badge ad-badge--due @(IsOverdue(row.Item) ? "ad-badge--overdue" : "")">
+                                        @(IsOverdue(row.Item) ? "Overdue " : "Due ")@row.Item.DueDate.Value.ToString("MMM d")
+                                    </span>
+                                }
+                            </div>
+                        </div>
                     </div>
                 }
-                else
+            </div>
+        }
+    </div>
+
+    <!-- ── Related Ideas ────────────────────────────────────────── -->
+    <div class="ad-section">
+        <div class="ad-section-head">
+            <div class="ad-section-head__left">
+                <h2 class="ad-section-title">Ideas</h2>
+                @if (_areaIdeas.Count > 0)
                 {
-                    <div class="ad-list">
-                        @foreach (var idea in _areaIdeas)
-                        {
-                            <div class="ad-row">
-                                <div class="ad-row__info">
-                                    <a class="ad-row__name" href="/ideas/@idea.Id">@idea.Title</a>
-                                    <div class="ad-row__badges">
-                                        <span class="ad-badge ad-badge--status ad-status--@idea.Status.ToString().ToLower()">
-                                            @idea.Status.ToString()
-                                        </span>
-                                        <span class="ad-badge ad-badge--priority ad-priority--@idea.Priority.ToString().ToLower()">
-                                            @idea.Priority.ToString()
-                                        </span>
-                                    </div>
-                                </div>
+                    <span class="ad-count-badge">@_areaIdeas.Count</span>
+                }
+            </div>
+            <MudButton Variant="Variant.Text" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.EmojiObjects"
+                       Size="Size.Small"
+                       OnClick='() => Nav.NavigateTo("/ideas")'>
+                View All Ideas
+            </MudButton>
+        </div>
+
+        @if (_areaIdeas.Count == 0)
+        {
+            <div class="ad-empty">
+                <span class="ad-empty__icon">💡</span>
+                <p>No ideas linked to this area yet.</p>
+            </div>
+        }
+        else
+        {
+            <div class="ad-list">
+                @foreach (var idea in _areaIdeas)
+                {
+                    <div class="ad-row">
+                        <div class="ad-row__info">
+                            <a class="ad-row__name" href="/ideas/@idea.Id">@idea.Title</a>
+                            <div class="ad-row__badges">
+                                <span class="ad-badge ad-badge--status ad-status--@idea.Status.ToString().ToLower()">
+                                    @idea.Status.ToString()
+                                </span>
+                                <span class="ad-badge ad-badge--priority ad-priority--@idea.Priority.ToString().ToLower()">
+                                    @idea.Priority.ToString()
+                                </span>
                             </div>
-                        }
+                        </div>
                     </div>
                 }
             </div>
@@ -344,6 +414,18 @@ else
                     </div>
                 }
             </div>
+        }
+    </div>
+
+    <!-- ── Metadata footer ─────────────────────────────────────── -->
+    <div class="ad-meta-footer">
+        <span>Created @_detail.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+        <span class="ad-meta-footer__sep">•</span>
+        <span>Updated @_detail.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+        @if (_detail.IsArchived && _detail.ArchivedAtUtc.HasValue)
+        {
+            <span class="ad-meta-footer__sep">•</span>
+            <span>Archived @_detail.ArchivedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy")</span>
         }
     </div>
 }
@@ -635,11 +717,45 @@ else
 .ad-priority--medium   { color: #a07820; background: rgba(160,120,32,.10); }
 .ad-priority--low      { color: var(--sage); background: rgba(111,122,90,.10); }
 
+/* Task status badges (Todo / InProgress / Done reuse the palette above) */
+.ad-status--todo       { background: var(--paper-sunk); color: var(--ink-soft); }
+.ad-status--inprogress { background: rgba(58,123,205,.14); color: #1a5aa0; }
+.ad-status--done       { background: rgba(111,122,90,.14); color: #4a5c38; }
+
+/* Neutral project / due-date badges */
+.ad-badge--project {
+    background: var(--paper-sunk);
+    color: var(--ink-faint);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 600;
+}
+.ad-badge--due {
+    background: var(--paper-sunk);
+    color: var(--ink-faint);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 600;
+}
+.ad-badge--overdue { background: rgba(176,58,24,.12); color: #b03a18; }
+
 /* PARA category badges */
 .ad-para--project  { background: rgba(192,86,29,.10); color: var(--clay-deep); }
 .ad-para--area     { background: rgba(111,122,90,.14); color: #4a5c38; }
 .ad-para--resource { background: rgba(205,154,58,.14); color: #7a5c0e; }
 .ad-para--archive  { background: var(--paper-sunk); color: var(--ink-faint); }
+
+/* Metadata footer */
+.ad-meta-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .2rem 1.5rem;
+    font-size: .78rem;
+    color: var(--ink-faint);
+}
+.ad-meta-footer__sep { color: var(--line-strong); }
 
 /* Empty state */
 .ad-empty {
@@ -702,8 +818,9 @@ else
                 Lead = "Use this detail view to manage one area's standards, active project context, ideas, and supporting notes.",
                 Points =
                 [
-                    "Review its purpose, description, active project count, open task count, and note count.",
+                    "Review its purpose, description, active project count, open/overdue task count, note count, and idea count.",
                     "Assign projects to keep time-bound outcomes connected to the responsibility they support.",
+                    "Scan the Open Tasks list to see what's still outstanding across every project in this area, with overdue work called out.",
                     "Link notes and browse related ideas so area context stays reusable."
                 ]
             },
@@ -746,6 +863,11 @@ else
     private List<NoteDto>            _linkedNotes       = [];
     private List<NoteDto>            _availableNotes    = [];
     private IReadOnlyList<IdeaDto>   _areaIdeas         = [];
+    private List<AreaTaskRow>        _areaTasks         = [];
+    private int                      _overdueTaskCount;
+
+    /// <summary>An open task paired with the name of the project it belongs to, for display in the Area's task list.</summary>
+    private sealed record AreaTaskRow(TaskItemDto Item, string ProjectName, Guid ProjectId);
 
     // Link project picker state
     private bool   _showLinkProjectPicker;
@@ -781,6 +903,25 @@ else
             _availableNotes = [.. allNotes.Where(n => n.AreaId is null)];
 
             _areaIdeas = await IdeaService.GetByAreaAsync(AreaId);
+
+            // Aggregate open (non-Done, non-Archived) top-level tasks across every project
+            // linked to this area. Sequential awaits are required: TaskService shares a scoped
+            // DbContext that does not support concurrent operations.
+            var openTasks = new List<AreaTaskRow>();
+            foreach (var project in _linkedProjects)
+            {
+                var tasks = await TaskService.GetByProjectAsync(project.Id);
+                openTasks.AddRange(tasks
+                    .Where(t => t.Status is not (TaskItemStatus.Done or TaskItemStatus.Archived))
+                    .Select(t => new AreaTaskRow(t, project.Name, project.Id)));
+            }
+
+            _areaTasks = [.. openTasks
+                .OrderByDescending(r => IsOverdue(r.Item))
+                .ThenByDescending(r => r.Item.Priority)
+                .ThenBy(r => r.Item.DueDate ?? DateTime.MaxValue)
+                .ThenBy(r => r.Item.Title)];
+            _overdueTaskCount = _areaTasks.Count(r => IsOverdue(r.Item));
         }
 
         _loading = false;
@@ -924,6 +1065,28 @@ else
         ProjectStatus.Completed  => "Completed",
         ProjectStatus.Archived   => "Archived",
         _                        => s.ToString()
+    };
+
+    private static bool IsOverdue(TaskItemDto t) =>
+        t.DueDate.HasValue && t.DueDate.Value.Date < DateTime.Today && t.Status != TaskItemStatus.Done;
+
+    private static string TaskStatusLabel(TaskItemStatus s) => s switch
+    {
+        TaskItemStatus.Todo       => "To Do",
+        TaskItemStatus.InProgress => "In Progress",
+        TaskItemStatus.Waiting    => "Waiting",
+        TaskItemStatus.Done       => "Done",
+        TaskItemStatus.Archived   => "Archived",
+        _                         => s.ToString()
+    };
+
+    private static string TaskPriorityLabel(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => "Critical",
+        TaskPriority.High     => "High",
+        TaskPriority.Medium   => "Medium",
+        TaskPriority.Low      => "Low",
+        _                     => p.ToString()
     };
 
     private static string PriorityLabel(ProjectPriority p) => p switch
