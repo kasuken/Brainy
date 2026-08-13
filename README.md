@@ -12,6 +12,8 @@
 
 </div>
 
+<img width="1889" height="954" alt="image" src="https://github.com/user-attachments/assets/1d503607-6ed0-4070-8d55-826c8d08c62d" />
+
 ## Overview
 
 Brainy is a SaaS second-brain application built with .NET 10, Blazor, MudBlazor, Entity Framework Core, and SQL Server. It is inspired by Tiago Forte's PARA method and CODE workflow, with an emphasis on actionability rather than passive storage.
