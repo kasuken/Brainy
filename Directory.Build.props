@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <VersionPrefix>4.0.4</VersionPrefix>
+    <VersionPrefix>4.0.5</VersionPrefix>
     <RepositoryUrl>https://github.com/kasuken/Brainy</RepositoryUrl>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <NuGetAudit>true</NuGetAudit>

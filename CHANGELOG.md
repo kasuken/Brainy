@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.0.5] - 2026-08-13
+
+### Changed
+
+- **Tasks Hub header redesigned** — the top-dashboard panel is now a styled card with a clay accent left bar, radial gradient background, rounded corners, and a soft drop shadow for a stronger visual hierarchy.
+- **At-a-glance stat pills in the header** — a new `.td-header-summary` row shows compact metric pills (total, overdue, due today, in-progress counts) inline with the hero text so key numbers are visible without scrolling.
+- **Header layout switches to horizontal on wider viewports** — `.td-header-row` now uses `align-items: flex-end; justify-content: space-between` so the hero text and stat pills sit side-by-side, reducing vertical space consumption.
+- **Hero description line added** — a short subtitle below the page greeting improves orientation for new users and clarifies page intent.
+- **TaskHealthWidget layout tightened** — internal gaps and font sizes adjusted to remain readable within the narrower card bounds.
+
+---
+
 ## [4.0.4] - 2026-08-13
 
 ### Improved
