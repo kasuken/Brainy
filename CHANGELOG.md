@@ -1,10 +1,10 @@
 # Changelog
 
-## [4.0.2] - 2026-08-13
+## [4.0.4] - 2026-08-13
 
-### Fixed
+### Improved
 
-- Fix the TaskHub layout to ensure that every widget is visible and not clipped on smaller screens, improving usability for users with limited viewport sizes.
+- Add a complete Dashboard to the Pulse page, including a full PARA summary, task and project metrics, and a new "Pulse" section with a timeline of recent activity across all content types.
 
 ---
 
