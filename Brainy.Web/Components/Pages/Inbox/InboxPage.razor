@@ -26,7 +26,7 @@
             <div class="inbox-hero">
                 <div class="inbox-hero__text">
                     <div class="inbox-hero__heading-row">
-                        <MudText Typo="Typo.h4" Class="inbox-hero__heading">Inbox</MudText>
+                        <h1 class="inbox-hero__heading">Inbox</h1>
                         @if (!_loading && _notes.Count > 0)
                         {
                             <span class="inbox-hero__badge">@_notes.Count</span>
@@ -144,6 +144,14 @@
                 </div>
             }
 
+            else if (_loadError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                    Inbox could not be loaded. Check your connection and try again.
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadAsync" Class="ml-2">Retry</MudButton>
+                </MudAlert>
+            }
+
             @* ── Empty / Zero-inbox ── *@
             else if (_notes.Count == 0)
             {
@@ -179,7 +187,7 @@
 
                             <div class="inbox-card__header-row">
                                 @* Checkbox *@
-                                <label class="inbox-card__checkbox-wrap" title="Select for bulk processing">
+                                <label class="inbox-card__checkbox-wrap" aria-label="@($"Select {note.Title} for bulk processing")">
                                     <input type="checkbox"
                                            class="inbox-card__checkbox"
                                            checked="@isSelected"
@@ -196,7 +204,7 @@
                                 <div class="inbox-card__meta">
                                     <span class="inbox-card__pill">Unprocessed</span>
                                     <span class="inbox-card__date">
-                                        @note.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                        <UserLocalTime Utc="note.CreatedAtUtc" />
                                     </span>
                                 </div>
                             </div>
@@ -224,14 +232,14 @@
                                 <div class="inbox-card__actions-right">
                                     <MudIconButton Icon="@Icons.Material.Outlined.Edit"
                                                    Size="Size.Small"
-                                                   title="Edit note"
+                                                   aria-label="@($"Edit {note.Title}")"
                                                    Disabled="_busy"
                                                    OnClick="() => EditNoteAsync(note)"
                                                    Class="inbox-card__btn-icon" />
 
                                     <MudIconButton Icon="@Icons.Material.Outlined.Archive"
                                                    Size="Size.Small"
-                                                   title="Archive without processing"
+                                                   aria-label="@($"Archive {note.Title} without processing")"
                                                    Disabled="_busy"
                                                    OnClick="() => QuickArchiveAsync(note)"
                                                    Class="inbox-card__btn-icon" />
@@ -683,6 +691,7 @@
     private IReadOnlyList<NoteDto> _notes = [];
     private InboxMetricsDto? _metrics;
     private bool _loading = true;
+    private string? _loadError;
     private bool _busy;
     private Guid? _busyId;
     private int _totalOnLoad;
@@ -718,13 +727,24 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        _notes   = await NoteService.GetInboxAsync();
-        _metrics = await MetricsService.GetMetricsAsync();
-        if (_totalOnLoad == 0)
-            _totalOnLoad = _notes.Count;
-        // Remove any selections for notes no longer in inbox
-        _selectedIds.IntersectWith(_notes.Select(n => n.Id));
-        _loading = false;
+        _loadError = null;
+        try
+        {
+            _notes = await NoteService.GetInboxAsync();
+            _metrics = await MetricsService.GetMetricsAsync();
+            if (_totalOnLoad == 0)
+                _totalOnLoad = _notes.Count;
+            // Remove any selections for notes no longer in inbox
+            _selectedIds.IntersectWith(_notes.Select(n => n.Id));
+        }
+        catch
+        {
+            _loadError = "Unable to reach the inbox.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void ToggleSelection(Guid id)
@@ -857,7 +877,6 @@
     private static string TruncateContent(string content) =>
         content.Length <= 160 ? content : content[..160] + "…";
 }
-
 
 
 

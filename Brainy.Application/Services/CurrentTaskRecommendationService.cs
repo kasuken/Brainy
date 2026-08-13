@@ -16,7 +16,7 @@ namespace Brainy.Application.Services;
 internal sealed class CurrentTaskRecommendationService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    TimeProvider timeProvider) : ICurrentTaskRecommendationService
+    IUserTimeZoneService userTimeZone) : ICurrentTaskRecommendationService
 {
     private static readonly TaskItemStatus[] _excludedStatuses =
         [TaskItemStatus.Done, TaskItemStatus.Archived];
@@ -24,7 +24,7 @@ internal sealed class CurrentTaskRecommendationService(
     public async Task<TodayTaskItemDto?> GetRecommendationAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today = timeProvider.GetUserToday();
+        var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
         var weekEnd = today.AddDays(7);
 
         // Fetch all eligible candidates in one query; scoring is done in memory

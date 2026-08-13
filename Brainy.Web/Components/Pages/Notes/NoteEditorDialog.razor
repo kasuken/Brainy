@@ -1,6 +1,7 @@
 @implements IAsyncDisposable
 
 @using Brainy.Application.Common
+@using Brainy.Application.DTOs.ActionItems
 @using Brainy.Application.DTOs.Highlights
 @using Brainy.Application.DTOs.Notes
 @using Brainy.Application.DTOs.NoteRelationships
@@ -9,7 +10,7 @@
 @using Brainy.Application.Interfaces.AI
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
-@using Markdig
+@using Brainy.Web.Security
 @using Microsoft.JSInterop
 @using System.Text.Json
 
@@ -22,6 +23,7 @@
 @inject NavigationManager Nav
 @inject IHighlightService HighlightService
 @inject ISummaryService SummaryService
+@inject IActionItemService ActionItemService
 @inject IAiAssistant AiAssistant
 @inject IJSRuntime JS
 
@@ -521,6 +523,103 @@
                                     }
                                 </div>
 
+                                @* ── Actions ── *@
+                                <div class="note-editor__sidebar-section">
+                                    <div class="ned-links__header">
+                                        <h3 class="note-editor__sidebar-heading">Actions</h3>
+                                        @if (_actionsExtracting)
+                                        {
+                                            <MudProgressCircular Indeterminate="true"
+                                                                 Size="Size.Small"
+                                                                 Color="Color.Primary"
+                                                                 Class="ned-links__add-btn" />
+                                        }
+                                        else
+                                        {
+                                            <button type="button"
+                                                    class="ned-links__add-btn"
+                                                    title="@(_isDirty ? "Save note changes before AI extraction" : "Extract actions with AI")"
+                                                    aria-label="Extract actions with AI"
+                                                    disabled="@(_originalNote is null || _isDirty || _actionsLoading)"
+                                                    @onclick="ExtractActionsAsync">✨</button>
+                                        }
+                                        <button type="button"
+                                                class="ned-links__add-btn"
+                                                title="Add action"
+                                                aria-label="Add action"
+                                                disabled="@(_originalNote is null || _actionsLoading)"
+                                                @onclick="() => OpenActionEditorAsync(null)">
+                                            <MudIcon Icon="@Icons.Material.Outlined.AddTask"
+                                                     Class="ned-links__add-icon" />
+                                        </button>
+                                    </div>
+
+                                    @if (_actionsLoading)
+                                    {
+                                        <div class="ned-links__loading">
+                                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+                                        </div>
+                                    }
+                                    else if (_actions.Count == 0)
+                                    {
+                                        <p class="ned-links__empty">No actions distilled yet.</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="ned-links__list" aria-label="Distilled actions">
+                                            @foreach (var action in _actions)
+                                            {
+                                                <div class="ned-links__item">
+                                                    <MudIconButton Icon="@(action.Status == ActionItemStatus.Done
+                                                                            ? Icons.Material.Filled.CheckCircle
+                                                                            : Icons.Material.Outlined.RadioButtonUnchecked)"
+                                                                   Color="@(action.Status == ActionItemStatus.Done ? Color.Success : Color.Default)"
+                                                                   Size="Size.Small"
+                                                                   aria-label="@(action.Status == ActionItemStatus.Done
+                                                                                   ? $"Reopen {action.Title}"
+                                                                                   : $"Mark {action.Title} done")"
+                                                                   OnClick="() => ToggleActionStatusAsync(action)" />
+                                                    <div class="ned-highlights__content">
+                                                        <span class="ned-highlights__text">@action.Title</span>
+                                                        @if (action.IsAiGenerated)
+                                                        {
+                                                            <span class="ned-summaries__ai-badge ned-links__type-badge"
+                                                                  title="AI extracted with @(action.Model ?? "unknown model") · @(action.PromptVersion ?? "unknown prompt")">
+                                                                ✨ AI
+                                                            </span>
+                                                        }
+                                                        @if (action.TaskItemId.HasValue)
+                                                        {
+                                                            <button type="button"
+                                                                    class="ned-links__note-title"
+                                                                    title="Open project @action.ProjectName"
+                                                                    @onclick="() => OpenActionProject(action)">
+                                                                Task in @action.ProjectName
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                    @if (!action.TaskItemId.HasValue)
+                                                    {
+                                                        <MudIconButton Icon="@Icons.Material.Outlined.TaskAlt"
+                                                                       Size="Size.Small"
+                                                                       aria-label="@($"Promote {action.Title} to a task")"
+                                                                       OnClick="() => OpenPromotionAsync(action)" />
+                                                    }
+                                                    <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                                                   Size="Size.Small"
+                                                                   aria-label="@($"Edit {action.Title}")"
+                                                                   OnClick="() => OpenActionEditorAsync(action)" />
+                                                    <MudIconButton Icon="@Icons.Material.Outlined.DeleteOutline"
+                                                                   Size="Size.Small"
+                                                                   Color="Color.Error"
+                                                                   aria-label="@($"Delete {action.Title}")"
+                                                                   OnClick="() => DeleteActionAsync(action)" />
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
                                 @* ── Summary Layers ── *@
                                 <div class="note-editor__sidebar-section">
                                     <div class="ned-links__header">
@@ -619,13 +718,13 @@
                                         <div class="note-editor__meta-row">
                                             <span class="note-editor__meta-label">Created</span>
                                             <span class="note-editor__meta-value">
-                                                @_originalNote.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                                <UserLocalTime Utc="_originalNote?.CreatedAtUtc" />
                                             </span>
                                         </div>
                                         <div class="note-editor__meta-row">
                                             <span class="note-editor__meta-label">Updated</span>
                                             <span class="note-editor__meta-value">
-                                                @_originalNote.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                                <UserLocalTime Utc="_originalNote?.UpdatedAtUtc" />
                                             </span>
                                         </div>
                                     </div>
@@ -720,6 +819,8 @@
     private DotNetObjectReference<NoteEditorDialog>? _dotNetRef;
     private bool _pasteRegistered;
     private readonly List<Guid> _pendingImageIds = [];
+    private NoteDto? _persistedNoteAwaitingImageAssociation;
+    private bool _pendingImagesReferencedByPersistedNote;
     private IReadOnlyList<NoteRelationshipDto> _links = [];
     private bool _linksLoading;
 
@@ -743,15 +844,15 @@
     private bool _showAddSummaryForm;
     private string _newSummaryContent = string.Empty;
 
+    // ── Actions ──
+    private IReadOnlyList<ActionItemDto> _actions = [];
+    private bool _actionsLoading;
+    private bool _actionsExtracting;
+
     // ── Duplicate detection ──
     private bool _dupChecking;
     private bool _dupChecked;
     private List<(Guid Id, string Title)> _duplicates = [];
-
-    // DisableHtml is required: note content is user/web-captured text rendered via
-    // MarkupString, and Markdig passes raw HTML through by default (stored-XSS risk).
-    private static readonly MarkdownPipeline _pipeline =
-        new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
 
     protected override async Task OnInitializedAsync()
     {
@@ -780,6 +881,7 @@
 
             _highlights = await HighlightService.GetByNoteAsync(NoteId.Value);
             _summaries  = await SummaryService.GetByNoteAsync(NoteId.Value);
+            _actions    = await ActionItemService.GetByNoteAsync(NoteId.Value);
         }
         _loading = false;
     }
@@ -955,10 +1057,17 @@
         }
 
         _saving = true;
+        var notePersisted = _persistedNoteAwaitingImageAssociation is not null;
         try
         {
             NoteDto saved;
-            if (NoteId.HasValue)
+            if (_persistedNoteAwaitingImageAssociation is { } persistedNote)
+            {
+                // The note was committed by an earlier attempt but linking its pending
+                // images failed. Retry only the association instead of creating a duplicate.
+                saved = persistedNote;
+            }
+            else if (NoteId.HasValue)
             {
                 saved = await NoteService.UpdateAsync(new UpdateNoteDto(
                     NoteId.Value,
@@ -985,13 +1094,22 @@
                     Status: _model.Status,
                     SourceUrl: string.IsNullOrWhiteSpace(_model.SourceUrl) ? null : _model.SourceUrl,
                     SourceTitle: string.IsNullOrWhiteSpace(_model.SourceTitle) ? null : _model.SourceTitle));
+
+                if (_pendingImageIds.Count > 0)
+                {
+                    _persistedNoteAwaitingImageAssociation = saved;
+                    _pendingImagesReferencedByPersistedNote = true;
+                }
             }
+            notePersisted = true;
 
             // Link any images pasted before the note was first saved.
             if (_pendingImageIds.Count > 0)
             {
                 await NoteImageService.AssociateWithNoteAsync(saved.Id, _pendingImageIds);
                 _pendingImageIds.Clear();
+                _persistedNoteAwaitingImageAssociation = null;
+                _pendingImagesReferencedByPersistedNote = false;
             }
 
             _isDirty = false;
@@ -1008,6 +1126,9 @@
         }
         catch (Exception ex)
         {
+            if (!notePersisted && !NoteId.HasValue)
+                await TryDeletePendingImagesAsync(removeMarkdownReferences: true, notifyOnFailure: true);
+
             Snackbar.Add($"Could not save: {ex.Message}", Severity.Error);
         }
         finally
@@ -1028,6 +1149,7 @@
             if (confirmed != true) return;
         }
 
+        await TryDeletePendingImagesAsync(removeMarkdownReferences: false, notifyOnFailure: true);
         await CleanupJsAsync();
         MudDialog.Cancel();
     }
@@ -1038,7 +1160,7 @@
             return new MarkupString(
                 "<p class='note-editor__preview-empty'>Nothing to preview yet — switch to <strong>Write</strong> to add content.</p>");
 
-        return new MarkupString(Markdown.ToHtml(_model.Content, _pipeline));
+        return new MarkupString(MarkdownHtmlRenderer.Render(_model.Content));
     }
 
     private static string CategoryDotColor(ParaCategory cat) => cat switch
@@ -1054,6 +1176,37 @@
     {
         try { await JS.InvokeVoidAsync("brainyNoteEditor.removeBeforeunloadWarning"); }
         catch { /* ignore: circuit may be tearing down */ }
+    }
+
+    private async Task TryDeletePendingImagesAsync(bool removeMarkdownReferences, bool notifyOnFailure)
+    {
+        if (_pendingImageIds.Count == 0 || _pendingImagesReferencedByPersistedNote)
+            return;
+
+        var pendingIds = _pendingImageIds.ToArray();
+        try
+        {
+            await NoteImageService.DeletePendingAsync(pendingIds);
+            _pendingImageIds.Clear();
+
+            if (removeMarkdownReferences)
+            {
+                var pendingUrls = pendingIds
+                    .Select(id => $"/api/note-images/{id}")
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var retainedLines = _model.Content
+                    .Replace("\r\n", "\n", StringComparison.Ordinal)
+                    .Split('\n')
+                    .Where(line => !pendingUrls.Any(url => line.Contains(url, StringComparison.OrdinalIgnoreCase)));
+                _model.Content = string.Join("\n", retainedLines);
+                Snackbar.Add("Pending images were removed after the failed save. Paste them again before retrying.", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (notifyOnFailure)
+                Snackbar.Add($"Could not clean up pending images: {ex.Message}", Severity.Warning);
+        }
     }
 
     // ── Relationship helpers ──────────────────────────────────────────────────
@@ -1220,7 +1373,9 @@
                 NoteId.Value,
                 _newHighlightText,
                 string.IsNullOrWhiteSpace(_newHighlightAnnotation) ? null : _newHighlightAnnotation,
-                _newHighlightLayer));
+                _newHighlightLayer,
+                FindHighlightOffset(_model.Content, _newHighlightText),
+                FindHighlightEndOffset(_model.Content, _newHighlightText)));
             _highlights = await HighlightService.GetByNoteAsync(NoteId.Value);
             _newHighlightText       = string.Empty;
             _newHighlightAnnotation = string.Empty;
@@ -1236,6 +1391,19 @@
         {
             _highlightsLoading = false;
         }
+    }
+
+    private static int? FindHighlightOffset(string content, string text)
+    {
+        var trimmed = text.Trim();
+        var index = content.IndexOf(trimmed, StringComparison.Ordinal);
+        return index < 0 ? null : index;
+    }
+
+    private static int? FindHighlightEndOffset(string content, string text)
+    {
+        var start = FindHighlightOffset(content, text);
+        return start.HasValue ? start.Value + text.Trim().Length : null;
     }
 
     private async Task DeleteHighlightAsync(HighlightDto highlight)
@@ -1264,6 +1432,140 @@
         3 => "Key",
         _ => $"L{layer}"
     };
+
+    // ── Action helpers ───────────────────────────────────────────────────────
+
+    private async Task OpenActionEditorAsync(ActionItemDto? action)
+    {
+        if (!NoteId.HasValue) return;
+
+        var parameters = new DialogParameters<ActionItemEditorDialog>
+        {
+            { dialog => dialog.NoteId, NoteId.Value },
+            { dialog => dialog.Item, action }
+        };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            BackdropClick = false,
+            CloseOnEscapeKey = true,
+        };
+        var dialog = await DialogService.ShowAsync<ActionItemEditorDialog>(string.Empty, parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            _actions = await ActionItemService.GetByNoteAsync(NoteId.Value);
+            Snackbar.Add(action is null ? "Action added." : "Action updated.", Severity.Success);
+        }
+    }
+
+    private async Task ToggleActionStatusAsync(ActionItemDto action)
+    {
+        _actionsLoading = true;
+        try
+        {
+            var status = action.Status == ActionItemStatus.Done
+                ? ActionItemStatus.Open
+                : ActionItemStatus.Done;
+            await ActionItemService.UpdateAsync(new UpdateActionItemDto(
+                action.Id, action.Title, action.Description, status, action.RowVersion));
+            _actions = await ActionItemService.GetByNoteAsync(action.NoteId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not update action: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _actionsLoading = false;
+        }
+    }
+
+    private async Task DeleteActionAsync(ActionItemDto action)
+    {
+        var detail = action.TaskItemId.HasValue
+            ? "The promoted task will remain in its project."
+            : "This cannot be undone.";
+        var confirmed = await DialogService.ShowMessageBox(
+            "Delete action",
+            $"Delete \"{action.Title}\"? {detail}",
+            yesText: "Delete",
+            cancelText: "Cancel");
+        if (confirmed is not true) return;
+
+        _actionsLoading = true;
+        try
+        {
+            await ActionItemService.DeleteAsync(action.Id);
+            _actions = await ActionItemService.GetByNoteAsync(action.NoteId);
+            Snackbar.Add("Action deleted.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not delete action: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _actionsLoading = false;
+        }
+    }
+
+    private async Task ExtractActionsAsync()
+    {
+        if (!NoteId.HasValue) return;
+        if (_isDirty)
+        {
+            Snackbar.Add("Save note changes before extracting actions.", Severity.Warning);
+            return;
+        }
+
+        _actionsExtracting = true;
+        try
+        {
+            var created = await ActionItemService.ExtractFromNoteAsync(NoteId.Value);
+            _actions = await ActionItemService.GetByNoteAsync(NoteId.Value);
+            Snackbar.Add(
+                created.Count == 0 ? "No new actions were found." : $"Extracted {created.Count} action{(created.Count == 1 ? string.Empty : "s")}.",
+                created.Count == 0 ? Severity.Info : Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not extract actions: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _actionsExtracting = false;
+        }
+    }
+
+    private async Task OpenPromotionAsync(ActionItemDto action)
+    {
+        var parameters = new DialogParameters<PromoteActionItemDialog>
+        {
+            { dialog => dialog.Item, action }
+        };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            BackdropClick = false,
+            CloseOnEscapeKey = true,
+        };
+        var dialog = await DialogService.ShowAsync<PromoteActionItemDialog>(string.Empty, parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false } && NoteId.HasValue)
+        {
+            _actions = await ActionItemService.GetByNoteAsync(NoteId.Value);
+            Snackbar.Add("Action promoted to a project task.", Severity.Success);
+        }
+    }
+
+    private void OpenActionProject(ActionItemDto action)
+    {
+        if (action.ProjectId.HasValue)
+            Nav.NavigateTo($"/projects/{action.ProjectId.Value}");
+    }
 
     // ── Summary helpers ───────────────────────────────────────────────────────
 
@@ -1441,6 +1743,7 @@
         try { await JS.InvokeVoidAsync("brainyNoteEditor.unregisterPasteHandler", "ned-content-area"); }
         catch { /* ignore: circuit may be tearing down */ }
         _dotNetRef?.Dispose();
+        await TryDeletePendingImagesAsync(removeMarkdownReferences: false, notifyOnFailure: false);
         await CleanupJsAsync();
     }
 }

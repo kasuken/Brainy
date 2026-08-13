@@ -3,6 +3,7 @@ using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Domain.Entities;
+using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Brainy.Application.Services;
@@ -44,11 +45,13 @@ internal sealed class SummaryService(
 
         var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
 
-        var noteExists = await context.Notes
-            .AnyAsync(n => n.Id == dto.NoteId && n.UserId == userId, ct)
+        var note = await context.Notes
+            .Where(n => n.Id == dto.NoteId && n.UserId == userId)
+            .Select(n => new { n.Title })
+            .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
 
-        if (!noteExists)
+        if (note is null)
             throw new KeyNotFoundException($"Note '{dto.NoteId}' was not found.");
 
         var summary = new Summary
@@ -62,6 +65,17 @@ internal sealed class SummaryService(
         };
 
         context.Summaries.Add(summary);
+        context.LifecycleActivities.Add(new LifecycleActivity
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            EntityId = summary.Id,
+            ActivityType = PulseActivityType.SummaryCreated,
+            OccurredAtUtc = DateTime.UtcNow,
+            Title = note.Title,
+            Context = summary.IsAiGenerated ? "AI summary" : "Summary added",
+            Link = $"/notes/{dto.NoteId}",
+        });
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return new SummaryDto(

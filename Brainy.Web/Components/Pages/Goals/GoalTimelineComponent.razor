@@ -24,7 +24,7 @@ else
                         <h4 class="goal-timeline__title">@entry.Title</h4>
                         <span class="goal-timeline__state">@entry.Badge</span>
                     </div>
-                    <p class="goal-timeline__date">@entry.SortDate.ToLocalTime().ToString("MMMM d, yyyy")</p>
+                    <p class="goal-timeline__date"><UserLocalTime Utc="entry.SortDate" Format="MMMM d, yyyy" /></p>
                     @if (!string.IsNullOrWhiteSpace(entry.Detail))
                     {
                         <p class="goal-timeline__detail">@entry.Detail</p>

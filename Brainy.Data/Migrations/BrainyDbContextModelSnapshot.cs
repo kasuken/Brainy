@@ -17,7 +17,7 @@ namespace Brainy.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -103,8 +103,16 @@ namespace Brainy.Data.Migrations
                     b.Property<bool>("IsAiGenerated")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Model")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<Guid?>("NoteId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PromptVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -127,11 +135,17 @@ namespace Brainy.Data.Migrations
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NoteId");
 
                     b.HasIndex("TaskItemId");
+
+                    b.HasIndex("UserId", "NoteId");
 
                     b.ToTable("ActionItem", (string)null);
                 });
@@ -513,6 +527,52 @@ namespace Brainy.Data.Migrations
                     b.ToTable("Idea", (string)null);
                 });
 
+            modelBuilder.Entity("Brainy.Domain.Entities.LifecycleActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ActivityType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Context")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Link")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityType");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "OccurredAtUtc");
+
+                    b.ToTable("LifecycleActivity", (string)null);
+                });
+
             modelBuilder.Entity("Brainy.Domain.Entities.Note", b =>
                 {
                     b.Property<Guid>("Id")
@@ -798,6 +858,9 @@ namespace Brainy.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ArchiveOperationId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("ArchivedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -854,6 +917,9 @@ namespace Brainy.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("StatusBeforeArchive")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
@@ -1115,6 +1181,9 @@ namespace Brainy.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ArchiveOperationId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("ArchivedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -1164,6 +1233,9 @@ namespace Brainy.Data.Migrations
                     b.Property<int?>("RecurrenceInterval")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("RecurrenceSourceTaskId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int?>("RecurrenceType")
                         .HasColumnType("int");
 
@@ -1203,7 +1275,13 @@ namespace Brainy.Data.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("RecurrenceSourceTaskId")
+                        .IsUnique()
+                        .HasFilter("[RecurrenceSourceTaskId] IS NOT NULL");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasFilter("[IsCurrentTask] = 1");
 
                     b.ToTable("Task", (string)null);
                 });
@@ -1229,6 +1307,13 @@ namespace Brainy.Data.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("UTC");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -1243,7 +1328,8 @@ namespace Brainy.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .IsUnique();
 
                     b.ToTable("UserDashboardPreference", (string)null);
                 });
@@ -1438,6 +1524,11 @@ namespace Brainy.Data.Migrations
                         .HasForeignKey("TaskItemId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("Brainy.Data.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Note");
 
                     b.Navigation("TaskItem");
@@ -1529,6 +1620,15 @@ namespace Brainy.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Area");
+                });
+
+            modelBuilder.Entity("Brainy.Domain.Entities.LifecycleActivity", b =>
+                {
+                    b.HasOne("Brainy.Data.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Brainy.Domain.Entities.Note", b =>

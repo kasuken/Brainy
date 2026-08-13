@@ -409,6 +409,7 @@ internal static class DevelopmentDataSeeder
                 note.ActionItems.Add(new ActionItem
                 {
                     Id = Guid.NewGuid(),
+                    UserId = note.UserId,
                     Title = faker.PickRandom("Follow up with pilot user", "Clarify owner", "Convert insight into task", "Add to launch memo"),
                     Description = faker.Lorem.Sentence(12),
                     Status = faker.PickRandom(ActionItemStatus.Open, ActionItemStatus.Done),

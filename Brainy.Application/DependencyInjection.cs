@@ -42,6 +42,7 @@ public static class DependencyInjection
         services.AddScoped<ICurrentTaskRecommendationService, CurrentTaskRecommendationService>();
         services.AddScoped<ITodayNotificationService, TodayNotificationService>();
         services.AddScoped<IUserDashboardPreferenceService, UserDashboardPreferenceService>();
+        services.AddScoped<IUserTimeZoneService, UserTimeZoneService>();
         services.AddScoped<IArchiveRetentionService, ArchiveRetentionService>();
         services.AddScoped<IInboxMetricsService, InboxMetricsService>();
         services.AddScoped<IInboxSuggestionsService, InboxSuggestionsService>();
@@ -53,7 +54,9 @@ public static class DependencyInjection
         services.AddScoped<IOutputService, OutputService>();
         services.AddScoped<IHighlightService, HighlightService>();
         services.AddScoped<ISummaryService, SummaryService>();
+        services.AddScoped<IActionItemService, ActionItemService>();
         services.AddScoped<IPulseService, PulseService>();
+        services.AddScoped<IDataExportService, DataExportService>();
         return services;
     }
 

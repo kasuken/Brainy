@@ -1,3 +1,4 @@
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Areas
 @using Brainy.Application.DTOs.Goals
 @using Brainy.Application.DTOs.Outputs
@@ -128,6 +129,8 @@
     private Guid? _projectId;
     private Guid? _goalId;
     private string _content = "";
+    private GeneratedOutputDraftDto? _generatedDraft;
+    private byte[]? _rowVersion;
 
     private List<AreaDto> _areas = [];
     private List<ProjectDto> _projects = [];
@@ -154,11 +157,15 @@
             _areaId      = ExistingOutput.AreaId;
             _projectId   = ExistingOutput.ProjectId;
             _goalId      = ExistingOutput.GoalId;
+            _rowVersion  = ExistingOutput.RowVersion;
 
             // Load full content from detail endpoint
             var detail = await OutputService.GetDetailAsync(ExistingOutput.Id);
             if (detail is not null)
+            {
                 _content = detail.Content;
+                _rowVersion = detail.RowVersion;
+            }
         }
     }
 
@@ -174,16 +181,29 @@
             {
                 await OutputService.UpdateAsync(new UpdateOutputDto(
                     ExistingOutput.Id, _title, _description, _type, _status,
-                    _content, _projectId, _areaId, _goalId));
+                    _content, _projectId, _areaId, _goalId,
+                    IsAiGenerated: _generatedDraft is null ? null : true,
+                    Model: _generatedDraft?.Model,
+                    PromptVersion: _generatedDraft?.PromptVersion,
+                    SourceNoteIds: _generatedDraft?.SourceNoteIds,
+                    RowVersion: _rowVersion));
                 Snackbar.Add("Output updated.", Severity.Success);
             }
             else
             {
                 await OutputService.CreateAsync(new CreateOutputDto(
-                    _title, _description, _type, _content, _projectId, _areaId, _goalId));
+                    _title, _description, _type, _content, _projectId, _areaId, _goalId,
+                    IsAiGenerated: _generatedDraft is not null,
+                    Model: _generatedDraft?.Model,
+                    PromptVersion: _generatedDraft?.PromptVersion,
+                    SourceNoteIds: _generatedDraft?.SourceNoteIds));
                 Snackbar.Add("Output created.", Severity.Success);
             }
             MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
         }
         catch (Exception ex)
         {
@@ -217,9 +237,10 @@
         var dialog = await DialogService.ShowAsync<OutputAiGenerationDialog>("", parameters, opts);
         var result = await dialog.Result;
 
-        if (result is { Canceled: false, Data: string draftContent })
+        if (result is { Canceled: false, Data: GeneratedOutputDraftDto draft })
         {
-            _content = draftContent;
+            _generatedDraft = draft;
+            _content = draft.Content;
             Snackbar.Add("AI draft generated — review and save when ready.", Severity.Info);
         }
     }

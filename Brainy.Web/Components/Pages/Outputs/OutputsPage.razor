@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Outputs
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
@@ -426,7 +427,7 @@
                                             <span class="op-badge op-badge-neutral">@(output.ProjectTitle ?? "—")</span>
                                         </td>
                                         <td style="color:var(--mud-palette-text-disabled);font-size:0.8rem;white-space:nowrap;">
-                                            @output.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                            <UserLocalTime Utc="output.UpdatedAtUtc" />
                                         </td>
                                         <td>
                                             <div class="op-actions" style="justify-content:flex-end;">
@@ -497,7 +498,7 @@
                                                 <span class="op-badge op-badge-neutral">@(output.AreaName ?? "—")</span>
                                             </td>
                                             <td style="color:var(--mud-palette-text-disabled);font-size:0.8rem;white-space:nowrap;">
-                                                @(output.ArchivedDate?.ToLocalTime().ToString("MMM d, yyyy") ?? "—")
+                                                <UserLocalTime Utc="output.ArchivedDate" />
                                             </td>
                                             <td>
                                                 <div class="op-actions" style="justify-content:flex-end;">
@@ -752,9 +753,17 @@
 
         if (confirmed == true)
         {
-            await OutputService.DeleteAsync(output.Id);
-            Snackbar.Add($"\"{output.Title}\" deleted.", Severity.Warning);
-            await LoadAsync();
+            try
+            {
+                await OutputService.DeleteAsync(output.Id, output.RowVersion);
+                Snackbar.Add($"\"{output.Title}\" deleted.", Severity.Warning);
+                await LoadAsync();
+            }
+            catch (ConcurrencyConflictException ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Warning);
+                await LoadAsync();
+            }
         }
     }
 }

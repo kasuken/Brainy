@@ -25,6 +25,15 @@ internal static class IdentityComponentsEndpointRouteBuilderExtensions
             return TypedResults.LocalRedirect($"~/{returnUrl}");
         });
 
+        // Account deletion happens in the interactive circuit. A full navigation to
+        // this endpoint is required to expire the Identity cookie on an HTTP response.
+        accountGroup.MapGet("/CompleteDeletion", async (
+            [FromServices] SignInManager<ApplicationUser> signInManager) =>
+        {
+            await signInManager.SignOutAsync();
+            return TypedResults.LocalRedirect("~/Account/Login?deleted=true");
+        }).RequireAuthorization();
+
         return accountGroup;
     }
 }

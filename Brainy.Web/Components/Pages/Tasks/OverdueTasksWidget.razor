@@ -8,15 +8,19 @@
 
 <div class="td-widget td-section">
     <div class="td-section-head">
-        <span class="td-section-label td-section-label--overdue">Overdue</span>
+        <h2 id="overdue-tasks-heading" class="td-section-label td-section-label--overdue">Overdue</h2>
         <span class="td-section-count">@Tasks.Count task@(Tasks.Count == 1 ? "" : "s")</span>
         <MudIconButton Icon="@(_collapsed ? Icons.Material.Outlined.ExpandMore : Icons.Material.Outlined.ExpandLess)"
                        Size="Size.Small" Style="margin-left:auto; color:var(--ink-faint);"
+                       aria-label="@(_collapsed ? "Expand overdue tasks" : "Collapse overdue tasks")"
+                       aria-expanded="@(_collapsed ? "false" : "true")"
+                       aria-controls="overdue-tasks"
                        OnClick="() => _collapsed = !_collapsed" />
     </div>
 
     @if (!_collapsed)
     {
+        <div id="overdue-tasks">
         @if (Tasks.Count == 0)
         {
             <p class="td-empty">No overdue tasks — great work!</p>
@@ -27,7 +31,7 @@
             {
                 <div class="td-task @PriorityClass(t.Priority) td-task--overdue">
                     <div class="td-task-body">
-                        <p class="td-task-title">@t.Title</p>
+                        <h3 class="td-task-title">@t.Title</h3>
                         <div class="td-task-meta">
                             <span class="td-task-project">@t.ProjectName</span>
                             <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
@@ -63,16 +67,20 @@
                         <MudIconButton Icon="@Icons.Material.Outlined.EditCalendar"
                                        Size="Size.Small"
                                        Color="@(_rescheduleTaskId == t.Id ? Color.Primary : Color.Default)"
+                                       aria-label="@($"Reschedule {t.Title}")"
+                                       aria-expanded="@(_rescheduleTaskId == t.Id ? "true" : "false")"
                                        OnClick="@(() => ToggleReschedule(t.Id, t.DueDate))" />
                     </MudTooltip>
                     <MudTooltip Text="Mark complete">
                         <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
                                        Size="Size.Small" Color="Color.Success"
+                                       aria-label="@($"Mark {t.Title} complete")"
                                        OnClick="() => OnComplete.InvokeAsync(t.Id)" />
                     </MudTooltip>
                 </div>
             }
         }
+        </div>
     }
 </div>
 

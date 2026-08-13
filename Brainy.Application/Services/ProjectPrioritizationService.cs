@@ -16,7 +16,7 @@ namespace Brainy.Application.Services;
 internal sealed class ProjectPrioritizationService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    TimeProvider timeProvider) : IProjectPrioritizationService
+    IUserTimeZoneService userTimeZone) : IProjectPrioritizationService
 {
     private static readonly TaskItemStatus[] _inactiveStatuses =
         [TaskItemStatus.Done, TaskItemStatus.Archived];
@@ -26,7 +26,7 @@ internal sealed class ProjectPrioritizationService(
         CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today = timeProvider.GetUserToday();
+        var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
         var weekEnd = today.AddDays(7);
 
         // Fetch active projects with their task statistics in one query.

@@ -1,3 +1,4 @@
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Areas
 @using Brainy.Application.DTOs.Ideas
 @using Brainy.Application.Interfaces.Services
@@ -88,6 +89,7 @@
     private Guid? _areaId;
     private IdeaPriority _priority = IdeaPriority.Medium;
     private IdeaStatus _status = IdeaStatus.Captured;
+    private byte[]? _rowVersion;
 
     private List<AreaDto> _areas = [];
 
@@ -106,6 +108,7 @@
                 _areaId      = dto.AreaId;
                 _priority    = dto.Priority;
                 _status      = dto.Status;
+                _rowVersion  = dto.RowVersion;
             }
         }
     }
@@ -123,13 +126,18 @@
                 await IdeaService.UpdateAsync(new UpdateIdeaDto(
                     IdeaId.Value, _title, _description, _areaId,
                     _priority, _status,
-                    null, null, null));
+                    null, null, null,
+                    RowVersion: _rowVersion));
             }
             else
             {
                 await IdeaService.CreateAsync(new CreateIdeaDto(_title, _description, _areaId, _priority));
             }
             MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
         }
         catch (Exception ex)
         {

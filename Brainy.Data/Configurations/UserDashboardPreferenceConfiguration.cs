@@ -13,11 +13,17 @@ public class UserDashboardPreferenceConfiguration : IEntityTypeConfiguration<Use
         builder.HasKey(p => p.Id);
 
         builder.ConfigureUserOwnership();
+        builder.HasIndex(p => p.UserId).IsUnique();
 
         builder.Property(p => p.WidgetOrder)
             .HasMaxLength(2000);
 
         builder.Property(p => p.CollapsedWidgets)
             .HasMaxLength(2000);
+
+        builder.Property(p => p.TimeZoneId)
+            .IsRequired()
+            .HasMaxLength(100)
+            .HasDefaultValue("UTC");
     }
 }

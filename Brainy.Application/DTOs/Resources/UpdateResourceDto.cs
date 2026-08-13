@@ -8,4 +8,9 @@ public record UpdateResourceDto(
     string? Topic,
     Guid? AreaId,
     IReadOnlyList<string>? Tags,
-    string? Emoji = null);
+    string? Emoji = null,
+    /// <summary>
+    /// Concurrency token from the loaded resource. When provided, the update fails with a
+    /// <see cref="Common.ConcurrencyConflictException"/> if the resource changed after it was loaded.
+    /// </summary>
+    byte[]? RowVersion = null);

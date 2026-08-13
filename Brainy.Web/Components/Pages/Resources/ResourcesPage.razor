@@ -1,6 +1,7 @@
 @page "/resources"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Resources
 @using Brainy.Application.Interfaces.Services
 @inject IResourceService ResourceService
@@ -454,7 +455,7 @@
                                         <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
                                     </button>
                                 }
-                                <button class="rep-action-btn rep-action-btn--delete" title="Delete" @onclick="() => ConfirmDelete(r.Id, r.Name)" @onclick:stopPropagation="true">
+                                <button class="rep-action-btn rep-action-btn--delete" title="Delete" @onclick="() => ConfirmDelete(r)" @onclick:stopPropagation="true">
                                     <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" />
                                 </button>
                             </div>
@@ -499,7 +500,7 @@
                             <div class="rep-card-meta">
                                 <span style="display:flex; align-items:center; gap:0.35rem;">
                                     <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
-                                    Updated @r.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                    Updated <UserLocalTime Utc="r.UpdatedAtUtc" />
                                 </span>
                                 @if (r.Tags.Count > 0)
                                 {
@@ -802,11 +803,11 @@
         }
     }
 
-    private async Task ConfirmDelete(Guid id, string name)
+    private async Task ConfirmDelete(ResourceDto resource)
     {
         var box = await DialogService.ShowMessageBox(
             "Delete resource",
-            $"Permanently delete \"{name}\"? This cannot be undone.",
+            $"Permanently delete \"{resource.Name}\"? This cannot be undone.",
             yesText: "Delete",
             noText: "Cancel");
 
@@ -817,8 +818,13 @@
 
         try
         {
-            await ResourceService.DeleteAsync(id);
-            Snackbar.Add($"\"{name}\" deleted.", Severity.Warning);
+            await ResourceService.DeleteAsync(resource.Id, resource.RowVersion);
+            Snackbar.Add($"\"{resource.Name}\" deleted.", Severity.Warning);
+            await LoadAsync();
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
             await LoadAsync();
         }
         catch (Exception ex)

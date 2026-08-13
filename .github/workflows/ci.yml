@@ -6,9 +6,26 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: ${{ format('B7r!{0}xQ9_Test', github.run_id) }}
+        ports:
+          - 1433:1433
+    env:
+      BRAINY_TEST_SQL_CONNECTIONSTRING: ${{ format('Server=localhost,1433;Database=master;User Id=sa;Password=B7r!{0}xQ9_Test;TrustServerCertificate=true;Connect Timeout=2', github.run_id) }}
 
     steps:
       - name: Checkout
@@ -17,13 +34,27 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       - name: Restore
         run: dotnet restore
+
+      - name: Restore tools
+        run: dotnet tool restore
 
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
       - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal
+        run: dotnet test --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage"
+
+      - name: Verify EF model and migrations agree
+        run: dotnet ef migrations has-pending-model-changes --project Brainy.Data --startup-project Brainy.Web --no-build --configuration Release
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: '**/TestResults/**/coverage.cobertura.xml'
+          if-no-files-found: error

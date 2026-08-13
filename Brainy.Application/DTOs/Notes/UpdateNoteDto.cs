@@ -24,4 +24,8 @@ public record UpdateNoteDto(
     /// Concurrency token from the loaded note. When provided, the update fails with a
     /// <see cref="Common.ConcurrencyConflictException"/> if the note changed since it was loaded.
     /// </summary>
-    byte[]? RowVersion = null);
+    byte[]? RowVersion = null,
+    /// <summary>
+    /// Replacement tag names. Pass <c>null</c> to keep current tags or an empty list to remove all tags.
+    /// </summary>
+    IReadOnlyList<string>? Tags = null);

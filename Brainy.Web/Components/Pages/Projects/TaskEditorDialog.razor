@@ -104,6 +104,26 @@
                 }
             </div>
 
+            @if (_dependencyCandidates.Count > 0)
+            {
+                <MudDivider Class="ted-divider" />
+                <MudSelect T="Guid"
+                           @bind-SelectedValues="_selectedDependencyIds"
+                           MultiSelection="true"
+                           Label="Prerequisites"
+                           HelperText="This task cannot start or finish until every selected task is done."
+                           Variant="Variant.Outlined"
+                           Clearable="true"
+                           FullWidth="true">
+                    @foreach (var candidate in _dependencyCandidates)
+                    {
+                        <MudSelectItem T="Guid" Value="@candidate.Id">
+                            @candidate.Title (@FormatStatus(candidate.Status))
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+            }
+
             @if (ShowSubtasks)
             {
                 <MudDivider Class="ted-divider" />
@@ -333,6 +353,8 @@
     private readonly List<string> _stagedSubtasks = [];
     private IReadOnlyList<TaskItemDto> _existingSubtasks = [];
     private readonly HashSet<Guid> _togglingSubtasks = [];
+    private IReadOnlyList<TaskItemDto> _dependencyCandidates = [];
+    private IEnumerable<Guid> _selectedDependencyIds = [];
 
     // Only top-level tasks (not subtasks, and not the "create subtask" flow) can own subtasks.
     private bool ShowSubtasks => !_isSubtask && !ParentTaskId.HasValue;
@@ -340,6 +362,14 @@
     protected override async Task OnInitializedAsync()
     {
         _status = InitialStatus;
+
+        var projectTasks = await TaskService.GetByProjectAsync(ProjectId);
+        _dependencyCandidates = projectTasks
+            .SelectMany(task => new[] { task }.Concat(task.Subtasks ?? []))
+            .Where(task => task.Id != TaskId)
+            .OrderBy(task => task.Status == TaskItemStatus.Done ? 1 : 0)
+            .ThenBy(task => task.Title)
+            .ToList();
 
         if (TaskId.HasValue)
         {
@@ -360,6 +390,7 @@
                 _recurrenceEndDate    = task.RecurrenceEndDate;
                 _nextOccurrenceDate   = task.NextOccurrenceDate;
                 _rowVersion           = task.RowVersion;
+                _selectedDependencyIds = task.DependsOnTaskIds ?? [];
             }
         }
     }
@@ -395,14 +426,16 @@
                 await TaskService.UpdateAsync(new UpdateTaskDto(
                     TaskId.Value, _title, _description, _status, _priority, _dueDate, _complexity,
                     _isRecurring, _recurrenceType, _recurrenceInterval, _recurrenceEndDate, _nextOccurrenceDate,
-                    RowVersion: _rowVersion));
+                    RowVersion: _rowVersion,
+                    DependsOnTaskIds: _selectedDependencyIds.ToList()));
                 parentId = TaskId.Value;
             }
             else
             {
                 var created = await TaskService.CreateAsync(new CreateTaskDto(
                     ProjectId, _title, _description, _priority, _dueDate, ParentTaskId, _complexity,
-                    _isRecurring, _recurrenceType, _recurrenceInterval, _recurrenceEndDate, _nextOccurrenceDate));
+                    _isRecurring, _recurrenceType, _recurrenceInterval, _recurrenceEndDate, _nextOccurrenceDate,
+                    DependsOnTaskIds: _selectedDependencyIds.ToList()));
                 parentId = created.Id;
             }
 
@@ -432,6 +465,15 @@
     }
 
     private void Cancel() => MudDialog.Cancel();
+
+    private static string FormatStatus(TaskItemStatus status) => status switch
+    {
+        TaskItemStatus.Todo => "To do",
+        TaskItemStatus.InProgress => "In progress",
+        TaskItemStatus.Waiting => "Waiting",
+        TaskItemStatus.Done => "Done",
+        _ => status.ToString()
+    };
 
     private async Task ToggleSubtaskAsync(TaskItemDto sub)
     {

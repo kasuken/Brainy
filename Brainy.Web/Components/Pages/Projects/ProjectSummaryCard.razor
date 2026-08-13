@@ -7,9 +7,7 @@
    Used in: Today screen, Projects List, Project Detail.
 ───────────────────────────────────────────────────────────────────────────── *@
 
-<div class="psc @(Compact ? "psc--compact" : "")"
-     @onclick="HandleCardClick"
-     style="cursor: @(OnNavigate.HasDelegate ? "pointer" : "default")">
+<article class="psc @(Compact ? "psc--compact" : "")">
 
     <div class="psc__ribbon psc__ribbon--@Project.Priority.ToString().ToLower()"></div>
 
@@ -28,8 +26,18 @@
 
         
         <h3 class="psc__name">
-            <span class="psc__emoji">@Project.Emoji</span>
-            @Project.Name
+            @if (OnNavigate.HasDelegate)
+            {
+                <button type="button" class="psc__open" @onclick="HandleCardClick">
+                    <span class="psc__emoji">@Project.Emoji</span>
+                    <span class="psc__open-label">@Project.Name</span>
+                </button>
+            }
+            else
+            {
+                <span class="psc__emoji">@Project.Emoji</span>
+                @Project.Name
+            }
         </h3>
 
         
@@ -78,23 +86,23 @@
     
     @if (OnEdit.HasDelegate || OnArchive.HasDelegate || OnComplete.HasDelegate)
     {
-        <div class="psc__actions" @onclick:stopPropagation="true">
+        <div class="psc__actions" aria-label="@($"Actions for {Project.Name}")">
             @if (OnComplete.HasDelegate && Project.Status != ProjectStatus.Completed && Project.Status != ProjectStatus.Archived)
             {
-                <button class="psc__action-btn psc__action-btn--complete" title="Complete project"
+                <button type="button" class="psc__action-btn psc__action-btn--complete" aria-label="@($"Complete {Project.Name}")"
                         @onclick="() => OnComplete.InvokeAsync(Project)">
                     <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
                 </button>
             }
             @if (OnEdit.HasDelegate)
             {
-                <button class="psc__action-btn" title="Edit" @onclick="() => OnEdit.InvokeAsync(Project)">
+                <button type="button" class="psc__action-btn" aria-label="@($"Edit {Project.Name}")" @onclick="() => OnEdit.InvokeAsync(Project)">
                     <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3Zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5Zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178Z"/></svg>
                 </button>
             }
             @if (OnArchive.HasDelegate)
             {
-                <button class="psc__action-btn psc__action-btn--warn" title="Archive"
+                <button type="button" class="psc__action-btn psc__action-btn--warn" aria-label="@($"Archive {Project.Name}")"
                         @onclick="() => OnArchive.InvokeAsync(Project)">
                     <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 2a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 1 12.5V5a1 1 0 0 1-1-1V2Zm2 3v7.5A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5V5H2Zm13-3H1v2h14V2ZM5 7.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5Z"/></svg>
                 </button>
@@ -102,7 +110,7 @@
         </div>
     }
 
-</div>
+</article>
 
 <style>
     .psc {
@@ -180,6 +188,27 @@
         overflow: hidden;
         text-overflow: ellipsis;
         letter-spacing: -0.01em;
+    }
+
+    .psc__open {
+        display: flex;
+        align-items: center;
+        gap: .4rem;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        text-align: left;
+    }
+
+    .psc__open-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .psc__open:hover .psc__open-label { color: var(--clay); text-decoration: underline; text-underline-offset: .16em; }
+    .psc__open:focus-visible, .psc__action-btn:focus-visible {
+        outline: 3px solid var(--clay-ring);
+        outline-offset: 2px;
     }
 
     .psc__emoji {
@@ -272,7 +301,7 @@
         transition: opacity 0.15s;
     }
 
-    .psc:hover .psc__actions { opacity: 1; }
+    .psc:hover .psc__actions, .psc:focus-within .psc__actions { opacity: 1; }
 
     .psc__action-btn {
         width: 28px;

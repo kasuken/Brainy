@@ -5,6 +5,7 @@
 @using Brainy.Application.DTOs.Areas
 @using Brainy.Application.DTOs.Resources
 @using Brainy.Application.DTOs.Notes
+@using Brainy.Application.DTOs.Tasks
 @using Brainy.Application.DTOs.Archives
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
@@ -14,6 +15,7 @@
 @inject IResourceService ResourceService
 @inject INoteService NoteService
 @inject IGoalService GoalService
+@inject ITaskService TaskService
 @inject IArchiveRetentionService RetentionService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -140,6 +142,12 @@
     .arc-chip:hover {
         background: var(--mud-palette-surface);
         border-color: var(--mud-palette-lines-default);
+    }
+
+    .arc-chip:focus-visible,
+    .arc-retention-header:focus-visible {
+        outline: 3px solid var(--clay-ring);
+        outline-offset: 2px;
     }
 
     .arc-chip--on {
@@ -374,7 +382,7 @@
         <aside class="arc-sidebar">
             <p class="arc-eyebrow">Vault</p>
             <div class="arc-title-row">
-                <h1 class="arc-title">Archives</h1>
+                <h1 id="archives-title" class="arc-title">Archives</h1>
                 <PageHelpButton Guide="HelpGuide" />
             </div>
             
@@ -383,7 +391,7 @@
                 {
                     <span>Loading…</span>
                 }
-                else
+                else if (_loadError is null)
                 {
                     <span>@_allItems.Count total items</span>
                     @if (_goals.Count > 0)
@@ -391,10 +399,15 @@
                         <span> · @_goals.Count goals</span>
                     }
                 }
+                else
+                {
+                    <span>Archive count unavailable</span>
+                }
             </p>
 
             <div class="arc-widget">
                 <MudTextField @bind-Value="_search"
+                              aria-label="Search archives"
                               Placeholder="Search archives…"
                               Adornment="Adornment.Start"
                               AdornmentIcon="@Icons.Material.Outlined.Search"
@@ -407,12 +420,13 @@
                               OnClearButtonClick="@(() => ClearSearch())"
                               Class="mb-5" />
 
-                <div class="arc-filter-label">Entity Type</div>
-                <div class="arc-chips">
+                <div id="archive-type-filter-label" class="arc-filter-label">Entity Type</div>
+                <div class="arc-chips" role="group" aria-labelledby="archive-type-filter-label">
                     @foreach (var type in TypeFilters)
                     {
                         <button type="button"
                                 class="arc-chip @(type == _typeFilter ? "arc-chip--on" : "")"
+                                aria-pressed="@(type == _typeFilter ? "true" : "false")"
                                 @onclick="() => SetTypeFilter(type)">
                             @type
                         </button>
@@ -454,13 +468,22 @@
         </aside>
 
         @* ── Main Layout ── *@
-        <main class="arc-main">
+        <section class="arc-main" aria-labelledby="archives-title">
             @if (_loading)
             {
-                <div style="padding: 5rem 0; text-align: center;">
+                <div style="padding: 5rem 0; text-align: center;" role="status" aria-live="polite">
                     <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
                     <p style="margin-top: 1rem; color: var(--mud-palette-text-disabled); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem;">Accessing the vault…</p>
                 </div>
+            }
+            else if (_loadError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" role="alert">
+                    <MudText Typo="Typo.body1">@_loadError</MudText>
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadAsync" Class="mt-2">
+                        Try again
+                    </MudButton>
+                </MudAlert>
             }
             else
             {
@@ -511,7 +534,8 @@
                     <div class="arc-ledger">
                         @* Select-all header *@
                         <div class="arc-select-all-row">
-                            <MudCheckBox T="bool"
+                             <MudCheckBox T="bool"
+                                         aria-label="@($"Select all {_filtered.Count} archived items")"
                                          Value="@(_filtered.Count > 0 && _filtered.All(i => _selectedItems.Contains(i.Id)))"
                                          ValueChanged="ToggleSelectAllItems"
                                          Size="Size.Small"
@@ -525,7 +549,8 @@
                             var idx = i;
                             <div class="arc-ledger-item arc-row-in" style="animation-delay:@(idx * 25)ms;">
                                 <div style="display:flex; align-items:flex-start; padding-top:0.1rem;">
-                                    <MudCheckBox T="bool"
+                                     <MudCheckBox T="bool"
+                                                 aria-label="@($"Select {item.EntityType} {item.Name}")"
                                                  Value="@_selectedItems.Contains(item.Id)"
                                                  ValueChanged="@((bool v) => ToggleItem(item.Id, v))"
                                                  Size="Size.Small"
@@ -544,6 +569,7 @@
                                     <MudButton Variant="Variant.Text"
                                                Color="Color.Default"
                                                Size="Size.Small"
+                                               Disabled="@(!item.CanRestore)"
                                                OnClick="() => ConfirmRestore(item)">
                                         Restore
                                     </MudButton>
@@ -604,6 +630,7 @@
                         }
                         <div class="arc-select-all-row">
                             <MudCheckBox T="bool"
+                                         aria-label="@($"Select all {filteredGoalsList.Count} archived goals")"
                                          Value="@(filteredGoalsList.Count > 0 && filteredGoalsList.All(g => _selectedGoalIds.Contains(g.Id)))"
                                          ValueChanged="ToggleSelectAllGoals"
                                          Size="Size.Small"
@@ -617,7 +644,8 @@
                             var idx = i;
                             <div class="arc-ledger-item arc-row-in" style="animation-delay:@(idx * 25)ms;">
                                 <div style="display:flex; align-items:flex-start; padding-top:0.1rem;">
-                                    <MudCheckBox T="bool"
+                                     <MudCheckBox T="bool"
+                                                 aria-label="@($"Select goal {goal.Title}")"
                                                  Value="@_selectedGoalIds.Contains(goal.Id)"
                                                  ValueChanged="@((bool v) => ToggleGoalItem(goal.Id, v))"
                                                  Size="Size.Small"
@@ -669,19 +697,23 @@
 
                 @* ── Retention Rules Footer Widget ── *@
                 <section class="arc-retention-box">
-                    <button type="button" class="arc-retention-header" @onclick="ToggleRetention">
+                    <button type="button"
+                            class="arc-retention-header"
+                            aria-expanded="@(_showRetention ? "true" : "false")"
+                            aria-controls="archive-retention-panel"
+                            @onclick="ToggleRetention">
                         <div>
-                            <h2 class="arc-retention-title">Retention Rules</h2>
-                            <p style="margin: 0.25rem 0 0; color: var(--mud-palette-text-secondary); font-size: 0.85rem;">Automate deletion of old items</p>
+                            <h2 class="arc-retention-title">Manual Cleanup Rules</h2>
+                            <p style="margin: 0.25rem 0 0; color: var(--mud-palette-text-secondary); font-size: 0.85rem;">Identify old items for a user-confirmed purge</p>
                         </div>
                         <MudIcon Icon="@(_showRetention ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.Add)" Size="Size.Large" />
                     </button>
 
                     @if (_showRetention)
                     {
-                        <div class="arc-retention-body">
+                        <div id="archive-retention-panel" class="arc-retention-body">
                             <p style="margin:0; font-size:0.9rem; color:var(--mud-palette-text-secondary);">
-                                Set how long archived items are kept before becoming eligible for permanent deletion. Leave blank to keep forever.
+                                Set when archived items become eligible for manual cleanup. Brainy never deletes them automatically; review the matches, then use the purge button below. Leave blank to keep forever.
                             </p>
 
                             <div class="arc-retention-grid">
@@ -740,6 +772,7 @@
                                            Color="Color.Error"
                                            StartIcon="@Icons.Material.Filled.DeleteForever"
                                            Disabled="_purging"
+                                           aria-busy="@(_purging ? "true" : "false")"
                                            OnClick="PurgeExpiredAsync">
                                     @(_purging ? "Purging system…" : "Permanently delete expired items")
                                 </MudButton>
@@ -748,7 +781,7 @@
                     }
                 </section>
             }
-        </main>
+        </section>
     </div>
 </div>
 
@@ -764,7 +797,7 @@
             {
                 Title = "What this screen is for",
                 Icon = Icons.Material.Outlined.Archive,
-                Lead = "Archives hold inactive projects, areas, resources, notes, and goals so you can restore or review them later.",
+                Lead = "Archives hold inactive projects, tasks, areas, resources, notes, and goals so you can restore or review them later.",
                 Points =
                 [
                     "Browse preserved material that no longer belongs in active work views.",
@@ -802,9 +835,10 @@
     };
 
     private static readonly string[] EntityTypes = ["Project", "Area", "Resource", "Note"];
-    private static readonly string[] TypeFilters = ["All", "Project", "Area", "Resource", "Note"];
+    private static readonly string[] TypeFilters = ["All", "Project", "Task", "Area", "Resource", "Note"];
 
     private bool _loading = true;
+    private string? _loadError;
     private bool _showRetention;
     private bool _purging;
 
@@ -823,6 +857,7 @@
     private List<AreaDto> _archivedAreas = [];
     private List<ResourceDto> _archivedResources = [];
     private List<NoteDto> _archivedNotes = [];
+    private List<ArchivedTaskDto> _archivedTasks = [];
 
     private List<GoalDto> _goals = [];
 
@@ -849,6 +884,7 @@
     private async Task LoadAsync()
     {
         _loading = true;
+        _loadError = null;
 
         try
         {
@@ -856,6 +892,7 @@
             var areas = await AreaService.GetAllArchivedAsync();
             var resources = await ResourceService.GetAllArchivedAsync();
             var notes = await NoteService.GetAllArchivedAsync();
+            var tasks = await TaskService.GetAllArchivedAsync();
             var goals = await GoalService.GetAllArchivedAsync();
             var rules = await RetentionService.GetRulesAsync();
 
@@ -863,6 +900,7 @@
             _archivedAreas = [.. areas];
             _archivedResources = [.. resources];
             _archivedNotes = [.. notes];
+            _archivedTasks = [.. tasks];
             _goals = [.. goals];
 
             _retentionDays = EntityTypes.ToDictionary(type => type, _ => (int?)null);
@@ -900,7 +938,8 @@
                     r.Name,
                     BuildSnippet(r.Description ?? r.Topic),
                     r.ArchivedAtUtc,
-                    r.UpdatedAtUtc)),
+                    r.UpdatedAtUtc,
+                    RowVersion: r.RowVersion)),
 
                 .._archivedNotes.Select(n => new ArchiveItem(
                     n.Id,
@@ -908,18 +947,30 @@
                     n.Title,
                     BuildSnippet(n.Content),
                     n.ArchivedAtUtc,
-                    n.UpdatedAtUtc))
+                    n.UpdatedAtUtc)),
+
+                .._archivedTasks.Select(t => new ArchiveItem(
+                    t.Id,
+                    "Task",
+                    t.Title,
+                    BuildSnippet(string.IsNullOrWhiteSpace(t.Description)
+                        ? $"Project: {t.ProjectName}"
+                        : $"{t.Description} · Project: {t.ProjectName}"),
+                    t.ArchivedAtUtc,
+                    t.UpdatedAtUtc,
+                    $"/projects/{t.ProjectId}",
+                    t.CanRestore))
             ];
 
             _allItems = [.. _allItems.OrderByDescending(item => item.ArchivedAtUtc ?? item.UpdatedAtUtc)];
             ApplyFilter();
         }
-        catch (Exception ex)
+        catch
         {
             _allItems = [];
             _filtered = [];
             _goals = [];
-            Snackbar.Add($"Could not load archives: {ex.Message}", Severity.Error);
+            _loadError = "Brainy could not load your archives. Your data was not changed.";
         }
         finally
         {
@@ -1031,6 +1082,9 @@
                 case "Note":
                     await NoteService.RestoreAsync(item.Id);
                     break;
+                case "Task":
+                    await TaskService.RestoreAsync(item.Id);
+                    break;
             }
 
             Snackbar.Add($"\"{item.Name}\" restored.", Severity.Success);
@@ -1044,7 +1098,7 @@
 
     private void ViewItem(ArchiveItem item)
     {
-        var url = item.EntityType switch
+        var url = item.NavigationUrl ?? item.EntityType switch
         {
             "Project" => $"/projects/{item.Id}",
             "Area" => $"/areas/{item.Id}",
@@ -1145,7 +1199,7 @@
             {
                 try
                 {
-                    await ResourceService.DeleteAsync(resource.Id);
+                    await ResourceService.DeleteAsync(resource.Id, resource.RowVersion);
                     deletedCount++;
                 }
                 catch
@@ -1236,7 +1290,7 @@
     {
         if (_allItems.Count == 0)
         {
-            return "Archived projects, areas, resources, and notes will appear here once you start preserving completed work.";
+            return "Archived projects, tasks, areas, resources, and notes will appear here once you start preserving completed work.";
         }
 
         if (_typeFilter != "All" && !_allItems.Any(item => item.EntityType == _typeFilter))
@@ -1258,9 +1312,11 @@
         ("Area", true) => "Areas",
         ("Resource", true) => "Resources",
         ("Note", true) => "Notes",
+        ("Task", true) => "Tasks",
         ("Project", false) => "Project",
         ("Area", false) => "Area",
         ("Resource", false) => "Resource",
+        ("Task", false) => "Task",
         _ => "Note"
     };
 
@@ -1386,6 +1442,7 @@
                     case "Area":     await AreaService.RestoreAsync(item.Id);     break;
                     case "Resource": await ResourceService.RestoreAsync(item.Id); break;
                     case "Note":     await NoteService.RestoreAsync(item.Id);     break;
+                    case "Task":     await TaskService.RestoreAsync(item.Id);     break;
                 }
                 success++;
             }
@@ -1426,8 +1483,9 @@
                 {
                     case "Project":  await ProjectService.DeleteAsync(item.Id);  break;
                     case "Area":     await AreaService.DeleteAsync(item.Id);     break;
-                    case "Resource": await ResourceService.DeleteAsync(item.Id); break;
+                    case "Resource": await ResourceService.DeleteAsync(item.Id, item.RowVersion); break;
                     case "Note":     await NoteService.DeleteAsync(item.Id);     break;
+                    case "Task":     await TaskService.DeleteAsync(item.Id);     break;
                 }
                 success++;
             }
@@ -1462,8 +1520,9 @@
             {
                 case "Project":  await ProjectService.DeleteAsync(item.Id);  break;
                 case "Area":     await AreaService.DeleteAsync(item.Id);     break;
-                case "Resource": await ResourceService.DeleteAsync(item.Id); break;
+                case "Resource": await ResourceService.DeleteAsync(item.Id, item.RowVersion); break;
                 case "Note":     await NoteService.DeleteAsync(item.Id);     break;
+                case "Task":     await TaskService.DeleteAsync(item.Id);     break;
             }
 
             Snackbar.Add($"\"{item.Name}\" permanently deleted.", Severity.Success);
@@ -1523,7 +1582,7 @@
         {
             try
             {
-                await GoalService.DeleteAsync(goal.Id);
+                await GoalService.DeleteAsync(goal.Id, goal.RowVersion);
                 success++;
             }
             catch
@@ -1553,7 +1612,7 @@
 
         try
         {
-            await GoalService.DeleteAsync(goal.Id);
+            await GoalService.DeleteAsync(goal.Id, goal.RowVersion);
             Snackbar.Add($"\"{goal.Title}\" permanently deleted.", Severity.Success);
             _selectedGoalIds.Remove(goal.Id);
             await LoadAsync();
@@ -1570,5 +1629,8 @@
         string Name,
         string? Description,
         DateTime? ArchivedAtUtc,
-        DateTime UpdatedAtUtc);
+        DateTime UpdatedAtUtc,
+        string? NavigationUrl = null,
+        bool CanRestore = true,
+        byte[]? RowVersion = null);
 }

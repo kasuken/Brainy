@@ -32,12 +32,28 @@ public interface IApplicationDbContext
     DbSet<Goal> Goals { get; }
     DbSet<GoalMilestone> GoalMilestones { get; }
     DbSet<GoalActivity> GoalActivities { get; }
+    DbSet<LifecycleActivity> LifecycleActivities { get; }
 
     /// <summary>
     /// Change-tracker entry for <paramref name="entity"/>; used to set the original
     /// <see cref="BaseEntity.RowVersion"/> for optimistic concurrency checks.
     /// </summary>
     EntityEntry<TEntity> Entry<TEntity>(TEntity entity) where TEntity : class;
+
+    /// <summary>
+    /// Executes a complete task-dependency graph mutation under a per-user serialization
+    /// boundary. Relational implementations must include validation and persistence in
+    /// the same retryable transaction; non-relational test providers may execute directly.
+    /// </summary>
+    /// <typeparam name="TResult">The result returned by the mutation.</typeparam>
+    /// <param name="userId">The owner of the task-dependency graph being mutated.</param>
+    /// <param name="operation">The complete mutation, including reads, validation, and persistence.</param>
+    /// <param name="cancellationToken">A token that cancels the mutation.</param>
+    /// <returns>The result produced by <paramref name="operation"/>.</returns>
+    Task<TResult> ExecuteSerializedTaskDependencyMutationAsync<TResult>(
+        string userId,
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default);
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

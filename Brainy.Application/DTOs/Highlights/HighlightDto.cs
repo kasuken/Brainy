@@ -7,4 +7,6 @@ public record HighlightDto(
     string Text,
     string? Annotation,
     int Layer,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    int? StartOffset = null,
+    int? EndOffset = null);

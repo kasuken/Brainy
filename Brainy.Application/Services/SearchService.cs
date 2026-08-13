@@ -8,7 +8,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Brainy.Application.Services;
 
 /// <summary>
-/// Searches notes, outputs, projects, areas, tasks, goals, and ideas by title and content
+/// Searches notes, outputs, projects, areas, resources, tasks, goals, and ideas by title and content;
+/// note tags also participate in matching and are returned for display.
 /// for the current user. Results are ranked by relevance: title matches rank higher than
 /// content-only matches, then sorted by last-updated date descending.
 /// </summary>
@@ -35,7 +36,13 @@ internal sealed class SearchService(
         var notes = await context.Notes
             .AsNoTracking()
             .Where(n => n.UserId == userId &&
-                        (n.Title.Contains(term) || n.Content.Contains(term)))
+                        !n.IsArchived &&
+                        n.Status != NoteStatus.Archived &&
+                        (n.Title.Contains(term) ||
+                         n.Content.Contains(term) ||
+                         n.Tags.Any(tag => tag.UserId == userId && tag.Name.Contains(term))))
+            .OrderByDescending(n => n.Title.Contains(term))
+            .ThenByDescending(n => n.UpdatedAtUtc)
             .Select(n => new
             {
                 n.Id,
@@ -48,6 +55,11 @@ internal sealed class SearchService(
                 n.AreaId,
                 n.ResourceId,
                 n.UpdatedAtUtc,
+                Tags = n.Tags
+                    .Where(tag => tag.UserId == userId)
+                    .Select(tag => tag.Name)
+                    .OrderBy(name => name)
+                    .ToList(),
             })
             .Take(MaxResults * 2) // over-fetch before in-memory sort
             .ToListAsync(cancellationToken).ConfigureAwait(false);
@@ -59,6 +71,8 @@ internal sealed class SearchService(
                         (o.Title.Contains(term) ||
                          (o.Description != null && o.Description.Contains(term)) ||
                          o.Content.Contains(term)))
+            .OrderByDescending(o => o.Title.Contains(term))
+            .ThenByDescending(o => o.UpdatedAtUtc)
             .Select(o => new
             {
                 o.Id,
@@ -78,6 +92,8 @@ internal sealed class SearchService(
                         !p.IsArchived &&
                         (p.Name.Contains(term) ||
                          (p.Description != null && p.Description.Contains(term))))
+            .OrderByDescending(p => p.Name.Contains(term))
+            .ThenByDescending(p => p.UpdatedAtUtc)
             .Select(p => new
             {
                 p.Id,
@@ -95,6 +111,8 @@ internal sealed class SearchService(
                         !a.IsArchived &&
                         (a.Name.Contains(term) ||
                          (a.Description != null && a.Description.Contains(term))))
+            .OrderByDescending(a => a.Name.Contains(term))
+            .ThenByDescending(a => a.UpdatedAtUtc)
             .Select(a => new
             {
                 a.Id,
@@ -105,12 +123,35 @@ internal sealed class SearchService(
             .Take(MaxResults)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
+        var resources = await context.Resources
+            .AsNoTracking()
+            .Where(r => r.UserId == userId &&
+                        !r.IsArchived &&
+                        (r.Name.Contains(term) ||
+                         (r.Description != null && r.Description.Contains(term)) ||
+                         (r.Topic != null && r.Topic.Contains(term))))
+            .OrderByDescending(r => r.Name.Contains(term))
+            .ThenByDescending(r => r.UpdatedAtUtc)
+            .Select(r => new
+            {
+                r.Id,
+                r.Name,
+                r.Description,
+                r.Topic,
+                r.AreaId,
+                r.UpdatedAtUtc,
+            })
+            .Take(MaxResults)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
         var tasks = await context.Tasks
             .AsNoTracking()
             .Where(t => t.UserId == userId &&
                         !t.IsArchived &&
                         (t.Title.Contains(term) ||
                          (t.Description != null && t.Description.Contains(term))))
+            .OrderByDescending(t => t.Title.Contains(term))
+            .ThenByDescending(t => t.UpdatedAtUtc)
             .Select(t => new
             {
                 t.Id,
@@ -128,6 +169,8 @@ internal sealed class SearchService(
                         !g.IsArchived &&
                         (g.Title.Contains(term) ||
                          (g.Description != null && g.Description.Contains(term))))
+            .OrderByDescending(g => g.Title.Contains(term))
+            .ThenByDescending(g => g.UpdatedAtUtc)
             .Select(g => new
             {
                 g.Id,
@@ -144,6 +187,8 @@ internal sealed class SearchService(
                         !i.IsArchived &&
                         (i.Title.Contains(term) ||
                          (i.Description != null && i.Description.Contains(term))))
+            .OrderByDescending(i => i.Title.Contains(term))
+            .ThenByDescending(i => i.UpdatedAtUtc)
             .Select(i => new
             {
                 i.Id,
@@ -170,7 +215,8 @@ internal sealed class SearchService(
                 n.ResourceId,
                 n.UpdatedAtUtc,
                 Relevance: titleMatch ? 2 : 1,
-                ResultType: "Note");
+                ResultType: "Note",
+                Tags: n.Tags);
         });
 
         var outputResults = outputs.Select(o =>
@@ -234,6 +280,26 @@ internal sealed class SearchService(
                 ResultType: "Area");
         });
 
+        var resourceResults = resources.Select(r =>
+        {
+            var titleMatch = r.Name.Contains(term, StringComparison.OrdinalIgnoreCase);
+            var searchableDescription = string.Join(" · ", new[] { r.Topic, r.Description }
+                .Where(value => !string.IsNullOrWhiteSpace(value)));
+            return new SearchResultDto(
+                r.Id,
+                r.Name,
+                BuildSnippet(searchableDescription, term),
+                AiSummary: null,
+                Status: default,
+                ParaCategory: ParaCategory.Resource,
+                ProjectId: null,
+                AreaId: r.AreaId,
+                ResourceId: r.Id,
+                r.UpdatedAtUtc,
+                Relevance: titleMatch ? 2 : 1,
+                ResultType: "Resource");
+        });
+
         var taskResults = tasks.Select(t =>
         {
             var titleMatch = t.Title.Contains(term, StringComparison.OrdinalIgnoreCase);
@@ -292,6 +358,7 @@ internal sealed class SearchService(
             .Concat(outputResults)
             .Concat(projectResults)
             .Concat(areaResults)
+            .Concat(resourceResults)
             .Concat(taskResults)
             .Concat(goalResults)
             .Concat(ideaResults)

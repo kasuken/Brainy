@@ -20,4 +20,5 @@ public record UpdateTaskDto(
     /// Concurrency token from the loaded task. When provided, the update fails with a
     /// <see cref="Common.ConcurrencyConflictException"/> if the task changed since it was loaded.
     /// </summary>
-    byte[]? RowVersion = null);
+    byte[]? RowVersion = null,
+    IReadOnlyList<Guid>? DependsOnTaskIds = null);

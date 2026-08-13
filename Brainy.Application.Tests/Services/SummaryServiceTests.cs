@@ -5,7 +5,7 @@ using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
 using Brainy.Domain.Entities;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -61,6 +61,10 @@ public class SummaryServiceTests
         stored.Id.Should().Be(result.Id);
         stored.Content.Should().Be("the essence");
         stored.IsAiGenerated.Should().BeFalse();
+        var activity = await db.LifecycleActivities.AsNoTracking().SingleAsync(
+            entry => entry.ActivityType == Domain.Enums.PulseActivityType.SummaryCreated);
+        activity.EntityId.Should().Be(result.Id);
+        activity.Link.Should().Be($"/notes/{note.Id}");
     }
 
     [Fact]
@@ -134,6 +138,8 @@ public class SummaryServiceTests
         await sut.DeleteAsync(created.Id);
 
         (await db.Summaries.AsNoTracking().CountAsync()).Should().Be(0);
+        (await db.LifecycleActivities.AsNoTracking().CountAsync(
+            entry => entry.EntityId == created.Id)).Should().Be(1);
     }
 
     [Fact]

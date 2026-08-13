@@ -121,10 +121,46 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
             .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId, cancellationToken).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Area '{id}' was not found.");
 
+        if (area.IsArchived)
+            return;
+
+        var blockers = new List<string>();
+        AddBlocker("project", await context.Projects.AsNoTracking()
+            .CountAsync(p => p.UserId == userId && p.AreaId == id && !p.IsArchived && p.Status != ProjectStatus.Archived, cancellationToken)
+            .ConfigureAwait(false));
+        AddBlocker("resource", await context.Resources.AsNoTracking()
+            .CountAsync(r => r.UserId == userId && r.AreaId == id && !r.IsArchived, cancellationToken)
+            .ConfigureAwait(false));
+        AddBlocker("goal", await context.Goals.AsNoTracking()
+            .CountAsync(g => g.UserId == userId && g.AreaId == id && !g.IsArchived && g.Status != GoalStatus.Archived, cancellationToken)
+            .ConfigureAwait(false));
+        AddBlocker("note", await context.Notes.AsNoTracking()
+            .CountAsync(n => n.UserId == userId && n.AreaId == id && !n.IsArchived && n.Status != NoteStatus.Archived, cancellationToken)
+            .ConfigureAwait(false));
+        AddBlocker("idea", await context.Ideas.AsNoTracking()
+            .CountAsync(i => i.UserId == userId && i.AreaId == id && !i.IsArchived, cancellationToken)
+            .ConfigureAwait(false));
+        AddBlocker("output", await context.Outputs.AsNoTracking()
+            .CountAsync(o => o.UserId == userId && o.AreaId == id && !o.IsArchived && o.Status != OutputStatus.Archived, cancellationToken)
+            .ConfigureAwait(false));
+
+        if (blockers.Count > 0)
+            throw new InvalidOperationException(
+                $"Area '{area.Name}' cannot be archived while it contains {string.Join(", ", blockers)}. " +
+                "Archive or reassign those items first.");
+
         area.IsArchived = true;
         area.ArchivedAtUtc = DateTime.UtcNow;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return;
+
+        void AddBlocker(string label, int count)
+        {
+            if (count > 0)
+                blockers.Add($"{count} active {label}{(count == 1 ? string.Empty : "s")}");
+        }
     }
 
     public async Task RestoreAsync(Guid id, CancellationToken cancellationToken = default)
@@ -165,7 +201,7 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
         var areaExists = await context.Areas
-            .AnyAsync(a => a.Id == areaId && a.UserId == userId, cancellationToken).ConfigureAwait(false);
+            .AnyAsync(a => a.Id == areaId && a.UserId == userId && !a.IsArchived, cancellationToken).ConfigureAwait(false);
         if (!areaExists)
             throw new KeyNotFoundException($"Area '{areaId}' was not found.");
 
@@ -187,7 +223,7 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
         var areaExists = await context.Areas
-            .AnyAsync(a => a.Id == areaId && a.UserId == userId, cancellationToken).ConfigureAwait(false);
+            .AnyAsync(a => a.Id == areaId && a.UserId == userId && !a.IsArchived, cancellationToken).ConfigureAwait(false);
         if (!areaExists)
             throw new KeyNotFoundException($"Area '{areaId}' was not found.");
 

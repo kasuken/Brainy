@@ -1,12 +1,10 @@
 @using Brainy.Application.DTOs.Goals
+@using Brainy.Application.DTOs.Areas
 @using Brainy.Domain.Enums
 
 <MudPaper Class="goal-kanban-card"
           Elevation="0"
-          role="button"
-          tabindex="0"
-          Style="@($"--goal-accent:{GetStatusColor(Goal.Status)}")"
-          @onclick="HandleClick">
+          Style="@($"--goal-accent:{GetStatusColor(Goal.Status)}")">
     <div class="goal-kanban-card__rail"></div>
 
     <div class="goal-kanban-card__header">
@@ -26,9 +24,9 @@
         }
     </div>
 
-    <MudText Typo="Typo.h6" Class="goal-kanban-card__title">
-        @Goal.Title
-    </MudText>
+    <h3 class="goal-kanban-card__title">
+        <button type="button" class="goal-kanban-card__open" @onclick="HandleClick">@Goal.Title</button>
+    </h3>
 
     <div class="goal-kanban-card__meta">
         <span>@Goal.CompletedMilestones/@Goal.TotalMilestones milestones</span>
@@ -40,13 +38,36 @@
                        Rounded="true"
                        Size="Size.Small"
                        Value="@Goal.ProgressPercent" />
+
+    @if (OnAreaChanged.HasDelegate)
+    {
+        <MudSelect T="Guid?"
+                   Value="@Goal.AreaId"
+                   ValueChanged="HandleAreaChanged"
+                   Label="Move to area"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Disabled="@Goal.IsArchived"
+                   Class="goal-kanban-card__area-select">
+            <MudSelectItem T="Guid?" Value="@((Guid?)null)">No Area</MudSelectItem>
+            @foreach (var area in Areas)
+            {
+                <MudSelectItem T="Guid?" Value="@((Guid?)area.Id)" Disabled="@area.IsArchived">
+                    @($"{area.Name}{(area.IsArchived ? " (archived)" : string.Empty)}")
+                </MudSelectItem>
+            }
+        </MudSelect>
+    }
 </MudPaper>
 
 @code {
     [Parameter] public GoalDto Goal { get; set; } = default!;
     [Parameter] public EventCallback<GoalDto> OnCardClicked { get; set; }
+    [Parameter] public IReadOnlyList<AreaDto> Areas { get; set; } = [];
+    [Parameter] public EventCallback<Guid?> OnAreaChanged { get; set; }
 
     private Task HandleClick() => OnCardClicked.InvokeAsync(Goal);
+    private Task HandleAreaChanged(Guid? areaId) => OnAreaChanged.InvokeAsync(areaId);
 
     private bool IsTargetDateUrgent()
         => Goal.TargetDate.HasValue
@@ -140,6 +161,20 @@
         line-height: 1.2;
         color: var(--ink);
     }
+
+    .goal-kanban-card__open {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        text-align: left;
+    }
+    .goal-kanban-card__open:hover { color: var(--clay); text-decoration: underline; text-underline-offset: .16em; }
+    .goal-kanban-card__open:focus-visible { outline: 3px solid var(--clay-ring); outline-offset: 2px; }
+
+    .goal-kanban-card__area-select { margin-left: .2rem; }
 
     .goal-kanban-card__meta {
         display: flex;

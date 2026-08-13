@@ -5,4 +5,6 @@ public record CreateHighlightDto(
     Guid NoteId,
     string Text,
     string? Annotation,
-    int Layer = 1);
+    int Layer = 1,
+    int? StartOffset = null,
+    int? EndOffset = null);

@@ -9,8 +9,8 @@
 <MudDialog Class="qtd-dialog">
     <TitleContent>
         <div class="qtd-header">
-            <span class="qtd-header-glyph">+</span>
-            <span class="qtd-header-title">New Task</span>
+            <span class="qtd-header-glyph" aria-hidden="true">+</span>
+            <h2 class="qtd-header-title">New Task</h2>
             @if (SelectedDate != default)
             {
                 <span class="qtd-header-date">· @SelectedDate.ToString("MMM d")</span>
@@ -62,6 +62,7 @@
         <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="Cancel">Cancel</MudButton>
         <MudButton Variant="Variant.Filled" Color="Color.Primary"
                    OnClick="SubmitAsync"
+                   aria-busy="@(_saving ? "true" : "false")"
                    Disabled="_saving || string.IsNullOrWhiteSpace(_title) || _projectId == Guid.Empty">
             @(_saving ? "Creating…" : "Create Task")
         </MudButton>
@@ -88,6 +89,7 @@
     font-family: var(--font-display);
     font-size: 1.2rem;
     font-weight: 500;
+    margin: 0;
     color: var(--ink);
 }
 

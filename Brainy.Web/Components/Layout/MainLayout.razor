@@ -1,4 +1,5 @@
 @using Brainy.Application.DTOs.Notes
+@using Brainy.Application.Interfaces.Services
 @using Brainy.Web.Components.Pages.Inbox
 @using Brainy.Web.Themes
 @inherits LayoutComponentBase
@@ -7,15 +8,25 @@
 @inject IDialogService DialogService
 @inject ThemeService ThemeService
 @inject IJSRuntime JSRuntime
+@inject IUserTimeZoneService UserTimeZoneService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
 
 <MudThemeProvider Theme="_currentTheme" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
+<CascadingValue Value="_userTimeZone">
 <MudLayout>
+    <a class="brainy-skip-link" href="#brainy-main">Skip to main content</a>
     <MudAppBar Elevation="0" Class="brainy-appbar">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
+        <AuthorizeView>
+            <Authorized>
+                <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                               aria-label="Toggle navigation" OnClick="ToggleDrawer" />
+            </Authorized>
+        </AuthorizeView>
         <a href="/" class="brainy-appbar__brand">
             <img class="brainy-appbar__logo" src="img/logo.png" alt="Brainy logo" />
             <span class="brainy-appbar__name">Brainy</span>
@@ -38,10 +49,10 @@
                         </div>
                     </MudMenuItem>
                 </MudMenu>
-                <div class="brainy-user">
+                <a class="brainy-user brainy-user-link" href="/Account/Manage" aria-label="Manage account and export data">
                     <span class="brainy-user__avatar">@GetInitials(context.User.Identity?.Name)</span>
                     <span class="brainy-user__email d-none d-sm-flex">@context.User.Identity?.Name</span>
-                </div>
+                </a>
                 <form action="Account/Logout" method="post" class="brainy-logout-form">
                     <AntiforgeryToken />
                     <input type="hidden" name="ReturnUrl" value="Account/Login" />
@@ -65,26 +76,37 @@
         </AuthorizeView>
     </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen" Elevation="0" ClipMode="DrawerClipMode.Always" Class="brainy-drawer">
-        <NavMenu />
-    </MudDrawer>
+    <AuthorizeView>
+        <Authorized>
+            <MudDrawer @bind-Open="_drawerOpen" Elevation="0" ClipMode="DrawerClipMode.Always" Class="brainy-drawer">
+                <NavMenu />
+            </MudDrawer>
+        </Authorized>
+    </AuthorizeView>
 
-    <MudMainContent>
+    <MudMainContent id="brainy-main">
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-8">
             @Body
         </MudContainer>
 
-        <div class="layout-fab">
-            <MudFab Color="Color.Primary"
-                    StartIcon="@Icons.Material.Filled.Add"
-                    Label="Capture"
-                    Size="Size.Medium"
-                    OnClick="OpenQuickCaptureAsync" />
-        </div>
+        <AuthorizeView>
+            <Authorized>
+                <div class="layout-fab">
+                    <MudFab Color="Color.Primary"
+                            StartIcon="@Icons.Material.Filled.Add"
+                            Label="Capture"
+                            Size="Size.Medium"
+                            OnClick="OpenQuickCaptureAsync" />
+                </div>
+            </Authorized>
+        </AuthorizeView>
     </MudMainContent>
 </MudLayout>
+</CascadingValue>
 
 <style>
+    .brainy-user-link { color: inherit; text-decoration: none; }
+    .brainy-user-link:focus-visible { outline: 3px solid var(--clay-ring); outline-offset: 2px; border-radius: 8px; }
     .layout-fab {
         position: fixed;
         right: 2rem;
@@ -107,11 +129,19 @@
 @code {
     private bool _drawerOpen = true;
     private MudTheme _currentTheme = AppThemes.BrainyTheme;
+    private TimeZoneInfo _userTimeZone = TimeZoneInfo.Utc;
 
     protected override void OnInitialized()
     {
         ThemeService.OnThemeChanged += HandleThemeChanged;
         UpdateTheme();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authenticationState.User.Identity?.IsAuthenticated == true)
+            _userTimeZone = await UserTimeZoneService.GetTimeZoneAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -129,6 +159,8 @@
             {
                 await ApplyThemeToDomAsync();
             }
+
+            await PersistBrowserTimeZoneAsync();
         }
     }
 
@@ -176,6 +208,31 @@
         catch (Exception)
         {
             // Ignored if JS is not available (e.g., during pre-rendering)
+        }
+    }
+
+    private async Task PersistBrowserTimeZoneAsync()
+    {
+        try
+        {
+            var timeZoneId = await JSRuntime.InvokeAsync<string>("window.brainyTimeZone.get");
+            if (TimeZoneInfo.TryFindSystemTimeZoneById(timeZoneId, out var browserTimeZone))
+            {
+                _userTimeZone = browserTimeZone;
+                StateHasChanged();
+            }
+
+            var storedTimeZoneId = await UserTimeZoneService.GetTimeZoneIdAsync();
+            if (!string.Equals(storedTimeZoneId, timeZoneId, StringComparison.OrdinalIgnoreCase))
+            {
+                await UserTimeZoneService.SetTimeZoneIdAsync(timeZoneId);
+                Navigation.Refresh(forceReload: true);
+            }
+        }
+        catch (Exception)
+        {
+            // UTC remains the safe default during prerendering or when browser
+            // time-zone detection is unavailable.
         }
     }
 

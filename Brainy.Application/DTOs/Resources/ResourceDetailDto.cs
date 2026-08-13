@@ -16,6 +16,8 @@ public record ResourceDetailDto(
     IReadOnlyList<string> Tags,
     int NoteCount,
     IReadOnlyList<ResourceNoteDto> Notes,
-    string Emoji = ResourceEmojiDefaults.DefaultEmoji);
+    string Emoji = ResourceEmojiDefaults.DefaultEmoji,
+    /// <summary>Concurrency token captured at load time; pass back on update or delete.</summary>
+    byte[]? RowVersion = null);
 
 public record ResourceNoteDto(Guid Id, string Title, DateTime UpdatedAtUtc);

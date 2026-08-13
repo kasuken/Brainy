@@ -18,7 +18,7 @@ namespace Brainy.Application.Services;
 internal sealed class ProjectService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    TimeProvider timeProvider) : IProjectService
+    IUserTimeZoneService userTimeZone) : IProjectService
 {
     public async Task<IReadOnlyList<ProjectDto>> GetAllActiveAsync(CancellationToken cancellationToken = default)
     {
@@ -73,7 +73,7 @@ internal sealed class ProjectService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var today = timeProvider.GetUserToday();
+        var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
         var data = await context.Projects
             .AsNoTracking()
@@ -120,10 +120,13 @@ internal sealed class ProjectService(
 
         if (project is null) return null;
 
-        // Top-level tasks only (subtasks are loaded separately and nested)
+        // Top-level tasks only (subtasks are loaded separately and nested). Archived
+        // project context deliberately includes its archived tasks for reference.
         var tasks = await context.Tasks
             .AsNoTracking()
-            .Where(t => t.ProjectId == id && t.UserId == userId && !t.IsArchived && t.ParentTaskId == null)
+            .Where(t => t.ProjectId == id && t.UserId == userId
+                        && (!t.IsArchived || project.IsArchived)
+                        && t.ParentTaskId == null)
             .OrderBy(t => t.Status)
             .ThenByDescending(t => t.Priority)
             .ThenBy(t => t.DueDate)
@@ -142,7 +145,8 @@ internal sealed class ProjectService(
         var topLevelIds = tasks.Select(t => t.Id).ToList();
         var subtasks = await context.Tasks
             .AsNoTracking()
-            .Where(t => t.ProjectId == id && t.UserId == userId && !t.IsArchived
+            .Where(t => t.ProjectId == id && t.UserId == userId
+                        && (!t.IsArchived || project.IsArchived)
                         && t.ParentTaskId != null && topLevelIds.Contains(t.ParentTaskId.Value))
             .OrderBy(t => t.Status)
             .ThenByDescending(t => t.Priority)
@@ -261,11 +265,8 @@ internal sealed class ProjectService(
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var areaExists = await context.Areas
-            .AnyAsync(a => a.Id == dto.AreaId && a.UserId == userId, cancellationToken)
+        await context.Areas.EnsureActiveOwnedAreaAsync(dto.AreaId, userId, cancellationToken)
             .ConfigureAwait(false);
-        if (!areaExists)
-            throw new KeyNotFoundException($"Area '{dto.AreaId}' was not found.");
 
         if (dto.GoalId.HasValue)
         {
@@ -305,11 +306,8 @@ internal sealed class ProjectService(
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var areaExists = await context.Areas
-            .AnyAsync(a => a.Id == dto.AreaId && a.UserId == userId, cancellationToken)
+        await context.Areas.EnsureActiveOwnedAreaAsync(dto.AreaId, userId, cancellationToken)
             .ConfigureAwait(false);
-        if (!areaExists)
-            throw new KeyNotFoundException($"Area '{dto.AreaId}' was not found.");
 
         if (dto.GoalId.HasValue)
         {
@@ -420,7 +418,13 @@ internal sealed class ProjectService(
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Project '{id}' was not found.");
 
+        if (project.IsArchived)
+            return;
+
         var now = DateTime.UtcNow;
+        var archiveOperationId = Guid.NewGuid();
+        project.StatusBeforeArchive = project.Status;
+        project.ArchiveOperationId = archiveOperationId;
         project.IsArchived    = true;
         project.ArchivedAtUtc = now;
         project.Status        = ProjectStatus.Archived;
@@ -430,6 +434,8 @@ internal sealed class ProjectService(
         {
             task.IsArchived    = true;
             task.ArchivedAtUtc = now;
+            task.ArchiveOperationId = archiveOperationId;
+            task.IsCurrentTask = false;
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -445,15 +451,27 @@ internal sealed class ProjectService(
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Project '{id}' was not found.");
 
+        if (!project.IsArchived)
+            return ToDto(project);
+
+        await context.Areas.EnsureActiveOwnedAreaAsync(project.AreaId, userId, cancellationToken)
+            .ConfigureAwait(false);
+
+        var archiveOperationId = project.ArchiveOperationId;
         project.IsArchived    = false;
         project.ArchivedAtUtc = null;
-        project.Status        = ProjectStatus.NotStarted;
+        project.Status        = project.StatusBeforeArchive ?? ProjectStatus.NotStarted;
+        project.StatusBeforeArchive = null;
+        project.ArchiveOperationId = null;
 
-        // Restore tasks that were archived together with the project
-        foreach (var task in project.Tasks.Where(t => t.IsArchived))
+        // Restore only tasks archived by this project operation. Tasks archived
+        // manually before the project entered Archives remain archived.
+        foreach (var task in project.Tasks.Where(t =>
+                     t.IsArchived && archiveOperationId.HasValue && t.ArchiveOperationId == archiveOperationId))
         {
             task.IsArchived    = false;
             task.ArchivedAtUtc = null;
+            task.ArchiveOperationId = null;
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -520,7 +538,7 @@ internal sealed class ProjectService(
     public async Task<IReadOnlyList<ProjectSummaryDto>> GetDueTodayProjectsAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today  = timeProvider.GetUserToday();
+        var today  = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
         var data = await BuildDeadlineSummaryQuery(userId, today)
             .Where(p => p.DueDate.HasValue && p.DueDate.Value.Date == today)
@@ -535,9 +553,10 @@ internal sealed class ProjectService(
     public async Task<IReadOnlyList<ProjectSummaryDto>> GetDueThisWeekProjectsAsync(CancellationToken cancellationToken = default)
     {
         var userId   = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today    = timeProvider.GetUserToday();
+        var today    = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
         var tomorrow = today.AddDays(1);
-        var weekEnd  = today.AddDays(6);
+        var daysUntilSunday = ((int)DayOfWeek.Sunday - (int)today.DayOfWeek + 7) % 7;
+        var weekEnd  = today.AddDays(daysUntilSunday);
 
         var data = await BuildDeadlineSummaryQuery(userId, today)
             .Where(p => p.DueDate.HasValue
@@ -554,7 +573,7 @@ internal sealed class ProjectService(
     public async Task<IReadOnlyList<ProjectSummaryDto>> GetOverdueProjectsAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today  = timeProvider.GetUserToday();
+        var today  = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
         var data = await BuildDeadlineSummaryQuery(userId, today)
             .Where(p => p.DueDate.HasValue && p.DueDate.Value.Date < today)

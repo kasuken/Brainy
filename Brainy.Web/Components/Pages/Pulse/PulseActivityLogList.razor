@@ -9,8 +9,8 @@
 
 @if (_groups.Count == 0)
 {
-    <div class="pulse-log-empty">
-        <MudIcon Icon="@Icons.Material.Outlined.HourglassEmpty" Class="pulse-log-empty__icon" />
+    <div class="pulse-log-empty" role="status">
+        <MudIcon Icon="@Icons.Material.Outlined.HourglassEmpty" Class="pulse-log-empty__icon" aria-hidden="true" />
         <MudText Typo="Typo.body2" Class="mud-text-secondary">No activity recorded for this period.</MudText>
     </div>
 }
@@ -18,37 +18,39 @@ else
 {
     @foreach (var group in _groups)
     {
-        <div class="pulse-log-day">
+        <section class="pulse-log-day" aria-labelledby="@group.HeadingId">
             <div class="pulse-log-day__header">
-                <span class="pulse-log-day__label">@group.Label</span>
+                <h3 id="@group.HeadingId" class="pulse-log-day__label">@group.Label</h3>
                 <span class="pulse-log-day__count">@group.Entries.Count activit@(group.Entries.Count == 1 ? "y" : "ies")</span>
             </div>
 
-            <div class="pulse-log-day__items">
+            <ul class="pulse-log-day__items">
                 @foreach (var entry in group.Entries)
                 {
-                    @if (entry.Link is not null)
-                    {
-                        <a class="pulse-log-entry pulse-log-entry--link" href="@entry.Link">
-                            @RenderEntryContent(entry)
-                        </a>
-                    }
-                    else
-                    {
-                        <div class="pulse-log-entry">
-                            @RenderEntryContent(entry)
-                        </div>
-                    }
+                    <li>
+                        @if (entry.Link is not null)
+                        {
+                            <a class="pulse-log-entry pulse-log-entry--link" href="@entry.Link">
+                                @RenderEntryContent(entry)
+                            </a>
+                        }
+                        else
+                        {
+                            <div class="pulse-log-entry">
+                                @RenderEntryContent(entry)
+                            </div>
+                        }
+                    </li>
                 }
-            </div>
-        </div>
+            </ul>
+        </section>
     }
 }
 
 @code {
     [Parameter] public IReadOnlyList<PulseActivityLogEntryDto> Entries { get; set; } = [];
 
-    private sealed record DayGroup(string Label, IReadOnlyList<PulseActivityLogEntryDto> Entries);
+    private sealed record DayGroup(string HeadingId, string Label, IReadOnlyList<PulseActivityLogEntryDto> Entries);
 
     private IReadOnlyList<DayGroup> _groups = [];
 
@@ -56,13 +58,16 @@ else
 
     private void RebuildGroups()
     {
-        var today = DateTime.Now.Date;
+        var today = ToUserTime(DateTime.UtcNow).Date;
 
         _groups = Entries
             .OrderByDescending(e => e.OccurredAtUtc)
-            .GroupBy(e => e.OccurredAtUtc.ToLocalTime().Date)
+            .GroupBy(e => ToUserTime(e.OccurredAtUtc).Date)
             .OrderByDescending(g => g.Key)
-            .Select(g => new DayGroup(FormatDayLabel(g.Key, today), g.ToList()))
+            .Select(g => new DayGroup(
+                $"pulse-log-day-{g.Key:yyyyMMdd}",
+                FormatDayLabel(g.Key, today),
+                g.ToList()))
             .ToList();
     }
 
@@ -77,48 +82,65 @@ else
     {
         builder.OpenElement(0, "span");
         builder.AddAttribute(1, "class", "pulse-log-entry__icon");
-        builder.AddContent(2, EntryIcon(entry.ActivityType));
+        builder.AddAttribute(2, "aria-hidden", "true");
+        builder.AddContent(3, EntryIcon(entry.ActivityType));
         builder.CloseElement();
 
-        builder.OpenElement(3, "div");
-        builder.AddAttribute(4, "class", "pulse-log-entry__body");
+        builder.OpenElement(4, "div");
+        builder.AddAttribute(5, "class", "pulse-log-entry__body");
 
-        builder.OpenElement(5, "div");
-        builder.AddAttribute(6, "class", "pulse-log-entry__title");
-        builder.AddContent(7, entry.Title);
+        builder.OpenElement(6, "div");
+        builder.AddAttribute(7, "class", "pulse-log-entry__title");
+        builder.AddContent(8, entry.Title);
         builder.CloseElement();
 
         if (!string.IsNullOrWhiteSpace(entry.Context))
         {
-            builder.OpenElement(8, "div");
-            builder.AddAttribute(9, "class", "pulse-log-entry__context");
-            builder.AddContent(10, entry.Context);
+            builder.OpenElement(9, "div");
+            builder.AddAttribute(10, "class", "pulse-log-entry__context");
+            builder.AddContent(11, entry.Context);
             builder.CloseElement();
         }
 
         builder.CloseElement();
 
-        builder.OpenElement(11, "span");
-        builder.AddAttribute(12, "class", "pulse-log-entry__time");
-        builder.AddContent(13, entry.OccurredAtUtc.ToLocalTime().ToString("h:mm tt"));
+        builder.OpenElement(12, "time");
+        builder.AddAttribute(13, "class", "pulse-log-entry__time");
+        builder.AddAttribute(14, "datetime", AsUtc(entry.OccurredAtUtc).ToString("O"));
+        builder.AddContent(15, ToUserTime(entry.OccurredAtUtc).ToString("h:mm tt"));
         builder.CloseElement();
     };
+
+    [CascadingParameter]
+    private TimeZoneInfo UserTimeZone { get; set; } = TimeZoneInfo.Utc;
+
+    private static DateTime AsUtc(DateTime value) =>
+        value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+
+    private DateTime ToUserTime(DateTime value) =>
+        TimeZoneInfo.ConvertTimeFromUtc(AsUtc(value), UserTimeZone);
 
     private static string EntryIcon(PulseActivityType type) => type switch
     {
         PulseActivityType.NoteCaptured => "📝",
         PulseActivityType.NoteProcessed => "📥",
         PulseActivityType.NoteArchived => "📁",
+        PulseActivityType.NoteRestored => "↩️",
         PulseActivityType.HighlightAdded => "🖍️",
         PulseActivityType.SummaryCreated => "✨",
         PulseActivityType.TaskCreated => "☑️",
         PulseActivityType.TaskCompleted => "✅",
         PulseActivityType.TaskArchived => "📦",
+        PulseActivityType.TaskReopened => "🔄",
+        PulseActivityType.TaskRestored => "↩️",
         PulseActivityType.ProjectCreated => "🌱",
         PulseActivityType.ProjectCompleted => "🏁",
         PulseActivityType.ProjectArchived => "📦",
+        PulseActivityType.ProjectRestored => "↩️",
         PulseActivityType.OutputCreated => "🧩",
         PulseActivityType.OutputPublished => "🚀",
+        PulseActivityType.OutputArchived => "📦",
+        PulseActivityType.OutputRestored => "↩️",
         PulseActivityType.IdeaCaptured => "💡",
         PulseActivityType.IdeaCommitted => "🔥",
         PulseActivityType.GoalAchieved => "🎯",
@@ -166,6 +188,7 @@ else
         font-size: .95rem;
         font-weight: 600;
         color: var(--ink);
+        margin: 0;
     }
 
     .pulse-log-day__count {
@@ -177,6 +200,9 @@ else
         display: flex;
         flex-direction: column;
         gap: .5rem;
+        list-style: none;
+        margin: 0;
+        padding: 0;
     }
 
     .pulse-log-entry {

@@ -22,6 +22,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         var task = await context.Tasks
             .AsNoTracking()
             .Include(t => t.Subtasks)
+            .Include(t => t.Dependencies)
             .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -49,7 +50,8 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             RecurrenceInterval: task.RecurrenceInterval,
             RecurrenceEndDate: task.RecurrenceEndDate,
             NextOccurrenceDate: task.NextOccurrenceDate,
-            RowVersion: task.RowVersion);
+            RowVersion: task.RowVersion,
+            DependsOnTaskIds: task.Dependencies.Select(d => d.DependsOnTaskId).ToList());
     }
 
     public async Task<IReadOnlyList<TaskItemDto>> GetByProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
@@ -72,11 +74,14 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
                         s.DueDate, s.CompletedDate, s.IsArchived, s.IsCurrentTask, s.ProjectId, s.ParentTaskId,
                         s.CreatedAtUtc, s.UpdatedAtUtc, 0, 0, null, s.Complexity, s.SortOrder)
                     {
-                        RowVersion = s.RowVersion
+                        RowVersion = s.RowVersion,
+                        DependsOnTaskIds = s.Dependencies.Select(d => d.DependsOnTaskId).ToList()
                     })
                     .ToList(),
                 t.Complexity, t.SortOrder,
-                t.IsRecurring, t.RecurrenceType, t.RecurrenceInterval, t.RecurrenceEndDate, t.NextOccurrenceDate)
+                t.IsRecurring, t.RecurrenceType, t.RecurrenceInterval, t.RecurrenceEndDate, t.NextOccurrenceDate,
+                null,
+                t.Dependencies.Select(d => d.DependsOnTaskId).ToList())
             {
                 RowVersion = t.RowVersion
             })
@@ -94,6 +99,27 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             .ToList();
     }
 
+    public async Task<IReadOnlyList<ArchivedTaskDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await context.Tasks
+            .AsNoTracking()
+            .Where(t => t.UserId == userId && t.IsArchived)
+            .OrderByDescending(t => t.ArchivedAtUtc)
+            .Select(t => new ArchivedTaskDto(
+                t.Id,
+                t.Title,
+                t.Description,
+                t.ProjectId,
+                t.Project.Name,
+                t.ArchivedAtUtc ?? t.UpdatedAtUtc,
+                t.UpdatedAtUtc,
+                !t.Project.IsArchived && (t.ParentTaskId == null || !t.ParentTask!.IsArchived)))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     private static IReadOnlyList<TaskItemDto>? OrderTasks(IReadOnlyList<TaskItemDto>? tasks) =>
         tasks is null or { Count: 0 }
             ? tasks
@@ -109,11 +135,14 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         if (string.IsNullOrWhiteSpace(dto.Title))
             throw new ArgumentException("Task title is required.", nameof(dto));
 
+        ValidateRecurrence(dto.IsRecurring, dto.RecurrenceType, dto.RecurrenceInterval,
+            dto.NextOccurrenceDate, dto.RecurrenceEndDate);
+
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
         // Verify the project belongs to the user
         var projectExists = await context.Projects
-            .AnyAsync(p => p.Id == dto.ProjectId && p.UserId == userId, cancellationToken)
+            .AnyAsync(p => p.Id == dto.ProjectId && p.UserId == userId && !p.IsArchived, cancellationToken)
             .ConfigureAwait(false);
 
         if (!projectExists)
@@ -143,11 +172,21 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             DueDate      = dto.DueDate,
             Status       = TaskItemStatus.Todo,
             IsRecurring          = dto.IsRecurring,
-            RecurrenceType       = dto.RecurrenceType,
-            RecurrenceInterval   = dto.RecurrenceInterval,
-            RecurrenceEndDate    = dto.RecurrenceEndDate,
-            NextOccurrenceDate   = dto.NextOccurrenceDate,
+            RecurrenceType       = dto.IsRecurring ? dto.RecurrenceType : null,
+            RecurrenceInterval   = dto.IsRecurring ? dto.RecurrenceInterval : null,
+            RecurrenceEndDate    = dto.IsRecurring ? dto.RecurrenceEndDate?.Date : null,
+            NextOccurrenceDate   = dto.IsRecurring ? dto.NextOccurrenceDate?.Date : null,
         };
+
+        var dependencyIds = NormalizeDependencyIds(dto.DependsOnTaskIds, task.Id);
+        await ValidateDependenciesAsync(task.Id, dto.ProjectId, dependencyIds, userId, cancellationToken)
+            .ConfigureAwait(false);
+        task.Dependencies = dependencyIds.Select(dependencyId => new TaskDependency
+        {
+            Id = Guid.NewGuid(),
+            TaskId = task.Id,
+            DependsOnTaskId = dependencyId
+        }).ToList();
 
         context.Tasks.Add(task);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -167,9 +206,32 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         if (string.IsNullOrWhiteSpace(dto.Title))
             throw new ArgumentException("Task title is required.", nameof(dto));
 
+        ValidateRecurrence(dto.IsRecurring, dto.RecurrenceType, dto.RecurrenceInterval,
+            dto.NextOccurrenceDate, dto.RecurrenceEndDate);
+
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        var requiresSerializedDependencyState = dto.DependsOnTaskIds is not null ||
+                                                dto.Status is TaskItemStatus.InProgress or TaskItemStatus.Done;
+        if (!requiresSerializedDependencyState)
+        {
+            return await UpdateCoreAsync(dto, userId, cancellationToken).ConfigureAwait(false);
+        }
+
+        return await context.ExecuteSerializedTaskDependencyMutationAsync(
+                userId,
+                transactionCancellationToken => UpdateCoreAsync(dto, userId, transactionCancellationToken),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<TaskItemDto> UpdateCoreAsync(
+        UpdateTaskDto dto,
+        string userId,
+        CancellationToken cancellationToken)
+    {
         var task = await context.Tasks
+            .Include(t => t.Dependencies)
             .FirstOrDefaultAsync(t => t.Id == dto.Id && t.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Task '{dto.Id}' was not found.");
@@ -179,19 +241,46 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         if (dto.RowVersion is not null)
             context.Entry(task).Property(t => t.RowVersion).OriginalValue = dto.RowVersion;
 
+        var dependencyIds = dto.DependsOnTaskIds is null
+            ? task.Dependencies.Select(d => d.DependsOnTaskId).ToList()
+            : NormalizeDependencyIds(dto.DependsOnTaskIds, task.Id);
+        if (dto.DependsOnTaskIds is not null)
+        {
+            await ValidateDependenciesAsync(task.Id, task.ProjectId, dependencyIds, userId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var statusChanged = dto.Status != task.Status;
+        if (dto.Status is TaskItemStatus.InProgress or TaskItemStatus.Done)
+            await EnsurePrerequisitesCompletedAsync(dependencyIds, userId, cancellationToken).ConfigureAwait(false);
+
         task.Title       = dto.Title.Trim();
         task.Description = dto.Description?.Trim();
         task.Priority    = dto.Priority;
         task.Complexity  = dto.Complexity;
         task.DueDate     = dto.DueDate;
         task.IsRecurring          = dto.IsRecurring;
-        task.RecurrenceType       = dto.RecurrenceType;
-        task.RecurrenceInterval   = dto.RecurrenceInterval;
-        task.RecurrenceEndDate    = dto.RecurrenceEndDate;
-        task.NextOccurrenceDate   = dto.NextOccurrenceDate;
+        task.RecurrenceType       = dto.IsRecurring ? dto.RecurrenceType : null;
+        task.RecurrenceInterval   = dto.IsRecurring ? dto.RecurrenceInterval : null;
+        task.RecurrenceEndDate    = dto.IsRecurring ? dto.RecurrenceEndDate?.Date : null;
+        task.NextOccurrenceDate   = dto.IsRecurring ? dto.NextOccurrenceDate?.Date : null;
+
+        if (dto.DependsOnTaskIds is not null)
+        {
+            var existingDependencyIds = task.Dependencies.Select(d => d.DependsOnTaskId).ToHashSet();
+            if (!existingDependencyIds.SetEquals(dependencyIds))
+            {
+                context.TaskDependencies.RemoveRange(task.Dependencies);
+                context.TaskDependencies.AddRange(dependencyIds.Select(dependencyId => new TaskDependency
+                {
+                    Id = Guid.NewGuid(),
+                    TaskId = task.Id,
+                    DependsOnTaskId = dependencyId
+                }));
+            }
+        }
 
         // Handle status transition — keep CompletedDate in sync
-        var statusChanged = dto.Status != task.Status;
         if (dto.Status == TaskItemStatus.Done && task.Status != TaskItemStatus.Done)
         {
             task.CompletedDate = DateTime.UtcNow;
@@ -209,6 +298,11 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             task.IsCurrentTask = false;
         }
 
+        if (dto.Status == TaskItemStatus.Done && statusChanged && task.IsRecurring)
+        {
+            await PrepareRecurringOccurrenceAsync(task, userId, cancellationToken).ConfigureAwait(false);
+        }
+
         try
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -223,13 +317,25 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             await SyncParentProgressAsync(task.ParentTaskId.Value, userId, cancellationToken).ConfigureAwait(false);
         }
 
-        return ToDto(task);
+        return ToDto(task) with { DependsOnTaskIds = dependencyIds };
     }
 
     public async Task<TaskItemDto> CompleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await context.ExecuteSerializedTaskDependencyMutationAsync(
+                userId,
+                transactionCancellationToken => CompleteCoreAsync(id, userId, transactionCancellationToken),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<TaskItemDto> CompleteCoreAsync(
+        Guid id,
+        string userId,
+        CancellationToken cancellationToken)
+    {
         var task = await context.Tasks
             .Include(t => t.Subtasks)
             .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId, cancellationToken)
@@ -241,6 +347,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
 
         if (task.Status != TaskItemStatus.Done)
         {
+            await EnsurePrerequisitesCompletedAsync(task.Id, userId, cancellationToken).ConfigureAwait(false);
             task.Status        = TaskItemStatus.Done;
             task.CompletedDate = now;
             changed = true;
@@ -261,6 +368,12 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             changed = true;
         }
 
+        if (task.Status == TaskItemStatus.Done && task.IsRecurring)
+        {
+            await PrepareRecurringOccurrenceAsync(task, userId, cancellationToken).ConfigureAwait(false);
+            changed = true;
+        }
+
         if (changed)
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -278,6 +391,18 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await context.ExecuteSerializedTaskDependencyMutationAsync(
+                userId,
+                transactionCancellationToken => SetInProgressCoreAsync(id, userId, transactionCancellationToken),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<TaskItemDto> SetInProgressCoreAsync(
+        Guid id,
+        string userId,
+        CancellationToken cancellationToken)
+    {
         var task = await context.Tasks
             .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
@@ -285,6 +410,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
 
         if (task.Status != TaskItemStatus.InProgress)
         {
+            await EnsurePrerequisitesCompletedAsync(task.Id, userId, cancellationToken).ConfigureAwait(false);
             task.Status        = TaskItemStatus.InProgress;
             task.CompletedDate = null;
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -332,9 +458,14 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Task '{id}' was not found.");
 
+        if (task.IsArchived)
+            return;
+
         var now = DateTime.UtcNow;
+        var archiveOperationId = Guid.NewGuid();
         task.IsArchived    = true;
         task.ArchivedAtUtc = now;
+        task.ArchiveOperationId = archiveOperationId;
         task.IsCurrentTask = false;
 
         // Cascade archive to subtasks
@@ -342,6 +473,8 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         {
             sub.IsArchived    = true;
             sub.ArchivedAtUtc = now;
+            sub.ArchiveOperationId = archiveOperationId;
+            sub.IsCurrentTask = false;
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -351,6 +484,42 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         {
             await SyncParentProgressAsync(task.ParentTaskId.Value, userId, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    public async Task<TaskItemDto> RestoreAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var task = await context.Tasks
+            .Include(t => t.Project)
+            .Include(t => t.ParentTask)
+            .Include(t => t.Subtasks)
+            .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Task '{id}' was not found.");
+
+        if (!task.IsArchived)
+            return ToDto(task);
+
+        if (task.Project.IsArchived)
+            throw new InvalidOperationException("Restore the archived project to restore tasks archived with it.");
+        if (task.ParentTask?.IsArchived == true)
+            throw new InvalidOperationException("Restore the parent task before restoring this subtask.");
+
+        var operationId = task.ArchiveOperationId;
+        RestoreTask(task);
+
+        if (operationId.HasValue)
+        {
+            foreach (var subtask in task.Subtasks.Where(s => s.IsArchived && s.ArchiveOperationId == operationId))
+                RestoreTask(subtask);
+        }
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        if (task.ParentTaskId.HasValue)
+            await SyncParentProgressAsync(task.ParentTaskId.Value, userId, cancellationToken).ConfigureAwait(false);
+
+        return ToDto(task);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -394,16 +563,22 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        // Clear the flag on all tasks for this user first to enforce the one-per-user invariant
-        await context.Tasks
-            .Where(t => t.UserId == userId && t.IsCurrentTask)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsCurrentTask, false), cancellationToken)
+        // Load and validate the target before changing the existing current task. All
+        // flag changes are persisted in one SaveChanges transaction.
+        var candidates = await context.Tasks
+            .Include(t => t.Project)
+            .Where(t => t.UserId == userId && (t.Id == taskId || t.IsCurrentTask))
+            .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var task = await context.Tasks
-            .FirstOrDefaultAsync(t => t.Id == taskId && t.UserId == userId, cancellationToken)
-            .ConfigureAwait(false)
+        var task = candidates.FirstOrDefault(t => t.Id == taskId)
             ?? throw new KeyNotFoundException($"Task '{taskId}' was not found.");
+
+        if (task.IsArchived || task.Project.IsArchived || task.Status is TaskItemStatus.Done or TaskItemStatus.Archived)
+            throw new InvalidOperationException("Only an active, incomplete task can be set as the current task.");
+
+        foreach (var current in candidates.Where(t => t.IsCurrentTask && t.Id != taskId))
+            current.IsCurrentTask = false;
 
         if (task.Status != TaskItemStatus.InProgress)
         {
@@ -449,7 +624,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
-    public async Task<TaskItemDto> CreateRecurringOccurrenceAsync(Guid taskId, CancellationToken ct = default)
+    public async Task<TaskItemDto?> CreateRecurringOccurrenceAsync(Guid taskId, CancellationToken ct = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
 
@@ -461,65 +636,57 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         if (!template.IsRecurring)
             throw new InvalidOperationException($"Task '{taskId}' is not a recurring task.");
 
-        var occurrenceDueDate = template.NextOccurrenceDate;
+        if (template.Status != TaskItemStatus.Done)
+            throw new InvalidOperationException("A recurring task creates its next occurrence when it is completed.");
 
-        var occurrence = new TaskItem
-        {
-            Id          = Guid.NewGuid(),
-            UserId      = userId,
-            ProjectId   = template.ProjectId,
-            Title       = template.Title,
-            Description = template.Description,
-            Priority    = template.Priority,
-            Complexity  = template.Complexity,
-            DueDate     = occurrenceDueDate,
-            Status      = TaskItemStatus.Todo,
-            // Occurrences are one-off tasks, not themselves templates
-        };
-
-        context.Tasks.Add(occurrence);
-
-        // Advance the template's next occurrence date
-        if (occurrenceDueDate.HasValue
-            && template.RecurrenceType.HasValue
-            && template.RecurrenceInterval is > 0)
-        {
-            var interval = template.RecurrenceInterval.Value;
-            template.NextOccurrenceDate = template.RecurrenceType.Value switch
-            {
-                Domain.Enums.RecurrenceType.Daily   => occurrenceDueDate.Value.AddDays(interval),
-                Domain.Enums.RecurrenceType.Weekly  => occurrenceDueDate.Value.AddDays(7 * interval),
-                Domain.Enums.RecurrenceType.Monthly => occurrenceDueDate.Value.AddMonths(interval),
-                Domain.Enums.RecurrenceType.Yearly  => occurrenceDueDate.Value.AddYears(interval),
-                _                                   => occurrenceDueDate.Value,
-            };
-        }
+        var occurrence = await PrepareRecurringOccurrenceAsync(template, userId, ct).ConfigureAwait(false);
 
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
-
-        return ToDto(occurrence);
+        return occurrence is null ? null : ToDto(occurrence);
     }
 
     public async Task AddDependencyAsync(Guid taskId, Guid dependsOnTaskId, CancellationToken ct = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
 
-        var taskExists = await context.Tasks
-            .AnyAsync(t => t.Id == taskId && t.UserId == userId, ct)
+        _ = await context.ExecuteSerializedTaskDependencyMutationAsync(
+                userId,
+                transactionCancellationToken => AddDependencyCoreAsync(
+                    taskId,
+                    dependsOnTaskId,
+                    userId,
+                    transactionCancellationToken),
+                ct)
             .ConfigureAwait(false);
-        if (!taskExists)
+    }
+
+    private async Task<bool> AddDependencyCoreAsync(
+        Guid taskId,
+        Guid dependsOnTaskId,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        var taskState = await context.Tasks
+            .Where(t => t.Id == taskId && t.UserId == userId && !t.IsArchived)
+            .Select(t => new { t.ProjectId, t.Status })
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (taskState is null)
             throw new KeyNotFoundException($"Task '{taskId}' was not found.");
 
-        var dependsOnExists = await context.Tasks
-            .AnyAsync(t => t.Id == dependsOnTaskId && t.UserId == userId, ct)
+        var dependencyIds = NormalizeDependencyIds([dependsOnTaskId], taskId);
+        await ValidateDependenciesAsync(taskId, taskState.ProjectId, dependencyIds, userId, cancellationToken)
             .ConfigureAwait(false);
-        if (!dependsOnExists)
-            throw new KeyNotFoundException($"Task '{dependsOnTaskId}' was not found.");
 
         var alreadyExists = await context.TaskDependencies
-            .AnyAsync(d => d.TaskId == taskId && d.DependsOnTaskId == dependsOnTaskId, ct)
+            .AnyAsync(
+                d => d.TaskId == taskId && d.DependsOnTaskId == dependsOnTaskId,
+                cancellationToken)
             .ConfigureAwait(false);
-        if (alreadyExists) return;
+        if (alreadyExists) return false;
+
+        if (taskState.Status is TaskItemStatus.InProgress or TaskItemStatus.Done)
+            await EnsurePrerequisitesCompletedAsync(dependencyIds, userId, cancellationToken).ConfigureAwait(false);
 
         context.TaskDependencies.Add(new TaskDependency
         {
@@ -528,7 +695,8 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             DependsOnTaskId = dependsOnTaskId,
         });
 
-        await context.SaveChangesAsync(ct).ConfigureAwait(false);
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return true;
     }
 
     public async Task RemoveDependencyAsync(Guid taskId, Guid dependsOnTaskId, CancellationToken ct = default)
@@ -536,16 +704,11 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
 
         var dep = await context.TaskDependencies
-            .FirstOrDefaultAsync(d => d.TaskId == taskId && d.DependsOnTaskId == dependsOnTaskId, ct)
+            .FirstOrDefaultAsync(
+                d => d.TaskId == taskId && d.DependsOnTaskId == dependsOnTaskId && d.Task.UserId == userId,
+                ct)
             .ConfigureAwait(false);
         if (dep is null) return;
-
-        // Guard: the task must belong to the current user
-        var taskBelongsToUser = await context.Tasks
-            .AnyAsync(t => t.Id == taskId && t.UserId == userId, ct)
-            .ConfigureAwait(false);
-        if (!taskBelongsToUser)
-            throw new KeyNotFoundException($"Task '{taskId}' was not found.");
 
         context.TaskDependencies.Remove(dep);
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -598,6 +761,179 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         }
     }
 
+    private async Task<TaskItem?> PrepareRecurringOccurrenceAsync(
+        TaskItem template,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        ValidateRecurrence(template.IsRecurring, template.RecurrenceType, template.RecurrenceInterval,
+            template.NextOccurrenceDate, template.RecurrenceEndDate, allowExhausted: true);
+
+        var existing = await context.Tasks
+            .FirstOrDefaultAsync(t => t.RecurrenceSourceTaskId == template.Id && t.UserId == userId, cancellationToken)
+            .ConfigureAwait(false);
+        if (existing is not null)
+            return existing;
+
+        var occurrenceDueDate = template.NextOccurrenceDate!.Value.Date;
+        if (template.RecurrenceEndDate.HasValue && occurrenceDueDate > template.RecurrenceEndDate.Value.Date)
+            return null;
+
+        var followingDate = AdvanceRecurrence(
+            occurrenceDueDate,
+            template.RecurrenceType!.Value,
+            template.RecurrenceInterval!.Value);
+        var continues = !template.RecurrenceEndDate.HasValue || followingDate <= template.RecurrenceEndDate.Value.Date;
+
+        var occurrence = new TaskItem
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            ProjectId = template.ProjectId,
+            ParentTaskId = template.ParentTaskId,
+            Title = template.Title,
+            Description = template.Description,
+            Priority = template.Priority,
+            Complexity = template.Complexity,
+            DueDate = occurrenceDueDate,
+            Status = TaskItemStatus.Todo,
+            RecurrenceSourceTaskId = template.Id,
+            IsRecurring = continues,
+            RecurrenceType = continues ? template.RecurrenceType : null,
+            RecurrenceInterval = continues ? template.RecurrenceInterval : null,
+            RecurrenceEndDate = continues ? template.RecurrenceEndDate : null,
+            NextOccurrenceDate = continues ? followingDate : null,
+        };
+
+        template.NextOccurrenceDate = followingDate;
+        context.Tasks.Add(occurrence);
+        return occurrence;
+    }
+
+    private static DateTime AdvanceRecurrence(DateTime date, RecurrenceType recurrenceType, int interval) =>
+        recurrenceType switch
+        {
+            RecurrenceType.Daily => date.AddDays(interval),
+            RecurrenceType.Weekly => date.AddDays(7 * interval),
+            RecurrenceType.Monthly => date.AddMonths(interval),
+            RecurrenceType.Yearly => date.AddYears(interval),
+            _ => throw new ArgumentOutOfRangeException(nameof(recurrenceType)),
+        };
+
+    private static List<Guid> NormalizeDependencyIds(IReadOnlyList<Guid>? dependencyIds, Guid taskId)
+    {
+        var normalized = dependencyIds?.Distinct().ToList() ?? [];
+        if (normalized.Contains(taskId))
+            throw new InvalidOperationException("A task cannot depend on itself.");
+
+        return normalized;
+    }
+
+    private async Task ValidateDependenciesAsync(
+        Guid taskId,
+        Guid projectId,
+        IReadOnlyList<Guid> dependencyIds,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (dependencyIds.Count == 0)
+            return;
+
+        var dependencies = await context.Tasks
+            .AsNoTracking()
+            .Where(task => dependencyIds.Contains(task.Id) && task.UserId == userId)
+            .Select(task => new { task.Id, task.ProjectId, task.IsArchived })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (dependencies.Count != dependencyIds.Count)
+            throw new KeyNotFoundException("One or more prerequisite tasks were not found.");
+        if (dependencies.Any(task => task.IsArchived))
+            throw new InvalidOperationException("An archived task cannot be used as a prerequisite.");
+        if (dependencies.Any(task => task.ProjectId != projectId))
+            throw new InvalidOperationException("Task prerequisites must belong to the same project.");
+
+        var edges = await context.TaskDependencies
+            .AsNoTracking()
+            .Where(edge => edge.Task.UserId == userId && edge.TaskId != taskId)
+            .Select(edge => new { edge.TaskId, edge.DependsOnTaskId })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var pending = new Stack<Guid>(dependencyIds);
+        var visited = new HashSet<Guid>();
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            if (!visited.Add(current))
+                continue;
+            if (current == taskId)
+                throw new InvalidOperationException("This dependency would create a cycle.");
+
+            foreach (var next in edges.Where(edge => edge.TaskId == current).Select(edge => edge.DependsOnTaskId))
+                pending.Push(next);
+        }
+    }
+
+    private async Task EnsurePrerequisitesCompletedAsync(
+        Guid taskId,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        var dependencyIds = await context.TaskDependencies
+            .AsNoTracking()
+            .Where(edge => edge.TaskId == taskId && edge.Task.UserId == userId)
+            .Select(edge => edge.DependsOnTaskId)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        await EnsurePrerequisitesCompletedAsync(dependencyIds, userId, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EnsurePrerequisitesCompletedAsync(
+        IReadOnlyList<Guid> dependencyIds,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (dependencyIds.Count == 0)
+            return;
+
+        var completedCount = await context.Tasks
+            .AsNoTracking()
+            .CountAsync(task => dependencyIds.Contains(task.Id) && task.UserId == userId &&
+                                !task.IsArchived && task.Status == TaskItemStatus.Done, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (completedCount != dependencyIds.Count)
+            throw new InvalidOperationException("Complete all prerequisite tasks before starting or completing this task.");
+    }
+
+    private static void ValidateRecurrence(
+        bool isRecurring,
+        RecurrenceType? recurrenceType,
+        int? recurrenceInterval,
+        DateTime? nextOccurrenceDate,
+        DateTime? recurrenceEndDate,
+        bool allowExhausted = false)
+    {
+        if (!isRecurring) return;
+        if (!recurrenceType.HasValue)
+            throw new ArgumentException("A recurring task requires a recurrence type.");
+        if (recurrenceInterval is null or <= 0)
+            throw new ArgumentException("A recurring task requires a positive recurrence interval.");
+        if (!nextOccurrenceDate.HasValue)
+            throw new ArgumentException("A recurring task requires a next occurrence date.");
+        if (!allowExhausted && recurrenceEndDate.HasValue && recurrenceEndDate.Value.Date < nextOccurrenceDate.Value.Date)
+            throw new ArgumentException("The recurrence end date cannot be before the next occurrence date.");
+    }
+
+    private static void RestoreTask(TaskItem task)
+    {
+        task.IsArchived = false;
+        task.ArchivedAtUtc = null;
+        task.ArchiveOperationId = null;
+    }
+
     private static TaskItemDto ToDto(TaskItem t) => new(
         t.Id, t.Title, t.Description, t.Status, t.Priority,
         t.DueDate, t.CompletedDate, t.IsArchived, t.IsCurrentTask, t.ProjectId, t.ParentTaskId,
@@ -605,5 +941,6 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         SubtaskCount: 0, DoneSubtaskCount: 0, Complexity: t.Complexity, SortOrder: t.SortOrder,
         IsRecurring: t.IsRecurring, RecurrenceType: t.RecurrenceType,
         RecurrenceInterval: t.RecurrenceInterval, RecurrenceEndDate: t.RecurrenceEndDate,
-        NextOccurrenceDate: t.NextOccurrenceDate, RowVersion: t.RowVersion);
+        NextOccurrenceDate: t.NextOccurrenceDate, RowVersion: t.RowVersion,
+        DependsOnTaskIds: t.Dependencies.Select(d => d.DependsOnTaskId).ToList());
 }

@@ -14,4 +14,6 @@ public record ResourceDto(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     IReadOnlyList<string> Tags,
-    string Emoji = ResourceEmojiDefaults.DefaultEmoji);
+    string Emoji = ResourceEmojiDefaults.DefaultEmoji,
+    /// <summary>Concurrency token captured at load time; pass back on update or delete.</summary>
+    byte[]? RowVersion = null);

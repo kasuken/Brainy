@@ -10,7 +10,7 @@
     --paper-sunk: #ece3d3;
     --ink: #211d17;
     --ink-soft: #6b6253;
-    --ink-faint: #9a9180;
+    --ink-faint: #71695d;
     --line: #ded5c4;
     --line-strong: #cabea8;
 
@@ -55,7 +55,7 @@
     --paper-sunk: #f7f7f5;
     --ink: #37352f;
     --ink-soft: #787774;
-    --ink-faint: #9b9a97;
+    --ink-faint: #706f6b;
     --line: #ededec;
     --line-strong: #e0e0de;
 
@@ -2014,4 +2014,29 @@ body {
 
 @media (max-width: 600px) {
     .para-dash__grid { grid-template-columns: 1fr; }
+}
+
+.brainy-skip-link {
+    position: fixed;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 2000;
+    padding: 0.65rem 0.9rem;
+    color: var(--paper-raised);
+    background: var(--ink);
+    border-radius: 6px;
+    transform: translateY(-160%);
+}
+
+.brainy-skip-link:focus {
+    transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }

@@ -17,5 +17,7 @@ public record GoalDto(
     int CompletedMilestones,
     int ProgressPercent,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc
+    DateTime UpdatedAtUtc,
+    /// <summary>Concurrency token captured at load time; pass back on update or delete.</summary>
+    byte[]? RowVersion = null
 );

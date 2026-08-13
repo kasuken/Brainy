@@ -1,3 +1,4 @@
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Resources
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Common
@@ -131,6 +132,7 @@
     private string? _topic;
     private string? _description;
     private string _tagsInput = "";
+    private byte[]? _rowVersion;
 
     private IReadOnlyList<string> ParsedTags =>
         _tagsInput
@@ -163,6 +165,7 @@
             _topic = dto.Topic;
             _description = dto.Description;
             _tagsInput = string.Join(", ", dto.Tags);
+            _rowVersion = dto.RowVersion;
         }
         catch (Exception ex)
         {
@@ -196,7 +199,8 @@
                     NullIfWhiteSpace(_topic),
                     null,
                     ParsedTags,
-                    _emoji));
+                    _emoji,
+                    RowVersion: _rowVersion));
 
                 Snackbar.Add($"\"{_name}\" updated.", Severity.Success);
             }
@@ -214,6 +218,10 @@
             }
 
             MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
         }
         catch (Exception ex)
         {

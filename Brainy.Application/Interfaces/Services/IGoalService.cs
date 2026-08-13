@@ -33,7 +33,7 @@ public interface IGoalService
     Task<GoalDto> RestoreAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Permanently deletes a goal and all its milestones.</summary>
-    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid id, byte[]? rowVersion, CancellationToken cancellationToken = default);
 
     /// <summary>Returns progress percentage (0–100) based on completed milestones.</summary>
     Task<int> GetProgressAsync(Guid id, CancellationToken cancellationToken = default);

@@ -22,7 +22,10 @@ public record PulseSummaryDto(
     int IdeasCaptured,
     int IdeasCommitted,
     int GoalsAchieved,
-    /// <summary>Sum of every count above.</summary>
+    /// <summary>
+    /// Count of all activity-log entries, including reopen/restore and output-archive
+    /// transitions that are shown in the log but do not have a dedicated summary tile.
+    /// </summary>
     int TotalActivities,
-    /// <summary>Distinct calendar days (UTC) with at least one activity.</summary>
+    /// <summary>Distinct calendar days in the user's configured time zone with activity.</summary>
     int ActiveDays);

@@ -10,4 +10,8 @@ public record CreateOutputDto(
     string Content = "",
     Guid? ProjectId = null,
     Guid? AreaId = null,
-    Guid? GoalId = null);
+    Guid? GoalId = null,
+    bool IsAiGenerated = false,
+    string? Model = null,
+    string? PromptVersion = null,
+    IReadOnlyList<Guid>? SourceNoteIds = null);

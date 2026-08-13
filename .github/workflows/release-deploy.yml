@@ -9,13 +9,27 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: production
+  cancel-in-progress: false
+
 env:
-  DOTNET_VERSION: '10.0.x'
   AZURE_WEBAPP_NAME: brainy-prod-002
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: ${{ format('B7r!{0}xQ9_Test', github.run_id) }}
+        ports:
+          - 1433:1433
+    env:
+      BRAINY_TEST_SQL_CONNECTIONSTRING: ${{ format('Server=localhost,1433;Database=master;User Id=sa;Password=B7r!{0}xQ9_Test;TrustServerCertificate=true;Connect Timeout=2', github.run_id) }}
 
     steps:
       - name: Checkout
@@ -24,10 +38,31 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
+      - name: Verify EF model and migrations agree
+        run: dotnet ef migrations has-pending-model-changes --project Brainy.Data --startup-project Brainy.Web --no-build --configuration Release
 
       - name: Publish
-        run: dotnet publish Brainy.Web/Brainy.Web.csproj --configuration Release --output ./publish
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" == v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            dotnet publish Brainy.Web/Brainy.Web.csproj --no-restore --configuration Release --output ./publish -p:Version="$version"
+          else
+            dotnet publish Brainy.Web/Brainy.Web.csproj --no-restore --configuration Release --output ./publish
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -37,6 +72,7 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: build
     environment:
       name: production
@@ -65,9 +101,18 @@ jobs:
       - name: Smoke test
         run: |
           for i in $(seq 1 10); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" https://brainy-prod-002.azurewebsites.net/health) && \
+            status=$(curl -s -o /dev/null -w "%{http_code}" https://brainy-prod-002.azurewebsites.net/health/ready) && \
             [ "$status" = "200" ] && echo "Healthy" && exit 0
             echo "Attempt $i: status $status — retrying in 15s"
             sleep 15
           done
           echo "Health check failed" && exit 1
+
+      - name: Security smoke tests
+        run: |
+          redirect=$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" http://brainy-prod-002.azurewebsites.net/Account/Login)
+          case "$redirect" in
+            "301 https://"*|"308 https://"*) ;;
+            *) echo "HTTP login did not redirect to HTTPS: $redirect"; exit 1 ;;
+          esac
+          test "$(curl -s -o /dev/null -w "%{http_code}" https://brainy-prod-002.azurewebsites.net/Account/Login)" = "200"

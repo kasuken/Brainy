@@ -52,7 +52,7 @@ public interface IOutputService
     Task PublishAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Permanently deletes an output.</summary>
-    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid id, byte[]? rowVersion, CancellationToken cancellationToken = default);
 
     /// <summary>Adds a note to the output's source notes collection.</summary>
     Task AddSourceNoteAsync(Guid outputId, Guid noteId, CancellationToken cancellationToken = default);

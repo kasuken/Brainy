@@ -18,6 +18,8 @@ namespace Brainy.Application.Services;
 internal sealed class TasksHubService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
+    IUserTimeZoneService userTimeZone,
+    ITaskService taskService,
     TimeProvider timeProvider) : ITasksHubService
 {
     private static readonly TaskItemStatus[] _inactiveStatuses = [TaskItemStatus.Done, TaskItemStatus.Archived];
@@ -93,7 +95,7 @@ internal sealed class TasksHubService(
     public async Task<IReadOnlyList<TasksHubTaskDto>> GetOverdueTasksAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today = timeProvider.GetUserToday();
+        var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
         return await ActiveBase(userId)
             .Where(t => t.DueDate.HasValue && t.DueDate.Value.Date < today
@@ -107,7 +109,7 @@ internal sealed class TasksHubService(
     public async Task<IReadOnlyList<TasksHubTaskDto>> GetTasksNeedingAttentionAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today = timeProvider.GetUserToday();
+        var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
         // Fetch overdue, due-today, and critical tasks separately then union by Id.
         var overdue = await ActiveBase(userId)
@@ -194,7 +196,10 @@ internal sealed class TasksHubService(
     {
         ArgumentNullException.ThrowIfNull(task);
 
-        var today = timeProvider.GetUserToday();
+        // This method intentionally stays a pure synchronous score helper. Service
+        // query methods use the persisted user time zone; callers that need an exact
+        // boundary should score the already-classified query results.
+        var today = timeProvider.GetUtcNow().UtcDateTime.Date;
         int score = 0;
 
         if (task.DueDate.HasValue)
@@ -321,7 +326,7 @@ internal sealed class TasksHubService(
         if (dto.NewProjectId.HasValue)
         {
             var projectExists = await context.Projects
-                .AnyAsync(p => p.Id == dto.NewProjectId.Value && p.UserId == userId, cancellationToken)
+                .AnyAsync(p => p.Id == dto.NewProjectId.Value && p.UserId == userId && !p.IsArchived, cancellationToken)
                 .ConfigureAwait(false);
 
             if (!projectExists)
@@ -333,17 +338,26 @@ internal sealed class TasksHubService(
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        if (dto.Archive)
+        {
+            foreach (var task in tasks)
+                await taskService.ArchiveAsync(task.Id, cancellationToken).ConfigureAwait(false);
+
+            return tasks.Count;
+        }
+
+        var completedTaskIds = dto.NewStatus == TaskItemStatus.Done
+            ? tasks.Where(t => t.Status != TaskItemStatus.Done).Select(t => t.Id).ToList()
+            : [];
+
+        // Complete through TaskService before the bulk mutation so prerequisite,
+        // recurrence, subtask, and current-focus invariants cannot be bypassed.
+        foreach (var taskId in completedTaskIds)
+            await taskService.CompleteAsync(taskId, cancellationToken).ConfigureAwait(false);
+
         var now = DateTime.UtcNow;
         foreach (var task in tasks)
         {
-            if (dto.Archive)
-            {
-                task.IsArchived    = true;
-                task.ArchivedAtUtc = now;
-                task.IsCurrentTask = false;
-                continue;
-            }
-
             if (dto.NewStatus.HasValue)
             {
                 if (dto.NewStatus.Value == TaskItemStatus.Done && task.Status != TaskItemStatus.Done)
@@ -369,6 +383,7 @@ internal sealed class TasksHubService(
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
         return tasks.Count;
     }
 

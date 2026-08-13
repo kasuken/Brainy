@@ -28,22 +28,32 @@
             <div class="cal-header">
                 <p class="cal-eyebrow">Schedule</p>
                 <div class="d-flex align-center gap-2">
-                    <h1 class="cal-title">Tasks Calendar</h1>
+                    <h1 id="tasks-calendar-title" class="cal-title">Tasks Calendar</h1>
                     <MudSpacer />
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Outlined.AddTask"
+                               OnClick="OpenQuickTaskAsync">
+                        Add task
+                    </MudButton>
                     <PageHelpButton Guide="HelpGuide" />
                 </div>
             </div>
 
             @if (_loading)
             {
-                <div class="cal-skeleton-wrap">
+                <div class="cal-skeleton-wrap" role="status" aria-live="polite">
                     <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+                    <span>Loading task calendar…</span>
                 </div>
             }
             else if (_loadError is not null)
             {
-                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-4">
-                    Could not load calendar: @_loadError
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-4" role="alert">
+                    <MudText Typo="Typo.body1">@_loadError</MudText>
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="RetryLoadAsync" Class="mt-2">
+                        Try again
+                    </MudButton>
                 </MudAlert>
             }
             else
@@ -54,8 +64,8 @@
                         @* Filters panel *@
                         <div class="cal-widget">
                             <div class="cal-widget-header">
-                                <MudIcon Icon="@Icons.Material.Filled.FilterList" Size="Size.Small" Class="cal-widget-icon" />
-                                <span class="cal-widget-title">Filters</span>
+                                <MudIcon Icon="@Icons.Material.Filled.FilterList" Size="Size.Small" Class="cal-widget-icon" aria-hidden="true" />
+                                <h2 class="cal-widget-title">Filters</h2>
                                 @if (_hasActiveFilters)
                                 {
                                     <MudButton Variant="Variant.Text" Size="Size.Small"
@@ -123,15 +133,15 @@
                         {
                             <div class="cal-widget cal-deadlines">
                                 <div class="cal-widget-header">
-                                    <MudIcon Icon="@Icons.Material.Filled.AccessAlarm" Size="Size.Small" Class="cal-widget-icon cal-widget-icon--warn" />
-                                    <span class="cal-widget-title">Upcoming Deadlines</span>
+                                    <MudIcon Icon="@Icons.Material.Filled.AccessAlarm" Size="Size.Small" Class="cal-widget-icon cal-widget-icon--warn" aria-hidden="true" />
+                                    <h2 class="cal-widget-title">Upcoming Deadlines</h2>
                                 </div>
 
                                 @if (_deadlines.Overdue.Count > 0)
                                 {
-                                    <p class="cal-deadline-group cal-deadline-group--overdue">
+                                    <h3 class="cal-deadline-group cal-deadline-group--overdue">
                                         Overdue · @_deadlines.Overdue.Count
-                                    </p>
+                                    </h3>
                                     @foreach (var t in _deadlines.Overdue.Take(4))
                                     {
                                         <div class="cal-deadline-item cal-deadline-item--overdue">
@@ -148,7 +158,7 @@
 
                                 @if (_deadlines.DueToday.Count > 0)
                                 {
-                                    <p class="cal-deadline-group">Today · @_deadlines.DueToday.Count</p>
+                                    <h3 class="cal-deadline-group">Today · @_deadlines.DueToday.Count</h3>
                                     @foreach (var t in _deadlines.DueToday.Take(4))
                                     {
                                         <div class="cal-deadline-item">
@@ -161,7 +171,7 @@
 
                                 @if (_deadlines.DueThisWeek.Count > 0)
                                 {
-                                    <p class="cal-deadline-group">This week · @_deadlines.DueThisWeek.Count</p>
+                                    <h3 class="cal-deadline-group">This week · @_deadlines.DueThisWeek.Count</h3>
                                     @foreach (var t in _deadlines.DueThisWeek.Take(4))
                                     {
                                         <div class="cal-deadline-item">
@@ -184,10 +194,10 @@
                         {
                             <div class="cal-widget">
                                 <div class="cal-widget-header">
-                                    <MudIcon Icon="@Icons.Material.Filled.BarChart" Size="Size.Small" Class="cal-widget-icon" />
-                                    <span class="cal-widget-title">Workload (next 14 days)</span>
+                                    <MudIcon Icon="@Icons.Material.Filled.BarChart" Size="Size.Small" Class="cal-widget-icon" aria-hidden="true" />
+                                    <h2 class="cal-widget-title">Workload (next 14 days)</h2>
                                 </div>
-                                <div class="cal-workload-bars">
+                                <div class="cal-workload-bars" role="img" aria-label="@WorkloadAriaLabel">
                                     @foreach (var (date, count) in _workload.OrderBy(x => x.Key).Take(14))
                                     {
                                         <div class="cal-workload-day" title="@date.ToString("MMM d"): @count task@(count == 1 ? "" : "s")">
@@ -201,8 +211,9 @@
                     </aside>
 
                     @* ── Calendar main area ── *@
-                    <main class="cal-main">
-                        <MudCalendar TItem="TaskCalendarItem"
+                    <section class="cal-main" aria-labelledby="tasks-calendar-title">
+                        <MudCalendar
+                                     aria-label="Task due date calendar"
                                      Items="@_calendarItems"
                                      ShowDay="false"
                                      ShowWeek="false"
@@ -273,7 +284,29 @@
                             </DayTemplate>
 
                         </MudCalendar>
-                    </main>
+
+                        <details class="cal-task-list">
+                            <summary>Keyboard-friendly task list (@_calendarItems.Count)</summary>
+                            @if (_calendarItems.Count == 0)
+                            {
+                                <p>No scheduled tasks match the current filters.</p>
+                            }
+                            else
+                            {
+                                <ul>
+                                    @foreach (var item in _calendarItems.OrderBy(item => item.Start).ThenBy(item => item.Text))
+                                    {
+                                        <li>
+                                            <button type="button" @onclick="() => HandleItemClick(item)">
+                                                <span>@item.Text</span>
+                                                <span>@item.Start.ToString("MMM d, yyyy") · @item.ProjectName</span>
+                                            </button>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </details>
+                    </section>
                 </div>
             }
         </div>
@@ -352,23 +385,31 @@
 
     // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await LoadPageAsync();
+
+    private async Task LoadPageAsync()
     {
-        await LoadReferenceDataAsync();
+        _loading = true;
+        _loadError = null;
+
+        try
+        {
+            await LoadReferenceDataAsync();
+        }
+        catch
+        {
+            _loadError = "Brainy could not load the projects and areas required by the calendar. Your data was not changed.";
+            _loading = false;
+            return;
+        }
+
         await LoadCalendarDataAsync();
     }
 
     private async Task LoadReferenceDataAsync()
     {
-        try
-        {
-            _projects = await ProjectService.GetAllNonArchivedAsync();
-            _areas    = await AreaService.GetAllActiveAsync();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Could not load reference data: {ex.Message}", Severity.Warning);
-        }
+        _projects = await ProjectService.GetAllNonArchivedAsync();
+        _areas = await AreaService.GetAllActiveAsync();
     }
 
     private async Task LoadCalendarDataAsync()
@@ -387,9 +428,9 @@
             var today = DateOnly.FromDateTime(DateTime.Today);
             _workload = await CalendarService.GetWorkloadAsync(today, today.AddDays(13));
         }
-        catch (Exception ex)
+        catch
         {
-            _loadError = ex.Message;
+            _loadError = "Brainy could not load the task calendar. Your data was not changed.";
         }
         finally
         {
@@ -399,6 +440,10 @@
     }
 
     // ── Event handlers ────────────────────────────────────────────────────────────
+
+    private Task RetryLoadAsync() => LoadPageAsync();
+
+    private Task OpenQuickTaskAsync() => HandleDateClick(DateTime.Today);
 
     private async Task HandleItemClick(TaskCalendarItem item)
     {
@@ -538,6 +583,13 @@
         TaskItemStatus.Done       => "Done",
         _                         => "To Do",
     };
+
+    private string WorkloadAriaLabel => _workload.Count == 0
+        ? "No tasks due in the next 14 days."
+        : string.Join(
+            "; ",
+            _workload.OrderBy(item => item.Key)
+                .Select(item => $"{item.Key:MMM d}: {item.Value} task{(item.Value == 1 ? string.Empty : "s")}"));
 
     // ── Nested types ──────────────────────────────────────────────────────────────
 

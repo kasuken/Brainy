@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Authorization
 @using Brainy.Application.DTOs.Ideas
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Areas
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.Interfaces.Services
@@ -71,18 +72,18 @@ else
                             @_detail.AreaName
                         </span>
                     }
-                    <span class="id-meta-item">Created @_detail.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
-                    <span class="id-meta-item">Updated @_detail.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+                    <span class="id-meta-item">Created <UserLocalTime Utc="_detail.CreatedAtUtc" /></span>
+                    <span class="id-meta-item">Updated <UserLocalTime Utc="_detail.UpdatedAtUtc" /></span>
                     @if (_detail.IsArchived && _detail.ArchivedAtUtc.HasValue)
                     {
                         <span class="id-meta-item id-meta-item--warn">
-                            Archived @_detail.ArchivedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy")
+                            Archived <UserLocalTime Utc="_detail.ArchivedAtUtc" />
                         </span>
                     }
                     @if (_detail.CommittedProjectId.HasValue)
                     {
                         <span class="id-meta-item">
-                            Committed @(_detail.CommittedAtUtc?.ToLocalTime().ToString("MMM d, yyyy")) —
+                            Committed <UserLocalTime Utc="_detail.CommittedAtUtc" /> —
                             <a href="@($"/projects/{_detail.CommittedProjectId}")">View Project</a>
                         </span>
                     }
@@ -692,7 +693,8 @@ else
         SuitabilityReason:    _editSuitabilityReason,
         Evidence:             _editEvidence,
         ValidationExperiment: _editValidationExperiment,
-        ReplacedCommitment:   _editReplacedCommitment);
+        ReplacedCommitment:   _editReplacedCommitment,
+        RowVersion:           _detail.RowVersion);
 
     private async Task SaveDetailsAsync()
     {
@@ -704,6 +706,10 @@ else
             await IdeaService.UpdateAsync(BuildUpdateDto());
             Snackbar.Add("Details saved.", Severity.Success);
             await LoadAsync();
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
         }
         catch (Exception ex)
         {
@@ -724,6 +730,10 @@ else
             Snackbar.Add("Research saved.", Severity.Success);
             await LoadAsync();
         }
+        catch (ConcurrencyConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
         catch (Exception ex)
         {
             Snackbar.Add(ex.Message, Severity.Error);
@@ -742,6 +752,10 @@ else
             await IdeaService.UpdateAsync(BuildUpdateDto());
             Snackbar.Add("Competitor analysis saved.", Severity.Success);
             await LoadAsync();
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
         }
         catch (Exception ex)
         {
@@ -762,6 +776,10 @@ else
             Snackbar.Add("Notes saved.", Severity.Success);
             await LoadAsync();
         }
+        catch (ConcurrencyConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
         catch (Exception ex)
         {
             Snackbar.Add(ex.Message, Severity.Error);
@@ -780,6 +798,10 @@ else
             await IdeaService.UpdateAsync(BuildUpdateDto());
             Snackbar.Add("Commit criteria saved.", Severity.Success);
             await LoadAsync();
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
         }
         catch (Exception ex)
         {

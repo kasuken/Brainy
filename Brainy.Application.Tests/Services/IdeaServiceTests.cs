@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Ideas;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
@@ -6,7 +7,7 @@ using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
 using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -97,6 +98,65 @@ public class IdeaServiceTests
         await act.Should().ThrowAsync<ArgumentException>();
     }
 
+    [Fact]
+    public async Task CreateAsync_WithForeignArea_ThrowsKeyNotFoundException()
+    {
+        var (sut, db) = BuildService(nameof(CreateAsync_WithForeignArea_ThrowsKeyNotFoundException));
+        var foreignArea = new Area { Id = Guid.NewGuid(), UserId = OtherUserId, Name = "Secret area" };
+        db.Areas.Add(foreignArea);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.CreateAsync(new CreateIdeaDto("Idea", null, foreignArea.Id));
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+        (await db.Ideas.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithOwnedArea_ReturnsAreaName()
+    {
+        var (sut, db) = BuildService(nameof(CreateAsync_WithOwnedArea_ReturnsAreaName));
+        var area = new Area { Id = Guid.NewGuid(), UserId = DefaultUserId, Name = "Owned area" };
+        db.Areas.Add(area);
+        await db.SaveChangesAsync();
+
+        var result = await sut.CreateAsync(new CreateIdeaDto("Idea", null, area.Id));
+
+        result.AreaId.Should().Be(area.Id);
+        result.AreaName.Should().Be(area.Name);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithForeignArea_ThrowsKeyNotFoundException()
+    {
+        var (sut, db) = BuildService(nameof(UpdateAsync_WithForeignArea_ThrowsKeyNotFoundException));
+        var idea = CreateIdea(DefaultUserId);
+        var foreignArea = new Area { Id = Guid.NewGuid(), UserId = OtherUserId, Name = "Secret area" };
+        db.AddRange(idea, foreignArea);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.UpdateAsync(new UpdateIdeaDto(
+            idea.Id, idea.Title, null, foreignArea.Id, IdeaPriority.Medium,
+            IdeaStatus.Captured, null, null, null));
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException()
+    {
+        var (sut, _) = BuildService(nameof(UpdateAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException));
+        var idea = await sut.CreateAsync(new CreateIdeaDto(
+            "Build it", null, null, IdeaPriority.Medium));
+
+        var act = () => sut.UpdateAsync(new UpdateIdeaDto(
+            idea.Id, idea.Title, idea.Description, idea.AreaId, idea.Priority, idea.Status,
+            null, null, null,
+            RowVersion: [1, 2, 3]));
+
+        await act.Should().ThrowAsync<ConcurrencyConflictException>();
+    }
+
     // ── Read ──────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -123,6 +183,36 @@ public class IdeaServiceTests
         var result = await sut.GetAllActiveAsync();
 
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_WithLegacyForeignArea_DoesNotLeakAreaName()
+    {
+        var (sut, db) = BuildService(nameof(GetByIdAsync_WithLegacyForeignArea_DoesNotLeakAreaName));
+        var foreignArea = new Area { Id = Guid.NewGuid(), UserId = OtherUserId, Name = "Secret area" };
+        var idea = CreateIdea(DefaultUserId);
+        idea.AreaId = foreignArea.Id;
+        idea.Area = foreignArea;
+        db.AddRange(foreignArea, idea);
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetByIdAsync(idea.Id);
+
+        result.Should().NotBeNull();
+        result!.AreaName.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByAreaAsync_WithForeignArea_ThrowsKeyNotFoundException()
+    {
+        var (sut, db) = BuildService(nameof(GetByAreaAsync_WithForeignArea_ThrowsKeyNotFoundException));
+        var foreignArea = new Area { Id = Guid.NewGuid(), UserId = OtherUserId, Name = "Secret area" };
+        db.Areas.Add(foreignArea);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.GetByAreaAsync(foreignArea.Id);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
     // ── Archive / Restore ─────────────────────────────────────────────────────
@@ -230,8 +320,21 @@ public class IdeaServiceTests
         db.Ideas.Add(foreign);
         await db.SaveChangesAsync();
 
-        var act = () => sut.DeleteAsync(foreign.Id);
+        var act = () => sut.DeleteAsync(foreign.Id, null);
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException()
+    {
+        var (sut, db) = BuildService(nameof(DeleteAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException));
+        var idea = CreateIdea(DefaultUserId);
+        db.Ideas.Add(idea);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.DeleteAsync(idea.Id, [1, 2, 3]);
+
+        await act.Should().ThrowAsync<ConcurrencyConflictException>();
     }
 }

@@ -90,7 +90,7 @@ else
             <span class="rd-stat-tile__label">Notes</span>
         </div>
         <div class="rd-stat-tile">
-            <span class="rd-stat-tile__value rd-stat-tile__value--sage">@FormatDate(_detail.UpdatedAtUtc)</span>
+            <span class="rd-stat-tile__value rd-stat-tile__value--sage"><UserLocalTime Utc="_detail.UpdatedAtUtc" Format="dd MMM yyyy" /></span>
             <span class="rd-stat-tile__label">Last Updated</span>
         </div>
         <div class="rd-stat-tile">
@@ -210,7 +210,7 @@ else
                     <div class="rd-row">
                         <div class="rd-row__info">
                             <a class="rd-row__name" href="javascript:void(0)" @onclick="() => OpenNoteAsync(note.Id)" @onclick:preventDefault>@note.Title</a>
-                            <span class="rd-row__meta">Updated @FormatDate(note.UpdatedAtUtc)</span>
+                            <span class="rd-row__meta">Updated <UserLocalTime Utc="note.UpdatedAtUtc" Format="dd MMM yyyy" /></span>
                         </div>
                         <MudIconButton Icon="@Icons.Material.Filled.LinkOff"
                                        Size="Size.Small"
@@ -739,5 +739,4 @@ else
         }
     }
 
-    private static string FormatDate(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy");
 }

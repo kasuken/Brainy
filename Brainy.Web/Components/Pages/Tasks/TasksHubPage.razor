@@ -151,6 +151,7 @@
         letter-spacing: 0.14em;
         text-transform: uppercase;
         color: var(--mud-palette-text-disabled);
+        margin: 0;
     }
 
     .td-section-label--overdue { color: #d32f2f; }
@@ -394,7 +395,7 @@
             <div class="td-hero">
                 <p class="td-eyebrow">Task management</p>
                 <div class="td-hero-title-row">
-                    <h1 class="td-greeting">Tasks Hub</h1>
+                    <h1 id="tasks-hub-title" class="td-greeting">Tasks Hub</h1>
                     <MudSpacer />
                     <PageHelpButton Guide="HelpGuide" />
                 </div>
@@ -406,7 +407,7 @@
                     @* ── Status summary strip ── *@
                     <div style="margin-bottom:1.5rem;">
                         <div class="td-section-head" style="margin-bottom:0.75rem; border-bottom: none;">
-                            <span class="td-section-label">Status Overview</span>
+                            <h2 class="td-section-label">Status Overview</h2>
                         </div>
                         <TaskStatusSummaryWidget Summary="_aggregate!.StatusSummary" />
                     </div>
@@ -420,19 +421,23 @@
         </aside>
 
         @* ── Main Content: Search, Diagnostics & Grouped Tasks ── *@
-        <main class="td-main">
+        <section class="td-main" aria-labelledby="tasks-hub-title" aria-busy="@(_loading ? "true" : "false")">
             @if (_loading)
             {
-                <div class="td-loading-state">
+                <div class="td-loading-state" role="status" aria-live="polite">
                     <div class="td-skeleton"></div>
                     <div class="td-skeleton" style="width:85%;"></div>
                     <div class="td-skeleton" style="width:70%;"></div>
+                    <p>Loading Tasks Hub…</p>
                 </div>
             }
             else if (_loadError is not null)
             {
-                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
-                    Could not load Tasks Hub: @_loadError
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" role="alert">
+                    <MudText Typo="Typo.body1">@_loadError</MudText>
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="RetryInitialLoadAsync" Class="mt-2">
+                        Try again
+                    </MudButton>
                 </MudAlert>
             }
             else
@@ -448,6 +453,16 @@
                                   DebounceInterval="350"
                                   OnDebounceIntervalElapsed="HandleSearch" />
                 </div>
+
+                @if (_projectLoadError is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3" role="status">
+                        <MudText Typo="Typo.body2">@_projectLoadError</MudText>
+                        <MudButton Variant="Variant.Text" Color="Color.Warning" Size="Size.Small" OnClick="LoadProjectsAsync">
+                            Retry project filter
+                        </MudButton>
+                    </MudAlert>
+                }
 
                 @* ── Filter bar ── *@
                 <div class="th-filter-bar">
@@ -531,12 +546,13 @@
                 @* ── Search results ── *@
                 @if (_searchResults is not null)
                 {
-                    <div class="td-section th-search-results">
+                    <section class="td-section th-search-results" aria-labelledby="task-search-results-heading">
                         <div class="td-section-head">
-                            <span class="td-section-label">Search Results</span>
+                            <h2 id="task-search-results-heading" class="td-section-label">Search Results</h2>
                             <span class="td-section-count">@_searchResults.TotalCount result@(_searchResults.TotalCount == 1 ? "" : "s")</span>
                             <MudIconButton Icon="@Icons.Material.Filled.Close"
                                            Size="Size.Small" Style="margin-left:auto;"
+                                           aria-label="Clear task search results"
                                            OnClick="ClearSearch" />
                         </div>
                         @if (_searchResults.Items.Count == 0)
@@ -549,7 +565,7 @@
                             {
                                 <div class="td-task @PriorityClass(t.Priority)">
                                     <div class="td-task-body">
-                                        <p class="td-task-title">@t.Title</p>
+                                        <h3 class="td-task-title">@t.Title</h3>
                                         <div class="td-task-meta">
                                             <span class="td-task-project">@t.ProjectName</span>
                                             <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
@@ -569,7 +585,7 @@
                                         </div>
                                         @if (_rescheduleTaskId == t.Id)
                                         {
-                                            <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap;">
+                                            <div id="@($"hub-reschedule-{t.Id}")" style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap;">
                                                 <div style="flex: 1; max-width: 180px;">
                                                     <MudDatePicker @bind-Date="_rescheduleDate"
                                                                    Label="New due date"
@@ -590,27 +606,31 @@
                                         <MudIconButton Icon="@Icons.Material.Outlined.EditCalendar"
                                                        Size="Size.Small"
                                                        Color="@(_rescheduleTaskId == t.Id ? Color.Primary : Color.Default)"
+                                                       aria-label="@($"Reschedule {t.Title}")"
+                                                       aria-expanded="@(_rescheduleTaskId == t.Id ? "true" : "false")"
+                                                       aria-controls="@($"hub-reschedule-{t.Id}")"
                                                        OnClick="@(() => ToggleInlineReschedule(t.Id, t.DueDate))" />
                                     </MudTooltip>
                                     <MudTooltip Text="Mark complete">
                                         <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
                                                        Size="Size.Small" Color="Color.Success"
+                                                       aria-label="@($"Mark {t.Title} complete")"
                                                        OnClick="() => HandleCompleted(t.Id)" />
                                     </MudTooltip>
                                 </div>
                             }
                         }
-                    </div>
+                    </section>
                 }
                 else if (_filtersApplied && _filteredResults is not null)
                 {
                     @* ── Filtered results with checkboxes + bulk actions ── *@
-                    <div class="th-filtered-section">
+                    <section class="th-filtered-section" aria-labelledby="filtered-tasks-heading">
 
                         @* Bulk actions toolbar — visible only when items are selected *@
                         @if (_selectedTaskIds.Count > 0)
                         {
-                            <div class="th-bulk-toolbar">
+                            <div class="th-bulk-toolbar" role="region" aria-label="Bulk task actions">
                                 <MudText Typo="Typo.body2" Style="font-weight:700;">
                                     @_selectedTaskIds.Count selected
                                 </MudText>
@@ -620,6 +640,8 @@
                                            OnClick="BulkCompleteAsync">Complete</MudButton>
                                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
                                            StartIcon="@Icons.Material.Outlined.EditCalendar"
+                                           aria-expanded="@(_bulkReschedulePanelOpen ? "true" : "false")"
+                                           aria-controls="bulk-reschedule-panel"
                                            OnClick="ToggleBulkReschedulePanel">Reschedule</MudButton>
                                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning"
                                            StartIcon="@Icons.Material.Outlined.Archive"
@@ -632,7 +654,7 @@
 
                             @if (_bulkReschedulePanelOpen)
                             {
-                                <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1.1rem;background:var(--mud-palette-surface);border:1px solid var(--mud-palette-primary);border-radius:12px;margin-bottom:1rem;flex-wrap:wrap;">
+                                <div id="bulk-reschedule-panel" style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1.1rem;background:var(--mud-palette-surface);border:1px solid var(--mud-palette-primary);border-radius:12px;margin-bottom:1rem;flex-wrap:wrap;">
                                     <div style="flex: 1; max-width: 220px;">
                                         <MudDatePicker @bind-Date="_bulkRescheduleDate"
                                                        Label="New due date for all selected"
@@ -653,11 +675,12 @@
                         @* Header with select-all ── *@
                         <div class="td-section-head">
                             <MudCheckBox T="bool"
+                                         aria-label="@($"Select all {_filteredResults.Items.Count} filtered tasks")"
                                          Value="@(_filteredResults.Items.Count > 0 && _selectedTaskIds.Count == _filteredResults.Items.Count)"
                                          ValueChanged="ToggleSelectAll"
                                          Size="Size.Small"
                                          Style="margin-right:0.25rem;" />
-                            <span class="td-section-label">Filtered Results</span>
+                            <h2 id="filtered-tasks-heading" class="td-section-label">Filtered Results</h2>
                             <span class="td-section-count">@_filteredResults.TotalCount result@(_filteredResults.TotalCount == 1 ? "" : "s")</span>
                         </div>
 
@@ -672,10 +695,11 @@
                                 var isSelected = _selectedTaskIds.Contains(t.Id);
                                 <div class="td-task @PriorityClass(t.Priority) @(IsOverdue(t) ? "td-task--overdue" : "")">
                                     <MudCheckBox T="bool" Value="@isSelected"
+                                                 aria-label="@($"Select task {t.Title}")"
                                                  ValueChanged="@(v => ToggleTaskSelection(t.Id, v))"
                                                  Size="Size.Small" />
                                     <div class="td-task-body">
-                                        <p class="td-task-title">@t.Title</p>
+                                        <h3 class="td-task-title">@t.Title</h3>
                                         <div class="td-task-meta">
                                             <span class="td-task-project">@t.ProjectName</span>
                                             <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
@@ -700,7 +724,7 @@
                                         </div>
                                         @if (_rescheduleTaskId == t.Id)
                                         {
-                                            <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap;">
+                                            <div id="@($"hub-reschedule-{t.Id}")" style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap;">
                                                 <div style="flex: 1; max-width: 180px;">
                                                     <MudDatePicker @bind-Date="_rescheduleDate"
                                                                    Label="New due date"
@@ -721,17 +745,21 @@
                                         <MudIconButton Icon="@Icons.Material.Outlined.EditCalendar"
                                                        Size="Size.Small"
                                                        Color="@(_rescheduleTaskId == t.Id ? Color.Primary : Color.Default)"
+                                                       aria-label="@($"Reschedule {t.Title}")"
+                                                       aria-expanded="@(_rescheduleTaskId == t.Id ? "true" : "false")"
+                                                       aria-controls="@($"hub-reschedule-{t.Id}")"
                                                        OnClick="@(() => ToggleInlineReschedule(t.Id, t.DueDate))" />
                                     </MudTooltip>
                                     <MudTooltip Text="Mark complete">
                                         <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
                                                        Size="Size.Small" Color="Color.Success"
+                                                       aria-label="@($"Mark {t.Title} complete")"
                                                        OnClick="@(() => HandleCompleted(t.Id))" />
                                     </MudTooltip>
                                 </div>
                             }
                         }
-                    </div>
+                    </section>
                 }
                 else
                 {
@@ -763,7 +791,7 @@
                     </div>
                 }
             }
-        </main>
+        </section>
     </div>
 </div>
     </Authorized>
@@ -826,6 +854,7 @@
 
     private bool _loading = true;
     private string? _loadError;
+    private string? _projectLoadError;
     private TasksHubAggregateDto? _aggregate;
 
     // ── Search ───────────────────────────────────────────────────────────────
@@ -877,9 +906,10 @@
         {
             _aggregate = await TasksHubService.GetHubAggregateAsync();
         }
-        catch (Exception ex)
+        catch
         {
-            _loadError = ex.Message;
+            _aggregate = null;
+            _loadError = "Brainy could not load Tasks Hub. Your data was not changed.";
         }
 
         _loading = false;
@@ -888,14 +918,23 @@
 
     private async Task LoadProjectsAsync()
     {
+        _projectLoadError = null;
+
         try
         {
             _projects = await ProjectService.GetAllNonArchivedAsync();
         }
         catch
         {
-            // Non-critical: the project filter dropdown will just be empty.
+            _projects = [];
+            _projectLoadError = "Project filter options are temporarily unavailable. Other task views remain usable.";
         }
+    }
+
+    private async Task RetryInitialLoadAsync()
+    {
+        await LoadAsync();
+        await LoadProjectsAsync();
     }
 
     // ── Search ───────────────────────────────────────────────────────────────
