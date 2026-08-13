@@ -14,6 +14,7 @@
 @inject ITaskService TaskService
 @inject ITodayNotificationService NotificationService
 @inject IUserDashboardPreferenceService PreferenceService
+@inject IUserTimeZoneService UserTimeZoneService
 @inject IProjectPrioritizationService ProjectPrioritizationService
 @inject IProjectService ProjectService
 @inject IGoalService GoalService
@@ -377,10 +378,10 @@
                         <h1 class="td-greeting">Today</h1>
                         <PageHelpButton Guide="HelpGuide" />
                     </div>
-                    <p class="td-date">@DateTime.Now.ToString("dddd, MMMM d, yyyy")</p>
+                    <p class="td-date">@_today.ToString("dddd, MMMM d, yyyy")</p>
                 </div>
                 
-                @if (!_loading)
+                @if (!_loading && _loadError is null)
                 {
                     <div class="td-top-snapshot">
                         @* ── Daily snapshot strip ── *@
@@ -390,7 +391,7 @@
             </div>
 
             <nav class="td-nav">
-                <button class="td-nav-chip td-nav-chip-primary" @onclick="OpenAddTaskDialogAsync">
+                <button type="button" class="td-nav-chip td-nav-chip-primary" @onclick="OpenAddTaskDialogAsync">
                     <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" /> New Task
                 </button>
                 <a class="td-nav-chip" href="/projects">
@@ -404,7 +405,7 @@
                 </a>
             </nav>
 
-            @if (!_loading)
+            @if (!_loading && _loadError is null)
             {
                 <div class="td-sidebar-widgets">
                     @* ── Current focus ── *@
@@ -423,6 +424,16 @@
                     <div class="td-skeleton" style="width:85%;"></div>
                     <div class="td-skeleton" style="width:70%;"></div>
                 </div>
+            }
+            else if (_loadError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mt-4">
+                    <MudText Typo="Typo.subtitle2">Today could not be loaded</MudText>
+                    <MudText Typo="Typo.body2">@_loadError</MudText>
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadAsync" Class="mt-2">
+                        Retry
+                    </MudButton>
+                </MudAlert>
             }
             else
             {
@@ -568,6 +579,8 @@
 
     private string DisplayName { get; set; } = "there";
     private bool _loading = true;
+    private string? _loadError;
+    private DateTime _today = DateTime.Today;
 
     private TodayAggregateDto? _aggregate;
     private IReadOnlyList<TodayNotificationDto> _notifications = [];
@@ -593,16 +606,27 @@
     private async Task LoadAsync()
     {
         _loading = true;
+        _loadError = null;
         StateHasChanged();
 
-        _aggregate = await TodayService.GetTodayAggregateAsync();
-        _notifications = await NotificationService.GetNotificationsAsync();
-        _prioritizedProjects = await ProjectPrioritizationService.GetPrioritizedProjectsAsync(5);
-        _overdueGoals = await GoalService.GetOverdueAsync();
-        _dueSoonGoals = await GoalService.GetDueSoonAsync();
-
-        _loading = false;
-        StateHasChanged();
+        try
+        {
+            _today = await UserTimeZoneService.GetUserTodayAsync();
+            _aggregate = await TodayService.GetTodayAggregateAsync();
+            _notifications = await NotificationService.GetNotificationsAsync();
+            _prioritizedProjects = await ProjectPrioritizationService.GetPrioritizedProjectsAsync(5);
+            _overdueGoals = await GoalService.GetOverdueAsync();
+            _dueSoonGoals = await GoalService.GetDueSoonAsync();
+        }
+        catch
+        {
+            _loadError = "Check your connection and try again. Your data has not been changed.";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
     }
 
     private async Task HandleCompleted(Guid taskId)

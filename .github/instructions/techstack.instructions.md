@@ -66,7 +66,9 @@ AI providers must be interchangeable.
 
 Never couple business logic directly to a specific AI vendor.
 
-Use Microsoft Agent Framework for orchestrating AI interactions.
+Use the existing Microsoft.Extensions.AI abstraction. Add an orchestration
+framework only when a concrete multi-step workflow requires it and record the
+decision in the repository.
 
 ### Architecture
 

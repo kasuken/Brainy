@@ -12,6 +12,9 @@ public interface ITaskService
     /// <summary>Returns all non-archived top-level tasks for a project, ordered by priority then due date.</summary>
     Task<IReadOnlyList<TaskItemDto>> GetByProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns all archived tasks owned by the current user, newest first.</summary>
+    Task<IReadOnlyList<ArchivedTaskDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Creates a new task (or subtask when <see cref="CreateTaskDto.ParentTaskId"/> is set).</summary>
     Task<TaskItemDto> CreateAsync(CreateTaskDto dto, CancellationToken cancellationToken = default);
 
@@ -40,6 +43,13 @@ public interface ITaskService
     /// Also archives any direct subtasks.
     /// </summary>
     Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Restores a manually archived task and the active subtasks archived in the same
+    /// operation. Tasks archived as part of an archived project must be restored with
+    /// the project instead.
+    /// </summary>
+    Task<TaskItemDto> RestoreAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Permanently deletes a task and all its subtasks.</summary>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
@@ -70,7 +80,7 @@ public interface ITaskService
     /// one-off copy with <c>Status = Todo</c> and <c>DueDate = template.NextOccurrenceDate</c>.
     /// The template's <see cref="Domain.Entities.TaskItem.NextOccurrenceDate"/> is advanced by one interval.
     /// </summary>
-    Task<TaskItemDto> CreateRecurringOccurrenceAsync(Guid taskId, CancellationToken ct = default);
+    Task<TaskItemDto?> CreateRecurringOccurrenceAsync(Guid taskId, CancellationToken ct = default);
 
     // ── Dependencies ─────────────────────────────────────────────────────────
 

@@ -99,6 +99,7 @@
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--mud-palette-text-disabled);
+    margin: 0;
 }
 
 .cal-main {
@@ -196,8 +197,12 @@
 
 .cal-skeleton-wrap {
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
     justify-content: center;
     padding: 3rem;
+    color: var(--mud-palette-text-secondary);
 }
 
 .cal-task-item {
@@ -420,5 +425,58 @@
 .ev-status--inprogress { background: #1976d2; }
 .ev-status--waiting { background: #7b1fa2; }
 .ev-status--done { background: #2e7d32; }
+
+.cal-task-list {
+    margin-top: 1rem;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 12px;
+    background: var(--mud-palette-surface);
+}
+
+.cal-task-list summary {
+    cursor: pointer;
+    padding: 0.85rem 1rem;
+    font-weight: 700;
+    color: var(--mud-palette-text-primary);
+}
+
+.cal-task-list summary:focus-visible,
+.cal-task-list button:focus-visible {
+    outline: 3px solid var(--clay-ring);
+    outline-offset: 2px;
+}
+
+.cal-task-list ul {
+    list-style: none;
+    margin: 0;
+    padding: 0 1rem 1rem;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.cal-task-list p {
+    margin: 0;
+    padding: 0 1rem 1rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.cal-task-list button {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 8px;
+    background: var(--mud-palette-background);
+    color: var(--mud-palette-text-primary);
+    text-align: left;
+    cursor: pointer;
+}
+
+.cal-task-list button span:last-child {
+    color: var(--mud-palette-text-secondary);
+    white-space: nowrap;
+}
 
 

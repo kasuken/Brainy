@@ -38,6 +38,14 @@ public class Project : BaseEntity, IUserOwnedEntity
 
     public DateTime? ArchivedAtUtc { get; set; }
 
+    /// <summary>The status to restore when this project leaves the archive.</summary>
+    public ProjectStatus? StatusBeforeArchive { get; set; }
+
+    /// <summary>
+    /// Identifies the archive operation shared with tasks archived by this project.
+    /// </summary>
+    public Guid? ArchiveOperationId { get; set; }
+
     public Guid? AreaId { get; set; }
 
     public Area? Area { get; set; }

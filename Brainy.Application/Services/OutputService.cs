@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Outputs;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
@@ -121,7 +122,8 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
             output.ArchivedDate,
             output.CreatedAtUtc,
             output.UpdatedAtUtc,
-            sourceNotes);
+            sourceNotes,
+            output.RowVersion);
     }
 
     public async Task<IReadOnlyList<OutputDto>> SearchAsync(string query, CancellationToken cancellationToken = default)
@@ -182,6 +184,13 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        await context.Projects.EnsureOwnedAsync(dto.ProjectId, userId, "Project", cancellationToken)
+            .ConfigureAwait(false);
+        await context.Areas.EnsureActiveOwnedAreaAsync(dto.AreaId, userId, cancellationToken)
+            .ConfigureAwait(false);
+        await context.Goals.EnsureOwnedAsync(dto.GoalId, userId, "Goal", cancellationToken)
+            .ConfigureAwait(false);
+
         var output = new Output
         {
             Id          = Guid.NewGuid(),
@@ -193,8 +202,14 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
             Status      = OutputStatus.Draft,
             ProjectId   = dto.ProjectId,
             AreaId      = dto.AreaId,
-            GoalId      = dto.GoalId
+            GoalId      = dto.GoalId,
+            IsAiGenerated = dto.IsAiGenerated,
+            Model         = dto.IsAiGenerated ? dto.Model : null,
+            PromptVersion = dto.IsAiGenerated ? dto.PromptVersion : null,
         };
+
+        if (dto.SourceNoteIds is not null)
+            output.SourceNotes = await ResolveSourceNotesAsync(userId, dto.SourceNoteIds, cancellationToken).ConfigureAwait(false);
 
         context.Outputs.Add(output);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -213,9 +228,27 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        await context.Projects.EnsureOwnedAsync(dto.ProjectId, userId, "Project", cancellationToken)
+            .ConfigureAwait(false);
+        await context.Areas.EnsureActiveOwnedAreaAsync(dto.AreaId, userId, cancellationToken)
+            .ConfigureAwait(false);
+        await context.Goals.EnsureOwnedAsync(dto.GoalId, userId, "Goal", cancellationToken)
+            .ConfigureAwait(false);
+
         var output = await context.Outputs
+            .Include(o => o.SourceNotes)
             .FirstOrDefaultAsync(o => o.Id == dto.Id && o.UserId == userId, cancellationToken).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Output '{dto.Id}' was not found.");
+
+        if (dto.RowVersion is not null)
+            context.Entry(output).Property(o => o.RowVersion).OriginalValue = dto.RowVersion;
+
+        // Validate source-note ownership and lifecycle before touching the tracked output.
+        // This keeps a rejected update from remaining dirty in the scoped DbContext and
+        // being persisted by a later operation on the same service.
+        List<Note>? sourceNotes = null;
+        if (dto.SourceNoteIds is not null)
+            sourceNotes = await ResolveSourceNotesAsync(userId, dto.SourceNoteIds, cancellationToken).ConfigureAwait(false);
 
         output.Title       = dto.Title.Trim();
         output.Description = dto.Description?.Trim();
@@ -226,7 +259,32 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         output.AreaId      = dto.AreaId;
         output.GoalId      = dto.GoalId;
 
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (dto.IsAiGenerated.HasValue)
+        {
+            output.IsAiGenerated = dto.IsAiGenerated.Value;
+            output.Model = dto.IsAiGenerated.Value ? dto.Model : null;
+            output.PromptVersion = dto.IsAiGenerated.Value ? dto.PromptVersion : null;
+        }
+
+        if (sourceNotes is not null)
+        {
+            output.SourceNotes.Clear();
+            foreach (var note in sourceNotes)
+                output.SourceNotes.Add(note);
+        }
+
+        // Force one Output UPDATE even when only source-note join rows changed so the
+        // rowversion predicate is checked and SQL Server advances the token.
+        context.Entry(output).Property(o => o.UpdatedAtUtc).IsModified = true;
+
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException("output", ex);
+        }
 
         var (projectTitle, areaName, goalTitle) =
             await ResolveLinkedNamesAsync(output, cancellationToken).ConfigureAwait(false);
@@ -257,6 +315,9 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
             .FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId, cancellationToken).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Output '{id}' was not found.");
 
+        await context.Areas.EnsureActiveOwnedAreaAsync(output.AreaId, userId, cancellationToken)
+            .ConfigureAwait(false);
+
         output.IsArchived   = false;
         output.ArchivedDate = null;
         output.Status       = OutputStatus.Draft;
@@ -278,7 +339,10 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(
+        Guid id,
+        byte[]? rowVersion,
+        CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
@@ -286,8 +350,18 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
             .FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId, cancellationToken).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Output '{id}' was not found.");
 
+        if (rowVersion is not null)
+            context.Entry(output).Property(o => o.RowVersion).OriginalValue = rowVersion;
+
         context.Outputs.Remove(output);
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException("output", ex);
+        }
     }
 
     public async Task AddSourceNoteAsync(Guid outputId, Guid noteId, CancellationToken cancellationToken = default)
@@ -303,8 +377,12 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
             return; // already linked — idempotent
 
         var note = await context.Notes
-            .FirstOrDefaultAsync(n => n.Id == noteId && n.UserId == userId, cancellationToken).ConfigureAwait(false)
-            ?? throw new KeyNotFoundException($"Note '{noteId}' was not found.");
+            .FirstOrDefaultAsync(n => n.Id == noteId &&
+                                      n.UserId == userId &&
+                                      !n.IsArchived &&
+                                      n.Status != NoteStatus.Archived,
+                cancellationToken).ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Active note '{noteId}' was not found.");
 
         output.SourceNotes.Add(note);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -329,6 +407,29 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    private async Task<List<Note>> ResolveSourceNotesAsync(
+        string userId,
+        IReadOnlyList<Guid> sourceNoteIds,
+        CancellationToken cancellationToken)
+    {
+        var distinctIds = sourceNoteIds.Distinct().ToList();
+        if (distinctIds.Count == 0)
+            return [];
+
+        var notes = await context.Notes
+            .Where(note => distinctIds.Contains(note.Id) &&
+                           note.UserId == userId &&
+                           !note.IsArchived &&
+                           note.Status != NoteStatus.Archived)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (notes.Count != distinctIds.Count)
+            throw new ArgumentException("One or more source notes are unavailable or archived.", nameof(sourceNoteIds));
+
+        return notes;
+    }
+
     // Projects navigations inline so EF can translate the entire query server-side.
     private static OutputDto ToDto(Output o) => new(
         o.Id,
@@ -347,7 +448,8 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         o.PublishedDate,
         o.ArchivedDate,
         o.CreatedAtUtc,
-        o.UpdatedAtUtc);
+        o.UpdatedAtUtc,
+        o.RowVersion);
 
     /// <summary>
     /// Resolves the linked project/area/goal display names for the returned DTO in a
@@ -390,5 +492,6 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         o.PublishedDate,
         o.ArchivedDate,
         o.CreatedAtUtc,
-        o.UpdatedAtUtc);
+        o.UpdatedAtUtc,
+        o.RowVersion);
 }

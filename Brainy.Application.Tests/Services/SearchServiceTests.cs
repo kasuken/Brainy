@@ -5,7 +5,7 @@ using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
 using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -66,6 +66,22 @@ public class SearchServiceTests
     private static Idea CreateIdea(string userId, string title, bool isArchived = false)
         => new() { Id = Guid.NewGuid(), UserId = userId, Title = title, IsArchived = isArchived };
 
+    private static Resource CreateResource(
+        string userId,
+        string name,
+        string? topic = null,
+        string? description = null,
+        bool isArchived = false)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Name = name,
+            Topic = topic,
+            Description = description,
+            IsArchived = isArchived
+        };
+
     // ── Empty / whitespace queries ────────────────────────────────────────────
 
     [Theory]
@@ -125,12 +141,29 @@ public class SearchServiceTests
         db.Outputs.Add(CreateOutput(DefaultUserId, "voyager output"));
         db.Goals.Add(CreateGoal(DefaultUserId, "voyager goal"));
         db.Ideas.Add(CreateIdea(DefaultUserId, "voyager idea"));
+        db.Resources.Add(CreateResource(DefaultUserId, "voyager resource"));
         await db.SaveChangesAsync();
 
         var result = await sut.SearchAsync("voyager");
 
         result.Select(r => r.ResultType).Should()
-            .BeEquivalentTo("Note", "Output", "Project", "Area", "Task", "Goal", "Idea");
+            .BeEquivalentTo("Note", "Output", "Project", "Area", "Task", "Goal", "Idea", "Resource");
+    }
+
+    [Fact]
+    public async Task SearchAsync_MatchesResourceTopicAndReturnsResourceIdentity()
+    {
+        var (sut, db) = BuildService(nameof(SearchAsync_MatchesResourceTopicAndReturnsResourceIdentity));
+        var resource = CreateResource(DefaultUserId, "Engineering handbook", topic: "voyager operations");
+        db.Resources.Add(resource);
+        await db.SaveChangesAsync();
+
+        var result = await sut.SearchAsync("voyager");
+
+        var match = result.Should().ContainSingle().Which;
+        match.ResultType.Should().Be("Resource");
+        match.ParaCategory.Should().Be(ParaCategory.Resource);
+        match.ResourceId.Should().Be(resource.Id);
     }
 
     // ── Ranking ───────────────────────────────────────────────────────────────
@@ -151,12 +184,34 @@ public class SearchServiceTests
         result[1].Id.Should().Be(contentOnly.Id);
     }
 
+    [Fact]
+    public async Task SearchAsync_RanksBeforeApplyingPerEntityLimit()
+    {
+        var (sut, db) = BuildService(nameof(SearchAsync_RanksBeforeApplyingPerEntityLimit));
+        db.Projects.AddRange(Enumerable.Range(1, 100)
+            .Select(index => new Project
+            {
+                Id = Guid.NewGuid(),
+                UserId = DefaultUserId,
+                Name = $"Reference project {index}",
+                Description = "voyager",
+            }));
+        var titleMatch = CreateProject(DefaultUserId, "voyager priority project");
+        db.Projects.Add(titleMatch);
+        await db.SaveChangesAsync();
+
+        var result = await sut.SearchAsync("voyager");
+
+        result.Should().HaveCount(100);
+        result[0].Id.Should().Be(titleMatch.Id);
+    }
+
     // ── Exclusions ────────────────────────────────────────────────────────────
 
     [Fact]
     public async Task SearchAsync_ExcludesArchivedItems()
     {
-        // Archived outputs, projects, areas, tasks, goals, and ideas must never
+        // Archived entities must never
         // surface in search results (product rule: archives stay in Archives).
         var (sut, db) = BuildService(nameof(SearchAsync_ExcludesArchivedItems));
         var area = CreateArea(DefaultUserId, "voyager area", isArchived: true);
@@ -164,9 +219,18 @@ public class SearchServiceTests
         db.Areas.Add(area);
         db.Projects.Add(project);
         db.Tasks.Add(CreateTask(DefaultUserId, project.Id, "voyager task", isArchived: true));
+        db.Notes.Add(CreateNote(DefaultUserId, "voyager note", isArchived: true));
+        db.Notes.Add(new Note
+        {
+            Id = Guid.NewGuid(),
+            UserId = DefaultUserId,
+            Title = "voyager note by status",
+            Status = NoteStatus.Archived
+        });
         db.Outputs.Add(CreateOutput(DefaultUserId, "voyager output", isArchived: true));
         db.Goals.Add(CreateGoal(DefaultUserId, "voyager goal", isArchived: true));
         db.Ideas.Add(CreateIdea(DefaultUserId, "voyager idea", isArchived: true));
+        db.Resources.Add(CreateResource(DefaultUserId, "voyager resource", isArchived: true));
         await db.SaveChangesAsync();
 
         var result = await sut.SearchAsync("voyager");
@@ -182,6 +246,7 @@ public class SearchServiceTests
         db.Projects.Add(otherProject);
         db.Notes.Add(CreateNote(OtherUserId, "voyager note"));
         db.Tasks.Add(CreateTask(OtherUserId, otherProject.Id, "voyager task"));
+        db.Resources.Add(CreateResource(OtherUserId, "voyager resource"));
         await db.SaveChangesAsync();
 
         var result = await sut.SearchAsync("voyager");

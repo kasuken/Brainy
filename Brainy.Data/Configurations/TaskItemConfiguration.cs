@@ -36,6 +36,12 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
 
         builder.HasIndex(t => t.IsArchived);
         builder.HasIndex(t => t.DueDate);
+        builder.HasIndex(t => t.UserId)
+            .IsUnique()
+            .HasFilter("[IsCurrentTask] = 1");
+        builder.HasIndex(t => t.RecurrenceSourceTaskId)
+            .IsUnique()
+            .HasFilter("[RecurrenceSourceTaskId] IS NOT NULL");
 
         builder.HasOne(t => t.ParentTask)
             .WithMany(t => t.Subtasks)

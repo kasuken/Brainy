@@ -1,0 +1,101 @@
+@using Brainy.Application.DTOs.ActionItems
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+
+@inject IActionItemService ActionItemService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(Item is null ? "Add action" : "Edit action")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField T="string"
+                      @bind-Value="_title"
+                      Label="Action"
+                      Variant="Variant.Outlined"
+                      Immediate="true"
+                      Required="true"
+                      RequiredError="Action title is required"
+                      MaxLength="500"
+                      Counter="500"
+                      AutoFocus="true"
+                      Class="mb-3" />
+        <MudTextField T="string"
+                      @bind-Value="_description"
+                      Label="Details (optional)"
+                      Variant="Variant.Outlined"
+                      Lines="3"
+                      Immediate="true"
+                      MaxLength="2000"
+                      Counter="2000"
+                      Class="mb-3" />
+        @if (Item is not null)
+        {
+            <MudSelect T="ActionItemStatus"
+                       @bind-Value="_status"
+                       Label="Status"
+                       Variant="Variant.Outlined">
+                @foreach (var status in Enum.GetValues<ActionItemStatus>())
+                {
+                    <MudSelectItem Value="status">@status</MudSelectItem>
+                }
+            </MudSelect>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_saving">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   Disabled="_saving || string.IsNullOrWhiteSpace(_title)"
+                   OnClick="SaveAsync">
+            @(_saving ? "Saving…" : "Save action")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Guid NoteId { get; set; }
+
+    [Parameter] public ActionItemDto? Item { get; set; }
+
+    private string _title = string.Empty;
+    private string? _description;
+    private ActionItemStatus _status = ActionItemStatus.Open;
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        if (Item is null)
+            return;
+
+        _title = Item.Title;
+        _description = Item.Description;
+        _status = Item.Status;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            var saved = Item is null
+                ? await ActionItemService.CreateAsync(new CreateActionItemDto(NoteId, _title, _description))
+                : await ActionItemService.UpdateAsync(new UpdateActionItemDto(
+                    Item.Id, _title, _description, _status, Item.RowVersion));
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

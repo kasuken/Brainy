@@ -17,4 +17,6 @@ public record CreateNoteDto(
     /// </summary>
     string? SourceUrl = null,
     /// <summary>Human-readable title for the source (e.g. page title, article name).</summary>
-    string? SourceTitle = null);
+    string? SourceTitle = null,
+    /// <summary>Optional tag names. Names are trimmed, de-duplicated case-insensitively, and resolved per user.</summary>
+    IReadOnlyList<string>? Tags = null);

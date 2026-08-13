@@ -3,7 +3,7 @@ using Brainy.Domain.Enums;
 namespace Brainy.Application.DTOs.Search;
 
 /// <summary>
-/// A single search result (Note or Output), including a content snippet with the matched
+/// A single result from Brainy's cross-entity knowledge search, including a content snippet with the matched
 /// excerpt and a relevance score for ordering results.
 /// </summary>
 public record SearchResultDto(
@@ -23,9 +23,11 @@ public record SearchResultDto(
     /// Higher is more relevant.
     /// </summary>
     int Relevance,
-    /// <summary>Discriminator that identifies the source entity: "Note" or "Output".</summary>
+    /// <summary>Discriminator that identifies the source entity.</summary>
     string ResultType = "Note",
     /// <summary>Populated when <see cref="ResultType"/> is "Output".</summary>
     OutputType? OutputType = null,
     /// <summary>Populated when <see cref="ResultType"/> is "Output".</summary>
-    OutputStatus? OutputStatus = null);
+    OutputStatus? OutputStatus = null,
+    /// <summary>Tag names associated with the result, when supported by its entity type.</summary>
+    IReadOnlyList<string>? Tags = null);

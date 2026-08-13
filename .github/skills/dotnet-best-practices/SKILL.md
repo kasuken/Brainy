@@ -11,12 +11,13 @@ Your task is to ensure .NET/C# code in ${selection} meets the best practices spe
 
 - Create comprehensive XML documentation comments for all public classes, interfaces, methods, and properties
 - Include parameter descriptions and return value descriptions in XML comments
-- Follow the established namespace structure: {Core|Console|App|Service}.{Feature}
+- Follow Brainy's existing `Brainy.{Domain|Application|Data|Web}` namespaces.
 
 ## Design Patterns & Architecture
 
 - Use primary constructor syntax for dependency injection (e.g., `public class MyClass(IDependency dependency)`)
-- Implement the Command Handler pattern with generic base classes (e.g., `CommandHandler<TOptions>`)
+- Introduce command handlers only for workflows that need transactional or
+  independently testable orchestration; do not add generic base classes by default.
 - Use interface segregation with clear naming conventions (prefix interfaces with 'I')
 - Follow the Factory pattern for complex object creation.
 
@@ -42,7 +43,7 @@ Your task is to ensure .NET/C# code in ${selection} meets the best practices spe
 
 ## Testing Standards
 
-- Use MSTest framework with FluentAssertions for assertions
+- Use the repository's existing xUnit framework with FluentAssertions.
 - Follow AAA pattern (Arrange, Act, Assert)
 - Use Moq for mocking dependencies
 - Test both success and failure scenarios
@@ -55,12 +56,11 @@ Your task is to ensure .NET/C# code in ${selection} meets the best practices spe
 - Use IConfiguration binding for settings
 - Support appsettings.json configuration files
 
-## Semantic Kernel & AI Integration
+## AI Integration
 
-- Use Microsoft.SemanticKernel for AI operations
-- Implement proper kernel configuration and service registration
-- Handle AI model settings (ChatCompletion, Embedding, etc.)
-- Use structured output patterns for reliable AI responses
+- Use Brainy's existing Microsoft.Extensions.AI provider abstraction.
+- Keep prompts versioned and persist source/model/prompt provenance.
+- Use validated structured output when an operation returns domain data.
 
 ## Error Handling & Logging
 

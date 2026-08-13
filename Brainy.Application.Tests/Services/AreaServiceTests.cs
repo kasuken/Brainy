@@ -5,7 +5,8 @@ using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
 using Brainy.Domain.Entities;
-using FluentAssertions;
+using Brainy.Domain.Enums;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -161,6 +162,29 @@ public class AreaServiceTests
     }
 
     [Fact]
+    public async Task ArchiveAsync_WithActiveChildren_ReportsEveryBlockerAndLeavesAreaActive()
+    {
+        var (sut, db) = BuildService(nameof(ArchiveAsync_WithActiveChildren_ReportsEveryBlockerAndLeavesAreaActive));
+        var area = CreateArea(DefaultUserId, "Work");
+        db.Areas.Add(area);
+        db.Projects.Add(CreateProject(DefaultUserId, area.Id));
+        db.Resources.Add(new Resource { Id = Guid.NewGuid(), UserId = DefaultUserId, Name = "Reference", AreaId = area.Id });
+        db.Goals.Add(new Goal { Id = Guid.NewGuid(), UserId = DefaultUserId, Title = "Goal", AreaId = area.Id });
+        db.Notes.Add(new Note { Id = Guid.NewGuid(), UserId = DefaultUserId, Title = "Note", Content = "body", AreaId = area.Id });
+        db.Ideas.Add(new Idea { Id = Guid.NewGuid(), UserId = DefaultUserId, Title = "Idea", AreaId = area.Id });
+        db.Outputs.Add(new Output { Id = Guid.NewGuid(), UserId = DefaultUserId, Title = "Output", Content = "body", AreaId = area.Id });
+        await db.SaveChangesAsync();
+
+        var act = () => sut.ArchiveAsync(area.Id);
+
+        var exception = await act.Should().ThrowAsync<InvalidOperationException>();
+        exception.Which.Message.Should().ContainAll(
+            "1 active project", "1 active resource", "1 active goal",
+            "1 active note", "1 active idea", "1 active output");
+        (await db.Areas.AsNoTracking().SingleAsync()).IsArchived.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task RestoreAsync_ClearsArchivedFlagAndTimestamp()
     {
         var (sut, db) = BuildService(nameof(RestoreAsync_ClearsArchivedFlagAndTimestamp));
@@ -236,6 +260,23 @@ public class AreaServiceTests
 
         var stored = await db.Projects.AsNoTracking().SingleAsync();
         stored.AreaId.Should().Be(newArea.Id);
+    }
+
+    [Fact]
+    public async Task LinkProjectAsync_ToArchivedArea_IsRejected()
+    {
+        var (sut, db) = BuildService(nameof(LinkProjectAsync_ToArchivedArea_IsRejected));
+        var activeArea = CreateArea(DefaultUserId, "Active");
+        var archivedArea = CreateArea(DefaultUserId, "Archived", isArchived: true);
+        var project = CreateProject(DefaultUserId, activeArea.Id);
+        db.Areas.AddRange(activeArea, archivedArea);
+        db.Projects.Add(project);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.LinkProjectAsync(archivedArea.Id, project.Id);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+        (await db.Projects.AsNoTracking().SingleAsync()).AreaId.Should().Be(activeArea.Id);
     }
 
     [Fact]

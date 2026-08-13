@@ -6,5 +6,9 @@ namespace Brainy.Application.Tests.Fakes;
 /// </summary>
 internal sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
 {
-    public override DateTimeOffset GetUtcNow() => now;
+    private DateTimeOffset _now = now;
+
+    public override DateTimeOffset GetUtcNow() => _now;
+
+    public void Advance(TimeSpan elapsed) => _now = _now.Add(elapsed);
 }

@@ -14,7 +14,7 @@ public interface IResourceService
     Task<ResourceDto> UpdateAsync(UpdateResourceDto dto, CancellationToken cancellationToken = default);
     Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
     Task RestoreAsync(Guid id, CancellationToken cancellationToken = default);
-    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid id, byte[]? rowVersion, CancellationToken cancellationToken = default);
 
     // ── Note linking ──────────────────────────────────────────────────────────
     /// <summary>Associates a note with this resource by setting Note.ResourceId.</summary>

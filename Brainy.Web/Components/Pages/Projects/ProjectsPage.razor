@@ -187,6 +187,7 @@
             <div class="pp-widget">
                 <MudTextField @bind-Value="_searchText"
                               Placeholder="Search projects…"
+                              aria-label="Search projects"
                               Adornment="Adornment.Start"
                               AdornmentIcon="@Icons.Material.Outlined.Search"
                               Clearable="true"
@@ -201,7 +202,9 @@
                 <div class="pp-filter-group">
                     @foreach (var status in StatusFilters)
                     {
-                        <button class="pp-chip @(IsStatusActive(status) ? "pp-chip--on" : "")"
+                        <button type="button"
+                                class="pp-chip @(IsStatusActive(status) ? "pp-chip--on" : "")"
+                                aria-pressed="@IsStatusActive(status)"
                                 @onclick="() => ToggleStatusFilter(status)">
                             <span class="pp-chip-dot" style="background:@StatusColor(status)"></span>
                             @StatusLabel(status)
@@ -213,7 +216,9 @@
                 <div class="pp-filter-group">
                     @foreach (var pri in PriorityFilters)
                     {
-                        <button class="pp-chip @(IsPriorityActive(pri) ? "pp-chip--on" : "")"
+                        <button type="button"
+                                class="pp-chip @(IsPriorityActive(pri) ? "pp-chip--on" : "")"
+                                aria-pressed="@IsPriorityActive(pri)"
                                 @onclick="() => TogglePriorityFilter(pri)">
                             <span class="pp-chip-dot" style="background:@PriorityColor(pri)"></span>
                             @PriorityLabel(pri)
@@ -225,7 +230,10 @@
                 <div class="pp-filter-group" style="margin-bottom:0;">
                     @foreach (var opt in SortOptions)
                     {
-                        <button class="pp-chip @(_sortBy == opt ? "pp-chip--on" : "")"
+                        <button type="button"
+                                class="pp-chip @(_sortBy == opt ? "pp-chip--on" : "")"
+                                aria-pressed="@(_sortBy == opt)"
+                                aria-label="@SortAriaLabel(opt)"
                                 @onclick="() => SetSort(opt)">
                             @opt
                             @if (_sortBy == opt)
@@ -246,6 +254,13 @@
                     <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
                     <p style="margin-top: 1rem; color: var(--mud-palette-text-disabled); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem;">Loading projects…</p>
                 </div>
+            }
+            else if (_loadError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                    Projects could not be loaded. Check your connection and try again.
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadAsync" Class="ml-2">Retry</MudButton>
+                </MudAlert>
             }
             else if (_filtered is { Count: 0 })
             {
@@ -341,6 +356,7 @@
     };
 
     private bool _loading = true;
+    private string? _loadError;
     private List<ProjectSummaryDto>? _summaries;
     private List<ProjectSummaryDto>? _filtered;
 
@@ -358,6 +374,10 @@
 
     private static readonly string[] SortOptions = ["Priority", "Name", "Due Date", "Progress"];
 
+    private string SortAriaLabel(string option) => _sortBy == option
+        ? $"Sort by {option}, currently {(_sortAsc ? "ascending" : "descending")}; activate to reverse"
+        : $"Sort by {option}";
+
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
@@ -366,10 +386,21 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        var result = await ProjectService.GetProjectSummariesAsync();
-        _summaries = result.ToList();
-        ApplyFilters();
-        _loading = false;
+        _loadError = null;
+        try
+        {
+            var result = await ProjectService.GetProjectSummariesAsync();
+            _summaries = result.ToList();
+            ApplyFilters();
+        }
+        catch
+        {
+            _loadError = "Unable to reach the project portfolio.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void OnSearchInput(ChangeEventArgs e)

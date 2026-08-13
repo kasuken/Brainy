@@ -90,7 +90,7 @@
                                     @milestone.Title
                                 </span>
                                 <span class="goal-milestones__meta">
-                                    @(milestone.CompletedAtUtc?.ToLocalTime().ToString("MMM d, yyyy") ?? "Pending")
+                                    <UserLocalTime Utc="milestone.CompletedAtUtc" Fallback="Pending" />
                                 </span>
                             </button>
                             <div class="goal-milestones__item-actions">

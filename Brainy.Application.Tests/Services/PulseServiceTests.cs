@@ -5,7 +5,7 @@ using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
 using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -16,14 +16,9 @@ namespace Brainy.Application.Tests.Services;
 /// Unit tests for <see cref="IPulseService"/> resolved via the real DI container with an
 /// EF Core InMemory database. Each test uses a unique database name for isolation.
 ///
-/// <see cref="BrainyDbContext"/> stamps <c>CreatedAtUtc</c> with the real system clock for
-/// every newly-added entity (not the injected <see cref="TimeProvider"/>), so tests that need
-/// a specific "captured/created" timestamp save the entity once, then mutate
-/// <c>CreatedAtUtc</c> on the now-tracked entity and save again — that second save is an
-/// <c>EntityState.Modified</c> change, which the context leaves untouched aside from
-/// <c>UpdatedAtUtc</c>. Activity types with an explicit lifecycle timestamp (ProcessedAtUtc,
-/// CompletedDate, ArchivedAtUtc, PublishedDate, CommittedAtUtc, AchievedDate) don't need this
-/// trick since those properties are plain, unaudited fields.
+/// <see cref="BrainyDbContext"/> stamps <c>CreatedAtUtc</c> with the real system clock and
+/// appends the matching immutable lifecycle row in the same save, so the frozen clock used
+/// for period boundaries stays close to the real clock in creation-event tests.
 /// </summary>
 public class PulseServiceTests
 {
@@ -53,16 +48,6 @@ public class PulseServiceTests
 
         var sp = services.BuildServiceProvider();
         return (sp.GetRequiredService<IPulseService>(), sp.GetRequiredService<BrainyDbContext>());
-    }
-
-    /// <summary>
-    /// Re-saves an already-persisted entity with an explicit <c>CreatedAtUtc</c>. See the
-    /// class remarks for why this two-step save is required to control that field in tests.
-    /// </summary>
-    private static async Task BackdateCreatedAtAsync(BrainyDbContext db, BaseEntity entity, DateTime createdAtUtc)
-    {
-        entity.CreatedAtUtc = createdAtUtc;
-        await db.SaveChangesAsync();
     }
 
     // ── Seed helpers ──────────────────────────────────────────────────────────
@@ -140,6 +125,7 @@ public class PulseServiceTests
             Id = Guid.NewGuid(),
             UserId = userId,
             Title = "Idea",
+            Status = committedAtUtc.HasValue ? IdeaStatus.Committed : IdeaStatus.Captured,
             CommittedAtUtc = committedAtUtc
         };
 
@@ -179,7 +165,6 @@ public class PulseServiceTests
         var note = CreateNote(DefaultUserId);
         db.Notes.Add(note);
         await db.SaveChangesAsync();
-        await BackdateCreatedAtAsync(db, note, FixedNow.UtcDateTime.AddDays(-1));
 
         var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
 
@@ -220,10 +205,19 @@ public class PulseServiceTests
         db.Notes.Add(note);
         await db.SaveChangesAsync();
 
-        var highlight = new Highlight { Id = Guid.NewGuid(), NoteId = note.Id, Note = note, Text = "important" };
-        db.Highlights.Add(highlight);
+        var highlightId = Guid.NewGuid();
+        db.LifecycleActivities.Add(new LifecycleActivity
+        {
+            Id = Guid.NewGuid(),
+            UserId = DefaultUserId,
+            EntityId = highlightId,
+            ActivityType = PulseActivityType.HighlightAdded,
+            OccurredAtUtc = FixedNow.UtcDateTime.AddDays(-1),
+            Title = note.Title,
+            Context = "Highlight added",
+            Link = $"/notes/{note.Id}",
+        });
         await db.SaveChangesAsync();
-        await BackdateCreatedAtAsync(db, highlight, FixedNow.UtcDateTime.AddDays(-1));
 
         var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
 
@@ -240,10 +234,18 @@ public class PulseServiceTests
         db.Notes.Add(note);
         await db.SaveChangesAsync();
 
-        var summary = new Summary { Id = Guid.NewGuid(), NoteId = note.Id, Note = note, Content = "tl;dr" };
-        db.Summaries.Add(summary);
+        db.LifecycleActivities.Add(new LifecycleActivity
+        {
+            Id = Guid.NewGuid(),
+            UserId = DefaultUserId,
+            EntityId = Guid.NewGuid(),
+            ActivityType = PulseActivityType.SummaryCreated,
+            OccurredAtUtc = FixedNow.UtcDateTime.AddDays(-1),
+            Title = note.Title,
+            Context = "Summary added",
+            Link = $"/notes/{note.Id}",
+        });
         await db.SaveChangesAsync();
-        await BackdateCreatedAtAsync(db, summary, FixedNow.UtcDateTime.AddDays(-1));
 
         var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
 
@@ -261,7 +263,6 @@ public class PulseServiceTests
         var task = CreateTask(DefaultUserId, project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
-        await BackdateCreatedAtAsync(db, task, FixedNow.UtcDateTime.AddDays(-1));
 
         var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
 
@@ -309,7 +310,6 @@ public class PulseServiceTests
         var project = CreateProject(DefaultUserId);
         db.Projects.Add(project);
         await db.SaveChangesAsync();
-        await BackdateCreatedAtAsync(db, project, FixedNow.UtcDateTime.AddDays(-1));
 
         var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
 
@@ -351,7 +351,6 @@ public class PulseServiceTests
         var output = CreateOutput(DefaultUserId);
         db.Outputs.Add(output);
         await db.SaveChangesAsync();
-        await BackdateCreatedAtAsync(db, output, FixedNow.UtcDateTime.AddDays(-1));
 
         var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
 
@@ -380,7 +379,6 @@ public class PulseServiceTests
         var idea = CreateIdea(DefaultUserId);
         db.Ideas.Add(idea);
         await db.SaveChangesAsync();
-        await BackdateCreatedAtAsync(db, idea, FixedNow.UtcDateTime.AddDays(-1));
 
         var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
 
@@ -420,7 +418,7 @@ public class PulseServiceTests
     public async Task GetReportAsync_ExcludesActivityBeforePeriodStart()
     {
         var (sut, db) = BuildService(nameof(GetReportAsync_ExcludesActivityBeforePeriodStart));
-        // LastWeek's window starts 2026-06-09; 10 days before FixedNow lands well outside it.
+        // Ten days before the frozen current time lands outside LastWeek.
         db.Notes.Add(CreateNote(DefaultUserId, processedAtUtc: FixedNow.UtcDateTime.AddDays(-10)));
         await db.SaveChangesAsync();
 
@@ -534,8 +532,9 @@ public class PulseServiceTests
 
         var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
 
-        result.Summary.TotalActivities.Should().Be(3);
-        result.Summary.ActiveDays.Should().Be(2);
+        // Each newly captured note is itself an activity in addition to processing it.
+        result.Summary.TotalActivities.Should().Be(6);
+        result.Summary.ActiveDays.Should().Be(3);
     }
 
     [Fact]
@@ -549,5 +548,106 @@ public class PulseServiceTests
         var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
 
         result.Log.Should().BeInDescendingOrder(e => e.OccurredAtUtc);
+    }
+
+    [Fact]
+    public async Task LifecycleLedger_PreservesTaskCompletionAfterTaskIsReopened()
+    {
+        var (sut, db) = BuildService(nameof(LifecycleLedger_PreservesTaskCompletionAfterTaskIsReopened));
+        var project = CreateProject(DefaultUserId);
+        var task = CreateTask(DefaultUserId, project);
+        db.Projects.Add(project);
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync();
+
+        task.Status = TaskItemStatus.Done;
+        task.CompletedDate = FixedNow.UtcDateTime.AddDays(-1);
+        await db.SaveChangesAsync();
+
+        task.Status = TaskItemStatus.Todo;
+        task.CompletedDate = null;
+        await db.SaveChangesAsync();
+
+        var activities = await db.LifecycleActivities.AsNoTracking()
+            .Where(activity => activity.EntityId == task.Id)
+            .Select(activity => activity.ActivityType)
+            .ToListAsync();
+        activities.Should().ContainSingle(type => type == PulseActivityType.TaskCompleted);
+        activities.Should().ContainSingle(type => type == PulseActivityType.TaskReopened);
+
+        var report = await sut.GetReportAsync(PulsePeriod.LastWeek);
+        report.Summary.TasksCompleted.Should().Be(1);
+        report.Log.Should().Contain(entry => entry.ActivityType == PulseActivityType.TaskReopened);
+    }
+
+    [Fact]
+    public async Task LifecycleLedger_RecordsLifecycleTransitionsWithoutCollapsingHistory()
+    {
+        var (_, db) = BuildService(nameof(LifecycleLedger_RecordsLifecycleTransitionsWithoutCollapsingHistory));
+        var note = CreateNote(DefaultUserId);
+        var project = CreateProject(DefaultUserId);
+        var output = CreateOutput(DefaultUserId);
+        var idea = CreateIdea(DefaultUserId);
+        db.AddRange(note, project, output, idea);
+        await db.SaveChangesAsync();
+
+        note.ProcessedAtUtc = FixedNow.UtcDateTime.AddMinutes(-4);
+        note.Status = NoteStatus.Active;
+        project.Status = ProjectStatus.Completed;
+        project.CompletedDate = FixedNow.UtcDateTime.AddMinutes(-3);
+        output.Status = OutputStatus.Published;
+        output.PublishedDate = FixedNow.UtcDateTime.AddMinutes(-2);
+        idea.Status = IdeaStatus.Committed;
+        idea.CommittedAtUtc = FixedNow.UtcDateTime.AddMinutes(-1);
+        await db.SaveChangesAsync();
+
+        note.IsArchived = true;
+        note.ArchivedAtUtc = FixedNow.UtcDateTime;
+        note.Status = NoteStatus.Archived;
+        project.IsArchived = true;
+        project.ArchivedAtUtc = FixedNow.UtcDateTime;
+        project.Status = ProjectStatus.Archived;
+        output.IsArchived = true;
+        output.ArchivedDate = FixedNow.UtcDateTime;
+        output.Status = OutputStatus.Archived;
+        await db.SaveChangesAsync();
+
+        note.IsArchived = false;
+        note.ArchivedAtUtc = null;
+        note.Status = NoteStatus.Active;
+        project.IsArchived = false;
+        project.ArchivedAtUtc = null;
+        project.Status = ProjectStatus.Completed;
+        output.IsArchived = false;
+        output.ArchivedDate = null;
+        output.Status = OutputStatus.Draft;
+        await db.SaveChangesAsync();
+
+        var activities = await db.LifecycleActivities.AsNoTracking().ToListAsync();
+        activities.Should().ContainSingle(a => a.EntityId == note.Id && a.ActivityType == PulseActivityType.NoteProcessed);
+        activities.Should().ContainSingle(a => a.EntityId == note.Id && a.ActivityType == PulseActivityType.NoteArchived);
+        activities.Should().ContainSingle(a => a.EntityId == note.Id && a.ActivityType == PulseActivityType.NoteRestored);
+        activities.Should().ContainSingle(a => a.EntityId == project.Id && a.ActivityType == PulseActivityType.ProjectCompleted);
+        activities.Should().ContainSingle(a => a.EntityId == project.Id && a.ActivityType == PulseActivityType.ProjectArchived);
+        activities.Should().ContainSingle(a => a.EntityId == project.Id && a.ActivityType == PulseActivityType.ProjectRestored);
+        activities.Should().ContainSingle(a => a.EntityId == output.Id && a.ActivityType == PulseActivityType.OutputPublished);
+        activities.Should().ContainSingle(a => a.EntityId == output.Id && a.ActivityType == PulseActivityType.OutputArchived);
+        activities.Should().ContainSingle(a => a.EntityId == output.Id && a.ActivityType == PulseActivityType.OutputRestored);
+        activities.Should().ContainSingle(a => a.EntityId == idea.Id && a.ActivityType == PulseActivityType.IdeaCommitted);
+    }
+
+    [Fact]
+    public async Task LifecycleLedger_RejectsMutationOfExistingActivity()
+    {
+        var (_, db) = BuildService(nameof(LifecycleLedger_RejectsMutationOfExistingActivity));
+        db.Notes.Add(CreateNote(DefaultUserId));
+        await db.SaveChangesAsync();
+        var activity = await db.LifecycleActivities.SingleAsync();
+        activity.Title = "rewritten history";
+
+        var act = () => db.SaveChangesAsync();
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*append-only*");
     }
 }

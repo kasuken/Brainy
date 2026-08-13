@@ -114,11 +114,11 @@ else
         <section class="god-stats">
             <div class="god-stat">
                 <span class="god-stat__label">Created</span>
-                <strong>@_detail.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</strong>
+                <strong><UserLocalTime Utc="_detail.CreatedAtUtc" /></strong>
             </div>
             <div class="god-stat">
                 <span class="god-stat__label">Updated</span>
-                <strong>@_detail.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</strong>
+                <strong><UserLocalTime Utc="_detail.UpdatedAtUtc" /></strong>
             </div>
             <div class="god-stat">
                 <span class="god-stat__label">Status</span>
@@ -162,13 +162,13 @@ else
                 <div class="god-projects">
                     @foreach (var project in _detail.Projects)
                     {
-                        <button class="god-project-card" type="button" @onclick="() => OpenProject(project.Id)">
+                        <a class="god-project-card" href="@($"/projects/{project.Id}")">
                             <div>
                                 <span class="god-project-card__eyebrow">Project</span>
                                 <h3 class="god-project-card__title">@project.Name</h3>
                             </div>
                             <span class="god-badge god-project-status">@ProjectStatusLabel(project.Status)</span>
-                        </button>
+                        </a>
                     }
                 </div>
             }
@@ -497,10 +497,13 @@ else
     border-radius: 16px;
     border: 1px solid var(--line);
     background: linear-gradient(180deg, rgba(255,255,255,.38), transparent), var(--paper);
+    color: inherit;
+    text-decoration: none;
     text-align: left;
     cursor: pointer;
     transition: transform .18s, box-shadow .18s, border-color .18s;
 }
+.god-project-card:focus-visible { outline: 3px solid var(--clay-ring); outline-offset: 2px; }
 
 .god-project-card:hover {
     transform: translateY(-2px);
@@ -719,13 +722,17 @@ else
         _                               => type.ToString()
     };
 
-    private static string RelativeDate(DateTime utc)
+    private string RelativeDate(DateTime utc)
     {
         var diff = DateTime.UtcNow - utc;
         if (diff.TotalMinutes < 2)  return "just now";
         if (diff.TotalHours   < 1)  return $"{(int)diff.TotalMinutes}m ago";
         if (diff.TotalDays    < 1)  return $"{(int)diff.TotalHours}h ago";
         if (diff.TotalDays    < 30) return $"{(int)diff.TotalDays}d ago";
-        return utc.ToLocalTime().ToString("MMM d, yyyy");
+        return TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(utc, DateTimeKind.Utc), UserTimeZone).ToString("MMM d, yyyy");
     }
+
+    [CascadingParameter]
+    private TimeZoneInfo UserTimeZone { get; set; } = TimeZoneInfo.Utc;
 }

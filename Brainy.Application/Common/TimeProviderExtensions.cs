@@ -8,10 +8,16 @@ namespace Brainy.Application.Common;
 internal static class TimeProviderExtensions
 {
     /// <summary>
-    /// Returns the calendar date used for "due today" / "overdue" comparisons.
-    /// Currently the UTC date; when per-user time zones are introduced, apply the
-    /// user's time-zone conversion here — this is the single definition of "today".
+    /// Returns the calendar date used for "due today" / "overdue" comparisons in
+    /// the supplied user time zone.
     /// </summary>
-    public static DateTime GetUserToday(this TimeProvider timeProvider) =>
-        timeProvider.GetUtcNow().UtcDateTime.Date;
+    public static DateTime GetUserToday(this TimeProvider timeProvider, TimeZoneInfo timeZone) =>
+        TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), timeZone).Date;
+
+    /// <summary>Converts a local midnight to UTC, respecting daylight-saving rules.</summary>
+    public static DateTime LocalDateToUtc(DateTime localDate, TimeZoneInfo timeZone)
+    {
+        var unspecified = DateTime.SpecifyKind(localDate.Date, DateTimeKind.Unspecified);
+        return TimeZoneInfo.ConvertTimeToUtc(unspecified, timeZone);
+    }
 }

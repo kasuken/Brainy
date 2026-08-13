@@ -6,11 +6,15 @@
 @using Brainy.Application.DTOs.Outputs
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
+@using Brainy.Web.Security
+@using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
 @inject IOutputService OutputService
 @inject INoteService NoteService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>@(_detail?.Title ?? "Output") — Brainy</PageTitle>
 
@@ -37,7 +41,7 @@ else
     <!-- ── Header ──────────────────────────────────────────────────── -->
     <div class="od-header">
         <div class="od-breadcrumb">
-            <button class="od-back" @onclick='() => Nav.NavigateTo("/outputs")'>
+            <button type="button" class="od-back" @onclick='() => Nav.NavigateTo("/outputs")'>
                 <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
                     <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
                 </svg>
@@ -89,18 +93,29 @@ else
                             @_detail.GoalTitle
                         </span>
                     }
-                    <span class="od-meta-item">Created @_detail.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
-                    <span class="od-meta-item">Updated @_detail.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+                    <span class="od-meta-item">Created <UserLocalTime Utc="_detail.CreatedAtUtc" /></span>
+                    <span class="od-meta-item">Updated <UserLocalTime Utc="_detail.UpdatedAtUtc" /></span>
                     @if (_detail.PublishedDate.HasValue)
                     {
                         <span class="od-meta-item" style="color:#1b5e20;">
-                            Published @_detail.PublishedDate.Value.ToLocalTime().ToString("MMM d, yyyy")
+                            Published <UserLocalTime Utc="_detail.PublishedDate" />
                         </span>
+                    }
+                    @if (_detail.IsAiGenerated && !string.IsNullOrWhiteSpace(_detail.Model))
+                    {
+                        <span class="od-meta-item">
+                            <MudIcon Icon="@Icons.Material.Outlined.AutoAwesome" Style="font-size:0.75rem;opacity:.6;" />
+                            Model @_detail.Model
+                        </span>
+                    }
+                    @if (_detail.IsAiGenerated && !string.IsNullOrWhiteSpace(_detail.PromptVersion))
+                    {
+                        <span class="od-meta-item">Prompt @_detail.PromptVersion</span>
                     }
                     @if (_detail.IsArchived && _detail.ArchivedDate.HasValue)
                     {
                         <span class="od-meta-item" style="color:#9c4416;">
-                            Archived @_detail.ArchivedDate.Value.ToLocalTime().ToString("MMM d, yyyy")
+                            Archived <UserLocalTime Utc="_detail.ArchivedDate" />
                         </span>
                     }
                 </div>
@@ -162,20 +177,56 @@ else
 
     <!-- ── Content ──────────────────────────────────────────────── -->
     <MudPaper Class="od-content-panel" Elevation="0">
-        <div class="od-section-label">Content</div>
+        <div class="od-content-toolbar">
+            <h2 class="od-section-label od-section-label--heading">Content</h2>
+            @if (!string.IsNullOrWhiteSpace(_detail.Content))
+            {
+                <div class="od-content-actions" aria-label="Output content actions">
+                    <div class="od-view-toggle" role="group" aria-label="Content view">
+                        <button type="button"
+                                class="od-view-toggle__button @(!_showRawMarkdown ? "is-active" : null)"
+                                aria-pressed="@(!_showRawMarkdown)"
+                                @onclick="() => _showRawMarkdown = false">
+                            Preview
+                        </button>
+                        <button type="button"
+                                class="od-view-toggle__button @(_showRawMarkdown ? "is-active" : null)"
+                                aria-pressed="@_showRawMarkdown"
+                                @onclick="() => _showRawMarkdown = true">
+                            Raw
+                        </button>
+                    </div>
+                    <button type="button" class="od-content-action" @onclick="CopyContentAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
+                        Copy
+                    </button>
+                    <a class="od-content-action"
+                       href="@DownloadHref"
+                       download="@DownloadFileName"
+                       aria-label="Download output as Markdown">
+                        <MudIcon Icon="@Icons.Material.Outlined.Download" Size="Size.Small" />
+                        Download .md
+                    </a>
+                </div>
+            }
+        </div>
         @if (string.IsNullOrWhiteSpace(_detail.Content))
         {
             <p style="color:var(--mud-palette-text-disabled); font-style: italic;">No content yet. Edit this output to add content.</p>
         }
-        else
+        else if (_showRawMarkdown)
         {
             <pre class="od-content-pre">@_detail.Content</pre>
+        }
+        else
+        {
+            <div class="od-content-markdown">@RenderMarkdown(_detail.Content)</div>
         }
     </MudPaper>
 
     <!-- ── Source Notes ─────────────────────────────────────────── -->
     <MudPaper Class="od-section-panel" Elevation="0">
-        <div class="od-section-label">Source Notes</div>
+        <h2 class="od-section-label od-section-label--section-heading">Source Notes</h2>
 
         @if (_detail.SourceNotes.Count == 0)
         {
@@ -189,8 +240,9 @@ else
                     <div class="od-note-item">
                         <MudIcon Icon="@Icons.Material.Outlined.Article" Size="Size.Small" Style="opacity:.6;" />
                         <span class="od-note-title">@note.NoteTitle</span>
-                        <span class="od-note-date">@note.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
-                        <button class="od-note-remove" title="Remove source note"
+                        <span class="od-note-date"><UserLocalTime Utc="note.CreatedAtUtc" /></span>
+                        <button type="button" class="od-note-remove"
+                                aria-label="Remove @note.NoteTitle from source notes"
                                 @onclick="() => RemoveSourceNoteAsync(note.NoteId)">
                             <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
                         </button>
@@ -347,6 +399,44 @@ body { font-family: var(--font-body); }
     border-bottom: 1px solid var(--line);
 }
 
+.od-content-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    margin-bottom: .9rem;
+    padding-bottom: .55rem;
+    border-bottom: 1px solid var(--line);
+}
+.od-section-label--heading { margin: 0; padding: 0; border: 0; }
+.od-section-label--section-heading { margin-top: 0; }
+.od-content-actions { display: flex; align-items: center; justify-content: flex-end; gap: .45rem; flex-wrap: wrap; }
+.od-view-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.od-view-toggle__button, .od-content-action {
+    border: 0;
+    background: transparent;
+    color: var(--ink-soft);
+    font: 600 .75rem/1 var(--font-body);
+    cursor: pointer;
+}
+.od-view-toggle__button { padding: .48rem .65rem; }
+.od-view-toggle__button + .od-view-toggle__button { border-left: 1px solid var(--line); }
+.od-view-toggle__button.is-active { color: var(--clay); background: var(--paper-sunk); }
+.od-content-action {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: .42rem .55rem;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    text-decoration: none;
+}
+.od-view-toggle__button:hover, .od-content-action:hover { color: var(--clay); background: var(--paper-sunk); }
+.od-view-toggle__button:focus-visible, .od-content-action:focus-visible, .od-back:focus-visible, .od-note-remove:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--clay) 45%, transparent);
+    outline-offset: 2px;
+}
+
 .od-content-pre {
     white-space: pre-wrap;
     word-break: break-word;
@@ -359,6 +449,24 @@ body { font-family: var(--font-body); }
     border: none;
     padding: 0;
 }
+
+.od-content-markdown { color: var(--ink); font-size: .95rem; line-height: 1.7; overflow-wrap: anywhere; }
+.od-content-markdown :first-child { margin-top: 0; }
+.od-content-markdown :last-child { margin-bottom: 0; }
+.od-content-markdown h1, .od-content-markdown h2, .od-content-markdown h3,
+.od-content-markdown h4, .od-content-markdown h5, .od-content-markdown h6 {
+    color: var(--ink);
+    font-family: var(--font-display);
+    line-height: 1.25;
+    margin: 1.25em 0 .5em;
+}
+.od-content-markdown a { color: var(--clay); text-decoration-thickness: .08em; text-underline-offset: .15em; }
+.od-content-markdown blockquote { margin: 1rem 0; padding: .15rem 1rem; border-left: 3px solid var(--clay); color: var(--ink-soft); }
+.od-content-markdown code { padding: .1rem .3rem; border-radius: 4px; background: var(--paper-sunk); }
+.od-content-markdown pre { padding: 1rem; border-radius: 8px; overflow-x: auto; background: var(--paper-sunk); border: 1px solid var(--line); }
+.od-content-markdown pre code { padding: 0; background: transparent; }
+.od-content-markdown table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.od-content-markdown th, .od-content-markdown td { padding: .45rem .65rem; border: 1px solid var(--line); text-align: left; }
 
 .od-note-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
 .od-note-item {
@@ -385,6 +493,8 @@ body { font-family: var(--font-body); }
     .od-actions { flex-direction: row; flex-wrap: wrap; }
     .od-breadcrumb__current { max-width: 160px; }
     .od-add-note-row { flex-direction: column; align-items: stretch; }
+    .od-content-toolbar { align-items: flex-start; flex-direction: column; }
+    .od-content-actions { justify-content: flex-start; }
 }
 </style>
 
@@ -442,6 +552,7 @@ body { font-family: var(--font-body); }
 
     private bool _loading = true;
     private bool _saving;
+    private bool _showRawMarkdown;
     private OutputDetailDto? _detail;
 
     private List<NoteDto> _allNotes = [];
@@ -452,11 +563,45 @@ body { font-family: var(--font-body); }
     private MudMessageBox _restoreMsgBox = null!;
     private MudMessageBox _publishMsgBox = null!;
 
+    private string DownloadHref => $"data:text/markdown;charset=utf-8,{Uri.EscapeDataString(_detail?.Content ?? string.Empty)}";
+
+    private string DownloadFileName
+    {
+        get
+        {
+            var title = string.IsNullOrWhiteSpace(_detail?.Title) ? "output" : _detail.Title;
+            var invalidCharacters = Path.GetInvalidFileNameChars();
+            var safeTitle = new string(title.Where(character => !invalidCharacters.Contains(character)).ToArray()).Trim();
+            return $"{(string.IsNullOrWhiteSpace(safeTitle) ? "output" : safeTitle)}.md";
+        }
+    }
+
+    private static MarkupString RenderMarkdown(string content) =>
+        new(MarkdownHtmlRenderer.Render(content));
+
+    private async Task CopyContentAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_detail?.Content))
+            return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _detail.Content);
+            Snackbar.Add("Output copied to the clipboard.", Severity.Success);
+        }
+        catch (JSException)
+        {
+            Snackbar.Add("The browser blocked clipboard access. Switch to Raw and copy the content manually.", Severity.Warning);
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
         var notes = await NoteService.GetAllAsync();
-        _allNotes = notes.ToList();
+        _allNotes = notes
+            .Where(note => !note.IsArchived && note.Status != NoteStatus.Archived)
+            .ToList();
     }
 
     private async Task LoadAsync()
@@ -477,7 +622,8 @@ body { font-family: var(--font-body); }
             _detail.Id, _detail.Title, _detail.Description, _detail.Type, _detail.Status,
             _detail.IsAiGenerated, _detail.IsArchived, _detail.ProjectId, _detail.ProjectTitle,
             _detail.AreaId, _detail.AreaName, _detail.GoalId, _detail.GoalTitle,
-            _detail.PublishedDate, _detail.ArchivedDate, _detail.CreatedAtUtc, _detail.UpdatedAtUtc);
+            _detail.PublishedDate, _detail.ArchivedDate, _detail.CreatedAtUtc, _detail.UpdatedAtUtc,
+            _detail.RowVersion);
 
         var parameters = new DialogParameters<OutputEditorDialog>();
         parameters.Add(x => x.ExistingOutput, summaryDto);

@@ -1,5 +1,5 @@
 ---
-description: "Use when working on Brainy, a .NET Blazor 10 second-brain app using Tiago Forte/PARA workflows, MatBlazor UI components, Entity Framework, and SQL Server."
+description: "Use when working on Brainy, a .NET 10 Blazor second-brain app using Tiago Forte/PARA workflows, MudBlazor, Entity Framework, and SQL Server."
 name: "Brainy Second Brain Guidelines"
 applyTo: "**"
 ---
@@ -171,9 +171,10 @@ Today must help the user focus on active execution, not knowledge storage. It sh
 
 Do not show archived tasks on Today. Archived tasks belong only in Archives or inside archived project context.
 
-Do not create a standalone Tasks screen by default.
-
-Show tasks in the context of their project. Archived tasks must not appear in active project, area, inbox, search-result, or task-oriented views unless the user is explicitly viewing Archives.
+Tasks Hub and Tasks Calendar are intentional planning views. Keep every task linked
+to and understandable within its project context. Archived tasks must not appear
+in active project, area, inbox, search-result, or task-oriented views unless the
+user is explicitly viewing Archives.
 
 When a project is archived, treat its tasks as archived context too. They should be visible from the archived project or Archives, not from active work screens.
 

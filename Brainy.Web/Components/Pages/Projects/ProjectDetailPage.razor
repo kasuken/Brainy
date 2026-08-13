@@ -42,7 +42,7 @@ else
     <!-- ── Header ──────────────────────────────────────────────────── -->
     <div class="pd-header">
         <div class="pd-breadcrumb">
-            <button class="pd-back" @onclick='() => Nav.NavigateTo("/projects")'>
+            <button type="button" class="pd-back" @onclick='() => Nav.NavigateTo("/projects")'>
                 <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
                     <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
                 </svg>
@@ -210,13 +210,13 @@ else
                 <div class="pd-note-grid">
                     @foreach (var note in _detail.Notes)
                     {
-                        <div class="pd-note-card" @onclick="() => OpenNote(note.Id)">
+                        <article class="pd-note-card">
                             <div class="pd-note-card__header">
                                 <span class="pd-note-status pd-note-status--@note.Status.ToString().ToLower()">
                                     @note.Status
                                 </span>
-                                <div class="pd-note-card__actions" @onclick:stopPropagation="true">
-                                    <button class="pd-note-action" @onclick="() => UnlinkNote(note.Id, note.Title)" title="Remove from project">
+                                <div class="pd-note-card__actions">
+                                    <button type="button" class="pd-note-action" @onclick="() => UnlinkNote(note.Id, note.Title)" aria-label="@($"Remove {note.Title} from project")">
                                         <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
                                             <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
                                         </svg>
@@ -224,7 +224,7 @@ else
                                 </div>
                                 <span class="pd-note-card__date">@note.UpdatedAtUtc.ToString("MMM d")</span>
                             </div>
-                            <h4 class="pd-note-card__title">@note.Title</h4>
+                            <h3 class="pd-note-card__title"><button type="button" class="pd-note-card__open" @onclick="() => OpenNote(note.Id)">@note.Title</button></h3>
                             @if (!string.IsNullOrWhiteSpace(note.AiSummary))
                             {
                                 <p class="pd-note-card__summary">@note.AiSummary</p>
@@ -235,7 +235,7 @@ else
                                     @(note.Content.Length > 120 ? note.Content[..120] + "…" : note.Content)
                                 </p>
                             }
-                        </div>
+                        </article>
                     }
                 </div>
             }
@@ -260,12 +260,12 @@ else
                 <div class="pd-note-grid">
                     @foreach (var res in _detail.ResourceNotes)
                     {
-                        <div class="pd-note-card pd-note-card--resource" @onclick="() => OpenNote(res.Id)">
+                        <article class="pd-note-card pd-note-card--resource">
                             <div class="pd-note-card__header">
                                 <span class="pd-resource-badge">Resource</span>
                                 <span class="pd-note-card__date">@res.UpdatedAtUtc.ToString("MMM d")</span>
                             </div>
-                            <h4 class="pd-note-card__title">@res.Title</h4>
+                            <h3 class="pd-note-card__title"><button type="button" class="pd-note-card__open" @onclick="() => OpenNote(res.Id)">@res.Title</button></h3>
                             @if (!string.IsNullOrWhiteSpace(res.AiSummary))
                             {
                                 <p class="pd-note-card__summary">@res.AiSummary</p>
@@ -276,7 +276,7 @@ else
                                     @(res.Content.Length > 120 ? res.Content[..120] + "…" : res.Content)
                                 </p>
                             }
-                        </div>
+                        </article>
                     }
                 </div>
             }
@@ -839,7 +839,7 @@ else
     opacity: 0;
     transition: opacity .15s;
 }
-.pd-note-card:hover .pd-note-card__actions { opacity: 1; }
+.pd-note-card:hover .pd-note-card__actions, .pd-note-card:focus-within .pd-note-card__actions { opacity: 1; }
 .pd-note-action {
     background: none;
     border: none;
@@ -859,6 +859,11 @@ else
     color: var(--ink);
     margin: 0;
     line-height: 1.3;
+}
+.pd-note-card__open { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.pd-note-card__open:focus-visible, .pd-note-action:focus-visible, .pd-back:focus-visible {
+    outline: 3px solid var(--clay-ring);
+    outline-offset: 2px;
 }
 .pd-note-card:hover .pd-note-card__title { color: var(--clay); }
 .pd-note-card__summary {
@@ -1276,13 +1281,17 @@ else
         _                               => type.ToString()
     };
 
-    private static string RelativeDate(DateTime utc)
+    private string RelativeDate(DateTime utc)
     {
         var diff = DateTime.UtcNow - utc;
         if (diff.TotalMinutes < 2)  return "just now";
         if (diff.TotalHours   < 1)  return $"{(int)diff.TotalMinutes}m ago";
         if (diff.TotalDays    < 1)  return $"{(int)diff.TotalHours}h ago";
         if (diff.TotalDays    < 30) return $"{(int)diff.TotalDays}d ago";
-        return utc.ToLocalTime().ToString("MMM d, yyyy");
+        return TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(utc, DateTimeKind.Utc), UserTimeZone).ToString("MMM d, yyyy");
     }
+
+    [CascadingParameter]
+    private TimeZoneInfo UserTimeZone { get; set; } = TimeZoneInfo.Utc;
 }

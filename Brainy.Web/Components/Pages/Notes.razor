@@ -120,7 +120,6 @@
         flex-direction: column;
         gap: 0.75rem;
         transition: transform 0.3s ease, box-shadow 0.3s ease;
-        cursor: pointer;
         position: relative;
         overflow: hidden;
     }
@@ -152,6 +151,22 @@
         line-height: 1.2;
         color: var(--mud-palette-text-primary);
         margin: 0;
+    }
+
+    .nn-fav-open, .nn-note-open {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        text-align: left;
+    }
+
+    .nn-fav-open:hover, .nn-note-open:hover { color: var(--clay); text-decoration: underline; text-underline-offset: .16em; }
+    .nn-fav-open:focus-visible, .nn-note-open:focus-visible {
+        outline: 3px solid var(--clay-ring);
+        outline-offset: 2px;
     }
 
     .nn-fav-summary {
@@ -221,6 +236,7 @@
 
                     <MudTextField @bind-Value="_searchText"
                                   Placeholder="Search entries…"
+                                  aria-label="Search notes"
                                   Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.Search"
                                   Clearable="true"
@@ -293,6 +309,13 @@
                             <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
                         </div>
                     }
+                    else if (_loadError is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                            Notes could not be loaded. Check your connection and try again.
+                            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadNotesAsync" Class="ml-2">Retry</MudButton>
+                        </MudAlert>
+                    }
                     else
                     {
                         @if (FavoriteNotes.Any())
@@ -303,14 +326,14 @@
                             <div class="nn-fav-grid">
                                 @foreach (var note in FavoriteNotes)
                                 {
-                                    <div class="nn-fav-card" @onclick="() => OpenEditDialogAsync(note.Id)">
+                                    <article class="nn-fav-card">
                                         <div style="display:flex; justify-content:space-between; align-items:start;">
-                                            <h3 class="nn-fav-title">@note.Title</h3>
-                                            <span @onclick:stopPropagation="true">
+                                            <h3 class="nn-fav-title"><button type="button" class="nn-fav-open" @onclick="() => OpenEditDialogAsync(note.Id)">@note.Title</button></h3>
+                                            <span>
                                                 <MudIconButton Icon="@Icons.Material.Filled.Star"
                                                                Color="Color.Warning"
                                                                Size="Size.Small"
-                                                               Title="Remove from favorites"
+                                                               aria-label="@($"Remove {note.Title} from favorites")"
                                                                OnClick="@(() => ToggleFavoriteAsync(note.Id))" />
                                             </span>
                                         </div>
@@ -322,7 +345,7 @@
                                             <MudChip T="string" Size="Size.Small" Color="CategoryColor(note.ParaCategory)" Variant="Variant.Outlined">@note.ParaCategory</MudChip>
                                             <MudChip T="string" Size="Size.Small" Color="StatusColor(note.Status)" Variant="Variant.Outlined">@note.Status</MudChip>
                                         </div>
-                                    </div>
+                                    </article>
                                 }
                             </div>
                         }
@@ -351,11 +374,10 @@
                                       Striped="false"
                                       Breakpoint="Breakpoint.Sm"
                                       RowsPerPage="10"
-                                      OnRowClick="OnRowClick"
                                       T="NoteDto"
                                       MultiSelection="true"
                                       @bind-SelectedItems="_selectedNotes"
-                                      Class="cursor-pointer">
+                                      Class="notes-table">
                                 
                                 <ToolBarContent>
                                     <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
@@ -397,13 +419,17 @@
                                             <MudIconButton Icon="@(noteContext.IsFavorite ? Icons.Material.Filled.Star : Icons.Material.Outlined.StarBorder)"
                                                            Color="@(noteContext.IsFavorite ? Color.Warning : Color.Default)"
                                                            Size="Size.Small"
-                                                           Title="@(noteContext.IsFavorite ? "Remove from favorites" : "Add to favorites")"
+                                                           aria-label="@FavoriteAriaLabel(noteContext)"
                                                            OnClick="@(() => ToggleFavoriteAsync(noteContext.Id))" />
                                         </span>
                                     </MudTd>
                                     <MudTd DataLabel="Title">
                                         <div style="display:flex; align-items:center; gap:0.4rem; font-family: var(--font-display); font-size:1.1rem; color:var(--mud-palette-text-primary); margin-bottom:0.25rem;">
-                                            <strong>@noteContext.Title</strong>
+                                            <button type="button" class="nn-note-open"
+                                                    @onclick="() => OpenEditDialogAsync(noteContext.Id)"
+                                                    @onclick:stopPropagation="true">
+                                                <strong>@noteContext.Title</strong>
+                                            </button>
                                             @if (noteContext.HasImages)
                                             {
                                                 <MudTooltip Text="Contains images" Placement="Placement.Top">
@@ -430,7 +456,7 @@
                                         </MudChip>
                                     </MudTd>
                                     <MudTd DataLabel="Updated">
-                                        <div style="color:var(--mud-palette-text-secondary); font-size: 0.8rem;">@noteContext.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</div>
+                                        <div style="color:var(--mud-palette-text-secondary); font-size: 0.8rem;"><UserLocalTime Utc="noteContext.UpdatedAtUtc" /></div>
                                     </MudTd>
                                 </RowTemplate>
 
@@ -510,6 +536,7 @@
     private IReadOnlyList<NoteDto> _notes = [];
     private string _searchText = string.Empty;
     private bool _loading = true;
+    private string? _loadError;
     private HashSet<NoteDto> _selectedNotes = [];
     private IEnumerable<ParaCategory> _selectedCategories = [];
     private IEnumerable<NoteStatus> _selectedStatuses = [];
@@ -530,6 +557,10 @@
             && (!_selectedCategories.Any() || _selectedCategories.Contains(n.ParaCategory))
             && (!_selectedStatuses.Any() || _selectedStatuses.Contains(n.Status))
             && (!_favoritesOnly || n.IsFavorite));
+
+    private static string FavoriteAriaLabel(NoteDto note) => note.IsFavorite
+        ? $"Remove {note.Title} from favorites"
+        : $"Add {note.Title} to favorites";
 
     private static readonly DialogOptions _dialogOptions = new()
     {
@@ -560,9 +591,20 @@
     private async Task LoadNotesAsync()
     {
         _loading = true;
-        _notes   = await NoteService.GetAllAsync();
-        _selectedNotes.Clear();
-        _loading = false;
+        _loadError = null;
+        try
+        {
+            _notes = await NoteService.GetAllAsync();
+            _selectedNotes.Clear();
+        }
+        catch
+        {
+            _loadError = "Unable to reach the notes library.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private async Task OpenCreateDialogAsync()
@@ -598,11 +640,6 @@
         {
             Snackbar.Add("Could not update favorite.", Severity.Error);
         }
-    }
-
-    private async Task OnRowClick(TableRowClickEventArgs<NoteDto> args)
-    {
-        await OpenEditDialogAsync(args.Item!.Id);
     }
 
     private async Task BulkMoveCategoryAsync()
@@ -662,6 +699,5 @@
         _                    => Color.Default
     };
 }
-
 
 

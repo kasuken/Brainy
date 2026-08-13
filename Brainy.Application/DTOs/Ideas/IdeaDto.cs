@@ -15,4 +15,6 @@ public record IdeaDto(
     DateTime? ArchivedAtUtc,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
-    Guid? CommittedProjectId);
+    Guid? CommittedProjectId,
+    /// <summary>Concurrency token captured at load time; pass back on update or delete.</summary>
+    byte[]? RowVersion = null);

@@ -3,6 +3,7 @@ using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Domain.Entities;
+using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Brainy.Application.Services;
@@ -26,7 +27,8 @@ internal sealed class HighlightService(
             .Where(h => h.NoteId == noteId && h.Note.UserId == userId)
             .OrderBy(h => h.Layer)
             .ThenBy(h => h.CreatedAtUtc)
-            .Select(h => new HighlightDto(h.Id, h.NoteId, h.Text, h.Annotation, h.Layer, h.CreatedAtUtc))
+            .Select(h => new HighlightDto(h.Id, h.NoteId, h.Text, h.Annotation, h.Layer,
+                h.CreatedAtUtc, h.StartOffset, h.EndOffset))
             .ToListAsync(ct)
             .ConfigureAwait(false);
     }
@@ -42,23 +44,41 @@ internal sealed class HighlightService(
 
         var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
 
-        var noteExists = await context.Notes
-            .AnyAsync(n => n.Id == dto.NoteId && n.UserId == userId, ct)
+        var note = await context.Notes
+            .Where(n => n.Id == dto.NoteId && n.UserId == userId)
+            .Select(n => new { n.Content, n.Title })
+            .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
 
-        if (!noteExists)
+        if (note is null)
             throw new KeyNotFoundException($"Note '{dto.NoteId}' was not found.");
+
+        var text = dto.Text.Trim();
+        var (startOffset, endOffset) = ResolveOffsets(note.Content, text, dto.StartOffset, dto.EndOffset);
 
         var highlight = new Highlight
         {
             Id         = Guid.NewGuid(),
             NoteId     = dto.NoteId,
-            Text       = dto.Text.Trim(),
+            Text       = text,
             Annotation = string.IsNullOrWhiteSpace(dto.Annotation) ? null : dto.Annotation.Trim(),
-            Layer      = dto.Layer
+            Layer      = dto.Layer,
+            StartOffset = startOffset,
+            EndOffset = endOffset
         };
 
         context.Highlights.Add(highlight);
+        context.LifecycleActivities.Add(new LifecycleActivity
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            EntityId = highlight.Id,
+            ActivityType = PulseActivityType.HighlightAdded,
+            OccurredAtUtc = DateTime.UtcNow,
+            Title = note.Title,
+            Context = "Highlight added",
+            Link = $"/notes/{dto.NoteId}",
+        });
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return new HighlightDto(
@@ -67,7 +87,9 @@ internal sealed class HighlightService(
             highlight.Text,
             highlight.Annotation,
             highlight.Layer,
-            highlight.CreatedAtUtc);
+            highlight.CreatedAtUtc,
+            highlight.StartOffset,
+            highlight.EndOffset);
     }
 
     public async Task UpdateAsync(
@@ -101,5 +123,32 @@ internal sealed class HighlightService(
 
         context.Highlights.Remove(highlight);
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    private static (int? Start, int? End) ResolveOffsets(
+        string noteContent,
+        string highlightedText,
+        int? requestedStart,
+        int? requestedEnd)
+    {
+        if (requestedStart.HasValue || requestedEnd.HasValue)
+        {
+            if (!requestedStart.HasValue || !requestedEnd.HasValue
+                || requestedStart.Value < 0
+                || requestedEnd.Value <= requestedStart.Value
+                || requestedEnd.Value > noteContent.Length
+                || !noteContent.AsSpan(requestedStart.Value, requestedEnd.Value - requestedStart.Value)
+                    .Equals(highlightedText.AsSpan(), StringComparison.Ordinal))
+            {
+                throw new ArgumentException("Highlight offsets must identify the exact selected text.");
+            }
+
+            return (requestedStart, requestedEnd);
+        }
+
+        var inferredStart = noteContent.IndexOf(highlightedText, StringComparison.Ordinal);
+        return inferredStart < 0
+            ? (null, null)
+            : (inferredStart, inferredStart + highlightedText.Length);
     }
 }

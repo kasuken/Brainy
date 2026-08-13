@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Resources;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
@@ -5,7 +6,7 @@ using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
 using Brainy.Domain.Entities;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -64,6 +65,61 @@ public class ResourceServiceTests
         stored.Topic.Should().Be("engineering");
     }
 
+    [Fact]
+    public async Task CreateAsync_WithForeignArea_ThrowsKeyNotFoundException()
+    {
+        var (sut, db) = BuildService(nameof(CreateAsync_WithForeignArea_ThrowsKeyNotFoundException));
+        var foreignArea = new Area { Id = Guid.NewGuid(), UserId = OtherUserId, Name = "Secret area" };
+        db.Areas.Add(foreignArea);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.CreateAsync(new CreateResourceDto("Resource", AreaId: foreignArea.Id));
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+        (await db.Resources.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithOwnedArea_PersistsAreaLink()
+    {
+        var (sut, db) = BuildService(nameof(CreateAsync_WithOwnedArea_PersistsAreaLink));
+        var area = new Area { Id = Guid.NewGuid(), UserId = DefaultUserId, Name = "Owned area" };
+        db.Areas.Add(area);
+        await db.SaveChangesAsync();
+
+        var result = await sut.CreateAsync(new CreateResourceDto("Resource", AreaId: area.Id));
+
+        result.AreaId.Should().Be(area.Id);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithForeignArea_ThrowsKeyNotFoundException()
+    {
+        var (sut, db) = BuildService(nameof(UpdateAsync_WithForeignArea_ThrowsKeyNotFoundException));
+        var resource = CreateResource(DefaultUserId);
+        var foreignArea = new Area { Id = Guid.NewGuid(), UserId = OtherUserId, Name = "Secret area" };
+        db.AddRange(resource, foreignArea);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.UpdateAsync(new UpdateResourceDto(
+            resource.Id, resource.Name, null, null, foreignArea.Id, null));
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException()
+    {
+        var (sut, _) = BuildService(nameof(UpdateAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException));
+        var resource = await sut.CreateAsync(new CreateResourceDto("Patterns"));
+
+        var act = () => sut.UpdateAsync(new UpdateResourceDto(
+            resource.Id, resource.Name, resource.Description, resource.Topic, resource.AreaId, resource.Tags,
+            RowVersion: [1, 2, 3]));
+
+        await act.Should().ThrowAsync<ConcurrencyConflictException>();
+    }
+
     // ── Read ──────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -103,6 +159,28 @@ public class ResourceServiceTests
         var result = await sut.GetByIdAsync(foreign.Id);
 
         result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_WithLegacyForeignLinkedNote_ExcludesForeignNoteAndCount()
+    {
+        var (sut, db) = BuildService(nameof(GetDetailAsync_WithLegacyForeignLinkedNote_ExcludesForeignNoteAndCount));
+        var resource = CreateResource(DefaultUserId);
+        var foreignNote = new Note
+        {
+            Id = Guid.NewGuid(),
+            UserId = OtherUserId,
+            Title = "Secret note",
+            ResourceId = resource.Id
+        };
+        db.AddRange(resource, foreignNote);
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetDetailAsync(resource.Id);
+
+        result.Should().NotBeNull();
+        result!.NoteCount.Should().Be(0);
+        result.Notes.Should().BeEmpty();
     }
 
     // ── Search ────────────────────────────────────────────────────────────────
@@ -190,8 +268,21 @@ public class ResourceServiceTests
         db.Resources.Add(foreign);
         await db.SaveChangesAsync();
 
-        var act = () => sut.DeleteAsync(foreign.Id);
+        var act = () => sut.DeleteAsync(foreign.Id, null);
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException()
+    {
+        var (sut, db) = BuildService(nameof(DeleteAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException));
+        var resource = CreateResource(DefaultUserId);
+        db.Resources.Add(resource);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.DeleteAsync(resource.Id, [1, 2, 3]);
+
+        await act.Should().ThrowAsync<ConcurrencyConflictException>();
     }
 }

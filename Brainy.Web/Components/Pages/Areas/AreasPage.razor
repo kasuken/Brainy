@@ -164,7 +164,6 @@
         display: flex;
         flex-direction: column;
         position: relative;
-        cursor: pointer;
         overflow: hidden;
         transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
     }
@@ -207,7 +206,8 @@
         transition: opacity 0.2s;
     }
 
-    .ap-card:hover .ap-card-actions {
+    .ap-card:hover .ap-card-actions,
+    .ap-card:focus-within .ap-card-actions {
         opacity: 1;
     }
 
@@ -260,6 +260,13 @@
         line-height:1.2;
     }
 
+    .ap-card-link { color: inherit; text-decoration: none; }
+    .ap-card-link:hover { color: var(--clay); text-decoration: underline; text-underline-offset: .16em; }
+    .ap-card-link:focus-visible, .ap-action-btn:focus-visible, .ap-chip:focus-visible {
+        outline: 3px solid var(--clay-ring);
+        outline-offset: 2px;
+    }
+
     .ap-card-desc {
         font-size: 0.9rem;
         color: var(--mud-palette-text-secondary);
@@ -309,6 +316,7 @@
             <div class="ap-widget">
                 <MudTextField @bind-Value="_searchText"
                               Placeholder="Search areas…"
+                              aria-label="Search areas"
                               Adornment="Adornment.Start"
                               AdornmentIcon="@Icons.Material.Outlined.Search"
                               Clearable="true"
@@ -321,7 +329,9 @@
 
                 <div class="ap-filter-label">Status</div>
                 <div class="ap-filter-group">
-                    <button class="ap-chip @(_showArchived ? "ap-chip--on" : "")"
+                    <button type="button"
+                            class="ap-chip @(_showArchived ? "ap-chip--on" : "")"
+                            aria-pressed="@_showArchived"
                             @onclick="ToggleArchived">
                         <MudIcon Icon="@Icons.Material.Outlined.Archive" Style="font-size:.85rem" />
                         Show Archived
@@ -332,7 +342,10 @@
                 <div class="ap-filter-group" style="margin-bottom:0;">
                     @foreach (var opt in SortOptions)
                     {
-                        <button class="ap-chip @(_sortBy == opt ? "ap-chip--on" : "")"
+                        <button type="button"
+                                class="ap-chip @(_sortBy == opt ? "ap-chip--on" : "")"
+                                aria-pressed="@(_sortBy == opt)"
+                                aria-label="@SortAriaLabel(opt)"
                                 @onclick="() => SetSort(opt)">
                             @opt
                             @if (_sortBy == opt)
@@ -353,6 +366,13 @@
                     <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
                     <p style="margin-top: 1rem; color: var(--mud-palette-text-disabled); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem;">Loading areas…</p>
                 </div>
+            }
+            else if (_loadError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                    Areas could not be loaded. Check your connection and try again.
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadAsync" Class="ml-2">Retry</MudButton>
+                </MudAlert>
             }
             else if (_filtered is { Count: 0 })
             {
@@ -383,27 +403,26 @@
                     {
                         var a = _filtered![i];
                         var idx = i;
-                        <div class="ap-card @(a.IsArchived ? "ap-card--archived" : "")" 
-                             style="animation-delay:@(idx * 35)ms; animation: ap-card-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;"
-                             @onclick="() => OpenDetail(a.Id)">
+                        <article class="ap-card @(a.IsArchived ? "ap-card--archived" : "")"
+                                 style="animation-delay:@(idx * 35)ms; animation: ap-card-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;">
                              
                             <div class="ap-card-actions">
-                                <button class="ap-action-btn" title="Edit" @onclick="() => OpenEditDialog(a)" @onclick:stopPropagation="true">
+                                <button type="button" class="ap-action-btn" aria-label="@($"Edit {a.Name}")" @onclick="() => OpenEditDialog(a)">
                                     <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
                                 </button>
                                 @if (a.IsArchived)
                                 {
-                                    <button class="ap-action-btn" title="Restore" @onclick="() => ConfirmRestore(a.Id, a.Name)" @onclick:stopPropagation="true">
+                                    <button type="button" class="ap-action-btn" aria-label="@($"Restore {a.Name}")" @onclick="() => ConfirmRestore(a.Id, a.Name)">
                                         <MudIcon Icon="@Icons.Material.Outlined.RestorePage" Size="Size.Small" />
                                     </button>
                                 }
                                 else
                                 {
-                                    <button class="ap-action-btn" title="Archive" @onclick="() => ConfirmArchive(a.Id, a.Name)" @onclick:stopPropagation="true">
+                                    <button type="button" class="ap-action-btn" aria-label="@($"Archive {a.Name}")" @onclick="() => ConfirmArchive(a.Id, a.Name)">
                                         <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
                                     </button>
                                 }
-                                <button class="ap-action-btn ap-action-btn--delete" title="Delete" @onclick="() => ConfirmDelete(a.Id, a.Name)" @onclick:stopPropagation="true">
+                                <button type="button" class="ap-action-btn ap-action-btn--delete" aria-label="@($"Delete {a.Name}")" @onclick="() => ConfirmDelete(a.Id, a.Name)">
                                     <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" />
                                 </button>
                             </div>
@@ -417,15 +436,15 @@
                                 {
                                     <MudIcon Icon="@Icons.Material.Filled.FolderSpecial" Size="Size.Medium" Class="ap-card-icon" />
                                 }
-                                <h3 class="ap-card-title">@a.Emoji @a.Name</h3>
+                                <h3 class="ap-card-title"><a class="ap-card-link" href="@($"/areas/{a.Id}")">@a.Emoji @a.Name</a></h3>
                             </div>
                             <p class="ap-card-desc">@(string.IsNullOrWhiteSpace(a.Description) ? "No description" : a.Description)</p>
                             
                             <div class="ap-card-meta">
                                 <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
-                                <span>Updated @a.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+                                <span>Updated <UserLocalTime Utc="a.UpdatedAtUtc" /></span>
                             </div>
-                        </div>
+                        </article>
                     }
                 </div>
             }
@@ -483,6 +502,7 @@
     };
 
     private bool _loading = true;
+    private string? _loadError;
     private List<AreaDto>? _areas;
     private List<AreaDto>? _filtered;
 
@@ -493,6 +513,10 @@
 
     private static readonly string[] SortOptions = ["Name", "Created"];
 
+    private string SortAriaLabel(string option) => _sortBy == option
+        ? $"Sort by {option}, currently {(_sortAsc ? "ascending" : "descending")}; activate to reverse"
+        : $"Sort by {option}";
+
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
@@ -501,13 +525,24 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        var result = _showArchived
-            ? await AreaService.GetAllArchivedAsync()
-            : await AreaService.GetAllActiveAsync();
-        _areas = result.ToList();
-        ApplyFilter();
-        _loading = false;
-        StateHasChanged();
+        _loadError = null;
+        try
+        {
+            var result = _showArchived
+                ? await AreaService.GetAllArchivedAsync()
+                : await AreaService.GetAllActiveAsync();
+            _areas = result.ToList();
+            ApplyFilter();
+        }
+        catch
+        {
+            _loadError = "Unable to reach the areas portfolio.";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
     }
 
     private void OnSearchInput(ChangeEventArgs e)
@@ -586,14 +621,21 @@
     {
         var box = await DialogService.ShowMessageBox(
             "Archive area",
-            $"Archive \"{name}\"? It will be hidden from active views.",
+            $"Archive \"{name}\"? Its active projects, resources, goals, notes, ideas, and outputs must be archived or reassigned first.",
             yesText: "Archive", cancelText: "Cancel");
 
         if (box == true)
         {
-            await AreaService.ArchiveAsync(id);
-            Snackbar.Add($"\"{name}\" archived.", Severity.Info);
-            await LoadAsync();
+            try
+            {
+                await AreaService.ArchiveAsync(id);
+                Snackbar.Add($"\"{name}\" archived.", Severity.Info);
+                await LoadAsync();
+            }
+            catch (InvalidOperationException ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
         }
     }
 

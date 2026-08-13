@@ -16,7 +16,7 @@ namespace Brainy.Application.Services;
 internal sealed class GoalService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    TimeProvider timeProvider) : IGoalService
+    IUserTimeZoneService userTimeZone) : IGoalService
 {
     public async Task<IReadOnlyList<GoalDto>> GetAllActiveAsync(CancellationToken cancellationToken = default)
     {
@@ -133,7 +133,8 @@ internal sealed class GoalService(
             goal.CreatedAtUtc,
             goal.UpdatedAtUtc,
             milestones,
-            projects
+            projects,
+            goal.RowVersion
         );
     }
 
@@ -156,15 +157,8 @@ internal sealed class GoalService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        if (dto.AreaId.HasValue)
-        {
-            var areaExists = await context.Areas
-                .AnyAsync(a => a.Id == dto.AreaId.Value && a.UserId == userId, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (!areaExists)
-                throw new KeyNotFoundException($"Area {dto.AreaId} not found.");
-        }
+        await context.Areas.EnsureActiveOwnedAreaAsync(dto.AreaId, userId, cancellationToken)
+            .ConfigureAwait(false);
 
         var goal = new Goal
         {
@@ -203,15 +197,11 @@ internal sealed class GoalService(
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Goal {dto.Id} not found.");
 
-        if (dto.AreaId.HasValue)
-        {
-            var areaExists = await context.Areas
-                .AnyAsync(a => a.Id == dto.AreaId.Value && a.UserId == userId, cancellationToken)
-                .ConfigureAwait(false);
+        await context.Areas.EnsureActiveOwnedAreaAsync(dto.AreaId, userId, cancellationToken)
+            .ConfigureAwait(false);
 
-            if (!areaExists)
-                throw new KeyNotFoundException($"Area {dto.AreaId} not found.");
-        }
+        if (dto.RowVersion is not null)
+            context.Entry(goal).Property(g => g.RowVersion).OriginalValue = dto.RowVersion;
 
         // Capture old values before mutation for activity recording
         var oldTitle       = goal.Title;
@@ -230,7 +220,17 @@ internal sealed class GoalService(
         else if (dto.Status != GoalStatus.Achieved)
             goal.AchievedDate = null;
 
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        // A no-op form submission must still validate the token captured by the editor.
+        context.Entry(goal).Property(g => g.UpdatedAtUtc).IsModified = true;
+
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException("goal", ex);
+        }
 
         // Record one activity per changed field
         var activities = new List<GoalActivity>();
@@ -294,6 +294,9 @@ internal sealed class GoalService(
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Goal {id} not found.");
 
+        await context.Areas.EnsureActiveOwnedAreaAsync(goal.AreaId, userId, cancellationToken)
+            .ConfigureAwait(false);
+
         goal.IsArchived = false;
         goal.ArchivedAtUtc = null;
         goal.Status = GoalStatus.Planned;
@@ -304,7 +307,10 @@ internal sealed class GoalService(
                ?? throw new InvalidOperationException("Failed to retrieve restored goal.");
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(
+        Guid id,
+        byte[]? rowVersion,
+        CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
@@ -314,8 +320,18 @@ internal sealed class GoalService(
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Goal {id} not found.");
 
+        if (rowVersion is not null)
+            context.Entry(goal).Property(g => g.RowVersion).OriginalValue = rowVersion;
+
         context.Goals.Remove(goal);
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException("goal", ex);
+        }
     }
 
     public async Task<int> GetProgressAsync(Guid id, CancellationToken cancellationToken = default)
@@ -373,7 +389,7 @@ internal sealed class GoalService(
     public async Task<IReadOnlyList<GoalDto>> GetDueSoonAsync(int daysAhead = 7, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today = timeProvider.GetUserToday();
+        var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
         var cutoff = today.AddDays(daysAhead);
 
         var goals = await context.Goals
@@ -397,7 +413,7 @@ internal sealed class GoalService(
     public async Task<IReadOnlyList<GoalDto>> GetOverdueAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var today = timeProvider.GetUserToday();
+        var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
         var goals = await context.Goals
             .AsNoTracking()
@@ -439,7 +455,8 @@ internal sealed class GoalService(
             completed,
             progress,
             g.CreatedAtUtc,
-            g.UpdatedAtUtc
+            g.UpdatedAtUtc,
+            g.RowVersion
         );
     }
 

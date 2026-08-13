@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Areas;
 using Brainy.Application.DTOs.Goals;
 using Brainy.Application.Interfaces.Identity;
@@ -5,7 +6,7 @@ using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
 using Brainy.Domain.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -150,6 +151,19 @@ public class GoalServiceTests
         updated.AchievedDate.Should().NotBeNull();
     }
 
+    [Fact]
+    public async Task UpdateAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException()
+    {
+        var (goals, _, _) = BuildServices(nameof(UpdateAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException));
+        var goal = await goals.CreateAsync(new CreateGoalDto("Run a marathon"));
+
+        var act = () => goals.UpdateAsync(new UpdateGoalDto(
+            goal.Id, goal.Title, goal.AreaId, goal.Description, goal.TargetDate, goal.Status,
+            RowVersion: [1, 2, 3]));
+
+        await act.Should().ThrowAsync<ConcurrencyConflictException>();
+    }
+
     // ── ArchiveAsync / RestoreAsync ──────────────────────────────────────────
 
     [Fact]
@@ -205,10 +219,21 @@ public class GoalServiceTests
         var (goals, _, _) = BuildServices(nameof(DeleteAsync_RemovesGoalFromStore));
 
         var goal = await goals.CreateAsync(new CreateGoalDto("Goal to delete"));
-        await goals.DeleteAsync(goal.Id);
+        await goals.DeleteAsync(goal.Id, goal.RowVersion);
 
         var result = await goals.GetByIdAsync(goal.Id);
         result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException()
+    {
+        var (goals, _, _) = BuildServices(nameof(DeleteAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException));
+        var goal = await goals.CreateAsync(new CreateGoalDto("Run a marathon"));
+
+        var act = () => goals.DeleteAsync(goal.Id, [1, 2, 3]);
+
+        await act.Should().ThrowAsync<ConcurrencyConflictException>();
     }
 
     // ── Progress calculation ─────────────────────────────────────────────────

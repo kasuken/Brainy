@@ -5,7 +5,7 @@ using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
 using Brainy.Domain.Entities;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -62,6 +62,10 @@ public class HighlightServiceTests
         stored.Text.Should().Be("key insight");
         stored.Annotation.Should().Be("why it matters");
         stored.Layer.Should().Be(2);
+        var activity = await db.LifecycleActivities.AsNoTracking().SingleAsync(
+            entry => entry.ActivityType == Domain.Enums.PulseActivityType.HighlightAdded);
+        activity.EntityId.Should().Be(result.Id);
+        activity.Link.Should().Be($"/notes/{note.Id}");
     }
 
     [Fact]
@@ -85,6 +89,39 @@ public class HighlightServiceTests
         var act = () => sut.CreateAsync(new CreateHighlightDto(foreignNote.Id, "text", null));
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenTextExistsInNote_PersistsAnchoredOffsets()
+    {
+        var (sut, db) = BuildService(nameof(CreateAsync_WhenTextExistsInNote_PersistsAnchoredOffsets));
+        var note = CreateNote(DefaultUserId);
+        note.Content = "Before key insight after";
+        db.Notes.Add(note);
+        await db.SaveChangesAsync();
+
+        var result = await sut.CreateAsync(new CreateHighlightDto(note.Id, "key insight", null));
+
+        result.StartOffset.Should().Be(7);
+        result.EndOffset.Should().Be(18);
+        var stored = await db.Highlights.AsNoTracking().SingleAsync();
+        stored.StartOffset.Should().Be(7);
+        stored.EndOffset.Should().Be(18);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenProvidedOffsetsDoNotMatchText_ThrowsArgumentException()
+    {
+        var (sut, db) = BuildService(nameof(CreateAsync_WhenProvidedOffsetsDoNotMatchText_ThrowsArgumentException));
+        var note = CreateNote(DefaultUserId);
+        note.Content = "Before key insight after";
+        db.Notes.Add(note);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.CreateAsync(new CreateHighlightDto(
+            note.Id, "key insight", null, StartOffset: 0, EndOffset: 11));
+
+        await act.Should().ThrowAsync<ArgumentException>();
     }
 
     // ── Read ──────────────────────────────────────────────────────────────────
@@ -150,6 +187,8 @@ public class HighlightServiceTests
         await sut.DeleteAsync(created.Id);
 
         (await db.Highlights.AsNoTracking().CountAsync()).Should().Be(0);
+        (await db.LifecycleActivities.AsNoTracking().CountAsync(
+            entry => entry.EntityId == created.Id)).Should().Be(1);
     }
 
     [Fact]

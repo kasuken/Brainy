@@ -197,12 +197,20 @@
         position: relative;
         overflow: hidden;
         transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+        color: inherit;
+        text-decoration: none;
     }
 
     .gp-card:hover {
         transform: translateY(-4px);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.05);
         border-color: rgba(192, 86, 29, 0.25);
+        color: inherit;
+    }
+
+    .gp-card:focus-visible, .gp-chip:focus-visible {
+        outline: 3px solid var(--clay-ring);
+        outline-offset: 2px;
     }
     
     .gp-card::before {
@@ -342,6 +350,7 @@
             <div class="gp-widget">
                 <MudTextField @bind-Value="_searchText"
                               Placeholder="Search goals…"
+                              aria-label="Search goals"
                               Adornment="Adornment.Start"
                               AdornmentIcon="@Icons.Material.Outlined.Search"
                               Clearable="true"
@@ -358,6 +367,7 @@
                     {
                         <button class="gp-chip @(IsStatusActive(status) ? "gp-chip--on" : "")"
                                 type="button"
+                                aria-pressed="@IsStatusActive(status)"
                                 @onclick="() => ToggleStatusFilter(status)">
                             <span class="gp-chip-dot" style="background:@StatusColor(status)"></span>
                             @StatusLabel(status)
@@ -375,6 +385,13 @@
                     <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
                     <p style="margin-top: 1rem; color: var(--mud-palette-text-disabled); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem;">Loading goals…</p>
                 </div>
+            }
+            else if (_loadError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                    Goals could not be loaded. Check your connection and try again.
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadAsync" Class="ml-2">Retry</MudButton>
+                </MudAlert>
             }
             else if (_filtered.Count == 0)
             {
@@ -404,7 +421,7 @@
                     @for (var i = 0; i < _filtered.Count; i++)
                     {
                         var goal = _filtered[i];
-                        <button class="gp-card" type="button" style="animation-delay:@(i * 35)ms; animation: gp-card-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;" @onclick="() => OpenDetail(goal.Id)">
+                        <a class="gp-card" href="@($"/goals/{goal.Id}")" style="animation-delay:@(i * 35)ms; animation: gp-card-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;">
                             
                             <div class="gp-card-header">
                                 <span class="gp-badge gp-status--@goal.Status.ToString().ToLowerInvariant()">
@@ -445,7 +462,7 @@
                                     @goal.CompletedMilestones / @goal.TotalMilestones milestones
                                 </span>
                             </div>
-                        </button>
+                        </a>
                     }
                 </div>
             }
@@ -506,6 +523,7 @@
         [GoalStatus.Planned, GoalStatus.Active, GoalStatus.Achieved, GoalStatus.Abandoned];
 
     private bool _loading = true;
+    private string? _loadError;
     private string _searchText = "";
     private List<GoalDto> _goals = [];
     private List<GoalDto> _filtered = [];
@@ -519,10 +537,21 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        var result = await GoalService.GetAllNonArchivedAsync();
-        _goals = result.Where(goal => !goal.IsArchived && goal.Status != GoalStatus.Archived).ToList();
-        ApplyFilters();
-        _loading = false;
+        _loadError = null;
+        try
+        {
+            var result = await GoalService.GetAllNonArchivedAsync();
+            _goals = result.Where(goal => !goal.IsArchived && goal.Status != GoalStatus.Archived).ToList();
+            ApplyFilters();
+        }
+        catch
+        {
+            _loadError = "Unable to reach the goals ledger.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void OnSearchInput(ChangeEventArgs args)

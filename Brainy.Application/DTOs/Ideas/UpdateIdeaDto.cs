@@ -17,4 +17,9 @@ public record UpdateIdeaDto(
     string? SuitabilityReason = null,
     string? Evidence = null,
     string? ValidationExperiment = null,
-    string? ReplacedCommitment = null);
+    string? ReplacedCommitment = null,
+    /// <summary>
+    /// Concurrency token from the loaded idea. When provided, the update fails with a
+    /// <see cref="Common.ConcurrencyConflictException"/> if the idea changed after it was loaded.
+    /// </summary>
+    byte[]? RowVersion = null);

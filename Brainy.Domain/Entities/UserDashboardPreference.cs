@@ -18,4 +18,10 @@ public class UserDashboardPreference : BaseEntity, IUserOwnedEntity
 
     /// <summary>Inbox count threshold at which a warning is shown. Default 10.</summary>
     public int InboxWarningThreshold { get; set; } = 10;
+
+    /// <summary>
+    /// IANA time-zone id used to interpret the user's calendar day. UTC is the safe
+    /// default until the browser reports a more specific zone.
+    /// </summary>
+    public string TimeZoneId { get; set; } = "UTC";
 }

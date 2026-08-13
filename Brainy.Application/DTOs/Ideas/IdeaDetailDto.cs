@@ -27,4 +27,6 @@ public record IdeaDetailDto(
     string? ValidationExperiment,
     string? ReplacedCommitment,
     Guid? CommittedProjectId,
-    DateTime? CommittedAtUtc);
+    DateTime? CommittedAtUtc,
+    /// <summary>Concurrency token captured at load time; pass back on update or delete.</summary>
+    byte[]? RowVersion = null);

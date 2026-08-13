@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Resources;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
@@ -94,17 +95,19 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
         var resource = await context.Resources
             .AsNoTracking()
             .Include(r => r.Tags)
-            .Include(r => r.Notes)
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId, cancellationToken)
             .ConfigureAwait(false);
 
         if (resource is null)
             return null;
 
-        var notes = resource.Notes
+        var notes = await context.Notes
+            .AsNoTracking()
+            .Where(n => n.ResourceId == id && n.UserId == userId)
             .OrderByDescending(n => n.UpdatedAtUtc)
             .Select(n => new ResourceNoteDto(n.Id, n.Title, n.UpdatedAtUtc))
-            .ToList();
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
 
         return new ResourceDetailDto(
             resource.Id,
@@ -119,7 +122,8 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
             resource.Tags.Select(t => t.Name).OrderBy(n => n).ToList(),
             notes.Count,
             notes,
-            NormalizeEmoji(resource.Emoji));
+            NormalizeEmoji(resource.Emoji),
+            resource.RowVersion);
     }
 
     public async Task<ResourceDto> CreateAsync(CreateResourceDto dto, CancellationToken cancellationToken = default)
@@ -127,6 +131,9 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
         ArgumentNullException.ThrowIfNull(dto);
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        await context.Areas.EnsureActiveOwnedAreaAsync(dto.AreaId, userId, cancellationToken)
+            .ConfigureAwait(false);
 
         var resource = new Resource
         {
@@ -162,6 +169,12 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Resource '{dto.Id}' was not found.");
 
+        await context.Areas.EnsureActiveOwnedAreaAsync(dto.AreaId, userId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (dto.RowVersion is not null)
+            context.Entry(resource).Property(r => r.RowVersion).OriginalValue = dto.RowVersion;
+
         resource.Name = dto.Name;
         resource.Emoji = NormalizeEmoji(dto.Emoji);
         resource.Description = dto.Description;
@@ -173,7 +186,18 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
             ? await ResolveTagsAsync(userId, dto.Tags, cancellationToken).ConfigureAwait(false)
             : new List<Tag>();
 
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        // Force one Resource UPDATE even when only its tag join rows changed so the
+        // rowversion predicate is checked and SQL Server advances the token.
+        context.Entry(resource).Property(r => r.UpdatedAtUtc).IsModified = true;
+
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException("resource", ex);
+        }
 
         return ToDto(resource);
     }
@@ -202,13 +226,19 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Resource '{id}' was not found.");
 
+        await context.Areas.EnsureActiveOwnedAreaAsync(resource.AreaId, userId, cancellationToken)
+            .ConfigureAwait(false);
+
         resource.IsArchived = false;
         resource.ArchivedAtUtc = null;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(
+        Guid id,
+        byte[]? rowVersion,
+        CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
@@ -217,8 +247,18 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Resource '{id}' was not found.");
 
+        if (rowVersion is not null)
+            context.Entry(resource).Property(r => r.RowVersion).OriginalValue = rowVersion;
+
         context.Resources.Remove(resource);
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException("resource", ex);
+        }
     }
 
     public async Task LinkNoteAsync(Guid resourceId, Guid noteId, CancellationToken cancellationToken = default)
@@ -313,7 +353,8 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
         r.CreatedAtUtc,
         r.UpdatedAtUtc,
         r.Tags.Select(t => t.Name).OrderBy(n => n).ToList(),
-        NormalizeEmoji(r.Emoji));
+        NormalizeEmoji(r.Emoji),
+        r.RowVersion);
 
     private static string NormalizeEmoji(string? emoji)
     {

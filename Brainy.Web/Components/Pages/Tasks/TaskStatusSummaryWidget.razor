@@ -4,20 +4,20 @@
    TaskStatusSummaryWidget — 4-stat-card overview of task status distribution.
 ───────────────────────────────────────────────────────────────────────────── *@
 
-<div class="th-summary-grid">
-    <div class="th-stat-card">
+<div class="th-summary-grid" role="list" aria-label="Task counts by status">
+    <div class="th-stat-card" role="listitem">
         <span class="th-stat-label">To Do</span>
         <span class="th-stat-value th-stat--todo">@Summary.TodoCount</span>
     </div>
-    <div class="th-stat-card">
+    <div class="th-stat-card" role="listitem">
         <span class="th-stat-label">In Progress</span>
         <span class="th-stat-value th-stat--inprogress">@Summary.InProgressCount</span>
     </div>
-    <div class="th-stat-card">
+    <div class="th-stat-card" role="listitem">
         <span class="th-stat-label">Waiting</span>
         <span class="th-stat-value th-stat--waiting">@Summary.WaitingCount</span>
     </div>
-    <div class="th-stat-card">
+    <div class="th-stat-card" role="listitem">
         <span class="th-stat-label">Done</span>
         <span class="th-stat-value th-stat--done">@Summary.DoneCount</span>
     </div>

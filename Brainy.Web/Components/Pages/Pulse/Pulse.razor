@@ -15,18 +15,21 @@
     @* ── Hero + period selector ── *@
     <div class="pulse-hero">
         <div class="pulse-hero__title-row">
-            <MudText Typo="Typo.h4" Class="pulse-hero__heading mb-1">Pulse</MudText>
+            <h1 id="pulse-title" class="pulse-hero__heading mb-1">Pulse</h1>
             <PageHelpButton Guide="HelpGuide" />
         </div>
         <MudText Typo="Typo.body1" Class="mud-text-secondary mb-5">
             A snapshot of what you captured, processed, and completed — pick a period to see your activity.
         </MudText>
 
-        <div class="pulse-period-bar">
+        <div class="pulse-period-bar" role="group" aria-label="Report period">
             @foreach (var option in PeriodOptions)
             {
                 <button type="button"
                         class="pulse-period-chip @(option.Period == _period ? "pulse-period-chip--active" : "")"
+                        aria-pressed="@(option.Period == _period ? "true" : "false")"
+                        aria-controls="pulse-report"
+                        disabled="@_loading"
                         @onclick="() => SelectPeriodAsync(option.Period)">
                     @option.Label
                 </button>
@@ -62,26 +65,38 @@
 
             @if (!string.IsNullOrWhiteSpace(_customRangeError))
             {
-                <MudText Typo="Typo.caption" Color="Color.Error" Class="mt-2">@_customRangeError</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Error" Class="mt-2" role="alert">@_customRangeError</MudText>
             }
         }
     </div>
 
     @* ── Report body ── *@
-    @if (_loading)
-    {
-        <div class="pulse-state">
-            <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Medium" />
-            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">Gathering your activity…</MudText>
-        </div>
-    }
-    else if (_report is not null)
-    {
+    <div id="pulse-report" aria-live="polite" aria-busy="@(_loading ? "true" : "false")">
+        @if (_loading)
+        {
+            <div class="pulse-state" role="status">
+                <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Medium" />
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">Gathering your activity…</MudText>
+            </div>
+        }
+        else if (_loadError is not null)
+        {
+            <div class="pulse-state">
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" role="alert">
+                    @_loadError
+                </MudAlert>
+                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="RetryLoadAsync">
+                    Try again
+                </MudButton>
+            </div>
+        }
+        else if (_report is not null)
+        {
         <div class="pulse-range-meta mb-4">
             <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
-                @_report.PeriodStartUtc.ToLocalTime().ToString("MMM d, yyyy")
+                <UserLocalTime Utc="_report.PeriodStartUtc" />
                 –
-                @_report.PeriodEndUtc.AddDays(-1).ToLocalTime().ToString("MMM d, yyyy")
+                <UserLocalTime Utc="_report.PeriodEndUtc.AddTicks(-1)" />
             </MudText>
         </div>
 
@@ -102,10 +117,10 @@
             @foreach (var group in MetricGroups)
             {
                 var groupTotal = group.Tiles.Sum(t => t.Selector(_report.Summary));
-                <div class="pulse-metric-group">
+                <section class="pulse-metric-group" aria-labelledby="@($"pulse-{group.Title.ToLowerInvariant()}-heading")">
                     <div class="pulse-metric-group__head">
-                        <MudIcon Icon="@group.Icon" Class="pulse-metric-group__icon" />
-                        <MudText Typo="Typo.subtitle1" Class="pulse-metric-group__title">@group.Title</MudText>
+                        <MudIcon Icon="@group.Icon" Class="pulse-metric-group__icon" aria-hidden="true" />
+                        <h2 id="@($"pulse-{group.Title.ToLowerInvariant()}-heading")" class="pulse-metric-group__title">@group.Title</h2>
                         <span class="pulse-metric-group__total @(groupTotal == 0 ? "pulse-metric-group__total--empty" : "")">@groupTotal</span>
                     </div>
                     <div class="pulse-metrics-grid">
@@ -113,24 +128,25 @@
                         {
                             var value = metric.Selector(_report.Summary);
                             <div class="pulse-metric-tile @(value == 0 ? "pulse-metric-tile--empty" : "")">
-                                <MudIcon Icon="@metric.Icon" Class="pulse-metric-tile__icon" />
+                                <MudIcon Icon="@metric.Icon" Class="pulse-metric-tile__icon" aria-hidden="true" />
                                 <div class="pulse-metric-tile__value">@value</div>
                                 <div class="pulse-metric-tile__label">@metric.Label</div>
                             </div>
                         }
                     </div>
-                </div>
+                </section>
             }
         </div>
 
         @* ── Activity log ── *@
-        <div class="pulse-log-section">
+        <section class="pulse-log-section" aria-labelledby="pulse-log-heading">
             <div class="pulse-log-section__head">
-                <MudText Typo="Typo.h6" Class="pulse-log-section__title">Activity Log</MudText>
+                <h2 id="pulse-log-heading" class="pulse-log-section__title">Activity Log</h2>
             </div>
             <PulseActivityLogList Entries="_report.Log" />
-        </div>
-    }
+        </section>
+        }
+    </div>
 
 </div>
 
@@ -149,9 +165,11 @@
 
     .pulse-hero__heading {
         font-family: var(--font-display);
+        font-size: clamp(2.25rem, 5vw, 3rem);
         font-weight: 600;
         color: var(--mud-palette-text-primary);
         letter-spacing: -0.5px;
+        margin-top: 0;
     }
 
     .pulse-hero__title-row {
@@ -187,6 +205,11 @@
         border-color: var(--mud-palette-primary);
         color: var(--mud-palette-primary);
         box-shadow: 0 1px 6px rgba(192,86,29,0.12);
+    }
+
+    .pulse-period-chip:focus-visible {
+        outline: 3px solid var(--clay-ring);
+        outline-offset: 2px;
     }
 
     .pulse-period-chip--active {
@@ -283,6 +306,8 @@
         font-family: var(--font-display);
         color: var(--ink);
         flex: 1;
+        font-size: 1rem;
+        margin: 0;
     }
 
     .pulse-metric-group__total {
@@ -352,6 +377,7 @@
     .pulse-log-section__title {
         font-family: var(--font-display);
         color: var(--ink);
+        margin: 0;
     }
 </style>
 
@@ -459,6 +485,7 @@
     private PulsePeriod _period = PulsePeriod.LastWeek;
     private PulseReportDto? _report;
     private bool _loading = true;
+    private string? _loadError;
     private DateTime? _customStart;
     private DateTime? _customEnd;
     private string? _customRangeError;
@@ -504,15 +531,27 @@
     private async Task LoadReportAsync(PulsePeriod period, DateTime? customStart = null, DateTime? customEnd = null)
     {
         _loading = true;
+        _loadError = null;
         StateHasChanged();
 
         try
         {
             _report = await PulseService.GetReportAsync(period, customStart, customEnd);
         }
+        catch
+        {
+            _report = null;
+            _loadError = "Brainy could not load activity for this period. Your data was not changed.";
+        }
         finally
         {
             _loading = false;
         }
     }
+
+    private Task RetryLoadAsync() =>
+        LoadReportAsync(
+            _period,
+            _period == PulsePeriod.Custom ? _customStart : null,
+            _period == PulsePeriod.Custom ? _customEnd : null);
 }

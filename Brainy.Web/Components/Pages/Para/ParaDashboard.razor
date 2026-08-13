@@ -87,6 +87,16 @@
         animation: pd-fade-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
     }
 
+    .para-load-state {
+        min-height: 220px;
+        display: grid;
+        place-items: center;
+        align-content: center;
+        gap: 0.75rem;
+        color: var(--mud-palette-text-secondary);
+        text-align: center;
+    }
+
     .para-grid {
         display: grid;
         grid-template-columns: 1fr;
@@ -260,6 +270,7 @@
         padding-bottom: 0.75rem;
         border-bottom: 2px solid;
         margin-bottom: 0.25rem;
+        margin-top: 0;
     }
 
     .para-items-col-header--project  { border-color: #d32f2f; }
@@ -332,7 +343,7 @@
         <aside class="para-sidebar">
             <p class="para-eyebrow">Second Brain Architecture</p>
             <div class="para-title-row">
-                <h1 class="para-title">Your PARA Overview</h1>
+                <h1 id="para-title" class="para-title">Your PARA Overview</h1>
                 <PageHelpButton Guide="HelpGuide" />
             </div>
             <p class="para-lead">
@@ -340,10 +351,22 @@
             </p>
         </aside>
 
-        <main class="para-main">
+        <section class="para-main" aria-labelledby="para-title">
             @if (_loading)
             {
-                <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+                <div class="para-load-state" role="status" aria-live="polite">
+                    <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+                    <span>Loading your PARA overview…</span>
+                </div>
+            }
+            else if (_loadError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" role="alert">
+                    <MudText Typo="Typo.body1">@_loadError</MudText>
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadAsync" Class="mt-2">
+                        Try again
+                    </MudButton>
+                </MudAlert>
             }
             else if (_summary is not null)
             {
@@ -358,7 +381,7 @@
                         {
                             <p class="para-card-archived">@_summary.ArchivedProjectCount archived</p>
                         }
-                        <div class="para-card-cta">
+                        <div class="para-card-cta" aria-hidden="true">
                             <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
                         </div>
                     </a>
@@ -372,7 +395,7 @@
                         {
                             <p class="para-card-archived">@_summary.ArchivedAreaCount archived</p>
                         }
-                        <div class="para-card-cta">
+                        <div class="para-card-cta" aria-hidden="true">
                             <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
                         </div>
                     </a>
@@ -386,7 +409,7 @@
                         {
                             <p class="para-card-archived">@_summary.ArchivedResourceCount archived</p>
                         }
-                        <div class="para-card-cta">
+                        <div class="para-card-cta" aria-hidden="true">
                             <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
                         </div>
                     </a>
@@ -404,7 +427,7 @@
                                 @_summary.ArchivedResourceCount&nbsp;resource@(_summary.ArchivedResourceCount == 1 ? "" : "s")
                             </p>
                         }
-                        <div class="para-card-cta">
+                        <div class="para-card-cta" aria-hidden="true">
                             <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
                         </div>
                     </a>
@@ -418,10 +441,10 @@
 
                         @* Projects column *@
                         <div class="para-items-col">
-                            <div class="para-items-col-header para-items-col-header--project">
+                            <h3 class="para-items-col-header para-items-col-header--project">
                                 <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
                                 Projects
-                            </div>
+                            </h3>
                             @if (_recentProjects.Count == 0)
                             {
                                 <p class="para-items-empty">No active projects</p>
@@ -433,6 +456,7 @@
                                     <div class="para-item-row">
                                         <a href="/projects/@project.Id" class="para-item-link" title="@project.Name">@project.Name</a>
                                         <MudMenu Icon="@Icons.Material.Filled.MoreVert"
+                                                 aria-label="@($"Actions for {project.Name}")"
                                                  Size="Size.Small"
                                                  Dense="true"
                                                  AnchorOrigin="Origin.BottomRight"
@@ -456,10 +480,10 @@
 
                         @* Areas column *@
                         <div class="para-items-col">
-                            <div class="para-items-col-header para-items-col-header--area">
+                            <h3 class="para-items-col-header para-items-col-header--area">
                                 <MudIcon Icon="@Icons.Material.Outlined.Landscape" Size="Size.Small" />
                                 Areas
-                            </div>
+                            </h3>
                             @if (_recentAreas.Count == 0)
                             {
                                 <p class="para-items-empty">No active areas</p>
@@ -471,6 +495,7 @@
                                     <div class="para-item-row">
                                         <a href="/areas/@area.Id" class="para-item-link" title="@area.Name">@area.Name</a>
                                         <MudMenu Icon="@Icons.Material.Filled.MoreVert"
+                                                 aria-label="@($"Actions for {area.Name}")"
                                                  Size="Size.Small"
                                                  Dense="true"
                                                  AnchorOrigin="Origin.BottomRight"
@@ -494,10 +519,10 @@
 
                         @* Resources column *@
                         <div class="para-items-col">
-                            <div class="para-items-col-header para-items-col-header--resource">
+                            <h3 class="para-items-col-header para-items-col-header--resource">
                                 <MudIcon Icon="@Icons.Material.Outlined.MenuBook" Size="Size.Small" />
                                 Resources
-                            </div>
+                            </h3>
                             @if (_recentResources.Count == 0)
                             {
                                 <p class="para-items-empty">No active resources</p>
@@ -509,6 +534,7 @@
                                     <div class="para-item-row">
                                         <a href="/resources/@resource.Id" class="para-item-link" title="@resource.Name">@resource.Name</a>
                                         <MudMenu Icon="@Icons.Material.Filled.MoreVert"
+                                                 aria-label="@($"Actions for {resource.Name}")"
                                                  Size="Size.Small"
                                                  Dense="true"
                                                  AnchorOrigin="Origin.BottomRight"
@@ -533,7 +559,7 @@
                     </div>
                 </section>
             }
-        </main>
+        </section>
 
     </div>
 </div>
@@ -589,26 +615,44 @@
 
     private ParaSummaryDto? _summary;
     private bool _loading = true;
+    private string? _loadError;
 
     private List<ProjectDto> _recentProjects = [];
     private List<AreaDto>    _recentAreas    = [];
     private List<ResourceDto> _recentResources = [];
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
     {
-        var summaryTask   = ParaSummaryService.GetSummaryAsync();
-        var projectsTask  = ProjectService.GetAllNonArchivedAsync();
-        var areasTask     = AreaService.GetAllActiveAsync();
-        var resourcesTask = ResourceService.GetAllActiveAsync();
+        _loading = true;
+        _loadError = null;
 
-        await Task.WhenAll(summaryTask, projectsTask, areasTask, resourcesTask);
+        try
+        {
+            // These services share the scoped DbContext, so load sequentially.
+            var summary = await ParaSummaryService.GetSummaryAsync();
+            var projects = await ProjectService.GetAllNonArchivedAsync();
+            var areas = await AreaService.GetAllActiveAsync();
+            var resources = await ResourceService.GetAllActiveAsync();
 
-        _summary          = summaryTask.Result;
-        _recentProjects   = [.. projectsTask.Result.OrderByDescending(p => p.UpdatedAtUtc).Take(5)];
-        _recentAreas      = [.. areasTask.Result.OrderByDescending(a => a.UpdatedAtUtc).Take(5)];
-        _recentResources  = [.. resourcesTask.Result.OrderByDescending(r => r.UpdatedAtUtc).Take(5)];
-
-        _loading = false;
+            _summary = summary;
+            _recentProjects = [.. projects.OrderByDescending(p => p.UpdatedAtUtc).Take(5)];
+            _recentAreas = [.. areas.OrderByDescending(a => a.UpdatedAtUtc).Take(5)];
+            _recentResources = [.. resources.OrderByDescending(r => r.UpdatedAtUtc).Take(5)];
+        }
+        catch
+        {
+            _summary = null;
+            _recentProjects = [];
+            _recentAreas = [];
+            _recentResources = [];
+            _loadError = "Brainy could not load your PARA overview. Your data was not changed.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     // ── Archive actions ───────────────────────────────────────────────────────

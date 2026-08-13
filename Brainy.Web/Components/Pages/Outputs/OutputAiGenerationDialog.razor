@@ -1,6 +1,8 @@
 @using Brainy.Application.DTOs.Notes
+@using Brainy.Application.DTOs.Outputs
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Application.Interfaces.AI
+@using Brainy.Domain.Enums
 
 @inject INoteService NoteService
 @inject IAiAssistant AiAssistant
@@ -19,6 +21,7 @@
 
             <MudTextField @bind-Value="_search"
                           Placeholder="Search notes…"
+                          aria-label="Search source notes"
                           Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Search"
                           Immediate="true"
@@ -49,6 +52,7 @@
                         var isDisabled = !isSelected && _selected.Count >= MaxNotes;
                         <button type="button"
                                 class="oagd__row @(isSelected ? "oagd__row--active" : "") @(isDisabled ? "oagd__row--disabled" : "")"
+                                aria-pressed="@isSelected"
                                 @onclick="() => ToggleNote(note.Id)"
                                 disabled="@isDisabled">
                             <MudIcon Icon="@(isSelected ? Icons.Material.Filled.CheckBox : Icons.Material.Outlined.CheckBoxOutlineBlank)"
@@ -173,7 +177,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _allNotes = await NoteService.GetAllAsync();
+        _allNotes = (await NoteService.GetAllAsync())
+            .Where(note => !note.IsArchived && note.Status != NoteStatus.Archived)
+            .ToList();
         _loading = false;
     }
 
@@ -199,7 +205,13 @@
             var result = await AiAssistant.GenerateOutputAsync(OutputTitle, OutputType, contents);
 
             if (result.Success)
-                MudDialog.Close(DialogResult.Ok(result.Content));
+            {
+                MudDialog.Close(DialogResult.Ok(new GeneratedOutputDraftDto(
+                    result.Content,
+                    result.Model,
+                    result.PromptVersion,
+                    _selected.ToList())));
+            }
             else
                 Snackbar.Add(result.ErrorMessage ?? "AI generation failed.", Severity.Error);
         }

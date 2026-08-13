@@ -5,7 +5,7 @@ using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
 using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -287,6 +287,21 @@ public class TodayServiceTests
         var result = await sut.GetDueThisWeekAsync();
 
         // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetDueThisWeekAsync_WithTaskDueNextMonday_ExcludesItFromCurrentWeek()
+    {
+        var (sut, db) = BuildService(nameof(GetDueThisWeekAsync_WithTaskDueNextMonday_ExcludesItFromCurrentWeek));
+        var project = CreateProject(DefaultUserId);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(7));
+        db.Projects.Add(project);
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetDueThisWeekAsync();
+
         result.Should().BeEmpty();
     }
 

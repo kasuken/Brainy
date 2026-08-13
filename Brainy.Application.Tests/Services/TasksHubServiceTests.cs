@@ -6,7 +6,7 @@ using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
 using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -646,16 +646,18 @@ public class TasksHubServiceTests
     [Fact]
     public async Task GetStaleTasksAsync_WithTaskNotUpdatedFor31Days_ReturnsIt()
     {
-        // Arrange — SaveChanges audit-stamps UpdatedAtUtc with the real "now", so
-        // staleness is exercised by moving the service clock 31 days past the save.
+        // Arrange — persistence and application logic share the same clock. Advance it
+        // after the save to exercise elapsed time without relying on the wall clock.
+        var clock = new FixedTimeProvider(DateTimeOffset.UtcNow);
         var (sut, db) = BuildService(
             nameof(GetStaleTasksAsync_WithTaskNotUpdatedFor31Days_ReturnsIt),
-            clock: new FixedTimeProvider(DateTimeOffset.UtcNow.AddDays(31)));
+            clock: clock);
         var project = CreateProject(DefaultUserId);
         var task = CreateTask(project.Id, DefaultUserId);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
+        clock.Advance(TimeSpan.FromDays(31));
 
         // Act
         var result = await sut.GetStaleTasksAsync();
@@ -668,15 +670,17 @@ public class TasksHubServiceTests
     [Fact]
     public async Task GetStaleTasksAsync_WithTaskUpdated29DaysAgo_ExcludesIt()
     {
-        // Arrange — clock 29 days after the save: inside the 30-day freshness window.
+        // Arrange — advance 29 days after the save: inside the freshness window.
+        var clock = new FixedTimeProvider(DateTimeOffset.UtcNow);
         var (sut, db) = BuildService(
             nameof(GetStaleTasksAsync_WithTaskUpdated29DaysAgo_ExcludesIt),
-            clock: new FixedTimeProvider(DateTimeOffset.UtcNow.AddDays(29)));
+            clock: clock);
         var project = CreateProject(DefaultUserId);
         var task = CreateTask(project.Id, DefaultUserId);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
+        clock.Advance(TimeSpan.FromDays(29));
 
         // Act
         var result = await sut.GetStaleTasksAsync();
@@ -688,15 +692,17 @@ public class TasksHubServiceTests
     [Fact]
     public async Task GetStaleTasksAsync_WithDoneTask_ExcludesIt()
     {
-        // Arrange — stale by clock (31 days past save) but Done, so it must be excluded.
+        // Arrange — stale by clock but Done, so it must be excluded.
+        var clock = new FixedTimeProvider(DateTimeOffset.UtcNow);
         var (sut, db) = BuildService(
             nameof(GetStaleTasksAsync_WithDoneTask_ExcludesIt),
-            clock: new FixedTimeProvider(DateTimeOffset.UtcNow.AddDays(31)));
+            clock: clock);
         var project = CreateProject(DefaultUserId);
         var task = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Done);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
+        clock.Advance(TimeSpan.FromDays(31));
 
         // Act
         var result = await sut.GetStaleTasksAsync();
@@ -708,15 +714,17 @@ public class TasksHubServiceTests
     [Fact]
     public async Task GetStaleTasksAsync_WithArchivedTask_ExcludesIt()
     {
-        // Arrange — stale by clock (31 days past save) but archived, so it must be excluded.
+        // Arrange — stale by clock but archived, so it must be excluded.
+        var clock = new FixedTimeProvider(DateTimeOffset.UtcNow);
         var (sut, db) = BuildService(
             nameof(GetStaleTasksAsync_WithArchivedTask_ExcludesIt),
-            clock: new FixedTimeProvider(DateTimeOffset.UtcNow.AddDays(31)));
+            clock: clock);
         var project = CreateProject(DefaultUserId);
         var task = CreateTask(project.Id, DefaultUserId, isArchived: true);
         db.Projects.Add(project);
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
+        clock.Advance(TimeSpan.FromDays(31));
 
         // Act
         var result = await sut.GetStaleTasksAsync();
@@ -1182,6 +1190,70 @@ public class TasksHubServiceTests
         count.Should().Be(2);
         var updated = await db.Tasks.Where(t => t.Id == task1.Id || t.Id == task2.Id).ToListAsync();
         updated.Should().AllSatisfy(t => t.IsArchived.Should().BeTrue());
+    }
+
+    [Fact]
+    public async Task BulkOperationAsync_CompletingRecurringTask_CreatesNextOccurrence()
+    {
+        var (sut, db) = BuildService(nameof(BulkOperationAsync_CompletingRecurringTask_CreatesNextOccurrence));
+        var project = CreateProject(DefaultUserId);
+        var task = CreateTask(project.Id, DefaultUserId);
+        task.IsRecurring = true;
+        task.RecurrenceType = RecurrenceType.Daily;
+        task.RecurrenceInterval = 1;
+        task.NextOccurrenceDate = Today.AddDays(1);
+        db.Projects.Add(project);
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync();
+        await sut.BulkOperationAsync(new BulkTaskOperationDto(
+            TaskIds: [task.Id], NewStatus: TaskItemStatus.Done));
+
+        (await db.Tasks.AsNoTracking().CountAsync(t => t.RecurrenceSourceTaskId == task.Id)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task BulkOperationAsync_WithIncompletePrerequisite_RejectsCompletion()
+    {
+        var (sut, db) = BuildService(nameof(BulkOperationAsync_WithIncompletePrerequisite_RejectsCompletion));
+        var project = CreateProject(DefaultUserId);
+        var prerequisite = CreateTask(project.Id, DefaultUserId);
+        var dependent = CreateTask(project.Id, DefaultUserId);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(prerequisite, dependent);
+        db.TaskDependencies.Add(new TaskDependency
+        {
+            Id = Guid.NewGuid(),
+            TaskId = dependent.Id,
+            DependsOnTaskId = prerequisite.Id,
+        });
+        await db.SaveChangesAsync();
+
+        var act = () => sut.BulkOperationAsync(new BulkTaskOperationDto(
+            TaskIds: [dependent.Id],
+            NewStatus: TaskItemStatus.Done));
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*prerequisite*");
+        (await db.Tasks.AsNoTracking().SingleAsync(t => t.Id == dependent.Id))
+            .Status.Should().Be(TaskItemStatus.Todo);
+    }
+
+    [Fact]
+    public async Task BulkOperationAsync_ArchivingParent_CascadesWithSharedOperationId()
+    {
+        var (sut, db) = BuildService(nameof(BulkOperationAsync_ArchivingParent_CascadesWithSharedOperationId));
+        var project = CreateProject(DefaultUserId);
+        var parent = CreateTask(project.Id, DefaultUserId);
+        var subtask = CreateTask(project.Id, DefaultUserId, parentTaskId: parent.Id);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(parent, subtask);
+        await db.SaveChangesAsync();
+
+        await sut.BulkOperationAsync(new BulkTaskOperationDto(TaskIds: [parent.Id], Archive: true));
+
+        var archived = await db.Tasks.AsNoTracking().ToDictionaryAsync(t => t.Id);
+        archived[subtask.Id].IsArchived.Should().BeTrue();
+        archived[parent.Id].ArchiveOperationId.Should().Be(archived[subtask.Id].ArchiveOperationId);
     }
 
     [Fact]

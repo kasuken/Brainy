@@ -15,6 +15,9 @@ namespace Brainy.Application.Services;
 /// </summary>
 internal sealed class NoteService(IApplicationDbContext context, ICurrentUserService currentUser) : INoteService
 {
+    private const int MaxTagsPerNote = 20;
+    private const int MaxTagNameLength = 100;
+
     public async Task<IReadOnlyList<NoteDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
@@ -29,7 +32,13 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
                 n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
                 n.IsFavorite, n.Images.Any(),
                 SourceUrl: n.Source != null ? n.Source.Url : null,
-                SourceTitle: n.Source != null ? n.Source.Title : null))
+                SourceTitle: n.Source != null ? n.Source.Title : null,
+                RowVersion: n.RowVersion,
+                Tags: n.Tags
+                    .Where(t => t.UserId == userId)
+                    .Select(t => t.Name)
+                    .OrderBy(name => name)
+                    .ToList()))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -41,6 +50,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         var note = await context.Notes
             .AsNoTracking()
             .Include(n => n.Source)
+            .Include(n => n.Tags)
             .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -52,6 +62,9 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         ArgumentNullException.ThrowIfNull(dto);
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        await context.EnsureNoteLinksOwnedAsync(
+            userId, dto.ProjectId, dto.AreaId, dto.ResourceId, cancellationToken).ConfigureAwait(false);
 
         var note = new Note
         {
@@ -81,6 +94,8 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             note.Source = source;
         }
 
+        note.Tags = await ResolveTagsAsync(userId, dto.Tags ?? [], cancellationToken).ConfigureAwait(false);
+
         context.Notes.Add(note);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -95,9 +110,13 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
 
         var note = await context.Notes
             .Include(n => n.Source)
+            .Include(n => n.Tags)
             .FirstOrDefaultAsync(n => n.Id == dto.Id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{dto.Id}' was not found.");
+
+        await context.EnsureNoteLinksOwnedAsync(
+            userId, dto.ProjectId, dto.AreaId, dto.ResourceId, cancellationToken).ConfigureAwait(false);
 
         // Optimistic concurrency: compare against the token captured when the caller
         // loaded the note, not the freshly loaded one, so edits made in another
@@ -113,6 +132,9 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         note.ProjectId = dto.ProjectId;
         note.AreaId = dto.AreaId;
         note.ResourceId = dto.ResourceId;
+
+        if (dto.Tags is not null)
+            note.Tags = await ResolveTagsAsync(userId, dto.Tags, cancellationToken).ConfigureAwait(false);
 
         if (dto.Status == NoteStatus.Archived)
         {
@@ -184,7 +206,13 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
                 n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
                 n.IsFavorite, n.Images.Any(),
                 SourceUrl: n.Source != null ? n.Source.Url : null,
-                SourceTitle: n.Source != null ? n.Source.Title : null))
+                SourceTitle: n.Source != null ? n.Source.Title : null,
+                RowVersion: n.RowVersion,
+                Tags: n.Tags
+                    .Where(t => t.UserId == userId)
+                    .Select(t => t.Name)
+                    .OrderBy(name => name)
+                    .ToList()))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -197,9 +225,13 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
 
         var note = await context.Notes
             .Include(n => n.Source)
+            .Include(n => n.Tags)
             .FirstOrDefaultAsync(n => n.Id == dto.Id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{dto.Id}' was not found.");
+
+        await context.EnsureNoteLinksOwnedAsync(
+            userId, dto.ProjectId, dto.AreaId, dto.ResourceId, cancellationToken).ConfigureAwait(false);
 
         note.Status          = dto.Status;
         note.ParaCategory    = dto.ParaCategory;
@@ -239,24 +271,31 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         if (idList.Count == 0) return 0;
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        await context.EnsureNoteLinksOwnedAsync(
+            userId, projectId, areaId, resourceId, cancellationToken).ConfigureAwait(false);
         var now = DateTime.UtcNow;
         var isArchived = status == NoteStatus.Archived;
 
-        return await context.Notes
+        var notes = await context.Notes
             .Where(n => n.UserId == userId && idList.Contains(n.Id))
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(n => n.ParaCategory, category)
-                    .SetProperty(n => n.Status, status)
-                    .SetProperty(n => n.ProjectId, projectId)
-                    .SetProperty(n => n.AreaId, areaId)
-                    .SetProperty(n => n.ResourceId, resourceId)
-                    .SetProperty(n => n.IsArchived, isArchived)
-                    .SetProperty(n => n.ArchivedAtUtc, isArchived ? now : (DateTime?)null)
-                    .SetProperty(n => n.ProcessedAtUtc, DateTime.UtcNow)
-                    .SetProperty(n => n.UpdatedAtUtc, DateTime.UtcNow),
-                cancellationToken)
+            .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        foreach (var note in notes)
+        {
+            note.ParaCategory = category;
+            note.Status = status;
+            note.ProjectId = projectId;
+            note.AreaId = areaId;
+            note.ResourceId = resourceId;
+            note.IsArchived = isArchived;
+            note.ArchivedAtUtc = isArchived ? now : null;
+            note.ProcessedAtUtc = now;
+        }
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return notes.Count;
     }
 
     public async Task<int> BulkMoveCategoryAsync(IEnumerable<Guid> ids, ParaCategory category, CancellationToken cancellationToken = default)
@@ -292,7 +331,13 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
                 n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
                 n.IsFavorite, n.Images.Any(),
                 SourceUrl: n.Source != null ? n.Source.Url : null,
-                SourceTitle: n.Source != null ? n.Source.Title : null))
+                SourceTitle: n.Source != null ? n.Source.Title : null,
+                RowVersion: n.RowVersion,
+                Tags: n.Tags
+                    .Where(t => t.UserId == userId)
+                    .Select(t => t.Name)
+                    .OrderBy(name => name)
+                    .ToList()))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -301,8 +346,12 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        await context.Projects.EnsureOwnedAsync(projectId, userId, "Project", cancellationToken)
+            .ConfigureAwait(false);
+
         var note = await context.Notes
             .Include(n => n.Source)
+            .Include(n => n.Tags)
             .FirstOrDefaultAsync(n => n.Id == noteId && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{noteId}' was not found.");
@@ -327,6 +376,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
 
         var note = await context.Notes
             .Include(n => n.Source)
+            .Include(n => n.Tags)
             .FirstOrDefaultAsync(n => n.Id == noteId && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{noteId}' was not found.");
@@ -371,7 +421,13 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
                 n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
                 n.IsFavorite, n.Images.Any(),
                 SourceUrl: n.Source != null ? n.Source.Url : null,
-                SourceTitle: n.Source != null ? n.Source.Title : null))
+                SourceTitle: n.Source != null ? n.Source.Title : null,
+                RowVersion: n.RowVersion,
+                Tags: n.Tags
+                    .Where(t => t.UserId == userId)
+                    .Select(t => t.Name)
+                    .OrderBy(name => name)
+                    .ToList()))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -397,6 +453,9 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{id}' was not found.");
+
+        await context.Areas.EnsureActiveOwnedAreaAsync(note.AreaId, userId, cancellationToken)
+            .ConfigureAwait(false);
         note.IsArchived = false;
         if (note.Status == NoteStatus.Archived)
         {
@@ -404,6 +463,72 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         }
         note.ArchivedAtUtc = null;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves normalized tag names against only the current user's tag rows, reusing
+    /// tags shared with Resources and creating missing names when necessary.
+    /// </summary>
+    private async Task<List<Tag>> ResolveTagsAsync(
+        string userId,
+        IReadOnlyList<string> tagNames,
+        CancellationToken cancellationToken)
+    {
+        var normalizedNames = new List<string>(tagNames.Count);
+
+        foreach (var tagName in tagNames)
+        {
+            if (string.IsNullOrWhiteSpace(tagName))
+                continue;
+
+            var normalized = tagName.Trim();
+            if (normalized.Length > MaxTagNameLength)
+                throw new ArgumentException($"Tag names cannot exceed {MaxTagNameLength} characters.", nameof(tagNames));
+
+            if (normalized.Any(char.IsControl))
+                throw new ArgumentException("Tag names cannot contain control characters.", nameof(tagNames));
+
+            if (!normalizedNames.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+                normalizedNames.Add(normalized);
+        }
+
+        if (normalizedNames.Count > MaxTagsPerNote)
+            throw new ArgumentException($"A note can have at most {MaxTagsPerNote} tags.", nameof(tagNames));
+
+        if (normalizedNames.Count == 0)
+            return [];
+
+        var normalizedKeys = normalizedNames.Select(name => name.ToLowerInvariant()).ToList();
+        var existing = await context.Tags
+            .Where(tag => tag.UserId == userId && normalizedKeys.Contains(tag.Name.ToLower()))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var existingByName = existing
+            .GroupBy(tag => tag.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        var resolved = new List<Tag>(normalizedNames.Count);
+        foreach (var name in normalizedNames)
+        {
+            if (existingByName.TryGetValue(name, out var existingTag))
+            {
+                resolved.Add(existingTag);
+                continue;
+            }
+
+            var tag = new Tag
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Name = name
+            };
+            context.Tags.Add(tag);
+            existingByName[name] = tag;
+            resolved.Add(tag);
+        }
+
+        return resolved;
     }
 
     private static NoteDto ToDto(Note n) => new(
@@ -426,7 +551,8 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         n.Images.Count > 0,
         SourceUrl: n.Source?.Url,
         SourceTitle: n.Source?.Title,
-        RowVersion: n.RowVersion);
+        RowVersion: n.RowVersion,
+        Tags: n.Tags.Select(t => t.Name).OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList());
 
     public async Task<NoteDto> ToggleFavoriteAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -434,6 +560,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
 
         var note = await context.Notes
             .Include(n => n.Source)
+            .Include(n => n.Tags)
             .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{id}' was not found.");

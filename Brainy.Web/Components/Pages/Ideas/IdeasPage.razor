@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Ideas
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
@@ -405,7 +406,7 @@
                                             </p>
                                         }
                                         <div style="margin-top:0.75rem; color:var(--mud-palette-text-disabled); font-size:0.75rem;">
-                                            @idea.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                                            <UserLocalTime Utc="idea.UpdatedAtUtc" />
                                         </div>
                                     </td>
                                     <td>
@@ -676,9 +677,17 @@
 
         if (confirmed == true)
         {
-            await IdeaService.DeleteAsync(idea.Id);
-            Snackbar.Add($"\"{idea.Title}\" deleted.", Severity.Warning);
-            await LoadAsync();
+            try
+            {
+                await IdeaService.DeleteAsync(idea.Id, idea.RowVersion);
+                Snackbar.Add($"\"{idea.Title}\" deleted.", Severity.Warning);
+                await LoadAsync();
+            }
+            catch (ConcurrencyConflictException ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Warning);
+                await LoadAsync();
+            }
         }
     }
 

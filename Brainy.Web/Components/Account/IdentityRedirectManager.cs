@@ -20,16 +20,17 @@ internal sealed class IdentityRedirectManager(NavigationManager navigationManage
 
     public void RedirectTo(string? uri)
     {
-        uri ??= "";
-
-        // Prevent open redirects.
-        if (!Uri.IsWellFormedUriString(uri, UriKind.Relative))
-        {
-            uri = navigationManager.ToBaseRelativePath(uri);
-        }
+        uri = IsSafeLocalUri(uri) ? uri! : "";
 
         navigationManager.NavigateTo(uri);
     }
+
+    private static bool IsSafeLocalUri(string? uri) =>
+        !string.IsNullOrWhiteSpace(uri)
+        && Uri.IsWellFormedUriString(uri, UriKind.Relative)
+        && !uri.StartsWith("//", StringComparison.Ordinal)
+        && !uri.StartsWith("\\", StringComparison.Ordinal)
+        && !uri.Contains('\\');
 
     public void RedirectTo(string uri, Dictionary<string, object?> queryParameters)
     {

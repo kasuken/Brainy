@@ -40,6 +40,13 @@ public class TaskItem : BaseEntity, IUserOwnedEntity
 
     public DateTime? ArchivedAtUtc { get; set; }
 
+    /// <summary>
+    /// Identifies the archive operation that moved this task out of active work.
+    /// Tasks archived together share an operation id, allowing restore to reverse
+    /// only that operation without resurrecting tasks archived earlier.
+    /// </summary>
+    public Guid? ArchiveOperationId { get; set; }
+
     public Guid ProjectId { get; set; }
 
     public Project Project { get; set; } = null!;
@@ -72,6 +79,12 @@ public class TaskItem : BaseEntity, IUserOwnedEntity
 
     /// <summary>Date of the next occurrence to be spawned via CreateRecurringOccurrenceAsync.</summary>
     public DateTime? NextOccurrenceDate { get; set; }
+
+    /// <summary>
+    /// The completed recurring task that created this occurrence. A filtered unique
+    /// index makes occurrence creation idempotent under retries and concurrent requests.
+    /// </summary>
+    public Guid? RecurrenceSourceTaskId { get; set; }
 
     // ── Dependencies ──────────────────────────────────────────────────────────
 

@@ -19,5 +19,7 @@ public record GoalDetailDto(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     IReadOnlyList<GoalMilestoneDto> Milestones,
-    IReadOnlyList<LinkedProjectDto> Projects
+    IReadOnlyList<LinkedProjectDto> Projects,
+    /// <summary>Concurrency token captured at load time; pass back on update or delete.</summary>
+    byte[]? RowVersion = null
 );

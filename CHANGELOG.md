@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Production health/readiness probes, hardened release/CI workflows, SQL Server model integration coverage, CodeQL, Dependabot, and an operator runbook.
+- Versioned, tenant-scoped JSON data export with image checksums and browser download from Account management.
+- Immutable lifecycle activity ledger for accurate Pulse history, including migration backfill for provable legacy timestamps.
+- Task recurrence execution, archive/restore provenance, prerequisite management and enforcement, highlight source offsets, and action-item distillation into project tasks.
+- Search coverage for every first-class content type and AI-output provenance/source preservation.
+
+### Security
+
+- Enforced HTTPS/HSTS assumptions, secure cookies, forwarded headers, security response headers, identity lockout, authentication rate limits, closed-by-default production registration, and stronger passwords.
+- Added consistent tenant ownership validation, safe Markdown rendering, note-image signature validation, per-user image quotas, and abandoned-upload cleanup.
+- Added optimistic concurrency handling for Projects, Tasks, Resources, Goals, Ideas, and Outputs.
+
+### Changed
+
+- Quick Capture now rejects unsupported binary attachments instead of silently discarding their contents.
+- Today, Pulse, and stale-work calculations use a persisted user time zone and injected clocks.
+- Archive and Area lifecycle operations preserve child state and reject unsafe restores or archives with actionable messages.
+- Primary pages expose recoverable loading failures, semantic headings, keyboard controls, accessible names, and responsive focus states.
+
+---
+
 ## [3.4.0] - 2026-08-13
 
 ### Added

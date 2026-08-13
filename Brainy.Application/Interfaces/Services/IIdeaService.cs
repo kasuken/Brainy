@@ -46,7 +46,7 @@ public interface IIdeaService
     Task RestoreAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Permanently deletes an idea.</summary>
-    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid id, byte[]? rowVersion, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Commits the idea to a new project. Requires all five commitment criteria to already be

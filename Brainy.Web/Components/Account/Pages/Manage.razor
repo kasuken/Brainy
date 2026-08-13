@@ -1,0 +1,355 @@
+@page "/Account/Manage"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Data.Identity
+@using Brainy.Web.Identity
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+
+@inject IDataExportService DataExportService
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject IAccountDeletionService DeletionService
+@inject NavigationManager Navigation
+
+<PageTitle>Account and data — Brainy</PageTitle>
+
+<main class="account-manage" aria-labelledby="account-manage-title">
+    <header class="account-manage__header">
+        <p class="account-manage__eyebrow">Account</p>
+        <h1 id="account-manage-title">Account and data</h1>
+        <p>Protect your sign-in and download a portable copy of your Brainy information.</p>
+    </header>
+
+    <MudPaper Class="account-manage__card" Elevation="0">
+        <div class="account-manage__card-heading">
+            <MudIcon Icon="@Icons.Material.Outlined.Password" aria-hidden="true" />
+            <div>
+                <h2>Change password</h2>
+                <p>Use at least 10 characters. Brainy also requires upper- and lowercase letters, a number, and a symbol.</p>
+            </div>
+        </div>
+
+        @if (_passwordError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                @_passwordError
+            </MudAlert>
+        }
+
+        <div class="account-manage__password-fields">
+            <MudTextField T="string"
+                          @bind-Value="_currentPassword"
+                          Label="Current password"
+                          InputType="InputType.Password"
+                          autocomplete="current-password"
+                          Variant="Variant.Outlined"
+                          Disabled="_changingPassword" />
+            <MudTextField T="string"
+                          @bind-Value="_newPassword"
+                          Label="New password"
+                          InputType="InputType.Password"
+                          autocomplete="new-password"
+                          Variant="Variant.Outlined"
+                          Disabled="_changingPassword" />
+            <MudTextField T="string"
+                          @bind-Value="_confirmPassword"
+                          Label="Confirm new password"
+                          InputType="InputType.Password"
+                          autocomplete="new-password"
+                          Variant="Variant.Outlined"
+                          Disabled="_changingPassword" />
+        </div>
+
+        <div class="account-manage__actions">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Disabled="_changingPassword"
+                       aria-busy="@_changingPassword.ToString().ToLowerInvariant()"
+                       OnClick="ChangePasswordAsync">
+                @(_changingPassword ? "Changing password…" : "Change password")
+            </MudButton>
+            <span class="account-manage__status" role="status" aria-live="polite">@_passwordStatus</span>
+        </div>
+    </MudPaper>
+
+    <MudPaper Class="account-manage__card" Elevation="0">
+        <div class="account-manage__card-heading">
+            <MudIcon Icon="@Icons.Material.Outlined.Download" aria-hidden="true" />
+            <div>
+                <h2>Export Brainy data</h2>
+                <p>
+                    Creates a versioned JSON archive containing your notes, projects, tasks,
+                    areas, resources, goals, outputs, relationships, preferences, and stored images.
+                </p>
+            </div>
+        </div>
+
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
+            Images are included as base64 with SHA-256 checksums. Brainy's account credentials,
+            password hashes, session tokens, configured AI provider keys, and application secrets
+            are excluded. Content you authored is exported as stored, so a secret written in a note
+            or source URL will still be present. Store the file securely.
+        </MudAlert>
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                @_error
+            </MudAlert>
+        }
+
+        <div class="account-manage__actions">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.FileDownload"
+                       Disabled="_exporting"
+                       aria-busy="@_exporting.ToString().ToLowerInvariant()"
+                       OnClick="ExportAsync">
+                @if (_exporting)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Preparing export…</span>
+                }
+                else
+                {
+                    <span>Download JSON export</span>
+                }
+            </MudButton>
+
+            <span class="account-manage__status" role="status" aria-live="polite">
+                @_status
+            </span>
+        </div>
+    </MudPaper>
+
+    <MudPaper Class="account-manage__card account-manage__danger" Elevation="0">
+        <div class="account-manage__card-heading">
+            <MudIcon Icon="@Icons.Material.Outlined.DeleteForever" Color="Color.Error" aria-hidden="true" />
+            <div>
+                <h2>Delete account</h2>
+                <p>Permanently deletes your Brainy account, sign-in credentials, and all stored Brainy data.</p>
+            </div>
+        </div>
+
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice">
+            This cannot be undone. Download the JSON export above first if you may need any of your
+            notes, projects, tasks, images, outputs, or settings later.
+        </MudAlert>
+
+        @if (_deletionError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                @_deletionError
+            </MudAlert>
+        }
+
+        <div class="account-manage__deletion-fields">
+            <MudTextField T="string"
+                          @bind-Value="_deletionPassword"
+                          Label="Current password"
+                          InputType="InputType.Password"
+                          autocomplete="current-password"
+                          Variant="Variant.Outlined"
+                          Disabled="_deletingAccount" />
+            <MudTextField T="string"
+                          @bind-Value="_deletionConfirmation"
+                          Label="Type DELETE MY ACCOUNT"
+                          HelperText="The phrase is case-sensitive."
+                          autocomplete="off"
+                          Variant="Variant.Outlined"
+                          Disabled="_deletingAccount" />
+        </div>
+
+        <div class="account-manage__actions">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Error"
+                       StartIcon="@Icons.Material.Outlined.DeleteForever"
+                       Disabled="@(_deletingAccount || string.IsNullOrEmpty(_deletionPassword) || _deletionConfirmation != AccountDeletionService.ConfirmationPhrase)"
+                       aria-busy="@_deletingAccount.ToString().ToLowerInvariant()"
+                       OnClick="DeleteAccountAsync">
+                @(_deletingAccount ? "Deleting account…" : "Permanently delete account")
+            </MudButton>
+        </div>
+    </MudPaper>
+</main>
+
+<style>
+    .account-manage { max-width: 820px; margin: 0 auto; display: grid; gap: 1.5rem; }
+    .account-manage__header h1 { margin: 0; font-family: var(--font-display); color: var(--ink); font-size: clamp(2rem, 5vw, 3rem); }
+    .account-manage__header > p:last-child { margin: .5rem 0 0; color: var(--ink-soft); }
+    .account-manage__eyebrow { margin: 0 0 .35rem; color: var(--clay); font-size: .75rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .account-manage__card { padding: clamp(1.25rem, 4vw, 2rem); border: 1px solid var(--line); border-radius: 18px; background: var(--paper-raised) !important; }
+    .account-manage__card-heading { display: flex; align-items: flex-start; gap: 1rem; }
+    .account-manage__card-heading h2 { margin: 0 0 .4rem; font-family: var(--font-display); color: var(--ink); }
+    .account-manage__card-heading p { margin: 0; color: var(--ink-soft); line-height: 1.6; }
+    .account-manage__notice { margin-top: 1.25rem; }
+    .account-manage__password-fields { margin-top: 1.25rem; display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .account-manage__deletion-fields { margin-top: 1.25rem; display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .account-manage__danger { border-color: var(--mud-palette-error); }
+    .account-manage__actions { margin-top: 1.25rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .account-manage__status { color: var(--ink-soft); font-size: .875rem; }
+    @@media (max-width: 720px) { .account-manage__password-fields, .account-manage__deletion-fields { grid-template-columns: 1fr; } }
+</style>
+
+@code {
+    private bool _exporting;
+    private string? _error;
+    private string? _status;
+    private bool _changingPassword;
+    private string _currentPassword = string.Empty;
+    private string _newPassword = string.Empty;
+    private string _confirmPassword = string.Empty;
+    private string? _passwordError;
+    private string? _passwordStatus;
+    private bool _deletingAccount;
+    private string _deletionPassword = string.Empty;
+    private string _deletionConfirmation = string.Empty;
+    private string? _deletionError;
+
+    private async Task ChangePasswordAsync()
+    {
+        if (_changingPassword)
+            return;
+
+        _passwordError = null;
+        _passwordStatus = null;
+        if (string.IsNullOrEmpty(_currentPassword) || string.IsNullOrEmpty(_newPassword))
+        {
+            _passwordError = "Enter your current password and a new password.";
+            return;
+        }
+        if (_newPassword != _confirmPassword)
+        {
+            _passwordError = "The new password and confirmation do not match.";
+            return;
+        }
+
+        _changingPassword = true;
+        try
+        {
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(authenticationState.User);
+            if (user is null)
+            {
+                _passwordError = "Your sign-in session is no longer valid. Sign in again and retry.";
+                return;
+            }
+
+            var result = await UserManager.ChangePasswordAsync(user, _currentPassword, _newPassword);
+            if (!result.Succeeded)
+            {
+                _passwordError = string.Join(" ", result.Errors.Select(error => error.Description));
+                return;
+            }
+
+            _currentPassword = string.Empty;
+            _newPassword = string.Empty;
+            _confirmPassword = string.Empty;
+            _passwordStatus = "Password changed. Existing sessions will be asked to sign in again.";
+        }
+        catch
+        {
+            _passwordError = "Brainy could not change your password. Try again.";
+        }
+        finally
+        {
+            _changingPassword = false;
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        if (_exporting)
+            return;
+
+        _exporting = true;
+        _error = null;
+        _status = "Preparing your archive. Large image collections may take a moment.";
+
+        try
+        {
+            var export = await DataExportService.ExportCurrentUserAsync();
+            await using var contentStream = new MemoryStream(export.Content, writable: false);
+            using var streamReference = new DotNetStreamReference(contentStream);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./dataExport.js");
+
+            await module.InvokeVoidAsync(
+                "downloadFileFromStream",
+                export.FileName,
+                export.ContentType,
+                streamReference);
+
+            _status = $"Export schema {export.SchemaVersion} downloaded.";
+        }
+        catch (JSDisconnectedException)
+        {
+            _error = "The browser connection closed before the download started. Reload this page and try again.";
+            _status = null;
+        }
+        catch
+        {
+            _error = "Brainy could not prepare your export. Your data was not changed. Try again.";
+            _status = null;
+        }
+        finally
+        {
+            _exporting = false;
+        }
+    }
+
+    private async Task DeleteAccountAsync()
+    {
+        if (_deletingAccount)
+            return;
+
+        _deletionError = null;
+        if (_deletionConfirmation != AccountDeletionService.ConfirmationPhrase)
+        {
+            _deletionError = $"Type {AccountDeletionService.ConfirmationPhrase} exactly to confirm.";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(_deletionPassword))
+        {
+            _deletionError = "Enter your current password.";
+            return;
+        }
+
+        _deletingAccount = true;
+        try
+        {
+            var result = await DeletionService.DeleteCurrentUserAsync(
+                _deletionPassword,
+                _deletionConfirmation);
+
+            switch (result)
+            {
+                case AccountDeletionResult.Succeeded:
+                    Navigation.NavigateTo("/Account/CompleteDeletion", forceLoad: true);
+                    return;
+                case AccountDeletionResult.InvalidPassword:
+                    _deletionError = "The current password is incorrect.";
+                    break;
+                case AccountDeletionResult.InvalidConfirmation:
+                    _deletionError = $"Type {AccountDeletionService.ConfirmationPhrase} exactly to confirm.";
+                    break;
+                case AccountDeletionResult.InvalidSession:
+                    _deletionError = "Your sign-in session is no longer valid. Sign in again and retry.";
+                    break;
+            }
+        }
+        catch
+        {
+            _deletionError = "Brainy could not delete your account. No partial deletion was committed. Try again.";
+        }
+        finally
+        {
+            _deletionPassword = string.Empty;
+            _deletingAccount = false;
+        }
+    }
+}

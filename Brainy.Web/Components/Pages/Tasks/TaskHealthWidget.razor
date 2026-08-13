@@ -4,27 +4,27 @@
 
 <div class="td-widget td-section">
     <div class="td-section-head">
-        <span class="td-section-label">Task Health</span>
+        <h2 class="td-section-label">Task Health</h2>
         <MudChip T="string" Size="Size.Small" Color="@HealthColor" Variant="Variant.Filled">@HealthLabel</MudChip>
     </div>
 
     <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.5rem;">
         <div class="th-health-row">
-            <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" />
+            <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" aria-hidden="true" />
             <span class="th-health-label">Overdue tasks</span>
             <MudChip T="string" Size="Size.Small" Color="@(OverdueCount > 0 ? Color.Error : Color.Success)" Variant="Variant.Outlined">
                 @OverdueCount
             </MudChip>
         </div>
         <div class="th-health-row">
-            <MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Warning" Size="Size.Small" />
+            <MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Warning" Size="Size.Small" aria-hidden="true" />
             <span class="th-health-label">Stale tasks (30+ days)</span>
             <MudChip T="string" Size="Size.Small" Color="@(StaleCount > 0 ? Color.Warning : Color.Success)" Variant="Variant.Outlined">
                 @StaleCount
             </MudChip>
         </div>
         <div class="th-health-row">
-            <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Color="Color.Info" Size="Size.Small" />
+            <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Color="Color.Info" Size="Size.Small" aria-hidden="true" />
             <span class="th-health-label">Tasks without due date</span>
             <MudChip T="string" Size="Size.Small" Color="@(WithoutDueDateCount > 0 ? Color.Info : Color.Success)" Variant="Variant.Outlined">
                 @WithoutDueDateCount

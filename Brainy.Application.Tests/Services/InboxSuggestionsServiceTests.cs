@@ -1,7 +1,7 @@
 using Brainy.Application.DTOs.Notes;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Domain.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

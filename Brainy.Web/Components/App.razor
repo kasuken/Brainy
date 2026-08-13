@@ -35,6 +35,12 @@
         if (window.brainyTheme.getTheme()) {
             document.documentElement.setAttribute('data-theme', 'minimal');
         }
+        window.brainyTimeZone = {
+            get: function () {
+                try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; }
+                catch { return 'UTC'; }
+            }
+        };
     </script>
     <HeadOutlet @rendermode="@PageRenderMode" />
 </head>

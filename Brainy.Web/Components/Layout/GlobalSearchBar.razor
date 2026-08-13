@@ -12,7 +12,9 @@
 <div class="gsb" @ref="_rootRef">
 
     @* ── Mobile trigger (icon only, visible on < md) ── *@
-    <button class="gsb__trigger d-flex d-md-none" @onclick="OpenAsync" aria-label="Search (Ctrl+K)">
+    <button type="button" class="gsb__trigger d-flex d-md-none"
+            @onclick='() => Nav.NavigateTo("/search")'
+            aria-label="Open search">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2.2"
              stroke-linecap="round" stroke-linejoin="round"
@@ -42,6 +44,7 @@
                aria-label="Global search"
                aria-expanded="@_open.ToString().ToLowerInvariant()"
                aria-haspopup="listbox"
+               aria-controls="global-search-results"
                value="@_query"
                @oninput="OnInputAsync"
                @onfocus="OnFocusAsync"
@@ -53,7 +56,7 @@
     @* ── Results overlay ── *@
     @if (_open && (_results.Count > 0 || _searching || _noResults))
     {
-        <div class="gsb__overlay" role="listbox" aria-label="Search results">
+        <div id="global-search-results" class="gsb__overlay" role="listbox" aria-label="Search results">
 
             @if (_searching)
             {
@@ -424,19 +427,6 @@
 
     // ── UI event handlers ─────────────────────────────────────────────────
 
-    private async Task OpenAsync()
-    {
-        _open = true;
-        StateHasChanged();
-        await Task.Delay(60).ConfigureAwait(false);
-        try
-        {
-            await JS.InvokeVoidAsync("brainySearch.focus", _inputRef).ConfigureAwait(false);
-        }
-        catch (JSDisconnectedException) { }
-        catch (ObjectDisposedException) { }
-    }
-
     private Task OnFocusAsync()
     {
         _open = true;
@@ -554,6 +544,7 @@
         "Output"  => $"/outputs/{result.Id}",
         "Project" => $"/projects/{result.Id}",
         "Area"    => $"/areas/{result.Id}",
+        "Resource" => $"/resources/{result.Id}",
         "Goal"    => $"/goals/{result.Id}",
         "Idea"    => $"/ideas/{result.Id}",
         // Tasks live inside their parent project; fall back to hub when ProjectId is missing.
@@ -595,9 +586,10 @@
         "Project" => 1,
         "Task"    => 2,
         "Area"    => 3,
-        "Goal"    => 4,
-        "Idea"    => 5,
-        "Output"  => 6,
+        "Resource" => 4,
+        "Goal"    => 5,
+        "Idea"    => 6,
+        "Output"  => 7,
         _         => 99,
     };
 
@@ -608,6 +600,7 @@
         "Project" => Icons.Material.Outlined.AccountTree,
         "Task"    => Icons.Material.Outlined.TaskAlt,
         "Area"    => Icons.Material.Outlined.Landscape,
+        "Resource" => Icons.Material.Outlined.LibraryBooks,
         "Goal"    => Icons.Material.Outlined.Flag,
         "Idea"    => Icons.Material.Outlined.EmojiObjects,
         _         => Icons.Material.Outlined.Circle,

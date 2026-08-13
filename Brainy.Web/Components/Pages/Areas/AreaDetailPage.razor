@@ -42,7 +42,7 @@ else
     <!-- ── Header ──────────────────────────────────────────────────── -->
     <div class="ad-header">
         <div class="ad-breadcrumb">
-            <button class="ad-back" @onclick='() => Nav.NavigateTo("/areas")'>
+            <button type="button" class="ad-back" @onclick='() => Nav.NavigateTo("/areas")'>
                 <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
                     <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
                 </svg>
@@ -158,6 +158,8 @@ else
                        StartIcon="@Icons.Material.Filled.DriveFileMove"
                        Size="Size.Small"
                        OnClick="ToggleLinkProjectPicker"
+                       aria-expanded="@_showLinkProjectPicker"
+                       aria-controls="area-project-picker"
                        Disabled="_savingProjectLink">
                 Assign Project
             </MudButton>
@@ -165,7 +167,7 @@ else
 
         @if (_showLinkProjectPicker)
         {
-            <div class="ad-picker-panel">
+            <div id="area-project-picker" class="ad-picker-panel">
                 <MudSelect T="Guid?" @bind-Value="_selectedProjectId"
                            Label="Select a project"
                            Variant="Variant.Outlined" Margin="Margin.Dense"
@@ -345,6 +347,8 @@ else
                        StartIcon="@Icons.Material.Filled.Link"
                        Size="Size.Small"
                        OnClick="ToggleLinkNotePicker"
+                       aria-expanded="@_showLinkNotePicker"
+                       aria-controls="area-note-picker"
                        Disabled="_savingNoteLink">
                 Link Note
             </MudButton>
@@ -352,7 +356,7 @@ else
 
         @if (_showLinkNotePicker)
         {
-            <div class="ad-picker-panel">
+            <div id="area-note-picker" class="ad-picker-panel">
                 <MudSelect T="Guid?" @bind-Value="_selectedNoteId"
                            Label="Select a note"
                            Variant="Variant.Outlined" Margin="Margin.Dense"
@@ -419,13 +423,13 @@ else
 
     <!-- ── Metadata footer ─────────────────────────────────────── -->
     <div class="ad-meta-footer">
-        <span>Created @_detail.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+        <span>Created <UserLocalTime Utc="_detail.CreatedAtUtc" /></span>
         <span class="ad-meta-footer__sep">•</span>
-        <span>Updated @_detail.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+        <span>Updated <UserLocalTime Utc="_detail.UpdatedAtUtc" /></span>
         @if (_detail.IsArchived && _detail.ArchivedAtUtc.HasValue)
         {
             <span class="ad-meta-footer__sep">•</span>
-            <span>Archived @_detail.ArchivedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy")</span>
+            <span>Archived <UserLocalTime Utc="_detail.ArchivedAtUtc" /></span>
         }
     </div>
 }
@@ -433,7 +437,7 @@ else
 <!-- Archive confirmation -->
 <MudMessageBox @ref="_archiveMsgBox" Title="Archive Area?" CancelText="Cancel">
     <MessageContent>
-        Archiving <strong>@_detail?.Name</strong> will hide it from active views. You can restore it at any time.
+        Brainy can archive <strong>@_detail?.Name</strong> only after its active projects, resources, goals, notes, ideas, and outputs are archived or reassigned. You can restore the area later.
     </MessageContent>
     <YesButton>
         <MudButton Color="Color.Warning" Variant="Variant.Filled">Archive</MudButton>

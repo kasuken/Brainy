@@ -7,27 +7,27 @@
 <MudDialog Class="ced-dialog">
     <TitleContent>
         <div class="ced-header">
-            <span class="ced-priority-dot @PriorityDotClass"></span>
-            <span class="ced-title">@Item.Text</span>
+            <span class="ced-priority-dot @PriorityDotClass" aria-hidden="true"></span>
+            <h2 class="ced-title">@Item.Text</h2>
         </div>
     </TitleContent>
     <DialogContent>
         <div class="ced-body">
             @* Project / Area *@
             <div class="ced-meta-row">
-                <MudIcon Icon="@Icons.Material.Filled.FolderSpecial" Size="Size.Small" Class="ced-meta-icon" />
+                <MudIcon Icon="@Icons.Material.Filled.FolderSpecial" Size="Size.Small" Class="ced-meta-icon" aria-hidden="true" />
                 <span class="ced-meta-value">@Item.ProjectName</span>
                 @if (!string.IsNullOrWhiteSpace(Item.AreaName))
                 {
                     <span class="ced-meta-sep">·</span>
-                    <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" Class="ced-meta-icon" />
+                    <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" Class="ced-meta-icon" aria-hidden="true" />
                     <span class="ced-meta-value">@Item.AreaName</span>
                 }
             </div>
 
             @* Due date *@
             <div class="ced-meta-row">
-                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="@DueDateIconClass" />
+                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="@DueDateIconClass" aria-hidden="true" />
                 <span class="@DueDateValueClass">
                     @Item.Start.ToString("dddd, MMMM d, yyyy")
                     @if (Item.IsOverdue)
@@ -39,7 +39,7 @@
 
             @* Status *@
             <div class="ced-meta-row">
-                <MudIcon Icon="@StatusIcon" Size="Size.Small" Class="ced-meta-icon" />
+                <MudIcon Icon="@StatusIcon" Size="Size.Small" Class="ced-meta-icon" aria-hidden="true" />
                 <MudChip T="string" Size="Size.Small" Color="@StatusColor" Variant="Variant.Outlined">
                     @StatusLabel
                 </MudChip>
@@ -47,7 +47,7 @@
 
             @* Priority *@
             <div class="ced-meta-row">
-                <MudIcon Icon="@Icons.Material.Filled.Flag" Size="Size.Small" Class="ced-meta-icon" />
+                <MudIcon Icon="@Icons.Material.Filled.Flag" Size="Size.Small" Class="ced-meta-icon" aria-hidden="true" />
                 <MudChip T="string" Size="Size.Small" Color="@PriorityColor" Variant="Variant.Filled">
                     @Item.Priority.ToString()
                 </MudChip>
@@ -59,10 +59,12 @@
         <MudButton Variant="Variant.Outlined" Color="Color.Warning"
                    StartIcon="@Icons.Material.Filled.Archive"
                    Disabled="_busy"
+                   aria-busy="@(_busy ? "true" : "false")"
                    OnClick="ArchiveAsync">Archive</MudButton>
         <MudButton Variant="Variant.Filled" Color="Color.Success"
                    StartIcon="@Icons.Material.Filled.CheckCircle"
                    Disabled="_busy || Item.Status == TaskItemStatus.Done"
+                   aria-busy="@(_busy ? "true" : "false")"
                    OnClick="CompleteAsync">Complete</MudButton>
     </DialogActions>
 </MudDialog>
@@ -75,6 +77,8 @@
     align-items: center;
     gap: 0.6rem;
 }
+
+.ced-title { margin: 0; }
 
 .ced-priority-dot {
     flex-shrink: 0;

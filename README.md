@@ -23,15 +23,16 @@ Capture notes and ideas, organize them into projects, areas, resources, and arch
 
 ## Features
 
-- **Today dashboard** for current work, deadlines, overdue tasks, notifications, and project progress.
+- **Today dashboard** for current work, deadlines, overdue tasks, and project progress.
 - **PARA organization** across projects, areas, resources, and archives.
 - **Inbox processing** for captured notes and ideas that still need organization.
-- **Notes and knowledge distillation** with highlights, summaries, sources, images, tags, and related-note relationships.
-- **Tasks and planning** with priorities, due dates, subtasks, dependencies, recurrence, and project context.
+- **Notes and knowledge distillation** with highlights, summaries, sources, images, related-note relationships, and action-item promotion into project tasks.
+- **Tasks and planning** with priorities, due dates, subtasks, recurring occurrences, archive/restore, project context, and prerequisite management with cycle protection.
 - **Goals and milestones** for connecting longer-term outcomes to active projects.
-- **Outputs** for turning stored knowledge into reusable deliverables.
-- **Search and retrieval** across the user's own notes and content.
+- **Outputs** for turning stored knowledge into reusable Markdown deliverables, with preview, copy, download, and AI provenance.
+- **Search and retrieval** across notes, outputs, projects, tasks, areas, resources, ideas, and goals.
 - **Per-user data isolation** enforced through ASP.NET Core Identity and application services.
+- **Data portability** through a versioned JSON export of the signed-in user's content and relationships.
 - **Responsive Blazor UI** built with MudBlazor and interactive server rendering.
 
 ## Architecture
@@ -42,7 +43,9 @@ Capture notes and ideas, organize them into projects, areas, resources, and arch
 | `Brainy.Application` | DTOs, service interfaces, business workflows, and AI abstractions. |
 | `Brainy.Data` | Entity Framework Core context, SQL Server persistence, Identity, configurations, and migrations. |
 | `Brainy.Web` | Blazor Web App, Interactive Server components, authentication endpoints, and the MudBlazor interface. |
-| `Brainy.Application.Tests` | xUnit and FluentAssertions tests for application services. |
+| `Brainy.Application.Tests` | xUnit assertion tests for application services. |
+| `Brainy.Web.Tests` | Security and public web-surface integration tests. |
+| `Brainy.Data.IntegrationTests` | SQL Server migration, constraint, and rowversion tests. |
 
 ## Getting started
 
@@ -76,7 +79,7 @@ dotnet run --project Brainy.Web
 
 The development launch profiles use `http://localhost:5255` and `https://localhost:7107`.
 
-Pending EF Core migrations are applied automatically when the application starts. Register at `/Account/Register`; email confirmation is not required in the current configuration.
+Pending EF Core migrations are applied automatically when the application starts unless `Database:ApplyMigrationsOnStartup` is disabled. Local development enables `/Account/Register`; production registration is closed by default and must be deliberately enabled with `Identity:AllowRegistration`. Account confirmation is separately configurable through `Identity:RequireConfirmedAccount`.
 
 ## Development
 
@@ -116,7 +119,7 @@ Generate an idempotent SQL script for a controlled deployment:
 dotnet ef migrations script --idempotent --project Brainy.Data --startup-project Brainy.Web --output migrations.sql
 ```
 
-Development applies migrations at startup. CI only restores, builds, and tests; it does not modify a live database. Production deployments should apply the database migration before starting the new application version.
+Startup migration is enabled by default in every environment. CI migrates a disposable SQL Server database to validate the schema, but it never modifies production. The production SQL endpoint is private, so migration currently occurs during application startup. Review every migration before release and use a dedicated private-network migration job when that infrastructure is available.
 
 ### Authentication and data ownership
 
@@ -124,9 +127,9 @@ Brainy uses ASP.NET Core Identity with cookie authentication. Principal entities
 
 ## Deployment
 
-The release workflow publishes `Brainy.Web` and deploys it to Azure App Service when a GitHub release is published, or when started manually. It uses GitHub Actions with Azure OIDC authentication and performs a `/health` smoke check after deployment.
+The release workflow builds, audits, tests, verifies migrations, publishes `Brainy.Web`, and deploys it to Azure App Service when a GitHub release is published or the workflow is started manually. It uses GitHub Actions with Azure OIDC authentication and requires approval through the protected `production` environment.
 
-The health endpoint is available at `/health` and intentionally checks application liveness without querying the database.
+`/health/live` and the backwards-compatible `/health` endpoint check the process only. `/health/ready` checks SQL connectivity and is used by deployment validation. See [`docs/production-runbook.md`](docs/production-runbook.md) for release, rollback, and recovery procedures.
 
 ## Resources
 

@@ -15,4 +15,5 @@ public record CreateTaskDto(
     RecurrenceType? RecurrenceType = null,
     int? RecurrenceInterval = null,
     DateTime? RecurrenceEndDate = null,
-    DateTime? NextOccurrenceDate = null);
+    DateTime? NextOccurrenceDate = null,
+    IReadOnlyList<Guid>? DependsOnTaskIds = null);

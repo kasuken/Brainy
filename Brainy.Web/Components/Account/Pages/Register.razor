@@ -3,6 +3,7 @@
 
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.Extensions.Options
 @using Brainy.Data.Identity
 
 @inject UserManager<ApplicationUser> UserManager
@@ -11,6 +12,8 @@
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
+@inject IConfiguration Configuration
+@inject IOptions<IdentityOptions> IdentityOptions
 
 <PageTitle>Register · Brainy</PageTitle>
 
@@ -19,38 +22,47 @@
     Brainy
 </a>
 
-<span class="auth-eyebrow">Get started</span>
-<h2 class="auth-title">Build your second brain</h2>
-<p class="auth-subtitle">One account. Every idea, note, and project in one place.</p>
+@if (!RegistrationEnabled)
+{
+    <span class="auth-eyebrow">Private workspace</span>
+    <h2 class="auth-title">Registration is closed</h2>
+    <p class="auth-subtitle">This Brainy deployment is not accepting new accounts.</p>
+}
+else
+{
+    <span class="auth-eyebrow">Get started</span>
+    <h2 class="auth-title">Build your second brain</h2>
+    <p class="auth-subtitle">One account. Every idea, note, and project in one place.</p>
 
-<StatusMessage Message="@Message" />
+    <StatusMessage Message="@Message" />
 
-<EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register" class="auth-form">
+    <EditForm Model="FormInput" method="post" OnValidSubmit="RegisterUser" FormName="register" class="auth-form">
     <DataAnnotationsValidator />
 
     <div class="brainy-field">
         <label for="email" class="brainy-label">Email</label>
-        <InputText @bind-Value="Input.Email" id="email" class="brainy-input"
+        <InputText @bind-Value="FormInput.Email" id="email" class="brainy-input"
                    autocomplete="username" aria-required="true" placeholder="name@example.com" />
-        <ValidationMessage For="() => Input.Email" class="validation-message" />
+        <ValidationMessage For="() => FormInput.Email" class="validation-message" />
     </div>
 
     <div class="brainy-field">
         <label for="password" class="brainy-label">Password</label>
-        <InputText type="password" @bind-Value="Input.Password" id="password" class="brainy-input"
+        <InputText type="password" @bind-Value="FormInput.Password" id="password" class="brainy-input"
                    autocomplete="new-password" aria-required="true" placeholder="Choose a password" />
-        <ValidationMessage For="() => Input.Password" class="validation-message" />
+        <ValidationMessage For="() => FormInput.Password" class="validation-message" />
     </div>
 
     <div class="brainy-field">
         <label for="confirmPassword" class="brainy-label">Confirm password</label>
-        <InputText type="password" @bind-Value="Input.ConfirmPassword" id="confirmPassword" class="brainy-input"
+        <InputText type="password" @bind-Value="FormInput.ConfirmPassword" id="confirmPassword" class="brainy-input"
                    autocomplete="new-password" aria-required="true" placeholder="Re-enter your password" />
-        <ValidationMessage For="() => Input.ConfirmPassword" class="validation-message" />
+        <ValidationMessage For="() => FormInput.ConfirmPassword" class="validation-message" />
     </div>
 
     <button type="submit" class="brainy-btn">Create account</button>
-</EditForm>
+    </EditForm>
+}
 
 <div class="auth-divider">Already a member</div>
 
@@ -60,9 +72,14 @@
 
 @code {
     private IEnumerable<IdentityError>? identityErrors;
+    private string? statusMessage;
+
+    private bool RegistrationEnabled => Configuration.GetValue("Identity:AllowRegistration", false);
 
     [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = new();
+    private InputModel? Input { get; set; }
+
+    private InputModel FormInput => Input ??= new();
 
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
@@ -71,16 +88,23 @@
         NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl });
 
     private string? Message =>
-        identityErrors is null ? null : $"Error: {string.Join(", ", identityErrors.Select(error => error.Description))}";
+        statusMessage ??
+        (identityErrors is null ? null : $"Error: {string.Join(", ", identityErrors.Select(error => error.Description))}");
 
     public async Task RegisterUser(EditContext editContext)
     {
+        if (!RegistrationEnabled)
+        {
+            Logger.LogWarning("A registration attempt was rejected because registration is disabled.");
+            return;
+        }
+
         var user = CreateUser();
 
-        await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
+        await UserStore.SetUserNameAsync(user, FormInput.Email, CancellationToken.None);
         var emailStore = GetEmailStore();
-        await emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
-        var result = await UserManager.CreateAsync(user, Input.Password);
+        await emailStore.SetEmailAsync(user, FormInput.Email, CancellationToken.None);
+        var result = await UserManager.CreateAsync(user, FormInput.Password);
 
         if (!result.Succeeded)
         {
@@ -90,7 +114,12 @@
 
         Logger.LogInformation("User created a new account with password.");
 
-        // No email confirmation is required: sign the user in immediately.
+        if (IdentityOptions.Value.SignIn.RequireConfirmedAccount)
+        {
+            statusMessage = "Account created. Sign-in is blocked until the email address is confirmed.";
+            return;
+        }
+
         await SignInManager.SignInAsync(user, isPersistent: false);
         RedirectManager.RedirectTo(ReturnUrl);
     }
@@ -125,7 +154,7 @@
         public string Email { get; set; } = "";
 
         [Required]
-        [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
+        [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 10)]
         [DataType(DataType.Password)]
         [Display(Name = "Password")]
         public string Password { get; set; } = "";

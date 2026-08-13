@@ -8,6 +8,12 @@ public interface INoteImageService
     /// <summary>Maximum allowed size, in bytes, for a single uploaded image.</summary>
     const long MaxSizeBytes = 10 * 1024 * 1024;
 
+    /// <summary>Maximum total image storage allowed for one user.</summary>
+    const long MaxUserStorageBytes = 100 * 1024 * 1024;
+
+    /// <summary>Age after which an image that was never attached to a note may be removed.</summary>
+    static readonly TimeSpan UnattachedRetention = TimeSpan.FromHours(24);
+
     /// <summary>
     /// Stores an uploaded image for the current user and returns its metadata.
     /// Validates the content type and size.
@@ -26,4 +32,10 @@ public interface INoteImageService
     /// by the current user are affected. Returns the number of images updated.
     /// </summary>
     Task<int> AssociateWithNoteAsync(Guid noteId, IEnumerable<Guid> imageIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the specified pending uploads when they belong to the current user and are
+    /// still unattached. Images already associated with any note are never removed.
+    /// </summary>
+    Task<int> DeletePendingAsync(IEnumerable<Guid> imageIds, CancellationToken cancellationToken = default);
 }

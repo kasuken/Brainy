@@ -73,7 +73,7 @@ window.brainyNoteEditor = {
                         const ext = (fileName.split('.').pop() || '').toLowerCase();
                         const map = {
                             png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
-                            gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml'
+                            gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp'
                         };
                         contentType = map[ext] || 'image/png';
                     }

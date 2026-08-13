@@ -6,7 +6,7 @@ using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
 using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -20,6 +20,7 @@ namespace Brainy.Application.Tests.Services;
 public class NoteServiceTests
 {
     private const string DefaultUserId = "test-user-1";
+    private const string OtherUserId = "test-user-2";
 
     private static INoteService BuildService(string dbName, string userId = DefaultUserId)
     {
@@ -77,6 +78,66 @@ public class NoteServiceTests
         var act = () => sut.CreateAsync(null!);
 
         await act.Should().ThrowAsync<ArgumentNullException>();
+    }
+
+    [Theory]
+    [InlineData("Project")]
+    [InlineData("Area")]
+    [InlineData("Resource")]
+    public async Task CreateAsync_WithForeignRelatedEntity_ThrowsKeyNotFoundException(string entityType)
+    {
+        var dbName = $"{nameof(CreateAsync_WithForeignRelatedEntity_ThrowsKeyNotFoundException)}-{entityType}";
+        var options = new DbContextOptionsBuilder<BrainyDbContext>().UseInMemoryDatabase(dbName).Options;
+        await using var db = new BrainyDbContext(options);
+        var foreignId = Guid.NewGuid();
+
+        switch (entityType)
+        {
+            case "Project":
+                db.Projects.Add(new Project { Id = foreignId, UserId = OtherUserId, Name = "Foreign" });
+                break;
+            case "Area":
+                db.Areas.Add(new Area { Id = foreignId, UserId = OtherUserId, Name = "Foreign" });
+                break;
+            case "Resource":
+                db.Resources.Add(new Resource { Id = foreignId, UserId = OtherUserId, Name = "Foreign" });
+                break;
+        }
+        await db.SaveChangesAsync();
+
+        var sut = BuildService(dbName);
+        var dto = entityType switch
+        {
+            "Project" => new CreateNoteDto("Private", ProjectId: foreignId),
+            "Area" => new CreateNoteDto("Private", AreaId: foreignId),
+            _ => new CreateNoteDto("Private", ResourceId: foreignId)
+        };
+
+        var act = () => sut.CreateAsync(dto);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+        (await db.Notes.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithOwnedRelatedEntities_PersistsAllLinks()
+    {
+        var dbName = nameof(CreateAsync_WithOwnedRelatedEntities_PersistsAllLinks);
+        var options = new DbContextOptionsBuilder<BrainyDbContext>().UseInMemoryDatabase(dbName).Options;
+        await using var db = new BrainyDbContext(options);
+        var project = new Project { Id = Guid.NewGuid(), UserId = DefaultUserId, Name = "Project" };
+        var area = new Area { Id = Guid.NewGuid(), UserId = DefaultUserId, Name = "Area" };
+        var resource = new Resource { Id = Guid.NewGuid(), UserId = DefaultUserId, Name = "Resource" };
+        db.AddRange(project, area, resource);
+        await db.SaveChangesAsync();
+
+        var sut = BuildService(dbName);
+        var result = await sut.CreateAsync(new CreateNoteDto(
+            "Linked", ProjectId: project.Id, AreaId: area.Id, ResourceId: resource.Id));
+
+        result.ProjectId.Should().Be(project.Id);
+        result.AreaId.Should().Be(area.Id);
+        result.ResourceId.Should().Be(resource.Id);
     }
 
     // ── Read (single) ─────────────────────────────────────────────────────────
@@ -170,6 +231,39 @@ public class NoteServiceTests
         var act = () => sut.UpdateAsync(null!);
 
         await act.Should().ThrowAsync<ArgumentNullException>();
+    }
+
+    [Theory]
+    [InlineData("Update")]
+    [InlineData("Process")]
+    [InlineData("BulkProcess")]
+    [InlineData("LinkToProject")]
+    public async Task Mutations_WithForeignRelatedEntity_ThrowKeyNotFoundException(string operation)
+    {
+        var dbName = $"{nameof(Mutations_WithForeignRelatedEntity_ThrowKeyNotFoundException)}-{operation}";
+        var sut = BuildService(dbName);
+        var note = await sut.CreateAsync(new CreateNoteDto("Owned note"));
+        var options = new DbContextOptionsBuilder<BrainyDbContext>().UseInMemoryDatabase(dbName).Options;
+        await using var db = new BrainyDbContext(options);
+        var foreignProject = new Project { Id = Guid.NewGuid(), UserId = OtherUserId, Name = "Foreign project" };
+        var foreignArea = new Area { Id = Guid.NewGuid(), UserId = OtherUserId, Name = "Foreign area" };
+        var foreignResource = new Resource { Id = Guid.NewGuid(), UserId = OtherUserId, Name = "Foreign resource" };
+        db.AddRange(foreignProject, foreignArea, foreignResource);
+        await db.SaveChangesAsync();
+
+        Func<Task> act = operation switch
+        {
+            "Update" => async () => { await sut.UpdateAsync(new UpdateNoteDto(
+                note.Id, note.Title, note.Content, null, note.Status, note.ParaCategory,
+                null, foreignArea.Id, null)); },
+            "Process" => async () => { await sut.ProcessNoteAsync(new ProcessNoteDto(
+                note.Id, ParaCategory.Resource, ResourceId: foreignResource.Id)); },
+            "BulkProcess" => async () => { await sut.BulkProcessInboxAsync(
+                [note.Id], ParaCategory.Project, NoteStatus.Active, projectId: foreignProject.Id); },
+            _ => async () => { await sut.LinkToProjectAsync(note.Id, foreignProject.Id); }
+        };
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
     // ── Delete ────────────────────────────────────────────────────────────────

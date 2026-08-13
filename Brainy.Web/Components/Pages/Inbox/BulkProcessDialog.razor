@@ -30,12 +30,13 @@
 
             @* PARA category *@
             <p class="bpd__section-label">Where do they belong?</p>
-            <div class="bpd__categories">
+            <div class="bpd__categories" role="group" aria-label="PARA category">
                 @foreach (var cat in Enum.GetValues<ParaCategory>())
                 {
                     var active = cat == _category;
                     <button type="button"
                             class="bpd__cat @(active ? "bpd__cat--active" : "")"
+                            aria-pressed="@active"
                             @onclick="() => OnCategoryChanged(cat)">
                         <span class="bpd__cat-dot" style="background: @DotColor(cat)"></span>
                         <span class="bpd__cat-label">@cat</span>
@@ -53,6 +54,7 @@
             {
                 <p class="bpd__section-label mt-4">Assign to project <span class="bpd__optional">(optional)</span></p>
                 <MudSelect T="Guid?" @bind-Value="_projectId"
+                           aria-label="Assign to project"
                            Placeholder="— none —"
                            Clearable="true"
                            Variant="Variant.Outlined"
@@ -68,6 +70,7 @@
             {
                 <p class="bpd__section-label mt-4">Assign to area <span class="bpd__optional">(optional)</span></p>
                 <MudSelect T="Guid?" @bind-Value="_areaId"
+                           aria-label="Assign to area"
                            Placeholder="— none —"
                            Clearable="true"
                            Variant="Variant.Outlined"
@@ -83,6 +86,7 @@
             {
                 <p class="bpd__section-label mt-4">Assign to resource <span class="bpd__optional">(optional)</span></p>
                 <MudSelect T="Guid?" @bind-Value="_resourceId"
+                           aria-label="Assign to resource"
                            Placeholder="— none —"
                            Clearable="true"
                            Variant="Variant.Outlined"
@@ -97,12 +101,13 @@
 
             @* Status *@
             <p class="bpd__section-label mt-4">Mark as</p>
-            <div class="bpd__statuses">
+            <div class="bpd__statuses" role="group" aria-label="Note status">
                 @foreach (var s in new[] { NoteStatus.Active, NoteStatus.Distilled, NoteStatus.Archived })
                 {
                     var active = s == _status;
                     <button type="button"
                             class="bpd__status @(active ? "bpd__status--active" : "")"
+                            aria-pressed="@active"
                             @onclick="() => _status = s">
                         <MudIcon Icon="@StatusIcon(s)" Class="bpd__status-icon" />
                         <span class="bpd__status-label">@s</span>

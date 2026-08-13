@@ -5,8 +5,9 @@ using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Tests.Fakes;
 using Brainy.Data;
+using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -37,6 +38,18 @@ public class ProjectServiceTests
 
         var provider = services.BuildServiceProvider();
         return (provider.GetRequiredService<IProjectService>(), provider.GetRequiredService<IAreaService>());
+    }
+
+    private static (IProjectService Projects, BrainyDbContext Db) BuildLifecycleServices(string dbName)
+    {
+        var services = new ServiceCollection();
+        services.AddDbContext<BrainyDbContext>(o => o.UseInMemoryDatabase(dbName));
+        services.AddScoped<Brainy.Application.Interfaces.Persistence.IApplicationDbContext>(
+            sp => sp.GetRequiredService<BrainyDbContext>());
+        services.AddSingleton<ICurrentUserService>(new FakeCurrentUserService(DefaultUserId));
+        services.AddBrainyApplication();
+        var provider = services.BuildServiceProvider();
+        return (provider.GetRequiredService<IProjectService>(), provider.GetRequiredService<BrainyDbContext>());
     }
 
     // ── CreateAsync ───────────────────────────────────────────────────────────
@@ -132,5 +145,42 @@ public class ProjectServiceTests
             RowVersion: [1, 2, 3]));
 
         await act.Should().ThrowAsync<ConcurrencyConflictException>();
+    }
+
+    [Fact]
+    public async Task ArchiveAndRestoreAsync_PreservesProjectStatusAndManualTaskArchive()
+    {
+        var (projects, db) = BuildLifecycleServices(nameof(ArchiveAndRestoreAsync_PreservesProjectStatusAndManualTaskArchive));
+        var project = new Project
+        {
+            Id = Guid.NewGuid(), UserId = DefaultUserId, Name = "Lifecycle",
+            Status = ProjectStatus.Active, Priority = ProjectPriority.Medium,
+        };
+        var manuallyArchived = new TaskItem
+        {
+            Id = Guid.NewGuid(), UserId = DefaultUserId, ProjectId = project.Id,
+            Title = "Already archived", Status = TaskItemStatus.Todo,
+            IsArchived = true, ArchivedAtUtc = DateTime.UtcNow.AddDays(-2),
+            ArchiveOperationId = Guid.NewGuid(),
+        };
+        var active = new TaskItem
+        {
+            Id = Guid.NewGuid(), UserId = DefaultUserId, ProjectId = project.Id,
+            Title = "Active", Status = TaskItemStatus.InProgress, IsCurrentTask = true,
+        };
+        db.Projects.Add(project);
+        db.Tasks.AddRange(manuallyArchived, active);
+        await db.SaveChangesAsync();
+
+        await projects.ArchiveAsync(project.Id);
+        await projects.RestoreAsync(project.Id);
+
+        var restoredProject = await db.Projects.AsNoTracking().SingleAsync();
+        var tasks = await db.Tasks.AsNoTracking().ToDictionaryAsync(t => t.Id);
+        restoredProject.Status.Should().Be(ProjectStatus.Active);
+        restoredProject.StatusBeforeArchive.Should().BeNull();
+        tasks[manuallyArchived.Id].IsArchived.Should().BeTrue();
+        tasks[active.Id].IsArchived.Should().BeFalse();
+        tasks[active.Id].IsCurrentTask.Should().BeFalse();
     }
 }

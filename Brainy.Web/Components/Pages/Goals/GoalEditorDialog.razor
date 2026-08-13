@@ -1,3 +1,4 @@
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Areas
 @using Brainy.Application.DTOs.Goals
 @using Brainy.Application.Interfaces.Services
@@ -101,6 +102,7 @@
     private DateTime? _targetDate;
     private GoalStatus _status = GoalStatus.Planned;
     private IReadOnlyList<AreaDto> _areas = [];
+    private byte[]? _rowVersion;
 
     protected override async Task OnInitializedAsync()
     {
@@ -122,6 +124,7 @@
         _description = dto.Description;
         _targetDate = dto.TargetDate;
         _status = dto.Status == GoalStatus.Archived ? GoalStatus.Planned : dto.Status;
+        _rowVersion = dto.RowVersion;
     }
 
     private async Task SubmitAsync()
@@ -144,7 +147,8 @@
                     _areaId,
                     NormalizeText(_description),
                     _targetDate,
-                    _status));
+                    _status,
+                    RowVersion: _rowVersion));
             }
             else
             {
@@ -162,11 +166,16 @@
                         goal.AreaId,
                         goal.Description,
                         goal.TargetDate,
-                        _status));
+                        _status,
+                        RowVersion: goal.RowVersion));
                 }
             }
 
             MudDialog.Close(DialogResult.Ok(goal));
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
         }
         catch (Exception ex)
         {

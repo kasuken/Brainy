@@ -5,15 +5,14 @@
 
 <MudPaper Class="goal-dashboard-widget"
           Elevation="0"
-          role="button"
-          tabindex="0"
-          Style="@($"--goal-widget-accent:{StatusAccent(Goal.Status)}")"
-          @onclick="HandleNavigateAsync">
+          Style="@($"--goal-widget-accent:{StatusAccent(Goal.Status)}")">
     <div class="goal-dashboard-widget__rail"></div>
 
     <div class="goal-dashboard-widget__header">
         <div class="goal-dashboard-widget__title-wrap">
-            <h3 class="goal-dashboard-widget__title">@Goal.Title</h3>
+            <h3 class="goal-dashboard-widget__title">
+                <button type="button" class="goal-dashboard-widget__open" @onclick="HandleNavigateAsync">@Goal.Title</button>
+            </h3>
             <div class="goal-dashboard-widget__badges">
                 <span class="goal-dashboard-widget__badge goal-dashboard-widget__badge--status">
                     @StatusLabel(Goal.Status)
@@ -100,6 +99,18 @@
         line-height: 1.15;
         color: var(--ink);
     }
+
+    .goal-dashboard-widget__open {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .goal-dashboard-widget__open:hover { color: var(--clay); text-decoration: underline; text-underline-offset: .16em; }
+    .goal-dashboard-widget__open:focus-visible { outline: 3px solid var(--clay-ring); outline-offset: 2px; }
 
     .goal-dashboard-widget__badges {
         display: flex;

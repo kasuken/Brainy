@@ -1,0 +1,26 @@
+@if (Utc is { } value)
+{
+    var utc = value.Kind == DateTimeKind.Utc
+        ? value
+        : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+    var local = TimeZoneInfo.ConvertTimeFromUtc(utc, UserTimeZone);
+    <time datetime="@utc.ToString("O")">@local.ToString(Format)</time>
+}
+else
+{
+    @Fallback
+}
+
+@code {
+    [Parameter]
+    public DateTime? Utc { get; set; }
+
+    [Parameter]
+    public string Format { get; set; } = "MMM d, yyyy";
+
+    [Parameter]
+    public string Fallback { get; set; } = "—";
+
+    [CascadingParameter]
+    private TimeZoneInfo UserTimeZone { get; set; } = TimeZoneInfo.Utc;
+}
