@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.0.2] - 2026-08-13
+
+### Fixed
+
+- Fix the TaskHub layout to ensure that every widget is visible and not clipped on smaller screens, improving usability for users with limited viewport sizes.
+
+---
+
 ## [4.0.1] - 2026-08-13
 
 ### Fixed
