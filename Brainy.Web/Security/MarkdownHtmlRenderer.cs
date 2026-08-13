@@ -44,19 +44,18 @@ public static class MarkdownHtmlRenderer
         if (canonical.StartsWith("//", StringComparison.Ordinal) || canonical.Contains('\\'))
             return false;
 
-        if (Uri.TryCreate(canonical, UriKind.Absolute, out var absolute))
-        {
-            return absolute.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
-                || absolute.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
-                || absolute.Scheme.Equals(Uri.UriSchemeMailto, StringComparison.OrdinalIgnoreCase);
-        }
-
         // A colon before a path/query/fragment delimiter is a scheme even when URI
-        // parsing rejects the value. Reject it rather than treating it as a path.
+        // parsing rejects the value. Detect schemes before absolute URI parsing because
+        // Unix treats rooted app paths such as /notes/123 as absolute file: URIs.
         var delimiter = canonical.IndexOfAny(['/', '?', '#']);
         var colon = canonical.IndexOf(':');
         if (colon >= 0 && (delimiter < 0 || colon < delimiter))
-            return false;
+        {
+            return Uri.TryCreate(canonical, UriKind.Absolute, out var absolute)
+                && (absolute.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                    || absolute.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                    || absolute.Scheme.Equals(Uri.UriSchemeMailto, StringComparison.OrdinalIgnoreCase));
+        }
 
         return Uri.TryCreate(canonical, UriKind.Relative, out _);
     }

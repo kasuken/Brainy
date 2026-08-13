@@ -19,7 +19,11 @@ public class MarkdownHtmlRendererTests
     [InlineData("java%00script:alert(1)")]
     [InlineData("data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==")]
     [InlineData("vbscript:msgbox(1)")]
+    [InlineData("file:///etc/passwd")]
+    [InlineData("C:/Windows/System32")]
     [InlineData("//evil.example/steal")]
+    [InlineData("%2F%2Fevil.example/steal")]
+    [InlineData("\\\\evil.example\\steal")]
     public void Render_BlocksUnsafeOrDisguisedDestinations(string destination)
     {
         var html = MarkdownHtmlRenderer.Render($"[open]({destination})");
