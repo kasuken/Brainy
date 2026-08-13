@@ -1,5 +1,14 @@
 # Changelog
 
+## [4.0.1] - 2026-08-13
+
+### Fixed
+
+- Corrected the release metadata to keep the patch version aligned with the published package and assembly versioning.
+- Updated the changelog entry to reflect the latest patch release after the 4.0.0 major release.
+
+---
+
 ## [4.0.0] - 2026-08-13
 
 ### Added
