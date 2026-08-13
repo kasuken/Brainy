@@ -27,24 +27,43 @@
     .td-layout {
         display: flex;
         flex-direction: column;
-        gap: 3rem;
+        gap: 2rem;
     }
 
     /* ── Top Dashboard Area ── */
     .td-top-dashboard {
         display: flex;
         flex-direction: column;
-        gap: 1.5rem;
+        gap: 1.75rem;
+        position: relative;
+        overflow: hidden;
+        padding: clamp(1.25rem, 3vw, 2rem);
+        background:
+            radial-gradient(circle at 92% 0%, rgba(192, 86, 29, 0.12), transparent 28%),
+            var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 20px;
+        box-shadow: 0 12px 32px rgba(38, 32, 27, 0.05);
+    }
+
+    .td-top-dashboard::before {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        background: linear-gradient(180deg, var(--clay, #c0561d), #e5a66f);
     }
 
     .td-header-row {
         display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 2rem;
     }
 
     .td-hero {
         margin-bottom: 0;
+        max-width: 680px;
     }
 
     .td-eyebrow {
@@ -58,24 +77,88 @@
 
     .td-greeting {
         font-family: var(--font-display);
-        font-size: clamp(2.5rem, 6vw, 4rem);
+        font-size: clamp(2.5rem, 5vw, 3.5rem);
         font-weight: 600;
-        line-height: 1;
+        line-height: 0.95;
         color: var(--mud-palette-text-primary);
         letter-spacing: -0.02em;
-        margin: 0 0 0.5rem;
+        margin: 0;
     }
 
     .td-hero-title-row {
         display: flex;
-        align-items: flex-start;
-        gap: 1rem;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .td-hero-description {
+        max-width: 620px;
+        margin: 0.85rem 0 0;
+        color: var(--mud-palette-text-secondary);
+        font-size: 1rem;
+        line-height: 1.55;
+    }
+
+    .td-header-summary {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        max-width: 420px;
+    }
+
+    .td-header-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 34px;
+        padding: 0.4rem 0.75rem;
+        color: var(--mud-palette-text-secondary);
+        background: color-mix(in srgb, var(--mud-palette-surface) 82%, transparent);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .td-header-pill::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--clay, #c0561d);
+        box-shadow: 0 0 0 4px rgba(192, 86, 29, 0.1);
+    }
+
+    .td-header-pill--attention {
+        color: #9a3412;
+        border-color: rgba(234, 88, 12, 0.25);
+        background: rgba(255, 247, 237, 0.92);
+    }
+
+    .td-header-pill--attention::before {
+        background: #ea580c;
+        box-shadow: 0 0 0 4px rgba(234, 88, 12, 0.11);
+    }
+
+    .td-header-pill--healthy {
+        color: #166534;
+        border-color: rgba(22, 163, 74, 0.22);
+        background: rgba(240, 253, 244, 0.92);
+    }
+
+    .td-header-pill--healthy::before {
+        background: #16a34a;
+        box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.1);
     }
 
     .td-sidebar-widgets {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: 1.5rem;
+        gap: 1rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--mud-palette-lines-default);
     }
 
     .td-sidebar-widgets > * {
@@ -84,13 +167,40 @@
 
     @@media (min-width: 1000px) {
         .td-sidebar-widgets {
-            grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+            grid-template-columns: minmax(0, 1.8fr) minmax(300px, 1fr);
             align-items: stretch;
         }
     }
 
     .th-status-overview {
         min-width: 0;
+        padding: 0.15rem 0;
+    }
+
+    .th-overview-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.9rem;
+    }
+
+    .th-overview-caption {
+        color: var(--mud-palette-text-disabled);
+        font-size: 0.78rem;
+        font-weight: 500;
+    }
+
+    @@media (max-width: 760px) {
+        .td-header-row {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .td-header-summary {
+            justify-content: flex-start;
+        }
     }
 
     /* ── Main Area ── */
@@ -279,18 +389,19 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
         gap: 0.75rem;
-        margin-bottom: 0.5rem;
     }
 
     .th-stat-card {
         display: flex;
         flex-direction: column;
-        align-items: center;
-        padding: 1rem 0.75rem;
-        background: var(--mud-palette-surface);
+        align-items: flex-start;
+        justify-content: space-between;
+        min-height: 94px;
+        padding: 0.9rem 1rem;
+        background: color-mix(in srgb, var(--mud-palette-table-lines) 64%, transparent);
         border: 1px solid var(--mud-palette-lines-default);
-        border-radius: 10px;
-        gap: 0.35rem;
+        border-radius: 12px;
+        gap: 0.65rem;
         transition: box-shadow 0.2s ease, transform 0.2s ease;
     }
 
@@ -309,8 +420,8 @@
 
     .th-stat-value {
         font-family: var(--font-display);
-        font-size: 2rem;
-        font-weight: 500;
+        font-size: 2.15rem;
+        font-weight: 600;
         line-height: 1;
         color: var(--mud-palette-text-secondary);
     }
@@ -324,7 +435,7 @@
         display: flex;
         align-items: center;
         gap: 0.6rem;
-        padding: 0.5rem 0.6rem;
+        padding: 0.55rem 0.65rem;
         border-radius: 8px;
         background: var(--mud-palette-table-lines);
         border: 1px solid transparent;
@@ -340,6 +451,13 @@
         font-size: 0.85rem;
         color: var(--mud-palette-text-secondary);
         font-weight: 500;
+    }
+
+    .th-health-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
     }
 
     /* ── Filter Bar ── */
@@ -404,7 +522,29 @@
                         <h1 id="tasks-hub-title" class="td-greeting">Tasks Hub</h1>
                         <PageHelpButton Guide="HelpGuide" />
                     </div>
+                    <p class="td-hero-description">
+                        See the state of your project work, catch tasks that need a decision,
+                        and narrow your focus from one place.
+                    </p>
                 </div>
+                @if (!_loading && _loadError is null)
+                {
+                    <div class="td-header-summary" aria-label="Task hub summary">
+                        <span class="td-header-pill">
+                            @ActiveTaskCount active task@(ActiveTaskCount == 1 ? "" : "s")
+                        </span>
+                        @if (HealthSignalCount > 0)
+                        {
+                            <span class="td-header-pill td-header-pill--attention">
+                                @HealthSignalCount health signal@(HealthSignalCount == 1 ? "" : "s")
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="td-header-pill td-header-pill--healthy">Health checks clear</span>
+                        }
+                    </div>
+                }
             </div>
 
             @if (!_loading && _loadError is null)
@@ -412,8 +552,9 @@
                 <div class="td-sidebar-widgets">
                     @* ── Status summary strip ── *@
                     <section class="th-status-overview" aria-labelledby="task-status-overview-heading">
-                        <div class="td-section-head" style="margin-bottom:0.75rem; border-bottom: none;">
-                            <h2 id="task-status-overview-heading" class="td-section-label">Status Overview</h2>
+                        <div class="th-overview-head">
+                            <h2 id="task-status-overview-heading" class="td-section-label">Workflow snapshot</h2>
+                            <span class="th-overview-caption">Where your tasks are now</span>
                         </div>
                         <TaskStatusSummaryWidget Summary="_aggregate!.StatusSummary" />
                     </section>
@@ -879,6 +1020,20 @@
     private IReadOnlyList<ProjectDto> _projects = [];
     private PagedResult<TasksHubTaskDto>? _filteredResults;
     private bool _filtersApplied;
+
+    private int ActiveTaskCount =>
+        _aggregate is null
+            ? 0
+            : _aggregate.StatusSummary.TodoCount
+              + _aggregate.StatusSummary.InProgressCount
+              + _aggregate.StatusSummary.WaitingCount;
+
+    private int HealthSignalCount =>
+        _aggregate is null
+            ? 0
+            : _aggregate.OverdueTasks.Count
+              + _aggregate.StaleTasks.Count
+              + _aggregate.WithoutDueDateTasks.Count;
 
     // ── Bulk selection ───────────────────────────────────────────────────────
 
