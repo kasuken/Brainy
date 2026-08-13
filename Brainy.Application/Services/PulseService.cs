@@ -15,6 +15,27 @@ internal sealed class PulseService(
     ICurrentUserService currentUser,
     IUserTimeZoneService userTimeZone) : IPulseService
 {
+    private static readonly DayOfWeek[] Weekdays =
+    [
+        DayOfWeek.Monday,
+        DayOfWeek.Tuesday,
+        DayOfWeek.Wednesday,
+        DayOfWeek.Thursday,
+        DayOfWeek.Friday,
+        DayOfWeek.Saturday,
+        DayOfWeek.Sunday,
+    ];
+
+    private static readonly string[] TimeBlockLabels =
+    [
+        "12-3 AM",
+        "4-7 AM",
+        "8-11 AM",
+        "12-3 PM",
+        "4-7 PM",
+        "8-11 PM",
+    ];
+
     public async Task<PulseReportDto> GetReportAsync(
         PulsePeriod period,
         DateTime? customStartUtc = null,
@@ -62,8 +83,153 @@ internal sealed class PulseService(
                                     DateTime.SpecifyKind(e.OccurredAtUtc, DateTimeKind.Utc), timeZone).Date)
                                   .Distinct().Count());
 
-        return new PulseReportDto(period, start, end, summary, log);
+        var analytics = BuildAnalytics(log, start, end, timeZone, summary.ActiveDays);
+
+        return new PulseReportDto(period, start, end, timeZone.Id, summary, analytics, log);
     }
+
+    private static PulseAnalyticsDto BuildAnalytics(
+        IReadOnlyList<PulseActivityLogEntryDto> log,
+        DateTime startUtc,
+        DateTime endUtc,
+        TimeZoneInfo timeZone,
+        int activeDays)
+    {
+        var localActivities = log
+            .Select(entry => new LocalActivity(
+               entry.ActivityType,
+               TimeZoneInfo.ConvertTimeFromUtc(AsUtc(entry.OccurredAtUtc), timeZone)))
+            .ToList();
+
+        var firstDate = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTimeFromUtc(AsUtc(startUtc), timeZone));
+        var lastDate = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTimeFromUtc(AsUtc(endUtc.AddTicks(-1)), timeZone));
+        var daysInPeriod = lastDate.DayNumber - firstDate.DayNumber + 1;
+        var activitiesByDate = localActivities
+            .GroupBy(activity => DateOnly.FromDateTime(activity.OccurredAt))
+            .ToDictionary(group => group.Key, group => group.ToList());
+
+        var dailyActivity = Enumerable.Range(0, daysInPeriod)
+            .Select(offset =>
+            {
+               var date = firstDate.AddDays(offset);
+               var activities = activitiesByDate.GetValueOrDefault(date, []);
+               return new PulseDailyActivityDto(
+                   date,
+                   activities.Count,
+                   activities.Count(activity => IsForwardProgress(activity.ActivityType)));
+            })
+            .ToList();
+
+        var productiveWeekdays = Weekdays
+            .Select(day =>
+            {
+               var occurrences = dailyActivity.Count(activity => activity.Date.DayOfWeek == day);
+               var total = dailyActivity
+                   .Where(activity => activity.Date.DayOfWeek == day)
+                   .Sum(activity => activity.ForwardProgressActivities);
+               return new PulseActivityBucketDto(
+                   day.ToString()[..3],
+                   occurrences == 0 ? 0 : Math.Round((double)total / occurrences, 1));
+            })
+            .ToList();
+
+        var productiveTimeBlocks = TimeBlockLabels
+            .Select((label, index) => new PulseActivityBucketDto(
+               label,
+               localActivities.Count(activity =>
+                   IsForwardProgress(activity.ActivityType) &&
+                   activity.OccurredAt.Hour / 4 == index)))
+            .ToList();
+
+        var activityMix = new[]
+        {
+            new PulseActivityBucketDto(
+               "Capture",
+               localActivities.Count(activity => GetCategory(activity.ActivityType) == ActivityCategory.Capture)),
+            new PulseActivityBucketDto(
+               "Organize",
+               localActivities.Count(activity => GetCategory(activity.ActivityType) == ActivityCategory.Organize)),
+            new PulseActivityBucketDto(
+               "Distill",
+               localActivities.Count(activity => GetCategory(activity.ActivityType) == ActivityCategory.Distill)),
+            new PulseActivityBucketDto(
+               "Execute & express",
+               localActivities.Count(activity => GetCategory(activity.ActivityType) == ActivityCategory.ExecuteAndExpress)),
+            new PulseActivityBucketDto(
+               "Maintenance",
+               localActivities.Count(activity => GetCategory(activity.ActivityType) == ActivityCategory.Maintenance)),
+        };
+
+        var forwardProgressActivities = localActivities.Count(activity =>
+            IsForwardProgress(activity.ActivityType));
+        var mostProductiveWeekday = GetTopBucketLabel(productiveWeekdays);
+        var mostProductiveTimeBlock = GetTopBucketLabel(productiveTimeBlocks);
+        var busiestDay = dailyActivity
+            .Where(activity => activity.TotalActivities > 0)
+            .MaxBy(activity => activity.TotalActivities);
+
+        return new PulseAnalyticsDto(
+            dailyActivity,
+            productiveWeekdays,
+            productiveTimeBlocks,
+            activityMix,
+            forwardProgressActivities,
+            log.Count == 0 ? 0 : Math.Round((double)forwardProgressActivities / log.Count * 100, 0),
+            activeDays == 0 ? 0 : Math.Round((double)log.Count / activeDays, 1),
+            daysInPeriod,
+            mostProductiveWeekday,
+            mostProductiveTimeBlock,
+            busiestDay?.Date,
+            busiestDay?.TotalActivities ?? 0);
+    }
+
+    private static string? GetTopBucketLabel(IReadOnlyList<PulseActivityBucketDto> buckets)
+    {
+        var maximum = buckets.Max(bucket => bucket.Value);
+        return maximum == 0
+            ? null
+            : string.Join(" / ", buckets
+                .Where(bucket => bucket.Value == maximum)
+                .Select(bucket => bucket.Label));
+    }
+
+    private static DateTime AsUtc(DateTime value) =>
+        value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+
+    private static bool IsForwardProgress(PulseActivityType type) => type is
+        PulseActivityType.NoteProcessed or
+        PulseActivityType.HighlightAdded or
+        PulseActivityType.SummaryCreated or
+        PulseActivityType.TaskCompleted or
+        PulseActivityType.ProjectCompleted or
+        PulseActivityType.OutputCreated or
+        PulseActivityType.OutputPublished or
+        PulseActivityType.IdeaCommitted or
+        PulseActivityType.GoalAchieved;
+
+    private static ActivityCategory GetCategory(PulseActivityType type) => type switch
+    {
+        PulseActivityType.NoteCaptured or
+        PulseActivityType.TaskCreated or
+        PulseActivityType.ProjectCreated or
+        PulseActivityType.IdeaCaptured => ActivityCategory.Capture,
+
+        PulseActivityType.NoteProcessed => ActivityCategory.Organize,
+
+        PulseActivityType.HighlightAdded or
+        PulseActivityType.SummaryCreated => ActivityCategory.Distill,
+
+        PulseActivityType.TaskCompleted or
+        PulseActivityType.ProjectCompleted or
+        PulseActivityType.OutputCreated or
+        PulseActivityType.OutputPublished or
+        PulseActivityType.IdeaCommitted or
+        PulseActivityType.GoalAchieved => ActivityCategory.ExecuteAndExpress,
+
+        _ => ActivityCategory.Maintenance,
+    };
 
     private async Task<(DateTime StartUtc, DateTime EndUtc)> ResolveRangeAsync(
         PulsePeriod period,
@@ -96,5 +262,16 @@ internal sealed class PulseService(
 
         return await userTimeZone.GetUtcRangeAsync(
             today.AddDays(1 - days), today, cancellationToken).ConfigureAwait(false);
+    }
+
+    private sealed record LocalActivity(PulseActivityType ActivityType, DateTime OccurredAt);
+
+    private enum ActivityCategory
+    {
+        Capture,
+        Organize,
+        Distill,
+        ExecuteAndExpress,
+        Maintenance,
     }
 }

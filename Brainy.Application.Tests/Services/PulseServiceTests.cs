@@ -142,6 +142,19 @@ public class PulseServiceTests
             AchievedDate = achievedDate
         };
 
+    private static LifecycleActivity CreateActivity(
+        PulseActivityType activityType,
+        DateTime occurredAtUtc)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            UserId = DefaultUserId,
+            EntityId = Guid.NewGuid(),
+            ActivityType = activityType,
+            OccurredAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc),
+            Title = activityType.ToString(),
+        };
+
     // ── Empty state ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -535,6 +548,94 @@ public class PulseServiceTests
         // Each newly captured note is itself an activity in addition to processing it.
         result.Summary.TotalActivities.Should().Be(6);
         result.Summary.ActiveDays.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task GetReportAsync_BuildsDailyMomentumForEveryDayInPeriod()
+    {
+        var (sut, db) = BuildService(nameof(GetReportAsync_BuildsDailyMomentumForEveryDayInPeriod));
+        db.LifecycleActivities.AddRange(
+            CreateActivity(PulseActivityType.NoteCaptured, new DateTime(2026, 6, 10, 9, 0, 0)),
+            CreateActivity(PulseActivityType.NoteProcessed, new DateTime(2026, 6, 10, 10, 0, 0)),
+            CreateActivity(PulseActivityType.HighlightAdded, new DateTime(2026, 6, 10, 11, 0, 0)),
+            CreateActivity(PulseActivityType.TaskCompleted, new DateTime(2026, 6, 12, 16, 0, 0)));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
+
+        result.Analytics.DailyActivity.Should().HaveCount(7);
+        result.Analytics.DailyActivity.Sum(day => day.TotalActivities).Should().Be(4);
+        result.Analytics.DailyActivity.Sum(day => day.ForwardProgressActivities).Should().Be(3);
+        result.Analytics.BusiestDate.Should().Be(new DateOnly(2026, 6, 10));
+        result.Analytics.BusiestDateActivities.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task GetReportAsync_ClassifiesActivityMixAndForwardProgress()
+    {
+        var (sut, db) = BuildService(nameof(GetReportAsync_ClassifiesActivityMixAndForwardProgress));
+        db.LifecycleActivities.AddRange(
+            CreateActivity(PulseActivityType.NoteCaptured, new DateTime(2026, 6, 10, 8, 0, 0)),
+            CreateActivity(PulseActivityType.NoteProcessed, new DateTime(2026, 6, 10, 9, 0, 0)),
+            CreateActivity(PulseActivityType.SummaryCreated, new DateTime(2026, 6, 10, 10, 0, 0)),
+            CreateActivity(PulseActivityType.OutputPublished, new DateTime(2026, 6, 10, 11, 0, 0)),
+            CreateActivity(PulseActivityType.TaskArchived, new DateTime(2026, 6, 10, 12, 0, 0)));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
+
+        result.Analytics.ActivityMix.Should().ContainSingle(bucket =>
+            bucket.Label == "Capture" && bucket.Value == 1);
+        result.Analytics.ActivityMix.Should().ContainSingle(bucket =>
+            bucket.Label == "Organize" && bucket.Value == 1);
+        result.Analytics.ActivityMix.Should().ContainSingle(bucket =>
+            bucket.Label == "Distill" && bucket.Value == 1);
+        result.Analytics.ActivityMix.Should().ContainSingle(bucket =>
+            bucket.Label == "Execute & express" && bucket.Value == 1);
+        result.Analytics.ActivityMix.Should().ContainSingle(bucket =>
+            bucket.Label == "Maintenance" && bucket.Value == 1);
+        result.Analytics.ForwardProgressActivities.Should().Be(3);
+        result.Analytics.ForwardProgressPercentage.Should().Be(60);
+    }
+
+    [Fact]
+    public async Task GetReportAsync_IdentifiesProductiveWeekdayAndTimeBlock()
+    {
+        var (sut, db) = BuildService(nameof(GetReportAsync_IdentifiesProductiveWeekdayAndTimeBlock));
+        db.LifecycleActivities.AddRange(
+            CreateActivity(PulseActivityType.NoteProcessed, new DateTime(2026, 6, 10, 8, 0, 0)),
+            CreateActivity(PulseActivityType.SummaryCreated, new DateTime(2026, 6, 10, 10, 0, 0)),
+            CreateActivity(PulseActivityType.TaskCompleted, new DateTime(2026, 6, 10, 11, 0, 0)),
+            CreateActivity(PulseActivityType.NoteCaptured, new DateTime(2026, 6, 10, 14, 0, 0)));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
+
+        result.Analytics.MostProductiveWeekday.Should().Be("Wed");
+        result.Analytics.MostProductiveTimeBlock.Should().Be("8-11 AM");
+        result.Analytics.ProductiveTimeBlocks.Should().ContainSingle(bucket =>
+            bucket.Label == "8-11 AM" && bucket.Value == 3);
+    }
+
+    [Fact]
+    public async Task GetReportAsync_UsesUserTimeZoneForProductivityPatterns()
+    {
+        var (sut, db) = BuildService(nameof(GetReportAsync_UsesUserTimeZoneForProductivityPatterns));
+        db.DashboardPreferences.Add(new UserDashboardPreference
+        {
+            UserId = DefaultUserId,
+            TimeZoneId = "Asia/Tokyo",
+        });
+        db.LifecycleActivities.Add(
+            CreateActivity(PulseActivityType.TaskCompleted, new DateTime(2026, 6, 10, 23, 30, 0)));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetReportAsync(PulsePeriod.LastWeek);
+
+        result.Analytics.DailyActivity.Should().ContainSingle(day =>
+            day.Date == new DateOnly(2026, 6, 11) && day.ForwardProgressActivities == 1);
+        result.Analytics.MostProductiveWeekday.Should().Be("Thu");
+        result.Analytics.MostProductiveTimeBlock.Should().Be("8-11 AM");
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 @using Brainy.Application.DTOs.Pulse
 @using Brainy.Domain.Enums
+@inject TimeProvider TimeProvider
 
 @* ─────────────────────────────────────────────────────────────────────────────
    PulseActivityLogList — chronological, day-grouped activity log for Pulse.
@@ -45,22 +46,57 @@ else
             </ul>
         </section>
     }
+
+    @if (!_showAll && Entries.Count > InitialVisibleEntryCount)
+    {
+        <div class="pulse-log-more">
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.ExpandMore"
+                       OnClick="ShowAll">
+                Show all @(Entries.Count) activities
+            </MudButton>
+        </div>
+    }
 }
 
 @code {
+    private const int InitialVisibleEntryCount = 50;
+
     [Parameter] public IReadOnlyList<PulseActivityLogEntryDto> Entries { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public string TimeZoneId { get; set; } = "UTC";
 
     private sealed record DayGroup(string HeadingId, string Label, IReadOnlyList<PulseActivityLogEntryDto> Entries);
 
     private IReadOnlyList<DayGroup> _groups = [];
+    private IReadOnlyList<PulseActivityLogEntryDto>? _previousEntries;
+    private TimeZoneInfo _timeZone = TimeZoneInfo.Utc;
+    private bool _showAll;
 
-    protected override void OnParametersSet() => RebuildGroups();
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_previousEntries, Entries))
+        {
+            _showAll = false;
+            _previousEntries = Entries;
+        }
+
+        _timeZone = TimeZoneInfo.TryFindSystemTimeZoneById(TimeZoneId, out var timeZone)
+            ? timeZone
+            : TimeZoneInfo.Utc;
+        RebuildGroups();
+    }
 
     private void RebuildGroups()
     {
-        var today = ToUserTime(DateTime.UtcNow).Date;
+        var today = ToUserTime(TimeProvider.GetUtcNow().UtcDateTime).Date;
+        var visibleEntries = _showAll
+            ? Entries
+            : Entries.Take(InitialVisibleEntryCount);
 
-        _groups = Entries
+        _groups = visibleEntries
             .OrderByDescending(e => e.OccurredAtUtc)
             .GroupBy(e => ToUserTime(e.OccurredAtUtc).Date)
             .OrderByDescending(g => g.Key)
@@ -69,6 +105,12 @@ else
                 FormatDayLabel(g.Key, today),
                 g.ToList()))
             .ToList();
+    }
+
+    private void ShowAll()
+    {
+        _showAll = true;
+        RebuildGroups();
     }
 
     private static string FormatDayLabel(DateTime date, DateTime today)
@@ -111,14 +153,11 @@ else
         builder.CloseElement();
     };
 
-    [CascadingParameter]
-    private TimeZoneInfo UserTimeZone { get; set; } = TimeZoneInfo.Utc;
-
     private static DateTime AsUtc(DateTime value) =>
         value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);
 
     private DateTime ToUserTime(DateTime value) =>
-        TimeZoneInfo.ConvertTimeFromUtc(AsUtc(value), UserTimeZone);
+        TimeZoneInfo.ConvertTimeFromUtc(AsUtc(value), _timeZone);
 
     private static string EntryIcon(PulseActivityType type) => type switch
     {
@@ -171,6 +210,12 @@ else
 
     .pulse-log-day + .pulse-log-day {
         margin-top: 1.4rem;
+    }
+
+    .pulse-log-more {
+        display: flex;
+        justify-content: center;
+        margin-top: 1rem;
     }
 
     .pulse-log-day__header {

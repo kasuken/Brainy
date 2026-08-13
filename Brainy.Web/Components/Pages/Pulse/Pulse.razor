@@ -14,12 +14,13 @@
 
     @* ── Hero + period selector ── *@
     <div class="pulse-hero">
+        <span class="pulse-hero__eyebrow">Activity intelligence</span>
         <div class="pulse-hero__title-row">
             <h1 id="pulse-title" class="pulse-hero__heading mb-1">Pulse</h1>
             <PageHelpButton Guide="HelpGuide" />
         </div>
         <MudText Typo="Typo.body1" Class="mud-text-secondary mb-5">
-            A snapshot of what you captured, processed, and completed — pick a period to see your activity.
+            Understand your working rhythm, protect your productive hours, and turn more activity into forward progress.
         </MudText>
 
         <div class="pulse-period-bar" role="group" aria-label="Report period">
@@ -103,16 +104,40 @@
         @* ── Headline stats ── *@
         <div class="pulse-headline-row">
             <div class="pulse-headline-tile">
+                <MudIcon Icon="@Icons.Material.Outlined.Bolt" Class="pulse-headline-tile__icon" aria-hidden="true" />
                 <div class="pulse-headline-tile__value">@_report.Summary.TotalActivities</div>
                 <div class="pulse-headline-tile__label">Total Activities</div>
+                <div class="pulse-headline-tile__meta">Everything recorded</div>
             </div>
             <div class="pulse-headline-tile">
-                <div class="pulse-headline-tile__value">@_report.Summary.ActiveDays</div>
-                <div class="pulse-headline-tile__label">Active Days</div>
+                <MudIcon Icon="@Icons.Material.Outlined.TrendingUp" Class="pulse-headline-tile__icon" aria-hidden="true" />
+                <div class="pulse-headline-tile__value">@_report.Analytics.ForwardProgressActivities</div>
+                <div class="pulse-headline-tile__label">Forward Progress</div>
+                <div class="pulse-headline-tile__meta">@_report.Analytics.ForwardProgressPercentage.ToString("0")% of activity</div>
+            </div>
+            <div class="pulse-headline-tile">
+                <MudIcon Icon="@Icons.Material.Outlined.CalendarMonth" Class="pulse-headline-tile__icon" aria-hidden="true" />
+                <div class="pulse-headline-tile__value pulse-headline-tile__value--ratio">
+                    @_report.Summary.ActiveDays<span>/@_report.Analytics.DaysInPeriod</span>
+                </div>
+                <div class="pulse-headline-tile__label">Active Rhythm</div>
+                <div class="pulse-headline-tile__meta">Days with activity</div>
+            </div>
+            <div class="pulse-headline-tile">
+                <MudIcon Icon="@Icons.Material.Outlined.Speed" Class="pulse-headline-tile__icon" aria-hidden="true" />
+                <div class="pulse-headline-tile__value">@_report.Analytics.AverageActivitiesPerActiveDay.ToString("0.#")</div>
+                <div class="pulse-headline-tile__label">Daily Pace</div>
+                <div class="pulse-headline-tile__meta">Per active day</div>
             </div>
         </div>
 
+        <PulseAnalyticsDashboard Analytics="_report.Analytics" />
+
         @* ── Metric groups ── *@
+        <div class="pulse-detail-heading">
+            <span>Activity detail</span>
+            <h2>What moved across your second brain</h2>
+        </div>
         <div class="pulse-metrics">
             @foreach (var group in MetricGroups)
             {
@@ -143,7 +168,7 @@
             <div class="pulse-log-section__head">
                 <h2 id="pulse-log-heading" class="pulse-log-section__title">Activity Log</h2>
             </div>
-            <PulseActivityLogList Entries="_report.Log" />
+            <PulseActivityLogList Entries="_report.Log" TimeZoneId="_report.TimeZoneId" />
         </section>
         }
     </div>
@@ -153,7 +178,7 @@
 <style>
     /* ── Page layout ── */
     .pulse-page {
-        max-width: 900px;
+        max-width: 1180px;
         margin: 0 auto;
     }
 
@@ -161,6 +186,16 @@
     .pulse-hero {
         text-align: center;
         padding: 2.5rem 0 1.5rem;
+    }
+
+    .pulse-hero__eyebrow {
+        display: block;
+        margin-bottom: .35rem;
+        color: var(--clay);
+        font-size: .68rem;
+        font-weight: 800;
+        letter-spacing: .16em;
+        text-transform: uppercase;
     }
 
     .pulse-hero__heading {
@@ -246,30 +281,65 @@
 
     /* ── Headline stats ── */
     .pulse-headline-row {
-        display: flex;
-        justify-content: center;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 1rem;
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
+        margin-bottom: 1.75rem;
     }
 
     .pulse-headline-tile {
-        min-width: 160px;
+        position: relative;
+        min-width: 0;
+        overflow: hidden;
         background: var(--paper-raised);
         border: 1px solid var(--line);
-        border-radius: 16px;
-        padding: 1.25rem 1.75rem;
+        border-radius: 18px;
+        padding: 1.15rem 1.25rem;
         box-shadow: var(--shadow-sm);
-        text-align: center;
+        text-align: left;
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+
+    .pulse-headline-tile::after {
+        position: absolute;
+        right: -1.2rem;
+        bottom: -1.6rem;
+        width: 5.5rem;
+        height: 5.5rem;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        content: "";
+        opacity: .65;
+    }
+
+    .pulse-headline-tile:hover {
+        transform: translateY(-2px);
+        border-color: var(--clay-ring);
+        box-shadow: 0 10px 26px color-mix(in srgb, var(--clay) 10%, transparent);
+    }
+
+    .pulse-headline-tile__icon {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        color: var(--clay);
+        font-size: 1.2rem !important;
+        opacity: .72;
     }
 
     .pulse-headline-tile__value {
         font-family: var(--font-display);
-        font-size: 2.4rem;
+        font-size: clamp(1.9rem, 3vw, 2.4rem);
         font-weight: 700;
         line-height: 1;
         color: var(--clay);
-        margin-bottom: 0.3rem;
+        margin: .45rem 0 0.45rem;
+    }
+
+    .pulse-headline-tile__value--ratio span {
+        color: var(--ink-faint);
+        font-size: .48em;
+        font-weight: 600;
     }
 
     .pulse-headline-tile__label {
@@ -278,6 +348,35 @@
         letter-spacing: 0.1em;
         text-transform: uppercase;
         color: var(--ink-faint);
+    }
+
+    .pulse-headline-tile__meta {
+        position: relative;
+        z-index: 1;
+        margin-top: .25rem;
+        color: var(--ink-soft);
+        font-size: .72rem;
+    }
+
+    .pulse-detail-heading {
+        margin: 2rem 0 1rem;
+    }
+
+    .pulse-detail-heading span {
+        display: block;
+        margin-bottom: .25rem;
+        color: var(--clay);
+        font-size: .67rem;
+        font-weight: 800;
+        letter-spacing: .13em;
+        text-transform: uppercase;
+    }
+
+    .pulse-detail-heading h2 {
+        margin: 0;
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: clamp(1.3rem, 2.5vw, 1.75rem);
     }
 
     /* ── Metric groups ── */
@@ -379,6 +478,33 @@
         color: var(--ink);
         margin: 0;
     }
+
+    @@media (max-width: 900px) {
+        .pulse-headline-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 520px) {
+        .pulse-hero {
+            padding-top: 1.5rem;
+        }
+
+        .pulse-headline-row {
+            grid-template-columns: 1fr;
+            gap: .7rem;
+        }
+
+        .pulse-headline-tile {
+            padding: .9rem 1rem;
+        }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .pulse-headline-tile {
+            transition: none;
+        }
+    }
 </style>
 
 @code {
@@ -397,7 +523,8 @@
                 Points =
                 [
                     "Choose a preset period or a custom date range.",
-                    "Scan headline stats and per-category counts at a glance.",
+                    "Use the charts to find your strongest weekdays, time blocks, and momentum.",
+                    "Forward progress separates meaningful movement from capture and maintenance.",
                     "Review the day-by-day activity log for full detail."
                 ]
             },
@@ -410,6 +537,7 @@
                 [
                     "Seeing what you processed vs. captured highlights backlog building up in your Inbox.",
                     "Completed tasks, projects, and outputs show real progress, not just storage growth.",
+                    "Your strongest working windows can guide when to protect focus time.",
                     "A regular Pulse review keeps knowledge reuse — not hoarding — front of mind."
                 ]
             },
@@ -421,9 +549,10 @@
                 Points =
                 [
                     "Pick a period preset, or select Custom and choose a date range.",
-                    "Review the headline totals and metric tiles for the period.",
-                    "Scroll the activity log to see exactly what happened and when.",
-                    "Click any log entry to jump straight to that item."
+                    "Review the headline totals, then compare overall activity with forward progress.",
+                    "Use weekday and time-of-day patterns to plan future focus blocks.",
+                    "Check the activity mix for capture that is outpacing processing or expression.",
+                    "Scroll the activity log to see exactly what happened and click through to an item."
                 ]
             }
         ]

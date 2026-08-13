@@ -11,6 +11,10 @@ public record PulseReportDto(
     DateTime PeriodStartUtc,
     /// <summary>Exclusive upper bound of the reporting window.</summary>
     DateTime PeriodEndUtc,
+    /// <summary>Time-zone id used for all calendar and time-of-day analytics.</summary>
+    string TimeZoneId,
     PulseSummaryDto Summary,
+    /// <summary>Time-based trends and behavioral insights for the reporting window.</summary>
+    PulseAnalyticsDto Analytics,
     /// <summary>Ordered most-recent-first.</summary>
     IReadOnlyList<PulseActivityLogEntryDto> Log);

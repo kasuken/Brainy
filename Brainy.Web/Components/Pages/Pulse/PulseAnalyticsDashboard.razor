@@ -1,0 +1,719 @@
+@using Brainy.Application.DTOs.Pulse
+
+<section class="pulse-analytics" aria-labelledby="pulse-patterns-heading">
+    <div class="pulse-section-heading">
+        <div>
+            <span class="pulse-section-heading__eyebrow">Patterns, not just totals</span>
+            <h2 id="pulse-patterns-heading" class="pulse-section-heading__title">Your productive rhythm</h2>
+        </div>
+        <MudIcon Icon="@Icons.Material.Outlined.AutoGraph"
+                 Class="pulse-section-heading__icon"
+                 aria-hidden="true" />
+    </div>
+
+    @if (!HasAnyActivity)
+    {
+        <div class="pulse-analytics-empty" role="status">
+            <MudIcon Icon="@Icons.Material.Outlined.QueryStats" aria-hidden="true" />
+            <div>
+                <strong>Your rhythm will emerge here.</strong>
+                <span>Process a note, distill an idea, complete work, or publish an output to start building a useful pattern.</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <article class="pulse-rhythm-insight">
+            <div class="pulse-rhythm-insight__signal" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="pulse-rhythm-insight__copy">
+                <span class="pulse-rhythm-insight__kicker">@InsightKicker</span>
+                <h3>@InsightTitle</h3>
+                <p>@CoachingMessage</p>
+            </div>
+            <div class="pulse-rhythm-insight__facts">
+                <div>
+                    <span>Leading weekday</span>
+                    <strong>@(Analytics.MostProductiveWeekday ?? "Still forming")</strong>
+                </div>
+                <div>
+                    <span>Leading time block</span>
+                    <strong>@(Analytics.MostProductiveTimeBlock ?? "Still forming")</strong>
+                </div>
+                <div>
+                    <span>Busiest date</span>
+                    <strong>@BusiestDateLabel</strong>
+                </div>
+            </div>
+        </article>
+
+        <div class="pulse-chart-grid">
+            <article class="pulse-chart-card pulse-chart-card--wide">
+                <div class="pulse-chart-card__head">
+                    <div>
+                        <span class="pulse-chart-card__kicker">Momentum</span>
+                        <h3>Activity across the period</h3>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Outlined.ShowChart" aria-hidden="true" />
+                </div>
+                <p class="pulse-chart-card__description">
+                    Compare everything you did with the actions that moved knowledge or work forward.
+                </p>
+                <div class="pulse-chart-shell"
+                     role="img"
+                     aria-label="@MomentumAriaLabel">
+                    <MudChart ChartType="ChartType.Line"
+                              ChartSeries="_momentumSeries"
+                              XAxisLabels="_dailyLabels"
+                              ChartOptions="_momentumOptions"
+                              AxisChartOptions="_axisOptions"
+                              LegendPosition="Position.Bottom"
+                              Width="100%"
+                              Height="280px" />
+                </div>
+            </article>
+
+            <article class="pulse-chart-card">
+                <div class="pulse-chart-card__head">
+                    <div>
+                        <span class="pulse-chart-card__kicker">Weekly rhythm</span>
+                        <h3>Forward progress by weekday</h3>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Outlined.DateRange" aria-hidden="true" />
+                </div>
+                <p class="pulse-chart-card__description">Average forward-progress actions per occurrence of each weekday.</p>
+                <div class="pulse-chart-shell"
+                     role="img"
+                     aria-label="@WeekdayAriaLabel">
+                    <MudChart ChartType="ChartType.Bar"
+                              ChartSeries="_weekdaySeries"
+                              XAxisLabels="_weekdayLabels"
+                              ChartOptions="_barOptions"
+                              AxisChartOptions="_axisOptions"
+                              Width="100%"
+                              Height="245px" />
+                </div>
+            </article>
+
+            <article class="pulse-chart-card">
+                <div class="pulse-chart-card__head">
+                    <div>
+                        <span class="pulse-chart-card__kicker">Energy map</span>
+                        <h3>Total forward progress by time</h3>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Outlined.Schedule" aria-hidden="true" />
+                </div>
+                <p class="pulse-chart-card__description">Total actions in your local time, divided into equal four-hour blocks.</p>
+                <div class="pulse-chart-shell"
+                     role="img"
+                     aria-label="@TimeBlockAriaLabel">
+                    <MudChart ChartType="ChartType.Bar"
+                              ChartSeries="_timeBlockSeries"
+                              XAxisLabels="_timeBlockLabels"
+                              ChartOptions="_barOptions"
+                              AxisChartOptions="_timeAxisOptions"
+                              Width="100%"
+                              Height="245px" />
+                </div>
+            </article>
+
+            <article class="pulse-chart-card pulse-chart-card--mix">
+                <div class="pulse-chart-card__head">
+                    <div>
+                        <span class="pulse-chart-card__kicker">Balance</span>
+                        <h3>How your activity is spent</h3>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Outlined.DonutLarge" aria-hidden="true" />
+                </div>
+                <p class="pulse-chart-card__description">
+                    A CODE-oriented view of capture, organization, distillation, execution, and upkeep.
+                </p>
+                <div class="pulse-mix-layout">
+                    <div class="pulse-chart-shell pulse-chart-shell--donut"
+                         role="img"
+                         aria-label="@ActivityMixAriaLabel">
+                        <MudChart ChartType="ChartType.Donut"
+                                  InputData="_activityMixData"
+                                  InputLabels="_activityMixLabels"
+                                  ChartOptions="_mixOptions"
+                                  Width="210px"
+                                  Height="210px" />
+                        <div class="pulse-donut-center" aria-hidden="true">
+                            <strong>@Analytics.ForwardProgressPercentage.ToString("0")%</strong>
+                            <span>forward</span>
+                        </div>
+                    </div>
+                    <div class="pulse-mix-legend">
+                        @for (var index = 0; index < Analytics.ActivityMix.Count; index++)
+                        {
+                            var bucket = Analytics.ActivityMix[index];
+                            <div class="pulse-mix-legend__item">
+                                <span class="pulse-mix-legend__swatch pulse-mix-legend__swatch--@index" aria-hidden="true"></span>
+                                <span class="pulse-mix-legend__label">@bucket.Label</span>
+                                <strong>@bucket.Value.ToString("0")</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </article>
+        </div>
+    }
+</section>
+
+<style>
+    .pulse-analytics {
+        margin: 2rem 0 2.5rem;
+    }
+
+    .pulse-section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .pulse-section-heading__eyebrow,
+    .pulse-chart-card__kicker,
+    .pulse-rhythm-insight__kicker {
+        display: block;
+        margin-bottom: .25rem;
+        color: var(--clay);
+        font-size: .67rem;
+        font-weight: 800;
+        letter-spacing: .13em;
+        text-transform: uppercase;
+    }
+
+    .pulse-section-heading__title {
+        margin: 0;
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: clamp(1.45rem, 3vw, 2rem);
+        line-height: 1.1;
+    }
+
+    .pulse-section-heading__icon {
+        color: var(--clay);
+        font-size: 2rem !important;
+    }
+
+    .pulse-analytics-empty {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        min-height: 120px;
+        padding: 1.25rem;
+        border: 1px dashed var(--line);
+        border-radius: 18px;
+        background: var(--paper-raised);
+        color: var(--ink-soft);
+    }
+
+    .pulse-analytics-empty .mud-icon-root {
+        color: var(--clay);
+        font-size: 2rem;
+    }
+
+    .pulse-analytics-empty strong,
+    .pulse-analytics-empty span {
+        display: block;
+    }
+
+    .pulse-analytics-empty strong {
+        margin-bottom: .2rem;
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+    }
+
+    .pulse-rhythm-insight {
+        position: relative;
+        display: grid;
+        grid-template-columns: 92px minmax(0, 1.25fr) minmax(260px, .75fr);
+        align-items: center;
+        gap: 1.5rem;
+        overflow: hidden;
+        margin-bottom: 1rem;
+        padding: 1.5rem;
+        border: 1px solid color-mix(in srgb, var(--clay) 26%, var(--line));
+        border-radius: 22px;
+        background:
+            radial-gradient(circle at 8% 10%, var(--clay-soft), transparent 32%),
+            linear-gradient(135deg, var(--paper-raised), color-mix(in srgb, var(--paper-raised) 90%, #dce8df));
+        box-shadow: var(--shadow-sm);
+    }
+
+    .pulse-rhythm-insight::after {
+        position: absolute;
+        right: -5rem;
+        bottom: -8rem;
+        width: 18rem;
+        height: 18rem;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        content: "";
+        opacity: .55;
+    }
+
+    .pulse-rhythm-insight__signal {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 5px;
+        height: 72px;
+        padding: 12px;
+        border-radius: 18px;
+        background: var(--clay);
+        box-shadow: 0 12px 24px color-mix(in srgb, var(--clay) 28%, transparent);
+    }
+
+    .pulse-rhythm-insight__signal span {
+        width: 8px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.9);
+        animation: pulse-signal 1.4s ease-in-out infinite alternate;
+    }
+
+    .pulse-rhythm-insight__signal span:nth-child(1) { height: 22%; animation-delay: -.8s; }
+    .pulse-rhythm-insight__signal span:nth-child(2) { height: 52%; animation-delay: -.4s; }
+    .pulse-rhythm-insight__signal span:nth-child(3) { height: 88%; animation-delay: -.2s; }
+    .pulse-rhythm-insight__signal span:nth-child(4) { height: 64%; animation-delay: -.6s; }
+    .pulse-rhythm-insight__signal span:nth-child(5) { height: 38%; animation-delay: -1s; }
+
+    @@keyframes pulse-signal {
+        from { transform: scaleY(.72); opacity: .7; }
+        to { transform: scaleY(1); opacity: 1; }
+    }
+
+    .pulse-rhythm-insight__copy {
+        position: relative;
+        z-index: 1;
+    }
+
+    .pulse-rhythm-insight__copy h3 {
+        margin: 0 0 .35rem;
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: clamp(1.2rem, 2.5vw, 1.65rem);
+    }
+
+    .pulse-rhythm-insight__copy p {
+        max-width: 58ch;
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: .9rem;
+        line-height: 1.55;
+    }
+
+    .pulse-rhythm-insight__facts {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: .65rem;
+        padding-left: 1.25rem;
+        border-left: 1px solid var(--line);
+    }
+
+    .pulse-rhythm-insight__facts div {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: .75rem;
+    }
+
+    .pulse-rhythm-insight__facts span {
+        color: var(--ink-faint);
+        font-size: .7rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .pulse-rhythm-insight__facts strong {
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: .92rem;
+        text-align: right;
+    }
+
+    .pulse-chart-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    .pulse-chart-card {
+        min-width: 0;
+        padding: 1.2rem 1.2rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: var(--paper-raised);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .pulse-chart-card--wide {
+        grid-column: 1 / -1;
+    }
+
+    .pulse-chart-card__head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .pulse-chart-card__head h3 {
+        margin: 0;
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+    }
+
+    .pulse-chart-card__head > .mud-icon-root {
+        color: var(--clay);
+        opacity: .78;
+    }
+
+    .pulse-chart-card__description {
+        min-height: 2.4em;
+        margin: .5rem 0 .5rem;
+        color: var(--ink-faint);
+        font-size: .76rem;
+        line-height: 1.45;
+    }
+
+    .pulse-chart-shell {
+        min-width: 0;
+        color: var(--ink-soft);
+    }
+
+    .pulse-mix-layout {
+        display: grid;
+        grid-template-columns: minmax(190px, .8fr) minmax(190px, 1.2fr);
+        align-items: center;
+        gap: 1rem;
+        min-height: 245px;
+    }
+
+    .pulse-chart-shell--donut {
+        position: relative;
+        display: grid;
+        place-items: center;
+    }
+
+    .pulse-donut-center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+    }
+
+    .pulse-donut-center strong {
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: 1.35rem;
+        line-height: 1;
+    }
+
+    .pulse-donut-center span {
+        margin-top: .2rem;
+        color: var(--ink-faint);
+        font-size: .6rem;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .pulse-mix-legend {
+        display: grid;
+        gap: .6rem;
+    }
+
+    .pulse-mix-legend__item {
+        display: grid;
+        grid-template-columns: 10px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: .55rem;
+        font-size: .76rem;
+    }
+
+    .pulse-mix-legend__swatch {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+    }
+
+    .pulse-mix-legend__swatch--0 { background: #c9793d; }
+    .pulse-mix-legend__swatch--1 { background: #2f756d; }
+    .pulse-mix-legend__swatch--2 { background: #d1a13b; }
+    .pulse-mix-legend__swatch--3 { background: #536f91; }
+    .pulse-mix-legend__swatch--4 { background: #9c8072; }
+
+    .pulse-mix-legend__label {
+        overflow: hidden;
+        color: var(--ink-soft);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .pulse-mix-legend strong {
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: .9rem;
+    }
+
+    @@media (max-width: 900px) {
+        .pulse-rhythm-insight {
+            grid-template-columns: 76px minmax(0, 1fr);
+        }
+
+        .pulse-rhythm-insight__facts {
+            grid-column: 1 / -1;
+            grid-template-columns: repeat(3, 1fr);
+            padding: 1rem 0 0;
+            border-top: 1px solid var(--line);
+            border-left: 0;
+        }
+
+        .pulse-rhythm-insight__facts div {
+            display: block;
+        }
+
+        .pulse-rhythm-insight__facts strong {
+            display: block;
+            margin-top: .2rem;
+            text-align: left;
+        }
+    }
+
+    @@media (max-width: 720px) {
+        .pulse-chart-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .pulse-chart-card--wide {
+            grid-column: auto;
+        }
+
+        .pulse-mix-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 520px) {
+        .pulse-rhythm-insight {
+            grid-template-columns: 1fr;
+            padding: 1.15rem;
+        }
+
+        .pulse-rhythm-insight__signal {
+            width: 70px;
+            height: 58px;
+        }
+
+        .pulse-rhythm-insight__facts {
+            grid-template-columns: 1fr;
+        }
+
+        .pulse-chart-card {
+            padding: 1rem .75rem .75rem;
+        }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .pulse-rhythm-insight__signal span {
+            animation: none;
+        }
+    }
+</style>
+
+@code {
+    private static readonly ChartOptions MomentumOptions = new()
+    {
+        ChartPalette = ["#2f756d", "#c9793d"],
+        ShowLegend = true,
+        LineStrokeWidth = 3,
+        YAxisLines = true,
+        XAxisLines = false,
+        YAxisRequireZeroPoint = true,
+    };
+
+    private static readonly ChartOptions BarOptions = new()
+    {
+        ChartPalette = ["#c9793d"],
+        ShowLegend = false,
+        YAxisLines = true,
+        XAxisLines = false,
+    };
+
+    private static readonly ChartOptions MixOptions = new()
+    {
+        ChartPalette = ["#c9793d", "#2f756d", "#d1a13b", "#536f91", "#9c8072"],
+        ShowLegend = false,
+    };
+
+    private static readonly AxisChartOptions AxisOptions = new()
+    {
+        MatchBoundsToSize = true,
+    };
+
+    private static readonly AxisChartOptions TimeAxisOptions = new()
+    {
+        MatchBoundsToSize = true,
+        LabelRotation = 18,
+        LabelExtraHeight = 16,
+    };
+
+    /// <summary>The time-based analytics to visualize.</summary>
+    [Parameter, EditorRequired]
+    public PulseAnalyticsDto Analytics { get; set; } = default!;
+
+    private readonly ChartOptions _momentumOptions = MomentumOptions;
+    private readonly ChartOptions _barOptions = BarOptions;
+    private readonly ChartOptions _mixOptions = MixOptions;
+    private readonly AxisChartOptions _axisOptions = AxisOptions;
+    private readonly AxisChartOptions _timeAxisOptions = TimeAxisOptions;
+    private List<ChartSeries> _momentumSeries = [];
+    private List<ChartSeries> _weekdaySeries = [];
+    private List<ChartSeries> _timeBlockSeries = [];
+    private string[] _dailyLabels = [];
+    private string[] _weekdayLabels = [];
+    private string[] _timeBlockLabels = [];
+    private string[] _activityMixLabels = [];
+    private double[] _activityMixData = [];
+
+    private string InsightTitle =>
+        Analytics.ForwardProgressActivities == 0
+            ? "Turn capture into forward progress"
+            : HasEstablishedPattern
+                ? $"Protect {Analytics.MostProductiveTimeBlock} for meaningful work"
+                : $"{Analytics.MostProductiveTimeBlock} is leading - keep observing";
+
+    private string InsightKicker =>
+        HasEstablishedPattern ? "A planning cue" : "An early signal";
+
+    private string CoachingMessage
+    {
+        get
+        {
+            var captureCount = BucketValue("Capture");
+
+            if (Analytics.ForwardProgressActivities == 0)
+            {
+                return "This period contains activity, but no processing, distillation, completion, commitment, achievement, or expression yet. Pick one captured item and move it to a useful next state.";
+            }
+
+            if (!HasEstablishedPattern)
+            {
+                return "This window suggests where momentum may be forming. Compare at least two weeks and several forward-progress actions before reshaping your calendar around it.";
+            }
+
+            if (captureCount > Analytics.ForwardProgressActivities)
+            {
+                return "Capture is outpacing follow-through. Schedule a short processing block in your strongest window so saved knowledge becomes decisions, completed work, or reusable output.";
+            }
+
+            if (Analytics.ForwardProgressPercentage >= 60)
+            {
+                return "Most of your logged activity is moving work forward. Keep high-value tasks in this window and use lower-energy hours for capture and maintenance.";
+            }
+
+            return "You have a visible working rhythm. Reserve this window for processing, distillation, completion, and expression before reactive work fills the day.";
+        }
+    }
+
+    private string BusiestDateLabel =>
+        Analytics.BusiestDate is { } date
+            ? $"{date:ddd, MMM d} ({Analytics.BusiestDateActivities})"
+            : "Still forming";
+
+    private string MomentumAriaLabel =>
+        $"Daily activity chart with {Analytics.DailyActivity.Sum(day => day.TotalActivities)} total activities and {Analytics.ForwardProgressActivities} forward-progress activities.";
+
+    private string WeekdayAriaLabel =>
+        Analytics.MostProductiveWeekday is null
+            ? "No forward-progress weekday pattern is available."
+            : $"{Analytics.MostProductiveWeekday} has the highest average forward progress.";
+
+    private string TimeBlockAriaLabel =>
+        Analytics.MostProductiveTimeBlock is null
+            ? "No forward-progress time-of-day pattern is available."
+            : $"{Analytics.MostProductiveTimeBlock} has the most forward-progress activity.";
+
+    private bool HasAnyActivity =>
+        Analytics.DailyActivity.Any(day => day.TotalActivities > 0);
+
+    private bool HasEstablishedPattern =>
+        Analytics.DaysInPeriod >= 14 &&
+        Analytics.ForwardProgressActivities >= 5 &&
+        Analytics.DailyActivity.Count(day => day.ForwardProgressActivities > 0) >= 3;
+
+    private string ActivityMixAriaLabel =>
+        string.Join(", ", Analytics.ActivityMix.Select(bucket => $"{bucket.Label}: {bucket.Value:0}"));
+
+    protected override void OnParametersSet()
+    {
+        var labelStep = Analytics.DailyActivity.Count switch
+        {
+            <= 14 => 1,
+            <= 31 => 3,
+            <= 90 => 7,
+            _ => Math.Max(1, Analytics.DailyActivity.Count / 12),
+        };
+
+        _dailyLabels = Analytics.DailyActivity
+            .Select((day, index) =>
+                index % labelStep == 0 || index == Analytics.DailyActivity.Count - 1
+                    ? day.Date.ToString("MMM d")
+                    : string.Empty)
+            .ToArray();
+
+        _momentumSeries =
+        [
+            new ChartSeries
+            {
+                Name = "All activity",
+                Data = Analytics.DailyActivity.Select(day => (double)day.TotalActivities).ToArray(),
+                ShowDataMarkers = true,
+            },
+            new ChartSeries
+            {
+                Name = "Forward progress",
+                Data = Analytics.DailyActivity.Select(day => (double)day.ForwardProgressActivities).ToArray(),
+                ShowDataMarkers = true,
+            },
+        ];
+
+        _weekdayLabels = Analytics.ProductiveWeekdays.Select(bucket => bucket.Label).ToArray();
+        _weekdaySeries =
+        [
+            new ChartSeries
+            {
+                Name = "Average forward progress",
+                Data = Analytics.ProductiveWeekdays.Select(bucket => bucket.Value).ToArray(),
+            },
+        ];
+
+        _timeBlockLabels = Analytics.ProductiveTimeBlocks.Select(bucket => bucket.Label).ToArray();
+        _timeBlockSeries =
+        [
+            new ChartSeries
+            {
+                Name = "Forward progress",
+                Data = Analytics.ProductiveTimeBlocks.Select(bucket => bucket.Value).ToArray(),
+            },
+        ];
+
+        _activityMixLabels = Analytics.ActivityMix.Select(bucket => bucket.Label).ToArray();
+        _activityMixData = Analytics.ActivityMix.Select(bucket => bucket.Value).ToArray();
+    }
+
+    private double BucketValue(string label) =>
+        Analytics.ActivityMix.First(bucket => bucket.Label == label).Value;
+}
