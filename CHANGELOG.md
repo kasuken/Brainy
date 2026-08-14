@@ -1,5 +1,14 @@
 # Changelog
 
+## [4.0.7] - 2026-08-14
+
+### Fixed
+
+- **Inactive project tasks excluded from active task views** — Today, Tasks Hub, and current-task recommendations now require the parent project to be active, so tasks belonging to waiting projects no longer appear in active execution workflows.
+- **Regression coverage for waiting projects** — focused Today and Tasks Hub service tests now verify that tasks from waiting projects are excluded.
+
+---
+
 ## [4.0.6] - 2026-08-14
 
 ### Added
