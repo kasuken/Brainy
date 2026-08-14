@@ -21,15 +21,15 @@
 
 @if (_loading)
 {
-    <div class="ad-loading">
+    <div class="area-loading">
         <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
     </div>
 }
 else if (_detail is null)
 {
-    <div class="ad-notfound">
-        <span class="ad-notfound__glyph">◈</span>
-        <p class="ad-notfound__title">Area not found</p>
+    <div class="area-notfound">
+        <span class="area-notfound__glyph">◈</span>
+        <p class="area-notfound__title">Area not found</p>
         <MudButton Variant="Variant.Outlined" Color="Color.Primary"
                    StartIcon="@Icons.Material.Filled.ArrowBack"
                    OnClick='() => Nav.NavigateTo("/areas")'>
@@ -40,33 +40,33 @@ else if (_detail is null)
 else
 {
     <!-- ── Header ──────────────────────────────────────────────────── -->
-    <div class="ad-header">
-        <div class="ad-breadcrumb">
-            <button type="button" class="ad-back" @onclick='() => Nav.NavigateTo("/areas")'>
+    <div class="area-header">
+        <div class="area-breadcrumb">
+            <button type="button" class="area-back" @onclick='() => Nav.NavigateTo("/areas")'>
                 <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
                     <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
                 </svg>
                 Areas
             </button>
-            <span class="ad-breadcrumb__sep">›</span>
-            <span class="ad-breadcrumb__current">@_detail.Emoji @_detail.Name</span>
+            <span class="area-breadcrumb__sep">›</span>
+            <span class="area-breadcrumb__current">@_detail.Emoji @_detail.Name</span>
         </div>
 
-        <div class="ad-title-row">
-            <div class="ad-title-block">
-                <div class="ad-title-top">
-                    <h1 class="ad-title">@_detail.Emoji @_detail.Name</h1>
+        <div class="area-title-row">
+            <div class="area-title-block">
+                <div class="area-title-top">
+                    <h1 class="area-title">@_detail.Emoji @_detail.Name</h1>
                     <PageHelpButton Guide="HelpGuide" />
                     @if (_detail.IsArchived)
                     {
                         <MudChip T="string" Color="Color.Warning" Size="Size.Small"
-                                 Class="ad-archived-chip">
+                                 Class="area-archived-chip">
                             Archived
                         </MudChip>
                     }
                 </div>
             </div>
-            <div class="ad-actions">
+            <div class="area-actions">
                 <MudButton Variant="Variant.Outlined" Color="Color.Default"
                            StartIcon="@Icons.Material.Filled.Edit"
                            Size="Size.Small" OnClick="OpenEditDialogAsync">
@@ -93,65 +93,65 @@ else
     </div>
 
     <!-- ── Dashboard Summary Strip ──────────────────────────────── -->
-    <div class="ad-stats">
-        <div class="ad-stat-tile">
-            <span class="ad-stat-tile__value @(_detail.ActiveProjectCount > 0 ? "ad-stat-tile__value--clay" : "")">
+    <div class="area-stats">
+        <div class="area-stat-tile">
+            <span class="area-stat-tile__value @(_detail.ActiveProjectCount > 0 ? "area-stat-tile__value--clay" : "")">
                 @_detail.ActiveProjectCount
             </span>
-            <span class="ad-stat-tile__label">Active Projects</span>
+            <span class="area-stat-tile__label">Active Projects</span>
         </div>
-        <div class="ad-stat-tile">
-            <span class="ad-stat-tile__value @(_detail.OpenTaskCount > 0 ? "ad-stat-tile__value--red" : "")">
+        <div class="area-stat-tile">
+            <span class="area-stat-tile__value @(_detail.OpenTaskCount > 0 ? "area-stat-tile__value--red" : "")">
                 @_detail.OpenTaskCount
             </span>
-            <span class="ad-stat-tile__label">Open Tasks</span>
+            <span class="area-stat-tile__label">Open Tasks</span>
         </div>
-        <div class="ad-stat-tile">
-            <span class="ad-stat-tile__value @(_overdueTaskCount > 0 ? "ad-stat-tile__value--red" : "")">
+        <div class="area-stat-tile">
+            <span class="area-stat-tile__value @(_overdueTaskCount > 0 ? "area-stat-tile__value--red" : "")">
                 @_overdueTaskCount
             </span>
-            <span class="ad-stat-tile__label">Overdue</span>
+            <span class="area-stat-tile__label">Overdue</span>
         </div>
-        <div class="ad-stat-tile">
-            <span class="ad-stat-tile__value @(_detail.RecentNoteCount > 0 ? "ad-stat-tile__value--sage" : "")">
+        <div class="area-stat-tile">
+            <span class="area-stat-tile__value @(_detail.RecentNoteCount > 0 ? "area-stat-tile__value--sage" : "")">
                 @_detail.RecentNoteCount
             </span>
-            <span class="ad-stat-tile__label">Notes</span>
+            <span class="area-stat-tile__label">Notes</span>
         </div>
-        <div class="ad-stat-tile">
-            <span class="ad-stat-tile__value @(_areaIdeas.Count > 0 ? "ad-stat-tile__value--clay" : "")">
+        <div class="area-stat-tile">
+            <span class="area-stat-tile__value @(_areaIdeas.Count > 0 ? "area-stat-tile__value--clay" : "")">
                 @_areaIdeas.Count
             </span>
-            <span class="ad-stat-tile__label">Ideas</span>
+            <span class="area-stat-tile__label">Ideas</span>
         </div>
     </div>
 
     <!-- ── Purpose & Description ────────────────────────────────── -->
     @if (!string.IsNullOrWhiteSpace(_detail.Purpose) || !string.IsNullOrWhiteSpace(_detail.Description))
     {
-        <div class="ad-section ad-section--meta">
+        <div class="area-section area-section--meta">
             @if (!string.IsNullOrWhiteSpace(_detail.Purpose))
             {
-                <div class="ad-purpose">
-                    <span class="ad-meta-label">Purpose</span>
-                    <p class="ad-purpose__text">@_detail.Purpose</p>
+                <div class="area-purpose">
+                    <span class="area-meta-label">Purpose</span>
+                    <p class="area-purpose__text">@_detail.Purpose</p>
                 </div>
             }
             @if (!string.IsNullOrWhiteSpace(_detail.Description))
             {
-                <p class="ad-description">@_detail.Description</p>
+                <p class="area-description">@_detail.Description</p>
             }
         </div>
     }
 
     <!-- ── Related Projects ─────────────────────────────────────── -->
-    <div class="ad-section">
-        <div class="ad-section-head">
-            <div class="ad-section-head__left">
-                <h2 class="ad-section-title">Projects</h2>
+    <div class="area-section">
+        <div class="area-section-head">
+            <div class="area-section-head__left">
+                <h2 class="area-section-title">Projects</h2>
                 @if (_linkedProjects.Count > 0)
                 {
-                    <span class="ad-count-badge">@_linkedProjects.Count</span>
+                    <span class="area-count-badge">@_linkedProjects.Count</span>
                 }
             </div>
             <MudButton Variant="Variant.Text" Color="Color.Primary"
@@ -167,7 +167,7 @@ else
 
         @if (_showLinkProjectPicker)
         {
-            <div id="area-project-picker" class="ad-picker-panel">
+            <div id="area-project-picker" class="area-picker-panel">
                 <MudSelect T="Guid?" @bind-Value="_selectedProjectId"
                            Label="Select a project"
                            Variant="Variant.Outlined" Margin="Margin.Dense"
@@ -178,7 +178,7 @@ else
                         <MudSelectItem T="Guid?" Value="p.Id">@p.Name</MudSelectItem>
                     }
                 </MudSelect>
-                <div class="ad-picker-panel__actions">
+                <div class="area-picker-panel__actions">
                     <MudButton Variant="Variant.Text" Size="Size.Small"
                                OnClick="ToggleLinkProjectPicker">Cancel</MudButton>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary"
@@ -194,31 +194,31 @@ else
                 </div>
                 @if (_availableProjects.Count == 0)
                 {
-                    <p class="ad-picker-empty">No other non-archived projects are available to assign to this area.</p>
+                    <p class="area-picker-empty">No other non-archived projects are available to assign to this area.</p>
                 }
             </div>
         }
 
         @if (_linkedProjects.Count == 0)
         {
-            <div class="ad-empty">
-                <span class="ad-empty__icon">📂</span>
+            <div class="area-empty">
+                <span class="area-empty__icon">📂</span>
                 <p>No projects assigned to this area yet.</p>
             </div>
         }
         else
         {
-            <div class="ad-list">
+            <div class="area-list">
                 @foreach (var project in _linkedProjects)
                 {
-                    <div class="ad-row">
-                        <div class="ad-row__info">
-                            <a class="ad-row__name" href="/projects/@project.Id">@project.Name</a>
-                            <div class="ad-row__badges">
-                                <span class="ad-badge ad-badge--status ad-status--@project.Status.ToString().ToLower()">
+                    <div class="area-row">
+                        <div class="area-row__info">
+                            <a class="area-row__name" href="/projects/@project.Id">@project.Name</a>
+                            <div class="area-row__badges">
+                                <span class="area-badge area-badge--status area-status--@project.Status.ToString().ToLower()">
                                     @ProjectStatusLabel(project.Status)
                                 </span>
-                                <span class="ad-badge ad-badge--priority ad-priority--@project.Priority.ToString().ToLower()">
+                                <span class="area-badge area-badge--priority area-priority--@project.Priority.ToString().ToLower()">
                                     @PriorityLabel(project.Priority)
                                 </span>
                             </div>
@@ -230,50 +230,50 @@ else
     </div>
 
     <!-- ── Open Tasks ───────────────────────────────────────────── -->
-    <div class="ad-section">
-        <div class="ad-section-head">
-            <div class="ad-section-head__left">
-                <h2 class="ad-section-title">Open Tasks</h2>
+    <div class="area-section">
+        <div class="area-section-head">
+            <div class="area-section-head__left">
+                <h2 class="area-section-title">Open Tasks</h2>
                 @if (_areaTasks.Count > 0)
                 {
-                    <span class="ad-count-badge">@_areaTasks.Count</span>
+                    <span class="area-count-badge">@_areaTasks.Count</span>
                 }
             </div>
         </div>
 
         @if (_linkedProjects.Count == 0)
         {
-            <div class="ad-empty">
-                <span class="ad-empty__icon">✅</span>
+            <div class="area-empty">
+                <span class="area-empty__icon">✅</span>
                 <p>Assign a project to this area to see its open tasks here.</p>
             </div>
         }
         else if (_areaTasks.Count == 0)
         {
-            <div class="ad-empty">
-                <span class="ad-empty__icon">✅</span>
+            <div class="area-empty">
+                <span class="area-empty__icon">✅</span>
                 <p>No open tasks across this area's projects — all caught up!</p>
             </div>
         }
         else
         {
-            <div class="ad-list">
+            <div class="area-list">
                 @foreach (var row in _areaTasks)
                 {
-                    <div class="ad-row">
-                        <div class="ad-row__info">
-                            <a class="ad-row__name" href="/projects/@row.ProjectId">@row.Item.Title</a>
-                            <div class="ad-row__badges">
-                                <span class="ad-badge ad-badge--status ad-status--@row.Item.Status.ToString().ToLower()">
+                    <div class="area-row">
+                        <div class="area-row__info">
+                            <a class="area-row__name" href="/projects/@row.ProjectId">@row.Item.Title</a>
+                            <div class="area-row__badges">
+                                <span class="area-badge area-badge--status area-status--@row.Item.Status.ToString().ToLower()">
                                     @TaskStatusLabel(row.Item.Status)
                                 </span>
-                                <span class="ad-badge ad-badge--priority ad-priority--@row.Item.Priority.ToString().ToLower()">
+                                <span class="area-badge area-badge--priority area-priority--@row.Item.Priority.ToString().ToLower()">
                                     @TaskPriorityLabel(row.Item.Priority)
                                 </span>
-                                <span class="ad-badge ad-badge--project">@row.ProjectName</span>
+                                <span class="area-badge area-badge--project">@row.ProjectName</span>
                                 @if (row.Item.DueDate.HasValue)
                                 {
-                                    <span class="ad-badge ad-badge--due @(IsOverdue(row.Item) ? "ad-badge--overdue" : "")">
+                                    <span class="area-badge area-badge--due @(IsOverdue(row.Item) ? "area-badge--overdue" : "")">
                                         @(IsOverdue(row.Item) ? "Overdue " : "Due ")@row.Item.DueDate.Value.ToString("MMM d")
                                     </span>
                                 }
@@ -286,13 +286,13 @@ else
     </div>
 
     <!-- ── Related Ideas ────────────────────────────────────────── -->
-    <div class="ad-section">
-        <div class="ad-section-head">
-            <div class="ad-section-head__left">
-                <h2 class="ad-section-title">Ideas</h2>
+    <div class="area-section">
+        <div class="area-section-head">
+            <div class="area-section-head__left">
+                <h2 class="area-section-title">Ideas</h2>
                 @if (_areaIdeas.Count > 0)
                 {
-                    <span class="ad-count-badge">@_areaIdeas.Count</span>
+                    <span class="area-count-badge">@_areaIdeas.Count</span>
                 }
             </div>
             <MudButton Variant="Variant.Text" Color="Color.Primary"
@@ -305,24 +305,24 @@ else
 
         @if (_areaIdeas.Count == 0)
         {
-            <div class="ad-empty">
-                <span class="ad-empty__icon">💡</span>
+            <div class="area-empty">
+                <span class="area-empty__icon">💡</span>
                 <p>No ideas linked to this area yet.</p>
             </div>
         }
         else
         {
-            <div class="ad-list">
+            <div class="area-list">
                 @foreach (var idea in _areaIdeas)
                 {
-                    <div class="ad-row">
-                        <div class="ad-row__info">
-                            <a class="ad-row__name" href="/ideas/@idea.Id">@idea.Title</a>
-                            <div class="ad-row__badges">
-                                <span class="ad-badge ad-badge--status ad-status--@idea.Status.ToString().ToLower()">
+                    <div class="area-row">
+                        <div class="area-row__info">
+                            <a class="area-row__name" href="/ideas/@idea.Id">@idea.Title</a>
+                            <div class="area-row__badges">
+                                <span class="area-badge area-badge--status area-status--@idea.Status.ToString().ToLower()">
                                     @idea.Status.ToString()
                                 </span>
-                                <span class="ad-badge ad-badge--priority ad-priority--@idea.Priority.ToString().ToLower()">
+                                <span class="area-badge area-badge--priority area-priority--@idea.Priority.ToString().ToLower()">
                                     @idea.Priority.ToString()
                                 </span>
                             </div>
@@ -334,13 +334,13 @@ else
     </div>
 
     <!-- ── Related Notes ────────────────────────────────────────── -->
-    <div class="ad-section">
-        <div class="ad-section-head">
-            <div class="ad-section-head__left">
-                <h2 class="ad-section-title">Notes</h2>
+    <div class="area-section">
+        <div class="area-section-head">
+            <div class="area-section-head__left">
+                <h2 class="area-section-title">Notes</h2>
                 @if (_linkedNotes.Count > 0)
                 {
-                    <span class="ad-count-badge">@_linkedNotes.Count</span>
+                    <span class="area-count-badge">@_linkedNotes.Count</span>
                 }
             </div>
             <MudButton Variant="Variant.Text" Color="Color.Primary"
@@ -356,7 +356,7 @@ else
 
         @if (_showLinkNotePicker)
         {
-            <div id="area-note-picker" class="ad-picker-panel">
+            <div id="area-note-picker" class="area-picker-panel">
                 <MudSelect T="Guid?" @bind-Value="_selectedNoteId"
                            Label="Select a note"
                            Variant="Variant.Outlined" Margin="Margin.Dense"
@@ -367,7 +367,7 @@ else
                         <MudSelectItem T="Guid?" Value="n.Id">@n.Title</MudSelectItem>
                     }
                 </MudSelect>
-                <div class="ad-picker-panel__actions">
+                <div class="area-picker-panel__actions">
                     <MudButton Variant="Variant.Text" Size="Size.Small"
                                OnClick="ToggleLinkNotePicker">Cancel</MudButton>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary"
@@ -383,28 +383,28 @@ else
                 </div>
                 @if (_availableNotes.Count == 0)
                 {
-                    <p class="ad-picker-empty">No unlinked notes available to add.</p>
+                    <p class="area-picker-empty">No unlinked notes available to add.</p>
                 }
             </div>
         }
 
         @if (_linkedNotes.Count == 0)
         {
-            <div class="ad-empty">
-                <span class="ad-empty__icon">📝</span>
+            <div class="area-empty">
+                <span class="area-empty__icon">📝</span>
                 <p>No notes linked to this area yet.</p>
             </div>
         }
         else
         {
-            <div class="ad-list">
+            <div class="area-list">
                 @foreach (var note in _linkedNotes)
                 {
-                    <div class="ad-row">
-                        <div class="ad-row__info">
-                            <a class="ad-row__name" href="/notes">@note.Title</a>
-                            <div class="ad-row__badges">
-                                <span class="ad-badge ad-badge--para ad-para--@note.ParaCategory.ToString().ToLower()">
+                    <div class="area-row">
+                        <div class="area-row__info">
+                            <a class="area-row__name" href="/notes">@note.Title</a>
+                            <div class="area-row__badges">
+                                <span class="area-badge area-badge--para area-para--@note.ParaCategory.ToString().ToLower()">
                                     @ParaCategoryLabel(note.ParaCategory)
                                 </span>
                             </div>
@@ -413,7 +413,7 @@ else
                                        Size="Size.Small"
                                        title="Unlink note"
                                        Color="Color.Default"
-                                       Class="ad-row__unlink"
+                                       Class="area-row__unlink"
                                        OnClick="() => UnlinkNoteAsync(note.Id, note.Title)" />
                     </div>
                 }
@@ -422,13 +422,13 @@ else
     </div>
 
     <!-- ── Metadata footer ─────────────────────────────────────── -->
-    <div class="ad-meta-footer">
+    <div class="area-meta-footer">
         <span>Created <UserLocalTime Utc="_detail.CreatedAtUtc" /></span>
-        <span class="ad-meta-footer__sep">•</span>
+        <span class="area-meta-footer__sep">•</span>
         <span>Updated <UserLocalTime Utc="_detail.UpdatedAtUtc" /></span>
         @if (_detail.IsArchived && _detail.ArchivedAtUtc.HasValue)
         {
-            <span class="ad-meta-footer__sep">•</span>
+            <span class="area-meta-footer__sep">•</span>
             <span>Archived <UserLocalTime Utc="_detail.ArchivedAtUtc" /></span>
         }
     </div>
@@ -460,7 +460,7 @@ else
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Loading / not-found */
-.ad-loading, .ad-notfound {
+.area-loading, .area-notfound {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -468,13 +468,13 @@ else
     gap: 1rem;
     padding: 6rem 1rem;
 }
-.ad-notfound__glyph {
+.area-notfound__glyph {
     font-size: 3rem;
     opacity: .15;
     font-family: var(--font-display);
     color: var(--clay);
 }
-.ad-notfound__title {
+.area-notfound__title {
     font-family: var(--font-display);
     font-size: 1.4rem;
     color: var(--ink);
@@ -482,7 +482,7 @@ else
 }
 
 /* Breadcrumb */
-.ad-breadcrumb {
+.area-breadcrumb {
     display: flex;
     align-items: center;
     gap: .4rem;
@@ -490,7 +490,7 @@ else
     font-size: .8rem;
     color: var(--ink-faint);
 }
-.ad-back {
+.area-back {
     background: none;
     border: none;
     cursor: pointer;
@@ -504,27 +504,27 @@ else
     padding: 0;
     transition: opacity .15s;
 }
-.ad-back:hover { opacity: .7; }
-.ad-breadcrumb__sep { color: var(--line-strong); }
-.ad-breadcrumb__current { color: var(--ink-soft); }
+.area-back:hover { opacity: .7; }
+.area-breadcrumb__sep { color: var(--line-strong); }
+.area-breadcrumb__current { color: var(--ink-soft); }
 
 /* Header */
-.ad-header { margin-bottom: 1.5rem; }
+.area-header { margin-bottom: 1.5rem; }
 
-.ad-title-row {
+.area-title-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 1rem;
 }
-.ad-title-block { flex: 1; min-width: 0; }
-.ad-title-top {
+.area-title-block { flex: 1; min-width: 0; }
+.area-title-top {
     display: flex;
     align-items: center;
     gap: .75rem;
     flex-wrap: wrap;
 }
-.ad-title {
+.area-title {
     font-family: var(--font-display);
     font-size: clamp(1.6rem, 3.5vw, 2.4rem);
     font-weight: 500;
@@ -534,8 +534,8 @@ else
     letter-spacing: -.02em;
     line-height: 1.15;
 }
-.ad-archived-chip { flex-shrink: 0; }
-.ad-actions {
+.area-archived-chip { flex-shrink: 0; }
+.area-actions {
     display: flex;
     flex-direction: column;
     gap: .4rem;
@@ -543,13 +543,13 @@ else
 }
 
 /* Stats strip */
-.ad-stats {
+.area-stats {
     display: flex;
     flex-wrap: wrap;
     gap: .75rem;
     margin-bottom: 1.75rem;
 }
-.ad-stat-tile {
+.area-stat-tile {
     background: var(--paper-raised);
     border: 1px solid var(--line);
     border-radius: 12px;
@@ -560,17 +560,17 @@ else
     min-width: 110px;
     box-shadow: var(--shadow-sm);
 }
-.ad-stat-tile__value {
+.area-stat-tile__value {
     font-family: var(--font-display);
     font-size: 1.75rem;
     font-weight: 500;
     color: var(--ink-soft);
     line-height: 1;
 }
-.ad-stat-tile__value--clay  { color: var(--clay); }
-.ad-stat-tile__value--red   { color: #b03a18; }
-.ad-stat-tile__value--sage  { color: var(--sage); }
-.ad-stat-tile__label {
+.area-stat-tile__value--clay  { color: var(--clay); }
+.area-stat-tile__value--red   { color: #b03a18; }
+.area-stat-tile__value--sage  { color: var(--sage); }
+.area-stat-tile__label {
     font-size: .7rem;
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -579,36 +579,36 @@ else
 }
 
 /* Section */
-.ad-section {
+.area-section {
     margin-bottom: 2rem;
     border: 1px solid var(--line);
     border-radius: 14px;
     padding: 1.25rem 1.4rem;
     background: var(--paper-raised);
 }
-.ad-section--meta {
+.area-section--meta {
     background: var(--clay-soft);
     border-color: rgba(192,86,29,.18);
 }
-.ad-section-head {
+.area-section-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 1rem;
 }
-.ad-section-head__left {
+.area-section-head__left {
     display: flex;
     align-items: center;
     gap: .5rem;
 }
-.ad-section-title {
+.area-section-title {
     font-family: var(--font-display);
     font-size: 1.15rem;
     font-weight: 500;
     color: var(--ink);
     margin: 0;
 }
-.ad-count-badge {
+.area-count-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -624,7 +624,7 @@ else
 }
 
 /* Purpose block */
-.ad-meta-label {
+.area-meta-label {
     display: block;
     font-size: .68rem;
     letter-spacing: .08em;
@@ -633,20 +633,20 @@ else
     color: var(--clay);
     margin-bottom: .3rem;
 }
-.ad-purpose {
+.area-purpose {
     padding: .6rem .85rem;
     border-left: 3px solid var(--clay);
     background: rgba(255,255,255,.55);
     border-radius: 0 8px 8px 0;
     margin-bottom: .75rem;
 }
-.ad-purpose__text {
+.area-purpose__text {
     font-size: .9rem;
     color: var(--ink);
     margin: 0;
     line-height: 1.6;
 }
-.ad-description {
+.area-description {
     font-size: .88rem;
     color: var(--ink-soft);
     margin: 0;
@@ -654,8 +654,8 @@ else
 }
 
 /* Row list */
-.ad-list { display: flex; flex-direction: column; gap: .4rem; }
-.ad-row {
+.area-list { display: flex; flex-direction: column; gap: .4rem; }
+.area-row {
     display: flex;
     align-items: center;
     gap: .75rem;
@@ -665,8 +665,8 @@ else
     border-radius: 10px;
     transition: border-color .15s, box-shadow .15s;
 }
-.ad-row:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
-.ad-row__info {
+.area-row:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+.area-row__info {
     flex: 1;
     min-width: 0;
     display: flex;
@@ -674,7 +674,7 @@ else
     gap: .65rem;
     flex-wrap: wrap;
 }
-.ad-row__name {
+.area-row__name {
     font-size: .9rem;
     font-weight: 600;
     color: var(--ink);
@@ -685,13 +685,13 @@ else
     text-overflow: ellipsis;
     max-width: 280px;
 }
-.ad-row__name:hover { color: var(--clay); text-decoration: underline; }
-.ad-row__badges { display: flex; flex-wrap: wrap; gap: .3rem; }
-.ad-row__unlink { flex-shrink: 0; opacity: .35; transition: opacity .15s; }
-.ad-row:hover .ad-row__unlink { opacity: 1; }
+.area-row__name:hover { color: var(--clay); text-decoration: underline; }
+.area-row__badges { display: flex; flex-wrap: wrap; gap: .3rem; }
+.area-row__unlink { flex-shrink: 0; opacity: .35; transition: opacity .15s; }
+.area-row:hover .area-row__unlink { opacity: 1; }
 
 /* Badges */
-.ad-badge {
+.area-badge {
     display: inline-flex;
     align-items: center;
     padding: .15rem .55rem;
@@ -703,54 +703,54 @@ else
 }
 
 /* Status badges */
-.ad-status--notstarted { background: var(--paper-sunk); color: var(--ink-soft); }
-.ad-status--active     { background: rgba(111,122,90,.14); color: #4a5c38; }
-.ad-status--waiting    { background: rgba(205,154,58,.14); color: #7a5c0e; }
-.ad-status--completed  { background: rgba(192,86,29,.10); color: var(--clay-deep); }
-.ad-status--archived   { background: var(--paper-sunk); color: var(--ink-faint); }
-.ad-status--captured   { background: var(--paper-sunk); color: var(--ink-soft); }
-.ad-status--evaluating { background: rgba(205,154,58,.18); color: #7a5c0e; }
-.ad-status--incubated  { background: rgba(111,122,90,.18); color: #4a5c38; }
-.ad-status--committed  { background: rgba(111,122,90,.25); color: #354a28; }
-.ad-status--rejected   { background: rgba(176,58,24,.10); color: #b03a18; }
-.ad-status--shipped    { background: rgba(58,123,205,.14); color: #1a5aa0; }
+.area-status--notstarted { background: var(--paper-sunk); color: var(--ink-soft); }
+.area-status--active     { background: rgba(111,122,90,.14); color: #4a5c38; }
+.area-status--waiting    { background: rgba(205,154,58,.14); color: #7a5c0e; }
+.area-status--completed  { background: rgba(192,86,29,.10); color: var(--clay-deep); }
+.area-status--archived   { background: var(--paper-sunk); color: var(--ink-faint); }
+.area-status--captured   { background: var(--paper-sunk); color: var(--ink-soft); }
+.area-status--evaluating { background: rgba(205,154,58,.18); color: #7a5c0e; }
+.area-status--incubated  { background: rgba(111,122,90,.18); color: #4a5c38; }
+.area-status--committed  { background: rgba(111,122,90,.25); color: #354a28; }
+.area-status--rejected   { background: rgba(176,58,24,.10); color: #b03a18; }
+.area-status--shipped    { background: rgba(58,123,205,.14); color: #1a5aa0; }
 
 /* Priority badges */
-.ad-priority--critical { color: #b03a18; background: rgba(176,58,24,.10); }
-.ad-priority--high     { color: #d4722a; background: rgba(212,114,42,.10); }
-.ad-priority--medium   { color: #a07820; background: rgba(160,120,32,.10); }
-.ad-priority--low      { color: var(--sage); background: rgba(111,122,90,.10); }
+.area-priority--critical { color: #b03a18; background: rgba(176,58,24,.10); }
+.area-priority--high     { color: #d4722a; background: rgba(212,114,42,.10); }
+.area-priority--medium   { color: #a07820; background: rgba(160,120,32,.10); }
+.area-priority--low      { color: var(--sage); background: rgba(111,122,90,.10); }
 
 /* Task status badges (Todo / InProgress / Done reuse the palette above) */
-.ad-status--todo       { background: var(--paper-sunk); color: var(--ink-soft); }
-.ad-status--inprogress { background: rgba(58,123,205,.14); color: #1a5aa0; }
-.ad-status--done       { background: rgba(111,122,90,.14); color: #4a5c38; }
+.area-status--todo       { background: var(--paper-sunk); color: var(--ink-soft); }
+.area-status--inprogress { background: rgba(58,123,205,.14); color: #1a5aa0; }
+.area-status--done       { background: rgba(111,122,90,.14); color: #4a5c38; }
 
 /* Neutral project / due-date badges */
-.ad-badge--project {
+.area-badge--project {
     background: var(--paper-sunk);
     color: var(--ink-faint);
     text-transform: none;
     letter-spacing: 0;
     font-weight: 600;
 }
-.ad-badge--due {
+.area-badge--due {
     background: var(--paper-sunk);
     color: var(--ink-faint);
     text-transform: none;
     letter-spacing: 0;
     font-weight: 600;
 }
-.ad-badge--overdue { background: rgba(176,58,24,.12); color: #b03a18; }
+.area-badge--overdue { background: rgba(176,58,24,.12); color: #b03a18; }
 
 /* PARA category badges */
-.ad-para--project  { background: rgba(192,86,29,.10); color: var(--clay-deep); }
-.ad-para--area     { background: rgba(111,122,90,.14); color: #4a5c38; }
-.ad-para--resource { background: rgba(205,154,58,.14); color: #7a5c0e; }
-.ad-para--archive  { background: var(--paper-sunk); color: var(--ink-faint); }
+.area-para--project  { background: rgba(192,86,29,.10); color: var(--clay-deep); }
+.area-para--area     { background: rgba(111,122,90,.14); color: #4a5c38; }
+.area-para--resource { background: rgba(205,154,58,.14); color: #7a5c0e; }
+.area-para--archive  { background: var(--paper-sunk); color: var(--ink-faint); }
 
 /* Metadata footer */
-.ad-meta-footer {
+.area-meta-footer {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -759,10 +759,10 @@ else
     font-size: .78rem;
     color: var(--ink-faint);
 }
-.ad-meta-footer__sep { color: var(--line-strong); }
+.area-meta-footer__sep { color: var(--line-strong); }
 
 /* Empty state */
-.ad-empty {
+.area-empty {
     padding: 2.5rem 1rem;
     text-align: center;
     color: var(--ink-faint);
@@ -772,11 +772,11 @@ else
     align-items: center;
     gap: .5rem;
 }
-.ad-empty__icon { font-size: 2rem; opacity: .4; }
-.ad-empty p { margin: 0; }
+.area-empty__icon { font-size: 2rem; opacity: .4; }
+.area-empty p { margin: 0; }
 
 /* Inline picker panel */
-.ad-picker-panel {
+.area-picker-panel {
     background: var(--paper-sunk);
     border: 1px solid var(--line-strong);
     border-radius: 10px;
@@ -786,12 +786,12 @@ else
     flex-direction: column;
     gap: .65rem;
 }
-.ad-picker-panel__actions {
+.area-picker-panel__actions {
     display: flex;
     justify-content: flex-end;
     gap: .5rem;
 }
-.ad-picker-empty {
+.area-picker-empty {
     font-size: .8rem;
     color: var(--ink-faint);
     margin: 0;
@@ -799,11 +799,11 @@ else
 }
 
 @@media (max-width: 640px) {
-    .ad-title-row  { flex-direction: column; }
-    .ad-actions    { flex-direction: row; flex-wrap: wrap; }
-    .ad-stats      { gap: .5rem; }
-    .ad-stat-tile  { min-width: calc(50% - .375rem); }
-    .ad-row__name  { max-width: 180px; }
+    .area-title-row  { flex-direction: column; }
+    .area-actions    { flex-direction: row; flex-wrap: wrap; }
+    .area-stats      { gap: .5rem; }
+    .area-stat-tile  { min-width: calc(50% - .375rem); }
+    .area-row__name  { max-width: 180px; }
 }
 </style>
 
