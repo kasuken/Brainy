@@ -1,5 +1,14 @@
 # Changelog
 
+## [4.0.9] - 2026-08-14
+
+### Fixed
+
+- **Area Detail now renders reliably with ad blockers enabled** — Area Detail CSS class names no longer use ad-blocker-sensitive `ad-*` prefixes, preventing cosmetic filter lists from hiding page content or styling.
+- **Ad-blocker-safe naming regression tests** — markup tests now protect the Area Detail page from reintroducing CSS class names commonly targeted by content blockers.
+
+---
+
 ## [4.0.8] - 2026-08-14
 
 ### Fixed
