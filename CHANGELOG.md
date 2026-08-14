@@ -1,5 +1,14 @@
 # Changelog
 
+## [4.0.8] - 2026-08-14
+
+### Fixed
+
+- **Area summaries now match active content** — Area project, open-task, and recent-note counts now exclude archived records, archived-by-status projects, subtasks, and records owned by another user.
+- **Archived notes removed from active Area views** — archived notes no longer appear in an Area's linked-note list or as candidates to link to an active Area.
+
+---
+
 ## [4.0.7] - 2026-08-14
 
 ### Fixed
