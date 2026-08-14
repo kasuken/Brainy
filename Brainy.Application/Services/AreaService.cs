@@ -52,16 +52,28 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
 
         if (area is null) return null;
 
+        // These tiles sit directly above the lists that render the same records, so every
+        // filter here must mirror the list queries. A count that includes rows the sections
+        // below exclude renders as a populated summary above empty sections.
         var activeProjectCount = await context.Projects.AsNoTracking()
-            .CountAsync(p => p.AreaId == id && !p.IsArchived, cancellationToken).ConfigureAwait(false);
+            .CountAsync(p => p.AreaId == id && p.UserId == userId
+                          && !p.IsArchived && p.Status != ProjectStatus.Archived, cancellationToken)
+            .ConfigureAwait(false);
 
+        // Top-level tasks only: subtasks render nested under their parent rather than as
+        // standalone rows, so counting them here would overstate the outstanding work.
         var openTaskCount = await context.Tasks.AsNoTracking()
-            .CountAsync(t => t.Project.AreaId == id && !t.IsArchived && !t.Project.IsArchived
+            .CountAsync(t => t.Project.AreaId == id && t.UserId == userId
+                          && t.ParentTaskId == null
+                          && !t.IsArchived
+                          && !t.Project.IsArchived && t.Project.Status != ProjectStatus.Archived
                           && t.Status != TaskItemStatus.Done && t.Status != TaskItemStatus.Archived, cancellationToken)
             .ConfigureAwait(false);
 
         var recentNoteCount = await context.Notes.AsNoTracking()
-            .CountAsync(n => n.AreaId == id && n.UserId == userId, cancellationToken).ConfigureAwait(false);
+            .CountAsync(n => n.AreaId == id && n.UserId == userId
+                          && !n.IsArchived && n.Status != NoteStatus.Archived, cancellationToken)
+            .ConfigureAwait(false);
 
         return new AreaDetailDto(area.Id, area.Name, area.Description, area.Purpose,
             area.IsArchived, area.ArchivedAtUtc, area.CreatedAtUtc, area.UpdatedAtUtc,

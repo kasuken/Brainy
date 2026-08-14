@@ -48,6 +48,29 @@ public class AreaServiceTests
     private static Project CreateProject(string userId, Guid areaId, bool isArchived = false)
         => new() { Id = Guid.NewGuid(), UserId = userId, Name = "P", AreaId = areaId, IsArchived = isArchived };
 
+    private static TaskItem CreateTask(string userId, Guid projectId, Guid? parentTaskId = null)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Title = "T",
+            ProjectId = projectId,
+            ParentTaskId = parentTaskId,
+            Status = TaskItemStatus.Todo
+        };
+
+    private static Note CreateNote(string userId, Guid areaId, bool isArchived = false)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Title = "N",
+            Content = "c",
+            AreaId = areaId,
+            IsArchived = isArchived,
+            Status = isArchived ? NoteStatus.Archived : NoteStatus.Active
+        };
+
     // ── Create ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -142,6 +165,85 @@ public class AreaServiceTests
 
         result.Should().NotBeNull();
         result!.ActiveProjectCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_ExcludesProjectsArchivedByStatusFromProjectCount()
+    {
+        var (sut, db) = BuildService(nameof(GetDetailAsync_ExcludesProjectsArchivedByStatusFromProjectCount));
+        var area = CreateArea(DefaultUserId);
+        db.Areas.Add(area);
+        var statusArchived = CreateProject(DefaultUserId, area.Id);
+        statusArchived.Status = ProjectStatus.Archived;
+        db.Projects.Add(statusArchived);
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetDetailAsync(area.Id);
+
+        result!.ActiveProjectCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_ExcludesOtherUsersProjectsFromProjectCount()
+    {
+        var (sut, db) = BuildService(nameof(GetDetailAsync_ExcludesOtherUsersProjectsFromProjectCount));
+        var area = CreateArea(DefaultUserId);
+        db.Areas.Add(area);
+        db.Projects.Add(CreateProject(OtherUserId, area.Id));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetDetailAsync(area.Id);
+
+        result!.ActiveProjectCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_ExcludesSubtasksFromOpenTaskCount()
+    {
+        var (sut, db) = BuildService(nameof(GetDetailAsync_ExcludesSubtasksFromOpenTaskCount));
+        var area = CreateArea(DefaultUserId);
+        db.Areas.Add(area);
+        var project = CreateProject(DefaultUserId, area.Id);
+        db.Projects.Add(project);
+        var parent = CreateTask(DefaultUserId, project.Id);
+        db.Tasks.Add(parent);
+        db.Tasks.Add(CreateTask(DefaultUserId, project.Id, parentTaskId: parent.Id));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetDetailAsync(area.Id);
+
+        result!.OpenTaskCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_ExcludesOtherUsersTasksFromOpenTaskCount()
+    {
+        var (sut, db) = BuildService(nameof(GetDetailAsync_ExcludesOtherUsersTasksFromOpenTaskCount));
+        var area = CreateArea(DefaultUserId);
+        db.Areas.Add(area);
+        var project = CreateProject(DefaultUserId, area.Id);
+        db.Projects.Add(project);
+        db.Tasks.Add(CreateTask(OtherUserId, project.Id));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetDetailAsync(area.Id);
+
+        result!.OpenTaskCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_ExcludesArchivedNotesFromNoteCount()
+    {
+        var (sut, db) = BuildService(nameof(GetDetailAsync_ExcludesArchivedNotesFromNoteCount));
+        var area = CreateArea(DefaultUserId);
+        db.Areas.Add(area);
+        db.Notes.Add(CreateNote(DefaultUserId, area.Id));
+        db.Notes.Add(CreateNote(DefaultUserId, area.Id, isArchived: true));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetDetailAsync(area.Id);
+
+        result!.RecentNoteCount.Should().Be(1);
     }
 
     // ── Archive / Restore ─────────────────────────────────────────────────────

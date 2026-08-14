@@ -902,9 +902,13 @@ else
             _linkedProjects    = [.. allProjects.Where(p => p.AreaId == AreaId)];
             _availableProjects = [.. allProjects.Where(p => p.AreaId != AreaId && !p.IsArchived)];
 
-            var allNotes = await NoteService.GetAllAsync();
-            _linkedNotes    = [.. allNotes.Where(n => n.AreaId == AreaId)];
-            _availableNotes = [.. allNotes.Where(n => n.AreaId is null)];
+            // Archived notes belong to Archives only — they must not surface in this
+            // active area view, nor be offered as link candidates.
+            var activeNotes = (await NoteService.GetAllAsync())
+                .Where(n => !n.IsArchived && n.Status != NoteStatus.Archived)
+                .ToList();
+            _linkedNotes    = [.. activeNotes.Where(n => n.AreaId == AreaId)];
+            _availableNotes = [.. activeNotes.Where(n => n.AreaId is null)];
 
             _areaIdeas = await IdeaService.GetByAreaAsync(AreaId);
 
