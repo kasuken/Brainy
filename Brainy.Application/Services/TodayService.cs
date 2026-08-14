@@ -11,7 +11,7 @@ namespace Brainy.Application.Services;
 
 /// <summary>
 /// Provides task aggregations for the Today screen.
-/// Every query enforces: non-archived task, non-archived project, top-level only.
+/// Every query enforces: active project, non-archived task, top-level only.
 /// </summary>
 internal sealed class TodayService(
     IApplicationDbContext context,
@@ -19,7 +19,7 @@ internal sealed class TodayService(
     IProjectPrioritizationService projectPrioritizationService,
     IUserTimeZoneService userTimeZone) : ITodayService
 {
-    // Base active-task predicate: excludes archived tasks, tasks from archived projects,
+    // Base active-task predicate: excludes archived tasks, tasks from non-active or archived projects,
     // done/archived statuses, and subtasks.
     private static readonly TaskItemStatus[] _inactiveStatuses =
         [TaskItemStatus.Done, TaskItemStatus.Archived];
@@ -207,13 +207,14 @@ internal sealed class TodayService(
 
     /// <summary>
     /// Base queryable that enforces the "active task" contract:
-    /// non-archived, belongs to a non-archived project, top-level only, owned by the user.
+    /// non-archived, belongs to an active non-archived project, top-level only, owned by the user.
     /// </summary>
     private IQueryable<Domain.Entities.TaskItem> ActiveBase(string userId) =>
         context.Tasks
             .AsNoTracking()
             .Where(t => t.UserId == userId
                         && !t.IsArchived
+                        && t.Project.Status == ProjectStatus.Active
                         && !t.Project.IsArchived
                         && t.ParentTaskId == null);
 

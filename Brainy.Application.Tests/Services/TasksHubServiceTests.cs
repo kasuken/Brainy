@@ -53,13 +53,14 @@ public class TasksHubServiceTests
     private static Project CreateProject(
         string userId,
         bool isArchived = false,
-        ProjectPriority priority = ProjectPriority.Medium)
+        ProjectPriority priority = ProjectPriority.Medium,
+        ProjectStatus status = ProjectStatus.Active)
         => new()
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             Name = "Test Project",
-            Status = ProjectStatus.Active,
+            Status = status,
             Priority = priority,
             IsArchived = isArchived,
             CreatedAtUtc = DateTime.UtcNow,
@@ -135,6 +136,24 @@ public class TasksHubServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetActiveTasksAsync_WithArchivedProject_ExcludesIt));
         var project = CreateProject(DefaultUserId, isArchived: true);
+        var task = CreateTask(project.Id, DefaultUserId);
+        db.Projects.Add(project);
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync();
+
+        // Act
+        var result = await sut.GetActiveTasksAsync();
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetActiveTasksAsync_WithWaitingProject_ExcludesIt()
+    {
+        // Arrange
+        var (sut, db) = BuildService(nameof(GetActiveTasksAsync_WithWaitingProject_ExcludesIt));
+        var project = CreateProject(DefaultUserId, status: ProjectStatus.Waiting);
         var task = CreateTask(project.Id, DefaultUserId);
         db.Projects.Add(project);
         db.Tasks.Add(task);

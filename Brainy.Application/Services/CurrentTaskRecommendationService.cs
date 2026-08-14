@@ -33,6 +33,7 @@ internal sealed class CurrentTaskRecommendationService(
             .AsNoTracking()
             .Where(t => t.UserId == userId
                         && !t.IsArchived
+                        && t.Project.Status == ProjectStatus.Active
                         && !t.Project.IsArchived
                         && t.ParentTaskId == null
                         && !_excludedStatuses.Contains(t.Status))

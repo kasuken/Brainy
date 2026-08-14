@@ -49,13 +49,14 @@ public class TodayServiceTests
     private static Project CreateProject(
         string userId,
         bool isArchived = false,
-        ProjectPriority priority = ProjectPriority.Medium)
+        ProjectPriority priority = ProjectPriority.Medium,
+        ProjectStatus status = ProjectStatus.Active)
         => new()
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             Name = "Test Project",
-            Status = ProjectStatus.Active,
+            Status = status,
             Priority = priority,
             IsArchived = isArchived,
             CreatedAtUtc = DateTime.UtcNow,
@@ -146,6 +147,24 @@ public class TodayServiceTests
         // Arrange
         var (sut, db) = BuildService(nameof(GetOverdueAsync_WithArchivedProject_ExcludesIt));
         var project = CreateProject(DefaultUserId, isArchived: true);
+        var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1));
+        db.Projects.Add(project);
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync();
+
+        // Act
+        var result = await sut.GetOverdueAsync();
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetOverdueAsync_WithWaitingProject_ExcludesIt()
+    {
+        // Arrange
+        var (sut, db) = BuildService(nameof(GetOverdueAsync_WithWaitingProject_ExcludesIt));
+        var project = CreateProject(DefaultUserId, status: ProjectStatus.Waiting);
         var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1));
         db.Projects.Add(project);
         db.Tasks.Add(task);

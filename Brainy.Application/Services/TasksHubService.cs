@@ -13,7 +13,7 @@ namespace Brainy.Application.Services;
 
 /// <summary>
 /// Provides all aggregated task data and operations for the Tasks Hub dashboard.
-/// All active-task queries enforce: non-archived task, non-archived project, top-level only.
+/// All active-task queries enforce: active project, non-archived task, top-level only.
 /// </summary>
 internal sealed class TasksHubService(
     IApplicationDbContext context,
@@ -396,6 +396,7 @@ internal sealed class TasksHubService(
             .AsNoTracking()
             .Where(t => t.UserId == userId
                         && !t.IsArchived
+                        && t.Project.Status == ProjectStatus.Active
                         && !t.Project.IsArchived
                         && t.ParentTaskId == null);
 }
