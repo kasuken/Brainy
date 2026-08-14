@@ -171,7 +171,7 @@ else
                     Add task
                 </MudButton>
             </div>
-            <TaskListComponent ProjectId="ProjectId" OnTaskChanged="OnBoardTaskChanged" />
+            <TaskListComponent ProjectId="ProjectId" RefreshVersion="@_taskListRefreshVersion" OnTaskChanged="OnBoardTaskChanged" />
         </MudTabPanel>
 
         <!-- Board tab -->
@@ -1014,6 +1014,7 @@ else
     private bool _loading = true;
     private ProjectDetailDto? _detail;
     private IReadOnlyList<OutputDto> _outputs = [];
+    private int _taskListRefreshVersion;
 
     // Live progress — updated by PeriodicTimer independently of the full detail load
     private ProjectProgressDto? _progress;
@@ -1108,11 +1109,15 @@ else
         var dialog = await DialogService.ShowAsync<TaskEditorDialog>("New Task", parameters, options);
         var result = await dialog.Result;
         if (result is not null && !result.Canceled)
+        {
+            _taskListRefreshVersion++;
             await LoadAsync();
+        }
     }
 
     private async Task OnBoardTaskChanged()
     {
+        _taskListRefreshVersion++;
         await LoadAsync();
     }
 

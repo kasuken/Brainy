@@ -521,7 +521,15 @@
         var dialog = await DialogService.ShowAsync<ProjectEditorDialog>("New Project", parameters, options);
         var result = await dialog.Result;
         if (result is not null && !result.Canceled)
+        {
+            if (result.Data is ProjectDto createdProject)
+            {
+                Nav.NavigateTo($"/projects/{createdProject.Id}");
+                return;
+            }
+
             await LoadAsync();
+        }
     }
 
     private async Task OpenCompletionDialog(ProjectSummaryDto p)
@@ -561,4 +569,3 @@
         }
     }
 }
-

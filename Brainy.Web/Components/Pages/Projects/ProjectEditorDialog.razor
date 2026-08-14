@@ -180,17 +180,18 @@
         {
             if (ProjectId.HasValue)
             {
-                await ProjectService.UpdateAsync(new UpdateProjectDto(
+                var updated = await ProjectService.UpdateAsync(new UpdateProjectDto(
                     ProjectId.Value, _name, _areaId, _description, _desiredOutcome,
                     _status, _priority, _startDate, _dueDate, _goalId, _emoji,
                     RowVersion: _rowVersion));
+                MudDialog.Close(DialogResult.Ok(updated));
             }
             else
             {
-                await ProjectService.CreateAsync(new CreateProjectDto(
+                var created = await ProjectService.CreateAsync(new CreateProjectDto(
                     _name, _areaId, _description, _desiredOutcome, _status, _priority, _startDate, _dueDate, _goalId, _emoji));
+                MudDialog.Close(DialogResult.Ok(created));
             }
-            MudDialog.Close(DialogResult.Ok(true));
         }
         catch (ConcurrencyConflictException ex)
         {

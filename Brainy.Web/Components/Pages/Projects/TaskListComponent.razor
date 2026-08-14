@@ -648,6 +648,7 @@ else
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public int RefreshVersion { get; set; }
     [Parameter] public EventCallback OnTaskChanged { get; set; }
 
     private List<TaskItemDto> _allTasks = new();
@@ -657,6 +658,7 @@ else
     private string _sortBy = "priority";
     private bool _loading = true;
     private Guid _loadedProjectId;
+    private int _loadedRefreshVersion = -1;
     private readonly HashSet<Guid> _expandedTasks = new();
 
     private static readonly TaskItemStatus[] _boardStatuses =
@@ -696,7 +698,7 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        if (_loadedProjectId != ProjectId)
+        if (_loadedProjectId != ProjectId || _loadedRefreshVersion != RefreshVersion)
             await LoadTasksAsync();
     }
 
@@ -704,6 +706,7 @@ else
     {
         _loading = true;
         _loadedProjectId = ProjectId;
+        _loadedRefreshVersion = RefreshVersion;
         var tasks = await TaskService.GetByProjectAsync(ProjectId);
         _allTasks = tasks.ToList();
         _loading = false;
