@@ -1,5 +1,19 @@
 # Changelog
 
+## [4.0.6] - 2026-08-14
+
+### Added
+
+- **`RefreshVersion` parameter on `TaskListComponent`** — the component now reloads its task list whenever `RefreshVersion` changes, enabling parent pages to trigger a targeted refresh without a full page reload.
+
+### Changed
+
+- **Navigate to new project after creation** — `ProjectsPage` now navigates directly to the newly created project's detail page instead of refreshing the list in place, reducing friction in the project-creation flow.
+- **`ProjectEditorDialog` returns the project DTO** — the dialog now closes with the created or updated `ProjectDto` so callers can act on the result (e.g., redirect to the new project).
+- **Task list refreshes after add/board change** — `ProjectDetailPage` increments `_taskListRefreshVersion` when a task is added via the dialog or changed on the board, ensuring the task list stays in sync without triggering a full detail reload.
+
+---
+
 ## [4.0.5] - 2026-08-13
 
 ### Changed
