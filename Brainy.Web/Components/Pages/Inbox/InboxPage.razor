@@ -12,6 +12,7 @@
 
 @inject INoteService NoteService
 @inject IInboxMetricsService MetricsService
+@inject IInboxSuggestionsService SuggestionsService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -183,6 +184,7 @@
                     @foreach (var note in _notes)
                     {
                         var isSelected = _selectedIds.Contains(note.Id);
+                        var suggestion = GetSuggestion(note.Id);
                         <div class="inbox-card @(_busyId == note.Id ? "inbox-card--busy" : "") @(isSelected ? "inbox-card--selected" : "")">
 
                             <div class="inbox-card__header-row">
@@ -211,6 +213,13 @@
 
                             <div class="inbox-card__body">
                                 <p class="inbox-card__title">@note.Title</p>
+
+                                @if (suggestion is not null)
+                                {
+                                    <span class="inbox-card__pill inbox-card__pill--suggestion" title="@suggestion.Reasoning">
+                                        Suggested: @suggestion.SuggestedCategory
+                                    </span>
+                                }
 
                                 @if (!string.IsNullOrWhiteSpace(note.Content))
                                 {
@@ -568,6 +577,16 @@
         font-family: 'Hanken Grotesk', sans-serif;
     }
 
+    .inbox-card__pill--suggestion {
+        margin: 0 0 0.6rem;
+        width: fit-content;
+        background: rgba(192, 86, 29, 0.08);
+        color: var(--mud-palette-text-secondary);
+        text-transform: none;
+        letter-spacing: 0;
+        font-weight: 600;
+    }
+
     .inbox-card__date {
         font-size: 0.75rem;
         color: var(--mud-palette-text-secondary);
@@ -689,6 +708,7 @@
     };
 
     private IReadOnlyList<NoteDto> _notes = [];
+    private readonly Dictionary<Guid, InboxSuggestionDto> _suggestionsByNoteId = [];
     private InboxMetricsDto? _metrics;
     private bool _loading = true;
     private string? _loadError;
@@ -732,6 +752,7 @@
         {
             _notes = await NoteService.GetInboxAsync();
             _metrics = await MetricsService.GetMetricsAsync();
+            await LoadSuggestionsAsync(_notes);
             if (_totalOnLoad == 0)
                 _totalOnLoad = _notes.Count;
             // Remove any selections for notes no longer in inbox
@@ -780,6 +801,7 @@
                 Snackbar.Add($"{processed} note{(processed == 1 ? "" : "s")} moved to {r.Category}.", Severity.Success);
                 _selectedIds.Clear();
                 _notes = await NoteService.GetInboxAsync();
+                await LoadSuggestionsAsync(_notes);
             }
             catch (Exception ex)
             {
@@ -812,6 +834,7 @@
                 Snackbar.Add($"\"{note.Title}\" moved to {dto.ParaCategory}.", Severity.Success);
                 _selectedIds.Remove(note.Id);
                 _notes = await NoteService.GetInboxAsync();
+                await LoadSuggestionsAsync(_notes);
             }
             catch (Exception ex)
             {
@@ -841,7 +864,10 @@
         var dialog = await DialogService.ShowAsync<NoteEditorDialog>("", parameters, _editDialogOptions);
         var result = await dialog.Result;
         if (result is { Canceled: false })
+        {
             _notes = await NoteService.GetInboxAsync();
+            await LoadSuggestionsAsync(_notes);
+        }
     }
 
     private async Task QuickArchiveAsync(NoteDto note)
@@ -862,6 +888,7 @@
             Snackbar.Add($"\"{note.Title}\" archived.", Severity.Info);
             _selectedIds.Remove(note.Id);
             _notes = await NoteService.GetInboxAsync();
+            await LoadSuggestionsAsync(_notes);
         }
         catch (Exception ex)
         {
@@ -876,7 +903,32 @@
 
     private static string TruncateContent(string content) =>
         content.Length <= 160 ? content : content[..160] + "…";
-}
 
+    private InboxSuggestionDto? GetSuggestion(Guid noteId) =>
+        _suggestionsByNoteId.GetValueOrDefault(noteId);
+
+    private async Task LoadSuggestionsAsync(IEnumerable<NoteDto> notes)
+    {
+        _suggestionsByNoteId.Clear();
+
+        try
+        {
+            // The suggestions service currently exposes only per-note lookup, so this
+            // intentionally performs one lightweight call per visible inbox item.
+            foreach (var note in notes)
+            {
+                var suggestion = await SuggestionsService.SuggestAsync(note);
+                if (suggestion is not null)
+                {
+                    _suggestionsByNoteId[note.Id] = suggestion;
+                }
+            }
+        }
+        catch
+        {
+            _suggestionsByNoteId.Clear();
+        }
+    }
+}
 
 

@@ -42,9 +42,11 @@
                autocomplete="off"
                spellcheck="false"
                aria-label="Global search"
+               role="combobox"
                aria-expanded="@_open.ToString().ToLowerInvariant()"
                aria-haspopup="listbox"
                aria-controls="global-search-results"
+               aria-activedescendant="@GetActiveDescendantId()"
                value="@_query"
                @oninput="OnInputAsync"
                @onfocus="OnFocusAsync"
@@ -96,6 +98,7 @@
                             var isActive = _flatIndex.TryGetValue(localItem.Id, out var idx) &&
                                            _selectedIndex == idx;
                             <button class="gsb__item @(isActive ? "gsb__item--active" : "")"
+                                    id="@($"gsb-item-{localItem.Id}")"
                                     role="option"
                                     aria-selected="@isActive"
                                     @onclick="() => NavigateTo(localItem)"
@@ -605,6 +608,11 @@
         "Idea"    => Icons.Material.Outlined.EmojiObjects,
         _         => Icons.Material.Outlined.Circle,
     };
+
+    private string? GetActiveDescendantId() =>
+        _open && _selectedIndex >= 0 && _selectedIndex < _flat.Count
+            ? $"gsb-item-{_flat[_selectedIndex].Id}"
+            : null;
 
     private static string TruncateSnippet(string snippet) =>
         snippet.Length <= SnippetDisplayLength

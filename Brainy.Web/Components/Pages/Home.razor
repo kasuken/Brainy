@@ -438,19 +438,22 @@
             else
             {
                 @* ── Notification bar ── *@
-                @* @if (_notifications.Count > 0)
+                @if (_notifications.Count > 0)
                 {
                     <div class="td-notifications">
-                        @foreach (var n in _notifications)
+                        @for (var i = 0; i < _notifications.Count; i++)
                         {
-                            <MudAlert Severity="@NotificationSeverity(n.Kind)"
+                            var notification = _notifications[i];
+
+                            <MudAlert @key="i"
+                                      Severity="@NotificationSeverity(notification.Kind)"
                                       Dense="true"
                                       Variant="Variant.Outlined">
-                                @n.Message
+                                @notification.Message
                             </MudAlert>
                         }
                     </div>
-                } *@
+                }
 
                 @* ── Quick actions toolbar ── *@
                 @* Removed quick actions per design update *@
