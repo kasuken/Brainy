@@ -309,7 +309,7 @@
                             <MudTh>Due</MudTh>
                             <MudTh>Progress</MudTh>
                             <MudTh>Open Tasks</MudTh>
-                            <MudTh Align="Align.Right">Actions</MudTh>
+                            <MudTh align="Align.Right">Actions</MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="Project">
@@ -320,7 +320,7 @@
                             <MudTd DataLabel="Due">@(context.DueDate?.ToString("MMM d, yyyy") ?? "—")</MudTd>
                             <MudTd DataLabel="Progress">@($"{context.ProgressPercent:F0}%")</MudTd>
                             <MudTd DataLabel="Open Tasks">@context.OpenTaskCount</MudTd>
-                            <MudTd DataLabel="Actions" Align="Align.Right">
+                            <MudTd DataLabel="Actions" align="Align.Right">
                                 <MudTooltip Text="Open">
                                     <MudIconButton Icon="@Icons.Material.Outlined.OpenInNew"
                                                    Color="Color.Default"
