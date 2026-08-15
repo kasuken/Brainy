@@ -156,6 +156,12 @@
         gap: 1.5rem;
     }
 
+    .pp-view-switch {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 1rem;
+    }
+
     @@keyframes pp-card-in {
         from { opacity: 0; transform: translateY(15px) scale(0.98); }
         to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -286,20 +292,83 @@
             }
             else
             {
-                <div class="pp-grid">
-                    @for (int i = 0; i < (_filtered?.Count ?? 0); i++)
-                    {
-                        var p = _filtered![i];
-                        var idx = i;
-                        <div style="animation-delay:@(idx * 35)ms; animation: pp-card-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;">
-                            <ProjectSummaryCard Project="p"
-                                                OnNavigate="id => OpenDetail(id)"
-                                                OnEdit="proj => OpenEditDialog(proj)"
-                                                OnComplete="proj => OpenCompletionDialog(proj)"
-                                                OnArchive="proj => ConfirmArchive(proj.Id, proj.Name)" />
-                        </div>
-                    }
+                <div class="pp-view-switch">
+                    <MudSwitch T="bool"
+                               @bind-Value="_tableViewEnabled"
+                               Color="Color.Primary"
+                               Label="@(_tableViewEnabled ? "Table view" : "Card view")" />
                 </div>
+
+                @if (_tableViewEnabled)
+                {
+                    <MudTable Items="_filtered" Hover="true" Dense="true" Elevation="0" Breakpoint="Breakpoint.Sm">
+                        <HeaderContent>
+                            <MudTh>Project</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh>Priority</MudTh>
+                            <MudTh>Due</MudTh>
+                            <MudTh>Progress</MudTh>
+                            <MudTh>Open Tasks</MudTh>
+                            <MudTh Align="Align.Right">Actions</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Project">
+                                <MudLink Href="@($"/projects/{context.Id}")">@($"{context.Emoji} {context.Name}")</MudLink>
+                            </MudTd>
+                            <MudTd DataLabel="Status">@StatusLabel(context.Status)</MudTd>
+                            <MudTd DataLabel="Priority">@PriorityLabel(context.Priority)</MudTd>
+                            <MudTd DataLabel="Due">@(context.DueDate?.ToString("MMM d, yyyy") ?? "—")</MudTd>
+                            <MudTd DataLabel="Progress">@($"{context.ProgressPercent:F0}%")</MudTd>
+                            <MudTd DataLabel="Open Tasks">@context.OpenTaskCount</MudTd>
+                            <MudTd DataLabel="Actions" Align="Align.Right">
+                                <MudTooltip Text="Open">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.OpenInNew"
+                                                   Color="Color.Default"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => OpenDetail(context.Id))" />
+                                </MudTooltip>
+                                <MudTooltip Text="Edit">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                                   Color="Color.Default"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => OpenEditDialog(context))" />
+                                </MudTooltip>
+                                @if (context.Status != ProjectStatus.Completed && context.Status != ProjectStatus.Archived)
+                                {
+                                    <MudTooltip Text="Complete">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                                                       Color="Color.Success"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => OpenCompletionDialog(context))" />
+                                    </MudTooltip>
+                                }
+                                <MudTooltip Text="Archive">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Archive"
+                                                   Color="Color.Error"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => ConfirmArchive(context.Id, context.Name))" />
+                                </MudTooltip>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+                else
+                {
+                    <div class="pp-grid">
+                        @for (int i = 0; i < (_filtered?.Count ?? 0); i++)
+                        {
+                            var p = _filtered![i];
+                            var idx = i;
+                            <div style="animation-delay:@(idx * 35)ms; animation: pp-card-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;">
+                                <ProjectSummaryCard Project="p"
+                                                    OnNavigate="id => OpenDetail(id)"
+                                                    OnEdit="proj => OpenEditDialog(proj)"
+                                                    OnComplete="proj => OpenCompletionDialog(proj)"
+                                                    OnArchive="proj => ConfirmArchive(proj.Id, proj.Name)" />
+                            </div>
+                        }
+                    </div>
+                }
             }
         </main>
 
@@ -359,6 +428,7 @@
     private string? _loadError;
     private List<ProjectSummaryDto>? _summaries;
     private List<ProjectSummaryDto>? _filtered;
+    private bool _tableViewEnabled;
 
     private string _searchText = "";
     private readonly HashSet<ProjectStatus> _activeStatusFilters = [];
