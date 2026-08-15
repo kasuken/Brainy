@@ -1,5 +1,19 @@
 # Changelog
 
+## [4.0.11] - 2026-08-15
+
+### Added
+
+- **Inbox PARA suggestions** — inbox cards now show the suggested PARA category for each note, with the suggestion reasoning available on hover. Suggestions refresh after capture processing, edits, categorization, and archiving.
+- **Home notifications restored** — the Today page now displays available notification alerts again.
+
+### Improved
+
+- **Global search accessibility** — the search field now exposes combobox semantics and tracks the active result for keyboard and assistive-technology users.
+- **Theme menu accessibility** — the theme switcher now has an accessible label.
+
+---
+
 ## [4.0.10] - 2026-08-15
 
 ### Added
