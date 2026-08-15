@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.0.10] - 2026-08-15
+
+### Added
+
+- **Project table view** — the Projects page now includes a card/table view toggle. The table layout exposes project status, priority, due date, progress, open-task count, and quick actions for opening, editing, completing, or archiving a project.
+
+---
+
 ## [4.0.9] - 2026-08-14
 
 ### Fixed
