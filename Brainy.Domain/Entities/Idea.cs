@@ -32,6 +32,8 @@ public class Idea : BaseEntity, IUserOwnedEntity
     /// <summary>Populated when the idea is archived. Null if active.</summary>
     public DateTime? ArchivedAtUtc { get; set; }
 
+    public string? ArchivedReason { get; set; }
+
     /// <summary>Free-form research notes accumulated during evaluation.</summary>
     public string? Research { get; set; }
 

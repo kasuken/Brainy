@@ -184,6 +184,16 @@ window.brainyCapture = {
         }
     },
 
+    /** Clears the file input and returns focus to the textarea for rapid repeat capture. */
+    prepareForNextCapture() {
+        const input = document.getElementById(this._fileInputId);
+        if (input) {
+            input.value = '';
+        }
+
+        this.focusTextInput();
+    },
+
     /** Stops an in-progress dictation, if any. */
     stopDictation() {
         if (this._recognition && this._listening) {

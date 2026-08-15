@@ -1,0 +1,40 @@
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Title</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-4">@Message</MudText>
+
+        <MudTextField @bind-Value="_archiveReason"
+                      Label="Why archive? (optional)"
+                      Placeholder="Add context for future you"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Lines="3"
+                      MaxLength="2000"
+                      Counter="2000" />
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="Confirm">Archive</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "Archive item";
+
+    [Parameter, EditorRequired]
+    public string Message { get; set; } = string.Empty;
+
+    private string? _archiveReason;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Confirm() => MudDialog.Close(DialogResult.Ok(string.IsNullOrWhiteSpace(_archiveReason) ? null : _archiveReason.Trim()));
+}

@@ -21,6 +21,9 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         builder.Property(t => t.Description)
             .HasMaxLength(4000);
 
+        builder.Property(t => t.ArchivedReason)
+            .HasMaxLength(2000);
+
         builder.Property(t => t.Status)
             .HasConversion<string>()
             .HasMaxLength(50);

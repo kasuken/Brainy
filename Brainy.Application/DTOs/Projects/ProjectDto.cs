@@ -23,4 +23,5 @@ public record ProjectDto(
     string? GoalTitle = null,
     string Emoji = ProjectEmojiDefaults.DefaultEmoji,
     /// <summary>Concurrency token captured at load time; pass back on update to detect conflicts.</summary>
-    byte[]? RowVersion = null);
+    byte[]? RowVersion = null,
+    string? ArchivedReason = null);

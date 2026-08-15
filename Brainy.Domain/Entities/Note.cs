@@ -27,6 +27,7 @@ public class Note : BaseEntity, IUserOwnedEntity
 
     public bool IsArchived { get; set; }
     public DateTime? ArchivedAtUtc { get; set; }
+    public string? ArchivedReason { get; set; }
 
     /// <summary>When this note was moved out of the Inbox. Null while still in Inbox.</summary>
     public DateTime? ProcessedAtUtc { get; set; }

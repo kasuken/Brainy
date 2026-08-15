@@ -26,4 +26,5 @@ public record ProjectSummaryDto(
     int DoneTaskCount,
     double ProgressPercent,
     int OverdueTaskCount = 0,
-    string Emoji = ProjectEmojiDefaults.DefaultEmoji);
+    string Emoji = ProjectEmojiDefaults.DefaultEmoji,
+    string? ArchivedReason = null);

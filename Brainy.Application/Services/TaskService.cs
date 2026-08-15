@@ -115,7 +115,8 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
                 t.Project.Name,
                 t.ArchivedAtUtc ?? t.UpdatedAtUtc,
                 t.UpdatedAtUtc,
-                !t.Project.IsArchived && (t.ParentTaskId == null || !t.ParentTask!.IsArchived)))
+                !t.Project.IsArchived && (t.ParentTaskId == null || !t.ParentTask!.IsArchived),
+                t.ArchivedReason))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -223,6 +224,117 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
                 transactionCancellationToken => UpdateCoreAsync(dto, userId, transactionCancellationToken),
                 cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public async Task<int> BulkUpdateStatusAsync(
+        IEnumerable<Guid> taskIds,
+        TaskItemStatus newStatus,
+        CancellationToken cancellationToken = default)
+    {
+        if (newStatus == TaskItemStatus.Archived)
+            throw new InvalidOperationException("Archived tasks must be managed with archive or restore actions.");
+
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var normalizedTaskIds = await ValidateBulkTaskIdsAsync(taskIds, userId, cancellationToken).ConfigureAwait(false);
+        if (normalizedTaskIds.Count == 0)
+            return 0;
+
+        var taskSnapshots = await context.Tasks
+            .AsNoTracking()
+            .Where(t => normalizedTaskIds.Contains(t.Id) && t.UserId == userId)
+            .Select(t => new BulkTaskSnapshot(
+                t.Id,
+                t.Title,
+                t.Description,
+                t.Status,
+                t.Priority,
+                t.DueDate,
+                t.Complexity,
+                t.RowVersion))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var snapshotsById = taskSnapshots.ToDictionary(task => task.Id);
+
+        _ = await context.ExecuteSerializedTaskDependencyMutationAsync(
+                userId,
+                async transactionCancellationToken =>
+                {
+                    foreach (var taskId in normalizedTaskIds)
+                    {
+                        var task = snapshotsById[taskId];
+                        if (task.Status == newStatus)
+                            continue;
+
+                        await UpdateCoreAsync(
+                                new UpdateTaskDto(
+                                    task.Id,
+                                    task.Title,
+                                    task.Description,
+                                    newStatus,
+                                    task.Priority,
+                                    task.DueDate,
+                                    task.Complexity,
+                                    RowVersion: task.RowVersion),
+                                userId,
+                                transactionCancellationToken)
+                            .ConfigureAwait(false);
+                    }
+
+                    return normalizedTaskIds.Count;
+                },
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return normalizedTaskIds.Count;
+    }
+
+    public async Task<int> BulkUpdatePriorityAsync(
+        IEnumerable<Guid> taskIds,
+        TaskPriority newPriority,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var normalizedTaskIds = await ValidateBulkTaskIdsAsync(taskIds, userId, cancellationToken).ConfigureAwait(false);
+        if (normalizedTaskIds.Count == 0)
+            return 0;
+
+        var tasks = await context.Tasks
+            .Where(t => normalizedTaskIds.Contains(t.Id) && t.UserId == userId)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var task in tasks)
+            task.Priority = newPriority;
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return normalizedTaskIds.Count;
+    }
+
+    public async Task<int> BulkDeleteAsync(IEnumerable<Guid> taskIds, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var normalizedTaskIds = await ValidateBulkTaskIdsAsync(taskIds, userId, cancellationToken).ConfigureAwait(false);
+        if (normalizedTaskIds.Count == 0)
+            return 0;
+
+        var selectedTasks = await context.Tasks
+            .AsNoTracking()
+            .Where(t => normalizedTaskIds.Contains(t.Id) && t.UserId == userId)
+            .Select(t => new { t.Id, t.ParentTaskId })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var selectedSet = selectedTasks.Select(task => task.Id).ToHashSet();
+        var rootTaskIds = selectedTasks
+            .Where(task => !task.ParentTaskId.HasValue || !selectedSet.Contains(task.ParentTaskId.Value))
+            .Select(task => task.Id)
+            .ToList();
+
+        foreach (var rootTaskId in rootTaskIds)
+            await DeleteAsync(rootTaskId, cancellationToken).ConfigureAwait(false);
+
+        return normalizedTaskIds.Count;
     }
 
     private async Task<TaskItemDto> UpdateCoreAsync(
@@ -448,7 +560,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         return ToDto(task);
     }
 
-    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
@@ -463,8 +575,10 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
 
         var now = DateTime.UtcNow;
         var archiveOperationId = Guid.NewGuid();
+        var normalizedReason = ArchiveReasonNormalizer.Normalize(archivedReason);
         task.IsArchived    = true;
         task.ArchivedAtUtc = now;
+        task.ArchivedReason = normalizedReason;
         task.ArchiveOperationId = archiveOperationId;
         task.IsCurrentTask = false;
 
@@ -473,6 +587,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         {
             sub.IsArchived    = true;
             sub.ArchivedAtUtc = now;
+            sub.ArchivedReason = normalizedReason;
             sub.ArchiveOperationId = archiveOperationId;
             sub.IsCurrentTask = false;
         }
@@ -643,6 +758,62 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
 
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
         return occurrence is null ? null : ToDto(occurrence);
+    }
+
+    public IReadOnlyList<DateTime> GetUpcomingOccurrences(
+        RecurrenceType? recurrenceType,
+        int? recurrenceInterval,
+        DateTime? nextOccurrenceDate,
+        DateTime? recurrenceEndDate,
+        int count = 5)
+    {
+        if (!recurrenceType.HasValue || recurrenceInterval is null or <= 0 || !nextOccurrenceDate.HasValue || count <= 0)
+            return [];
+
+        var upcoming = new List<DateTime>(count);
+        var current = nextOccurrenceDate.Value.Date;
+        var endDate = recurrenceEndDate?.Date;
+
+        while (upcoming.Count < count && (!endDate.HasValue || current <= endDate.Value))
+        {
+            upcoming.Add(current);
+            current = AdvanceRecurrence(current, recurrenceType.Value, recurrenceInterval.Value);
+        }
+
+        return upcoming;
+    }
+
+    public string GetRecurrenceSummary(
+        RecurrenceType? recurrenceType,
+        int? recurrenceInterval,
+        DateTime? nextOccurrenceDate,
+        DateTime? recurrenceEndDate)
+    {
+        if (!recurrenceType.HasValue)
+            return "Choose how often this task repeats.";
+
+        if (recurrenceInterval is null or <= 0)
+            return "Enter a repeat interval to preview this schedule.";
+
+        var interval = recurrenceInterval.Value;
+        var every = interval == 1
+            ? $"Every {GetSingularRecurrenceUnit(recurrenceType.Value)}"
+            : $"Every {interval} {GetPluralRecurrenceUnit(recurrenceType.Value)}";
+
+        if (!nextOccurrenceDate.HasValue)
+            return $"{every}. Choose the first occurrence date to preview upcoming dates.";
+
+        var summary = $"{every}, next on {FormatRecurrenceDate(nextOccurrenceDate.Value)}";
+
+        if (recurrenceEndDate.HasValue)
+        {
+            if (recurrenceEndDate.Value.Date < nextOccurrenceDate.Value.Date)
+                return $"{summary}. Adjust the end date so it falls on or after the next occurrence.";
+
+            summary += $", ending {FormatRecurrenceDate(recurrenceEndDate.Value)}";
+        }
+
+        return summary;
     }
 
     public async Task AddDependencyAsync(Guid taskId, Guid dependsOnTaskId, CancellationToken ct = default)
@@ -820,6 +991,54 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             _ => throw new ArgumentOutOfRangeException(nameof(recurrenceType)),
         };
 
+    private static string GetSingularRecurrenceUnit(RecurrenceType recurrenceType) =>
+        recurrenceType switch
+        {
+            RecurrenceType.Daily => "day",
+            RecurrenceType.Weekly => "week",
+            RecurrenceType.Monthly => "month",
+            RecurrenceType.Yearly => "year",
+            _ => throw new ArgumentOutOfRangeException(nameof(recurrenceType)),
+        };
+
+    private static string GetPluralRecurrenceUnit(RecurrenceType recurrenceType) =>
+        recurrenceType switch
+        {
+            RecurrenceType.Daily => "days",
+            RecurrenceType.Weekly => "weeks",
+            RecurrenceType.Monthly => "months",
+            RecurrenceType.Yearly => "years",
+            _ => throw new ArgumentOutOfRangeException(nameof(recurrenceType)),
+        };
+
+    private static string FormatRecurrenceDate(DateTime date) => date.Date.ToString("MMM d, yyyy");
+
+    private async Task<List<Guid>> ValidateBulkTaskIdsAsync(
+        IEnumerable<Guid> taskIds,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(taskIds);
+
+        var normalizedTaskIds = taskIds
+            .Where(taskId => taskId != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        if (normalizedTaskIds.Count == 0)
+            return normalizedTaskIds;
+
+        var ownedTaskCount = await context.Tasks
+            .AsNoTracking()
+            .CountAsync(task => normalizedTaskIds.Contains(task.Id) && task.UserId == userId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (ownedTaskCount != normalizedTaskIds.Count)
+            throw new KeyNotFoundException("One or more tasks were not found.");
+
+        return normalizedTaskIds;
+    }
+
     private static List<Guid> NormalizeDependencyIds(IReadOnlyList<Guid>? dependencyIds, Guid taskId)
     {
         var normalized = dependencyIds?.Distinct().ToList() ?? [];
@@ -931,6 +1150,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
     {
         task.IsArchived = false;
         task.ArchivedAtUtc = null;
+        task.ArchivedReason = null;
         task.ArchiveOperationId = null;
     }
 
@@ -943,4 +1163,14 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         RecurrenceInterval: t.RecurrenceInterval, RecurrenceEndDate: t.RecurrenceEndDate,
         NextOccurrenceDate: t.NextOccurrenceDate, RowVersion: t.RowVersion,
         DependsOnTaskIds: t.Dependencies.Select(d => d.DependsOnTaskId).ToList());
+
+    private sealed record BulkTaskSnapshot(
+        Guid Id,
+        string Title,
+        string? Description,
+        TaskItemStatus Status,
+        TaskPriority Priority,
+        DateTime? DueDate,
+        TaskComplexity? Complexity,
+        byte[]? RowVersion);
 }

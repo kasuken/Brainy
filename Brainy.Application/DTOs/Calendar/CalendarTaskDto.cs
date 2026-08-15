@@ -13,4 +13,10 @@ public record CalendarTaskDto(
     string ProjectName,
     Guid? AreaId,
     string? AreaName,
-    bool IsOverdue);
+    bool IsOverdue,
+    TaskComplexity? Complexity = null,
+    int DependencyCount = 0,
+    int UnresolvedDependencyCount = 0)
+{
+    public bool IsBlocked => UnresolvedDependencyCount > 0;
+}

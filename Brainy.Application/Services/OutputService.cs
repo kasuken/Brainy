@@ -73,6 +73,19 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
             .ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<OutputDto>> GetBySourceNoteAsync(Guid noteId, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await context.Outputs.AsNoTracking()
+            .Where(o => o.UserId == userId &&
+                        o.SourceNotes.Any(n => n.Id == noteId && n.UserId == userId))
+            .OrderBy(o => o.IsArchived)
+            .ThenByDescending(o => o.UpdatedAtUtc)
+            .Select(o => ToDto(o))
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<OutputDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
@@ -123,7 +136,8 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
             output.CreatedAtUtc,
             output.UpdatedAtUtc,
             sourceNotes,
-            output.RowVersion);
+            output.RowVersion,
+            output.ArchivedReason);
     }
 
     public async Task<IReadOnlyList<OutputDto>> SearchAsync(string query, CancellationToken cancellationToken = default)
@@ -292,7 +306,7 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         return ToDtoWithNames(output, projectTitle, areaName, goalTitle);
     }
 
-    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
@@ -300,8 +314,10 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
             .FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId, cancellationToken).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Output '{id}' was not found.");
 
+        var normalizedReason = ArchiveReasonNormalizer.Normalize(archivedReason);
         output.IsArchived   = true;
         output.ArchivedDate = DateTime.UtcNow;
+        output.ArchivedReason = normalizedReason;
         output.Status       = OutputStatus.Archived;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -320,6 +336,7 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
 
         output.IsArchived   = false;
         output.ArchivedDate = null;
+        output.ArchivedReason = null;
         output.Status       = OutputStatus.Draft;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -449,7 +466,8 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         o.ArchivedDate,
         o.CreatedAtUtc,
         o.UpdatedAtUtc,
-        o.RowVersion);
+        o.RowVersion,
+        o.ArchivedReason);
 
     /// <summary>
     /// Resolves the linked project/area/goal display names for the returned DTO in a
@@ -493,5 +511,6 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         o.ArchivedDate,
         o.CreatedAtUtc,
         o.UpdatedAtUtc,
-        o.RowVersion);
+        o.RowVersion,
+        o.ArchivedReason);
 }

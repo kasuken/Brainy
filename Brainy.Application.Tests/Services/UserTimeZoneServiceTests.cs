@@ -81,4 +81,33 @@ public sealed class UserTimeZoneServiceTests
 
         (end - start).Should().Be(TimeSpan.FromHours(23));
     }
+
+    [Fact]
+    public async Task SetTimeZoneOverrideAsync_PersistsExplicitOverride()
+    {
+        var (sut, db) = BuildService(
+            nameof(SetTimeZoneOverrideAsync_PersistsExplicitOverride),
+            DateTimeOffset.UtcNow);
+
+        await sut.SetTimeZoneOverrideAsync("Europe/Zurich");
+
+        (await sut.GetTimeZoneOverrideIdAsync()).Should().Be("Europe/Zurich");
+        (await sut.GetTimeZoneIdAsync()).Should().Be("Europe/Zurich");
+        (await db.DashboardPreferences.SingleAsync()).TimeZoneId.Should().Be("manual:Europe/Zurich");
+    }
+
+    [Fact]
+    public async Task SetTimeZoneIdAsync_AfterOverride_ClearsOverrideMarker()
+    {
+        var (sut, db) = BuildService(
+            nameof(SetTimeZoneIdAsync_AfterOverride_ClearsOverrideMarker),
+            DateTimeOffset.UtcNow);
+        await sut.SetTimeZoneOverrideAsync("Europe/Zurich");
+
+        await sut.SetTimeZoneIdAsync("UTC");
+
+        (await sut.GetTimeZoneOverrideIdAsync()).Should().BeNull();
+        (await sut.GetTimeZoneIdAsync()).Should().Be("UTC");
+        (await db.DashboardPreferences.SingleAsync()).TimeZoneId.Should().Be("UTC");
+    }
 }

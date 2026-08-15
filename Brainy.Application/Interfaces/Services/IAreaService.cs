@@ -16,7 +16,7 @@ public interface IAreaService
     Task<AreaDto> CreateAsync(CreateAreaDto dto, CancellationToken cancellationToken = default);
     Task<AreaDto> UpdateAsync(UpdateAreaDto dto, CancellationToken cancellationToken = default);
     /// <summary>Soft-archives the area. Sets IsArchived = true and ArchivedAtUtc = UtcNow.</summary>
-    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
+    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null);
     /// <summary>Restores an archived area. Clears IsArchived and ArchivedAtUtc.</summary>
     Task RestoreAsync(Guid id, CancellationToken cancellationToken = default);
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);

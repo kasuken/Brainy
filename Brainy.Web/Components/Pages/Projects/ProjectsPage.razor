@@ -3,6 +3,7 @@
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
+@using Brainy.Web.Components.Shared
 @attribute [Authorize]
 @inject IProjectService ProjectService
 @inject IDialogService DialogService
@@ -12,7 +13,6 @@
 <PageTitle>Projects — Brainy</PageTitle>
 
 <style>
-    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
 
     .pp-page {
         max-width: 1500px;
@@ -626,16 +626,22 @@
 
     private async Task ConfirmArchive(Guid id, string name)
     {
-        var confirmed = await DialogService.ShowMessageBox(
-            "Archive project",
-            $"Archive \"{name}\"? It will be moved to Archives and hidden from active views.",
-            yesText: "Archive", cancelText: "Cancel");
-
-        if (confirmed == true)
+        var parameters = new DialogParameters<ArchiveReasonDialog>
         {
-            await ProjectService.ArchiveAsync(id);
-            Snackbar.Add($"\"{name}\" archived.", Severity.Success);
-            await LoadAsync();
-        }
+            { x => x.Title, "Archive project" },
+            { x => x.Message, $"Archive \"{name}\"? It will be moved to Archives and hidden from active views." }
+        };
+        var dialog = await DialogService.ShowAsync<ArchiveReasonDialog>(
+            "Archive project",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled)
+            return;
+
+        await ProjectService.ArchiveAsync(id, archivedReason: result.Data as string);
+        Snackbar.Add($"\"{name}\" archived.", Severity.Success);
+        await LoadAsync();
     }
 }

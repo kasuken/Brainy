@@ -9,4 +9,5 @@ public sealed record ArchivedTaskDto(
     string ProjectName,
     DateTime ArchivedAtUtc,
     DateTime UpdatedAtUtc,
-    bool CanRestore);
+    bool CanRestore,
+    string? ArchivedReason = null);

@@ -40,6 +40,8 @@ public class TaskItem : BaseEntity, IUserOwnedEntity
 
     public DateTime? ArchivedAtUtc { get; set; }
 
+    public string? ArchivedReason { get; set; }
+
     /// <summary>
     /// Identifies the archive operation that moved this task out of active work.
     /// Tasks archived together share an operation id, allowing restore to reverse

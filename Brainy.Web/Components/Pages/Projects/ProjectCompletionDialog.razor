@@ -85,6 +85,19 @@
                     Completed projects can be archived to keep your workspace clean.
                     All notes and history are preserved.
                 </p>
+
+                @if (_archiveAfter)
+                {
+                    <MudTextField @bind-Value="_archiveReason"
+                                  Label="Why archive? (optional)"
+                                  Placeholder="Add a note for future reference"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Lines="2"
+                                  MaxLength="2000"
+                                  Counter="2000"
+                                  Class="mt-3" />
+                }
             </div>
 
         </div>
@@ -217,6 +230,7 @@
 
     private TaskCompletionAction _taskAction   = TaskCompletionAction.CompleteAll;
     private bool                  _archiveAfter = false;
+    private string?               _archiveReason;
     private bool                  _saving       = false;
 
     private void Cancel() => MudDialog.Cancel();
@@ -229,7 +243,7 @@
             await ProjectService.CompleteAsync(Project.Id, _taskAction);
 
             if (_archiveAfter)
-                await ProjectService.ArchiveAsync(Project.Id);
+                await ProjectService.ArchiveAsync(Project.Id, archivedReason: _archiveReason);
 
             Snackbar.Add("Project completed successfully.", Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));

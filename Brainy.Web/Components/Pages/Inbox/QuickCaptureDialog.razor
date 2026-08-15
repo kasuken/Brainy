@@ -66,7 +66,7 @@
                     <InputFile id="qcd-attach-input"
                                OnChange="HandleAttach"
                                multiple
-                               accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,.txt,.md,.csv"
+                               accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,application/pdf,.pdf,.txt,.md,.csv"
                                class="qcd__file-hidden"
                                aria-label="Attach files or images" />
                 </label>
@@ -106,8 +106,15 @@
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton OnClick="SaveAndAddAnotherAsync" Variant="Variant.Outlined" Disabled="@(!_valid || _saving)">
+            @if (_saving && !_closeAfterSave)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Save &amp; Add Another
+        </MudButton>
         <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!_valid || _saving)">
-            @if (_saving)
+            @if (_saving && _closeAfterSave)
             {
                 <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
             }
@@ -427,10 +434,11 @@
     private string _titleOverride = "";
     private bool _showDetails;
     private bool _saving;
+    private bool _closeAfterSave = true;
     private bool _speechSupported;
     private bool _listening;
     private Guid? _persistedAttachmentNoteId;
-    private IReadOnlyList<Guid> _persistedAttachmentImageIds = [];
+    private IReadOnlyList<Guid> _persistedAttachmentUploadIds = [];
 
     private readonly List<IBrowserFile> _attachments = [];
 
@@ -445,14 +453,25 @@
     private static readonly HashSet<string> ImageExtensions =
         new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" };
 
+    private static readonly HashSet<string> StoredAttachmentExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".pdf" };
+
     private static readonly HashSet<string> ImageContentTypes =
         new(StringComparer.OrdinalIgnoreCase) { "image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp" };
 
+    private static readonly HashSet<string> StoredAttachmentContentTypes =
+        new(StringComparer.OrdinalIgnoreCase) { "image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp", "application/pdf" };
+
     private static bool IsSupportedAttachment(IBrowserFile file) =>
-        IsImage(file) || TextExtensions.Contains(Path.GetExtension(file.Name));
+        IsStoredAttachment(file) || TextExtensions.Contains(Path.GetExtension(file.Name));
 
     private bool _valid =>
         !string.IsNullOrWhiteSpace(_text) || _attachments.Count > 0;
+
+    /// <summary>True when the given attachment is stored and served as a binary asset.</summary>
+    private static bool IsStoredAttachment(IBrowserFile file) =>
+        StoredAttachmentContentTypes.Contains(file.ContentType) ||
+        StoredAttachmentExtensions.Contains(Path.GetExtension(file.Name));
 
     /// <summary>True when the given attachment's content type or extension identifies it as an image.</summary>
     private static bool IsImage(IBrowserFile file) =>
@@ -493,12 +512,12 @@
             if (!IsSupportedAttachment(file))
             {
                 Snackbar.Add(
-                    $"{file.Name} was not attached. Brainy currently keeps images and plain-text files (.txt, .md, .csv) only.",
+                    $"{file.Name} was not attached. Brainy currently keeps images, PDFs, and plain-text files (.txt, .md, .csv) only.",
                     Severity.Warning);
                 continue;
             }
 
-            var maxSize = IsImage(file) ? INoteImageService.MaxSizeBytes : MaxTextAttachmentSizeBytes;
+            var maxSize = IsStoredAttachment(file) ? INoteImageService.MaxSizeBytes : MaxTextAttachmentSizeBytes;
             if (file.Size > maxSize)
             {
                 Snackbar.Add(
@@ -569,13 +588,18 @@
     public async Task SaveFromKeyboardAsync()
     {
         if (!_valid || _saving) return;
-        await Submit();
+        await Submit(closeAfterSave: true);
     }
 
-    private async Task Submit()
+    private Task Submit() => Submit(closeAfterSave: true);
+
+    private Task SaveAndAddAnotherAsync() => Submit(closeAfterSave: false);
+
+    private async Task Submit(bool closeAfterSave)
     {
         if (!_valid) return;
 
+        _closeAfterSave = closeAfterSave;
         _saving = true;
         try
         {
@@ -586,8 +610,18 @@
             else
                 await SaveTextCaptureAsync();
 
-            Snackbar.Add("Saved to Inbox", Severity.Success);
-            MudDialog.Close(DialogResult.Ok(true));
+            if (closeAfterSave)
+            {
+                Snackbar.Add("Saved to Inbox", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                ResetCaptureState();
+                await InvokeAsync(StateHasChanged);
+                await JS.InvokeVoidAsync("brainyCapture.prepareForNextCapture");
+                Snackbar.Add("Saved to Inbox. Ready for your next capture.", Severity.Success);
+            }
         }
         catch (Exception ex)
         {
@@ -616,8 +650,8 @@
     }
 
     /// <summary>
-    /// Handles one or more supported image or plain-text attachments. Images are uploaded and
-    /// embedded as Markdown references (then linked to the note so the serving endpoint can
+    /// Handles one or more supported attachments. Binary assets such as images and PDFs are
+    /// uploaded and linked from Markdown (then linked to the note so the serving endpoint can
     /// enforce ownership); text files are inlined. A read failure aborts the capture so a file is
     /// never represented as saved when its contents were not persisted.
     /// </summary>
@@ -629,26 +663,26 @@
             // Retry only that association so another click cannot create a duplicate note.
             await NoteImageService.AssociateWithNoteAsync(
                 persistedNoteId,
-                _persistedAttachmentImageIds);
+                _persistedAttachmentUploadIds);
             _persistedAttachmentNoteId = null;
-            _persistedAttachmentImageIds = [];
+            _persistedAttachmentUploadIds = [];
             return;
         }
 
         var caption = _text.Trim();
         var contentParts = new List<string>();
-        var imageIds = new List<Guid>();
+        var uploadIds = new List<Guid>();
 
         var notePersisted = false;
         try
         {
             foreach (var file in _attachments)
             {
-                if (IsImage(file))
+                if (IsStoredAttachment(file))
                 {
-                    var imageId = await UploadImageAsync(file);
-                    imageIds.Add(imageId);
-                    contentParts.Add($"![{file.Name}](/api/note-images/{imageId})");
+                    var uploadedAttachment = await UploadStoredAttachmentAsync(file);
+                    uploadIds.Add(uploadedAttachment.Id);
+                    contentParts.Add(BuildAttachmentMarkdown(uploadedAttachment));
                 }
                 else
                 {
@@ -666,20 +700,20 @@
                 title, content, ParaCategory.Project, Status: NoteStatus.Inbox));
             notePersisted = true;
 
-            if (imageIds.Count > 0)
+            if (uploadIds.Count > 0)
             {
                 _persistedAttachmentNoteId = created.Id;
-                _persistedAttachmentImageIds = imageIds.ToArray();
-                await NoteImageService.AssociateWithNoteAsync(created.Id, imageIds);
+                _persistedAttachmentUploadIds = uploadIds.ToArray();
+                await NoteImageService.AssociateWithNoteAsync(created.Id, uploadIds);
                 _persistedAttachmentNoteId = null;
-                _persistedAttachmentImageIds = [];
+                _persistedAttachmentUploadIds = [];
             }
         }
         catch
         {
-            if (!notePersisted && imageIds.Count > 0)
+            if (!notePersisted && uploadIds.Count > 0)
             {
-                try { await NoteImageService.DeletePendingAsync(imageIds); }
+                try { await NoteImageService.DeletePendingAsync(uploadIds); }
                 catch { /* Preserve the original capture failure; expiry cleanup is the fallback. */ }
             }
 
@@ -687,22 +721,21 @@
         }
     }
 
-    /// <summary>Uploads a single image attachment and returns its stored id.</summary>
-    private async Task<Guid> UploadImageAsync(IBrowserFile file)
+    /// <summary>Uploads a single binary attachment and returns its stored metadata.</summary>
+    private async Task<NoteImageDto> UploadStoredAttachmentAsync(IBrowserFile file)
     {
         await using var stream = file.OpenReadStream(INoteImageService.MaxSizeBytes);
         using var ms = new MemoryStream();
         await stream.CopyToAsync(ms);
         var bytes = ms.ToArray();
 
-        var imageDto = await NoteImageService.UploadAsync(
-            new UploadNoteImageDto(bytes, ResolveImageContentType(file), file.Name));
-        return imageDto.Id;
+        return await NoteImageService.UploadAsync(
+            new UploadNoteImageDto(bytes, ResolveStoredAttachmentContentType(file), file.Name));
     }
 
-    private static string ResolveImageContentType(IBrowserFile file)
+    private static string ResolveStoredAttachmentContentType(IBrowserFile file)
     {
-        if (ImageContentTypes.Contains(file.ContentType))
+        if (StoredAttachmentContentTypes.Contains(file.ContentType))
             return file.ContentType;
 
         return Path.GetExtension(file.Name).ToLowerInvariant() switch
@@ -712,9 +745,15 @@
             ".gif" => "image/gif",
             ".webp" => "image/webp",
             ".bmp" => "image/bmp",
+            ".pdf" => "application/pdf",
             _ => file.ContentType
         };
     }
+
+    private static string BuildAttachmentMarkdown(NoteImageDto attachment) =>
+        attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+            ? $"![{attachment.FileName}](/api/note-images/{attachment.Id})"
+            : $"[{attachment.FileName}](/api/note-images/{attachment.Id})";
 
     private static async Task<string> ReadTextFileAsync(IBrowserFile file)
     {
@@ -800,6 +839,16 @@
 
         var display = (uri.Host + uri.PathAndQuery).TrimEnd('/');
         return display.Length <= MaxTitleLength ? display : display[..MaxTitleLength].TrimEnd() + "…";
+    }
+
+    private void ResetCaptureState()
+    {
+        _text = string.Empty;
+        _titleOverride = string.Empty;
+        _showDetails = false;
+        _persistedAttachmentNoteId = null;
+        _persistedAttachmentUploadIds = [];
+        _attachments.Clear();
     }
 
     private void Cancel() => MudDialog.Cancel();

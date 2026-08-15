@@ -100,6 +100,27 @@
                                            Clearable="true"
                                            DateFormat="MMM d, yyyy" />
                         </MudItem>
+                        <MudItem xs="12">
+                            <MudPaper Outlined="true" Class="ted-recurrence__preview">
+                                <MudText Typo="Typo.body2" Class="ted-recurrence__summary">@RecurrenceSummary</MudText>
+                                @if (UpcomingOccurrences.Count > 0)
+                                {
+                                    <MudText Typo="Typo.caption" Class="ted-recurrence__label">Upcoming occurrences</MudText>
+                                    <div class="ted-recurrence__chips">
+                                        @foreach (var occurrence in UpcomingOccurrences)
+                                        {
+                                            <MudChip T="string"
+                                                     Size="Size.Small"
+                                                     Variant="Variant.Outlined"
+                                                     Color="Color.Primary"
+                                                     Icon="@Icons.Material.Rounded.EventRepeat">
+                                                @FormatRecurrenceDate(occurrence)
+                                            </MudChip>
+                                        }
+                                    </div>
+                                }
+                            </MudPaper>
+                        </MudItem>
                     </MudGrid>
                 }
             </div>
@@ -320,6 +341,32 @@
     text-decoration: underline;
 }
 .ted-recurrence__fields { margin-top: .5rem; }
+.ted-recurrence__preview {
+    margin-top: .15rem;
+    padding: .9rem 1rem;
+    border-radius: 14px;
+    border-color: rgba(var(--mud-palette-primary-rgb), .16);
+    background:
+        linear-gradient(135deg, rgba(var(--mud-palette-primary-rgb), .05), rgba(var(--mud-palette-surface-rgb), .92));
+}
+.ted-recurrence__summary {
+    color: var(--ink);
+    line-height: 1.5;
+}
+.ted-recurrence__label {
+    display: block;
+    margin-top: .8rem;
+    color: var(--clay);
+    font-size: .72rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+.ted-recurrence__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem;
+    margin-top: .5rem;
+}
 </style>
 
 @code {
@@ -355,6 +402,11 @@
     private readonly HashSet<Guid> _togglingSubtasks = [];
     private IReadOnlyList<TaskItemDto> _dependencyCandidates = [];
     private IEnumerable<Guid> _selectedDependencyIds = [];
+    private string RecurrenceSummary =>
+        TaskService.GetRecurrenceSummary(_recurrenceType, _recurrenceInterval, _nextOccurrenceDate, _recurrenceEndDate);
+
+    private IReadOnlyList<DateTime> UpcomingOccurrences =>
+        TaskService.GetUpcomingOccurrences(_recurrenceType, _recurrenceInterval, _nextOccurrenceDate, _recurrenceEndDate, count: 5);
 
     // Only top-level tasks (not subtasks, and not the "create subtask" flow) can own subtasks.
     private bool ShowSubtasks => !_isSubtask && !ParentTaskId.HasValue;
@@ -474,6 +526,8 @@
         TaskItemStatus.Done => "Done",
         _ => status.ToString()
     };
+
+    private static string FormatRecurrenceDate(DateTime date) => date.ToString("MMM d, yyyy");
 
     private async Task ToggleSubtaskAsync(TaskItemDto sub)
     {

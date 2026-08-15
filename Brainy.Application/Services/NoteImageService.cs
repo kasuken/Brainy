@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Brainy.Application.Services;
 
 /// <summary>
-/// Stores note images as binary in the database, scoped to the current user.
+/// Stores note attachments as binary in the database, scoped to the current user.
 /// Reads use <c>AsNoTracking</c>; the serving path takes an explicit user id because it
 /// runs outside a Blazor circuit.
 /// </summary>
@@ -22,6 +22,7 @@ internal sealed class NoteImageService(
 
     private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
     private static readonly byte[] JpegSignature = [0xFF, 0xD8, 0xFF];
+    private static readonly byte[] PdfSignature = "%PDF-"u8.ToArray();
 
     private static readonly SemaphoreSlim[] UploadLocks = Enumerable
         .Range(0, UploadLockStripeCount)
@@ -34,7 +35,8 @@ internal sealed class NoteImageService(
         "image/jpeg",
         "image/gif",
         "image/webp",
-        "image/bmp"
+        "image/bmp",
+        "application/pdf"
     };
 
     public async Task<NoteImageDto> UploadAsync(UploadNoteImageDto dto, CancellationToken cancellationToken = default)
@@ -42,20 +44,20 @@ internal sealed class NoteImageService(
         ArgumentNullException.ThrowIfNull(dto);
 
         if (dto.Data is null || dto.Data.Length == 0)
-            throw new ArgumentException("Image data is empty.", nameof(dto));
+            throw new ArgumentException("Attachment data is empty.", nameof(dto));
 
         if (dto.Data.Length > INoteImageService.MaxSizeBytes)
             throw new ArgumentException(
-                $"Image exceeds the maximum allowed size of {INoteImageService.MaxSizeBytes / (1024 * 1024)} MB.",
+                $"Attachment exceeds the maximum allowed size of {INoteImageService.MaxSizeBytes / (1024 * 1024)} MB.",
                 nameof(dto));
 
         var contentType = dto.ContentType?.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(contentType) || !AllowedContentTypes.Contains(contentType))
-            throw new ArgumentException($"Unsupported image type '{dto.ContentType}'.", nameof(dto));
+            throw new ArgumentException($"Unsupported attachment type '{dto.ContentType}'.", nameof(dto));
 
         if (!HasValidSignature(dto.Data, contentType))
             throw new ArgumentException(
-                $"Image bytes do not match the declared content type '{dto.ContentType}'.",
+                $"Attachment bytes do not match the declared content type '{dto.ContentType}'.",
                 nameof(dto));
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
@@ -77,10 +79,10 @@ internal sealed class NoteImageService(
 
             if (usedBytes > INoteImageService.MaxUserStorageBytes - dto.Data.LongLength)
                 throw new InvalidOperationException(
-                    $"Image storage quota exceeded. Each account can store up to " +
-                    $"{INoteImageService.MaxUserStorageBytes / (1024 * 1024)} MB of images.");
+                    $"Attachment storage quota exceeded. Each account can store up to " +
+                    $"{INoteImageService.MaxUserStorageBytes / (1024 * 1024)} MB of attachments.");
 
-            var fileName = string.IsNullOrWhiteSpace(dto.FileName) ? "image" : dto.FileName.Trim();
+            var fileName = string.IsNullOrWhiteSpace(dto.FileName) ? "attachment" : dto.FileName.Trim();
             if (fileName.Length > 255)
                 fileName = fileName[..255];
 
@@ -152,6 +154,61 @@ internal sealed class NoteImageService(
             }
 
             return updated;
+        }
+        finally
+        {
+            uploadLock.Release();
+        }
+    }
+
+    public async Task<IReadOnlyList<NoteImageDto>> GetForNoteAsync(Guid noteId, CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        await context.Notes.EnsureOwnedAsync(noteId, userId, "Note", cancellationToken)
+            .ConfigureAwait(false);
+
+        return await context.NoteImages
+            .AsNoTracking()
+            .Where(image => image.UserId == userId && image.NoteId == noteId)
+            .OrderByDescending(image => image.CreatedAtUtc)
+            .ThenByDescending(image => image.Id)
+            .Select(image => new NoteImageDto(
+                image.Id,
+                image.NoteId,
+                image.FileName,
+                image.ContentType,
+                image.SizeBytes))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<int> DeleteAsync(
+        IEnumerable<Guid> imageIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(imageIds);
+
+        var ids = imageIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return 0;
+
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var uploadLock = GetUploadLock(userId);
+        await uploadLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var ownedImages = await context.NoteImages
+                .Where(image => image.UserId == userId && ids.Contains(image.Id))
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (ownedImages.Count == 0)
+                return 0;
+
+            context.NoteImages.RemoveRange(ownedImages);
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return ownedImages.Count;
         }
         finally
         {
@@ -245,6 +302,7 @@ internal sealed class NoteImageService(
             && data.AsSpan(0, 4).SequenceEqual("RIFF"u8)
             && data.AsSpan(8, 4).SequenceEqual("WEBP"u8),
         "image/bmp" => data.AsSpan().StartsWith("BM"u8),
+        "application/pdf" => data.AsSpan().StartsWith(PdfSignature),
         _ => false
     };
 

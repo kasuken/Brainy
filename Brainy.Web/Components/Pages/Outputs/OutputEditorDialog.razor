@@ -117,6 +117,15 @@
     /// <summary>Pass an existing output to enter edit mode; null creates a new output.</summary>
     [Parameter] public OutputDto? ExistingOutput { get; set; }
 
+    /// <summary>Optional title to prefill when opening the create flow from a note.</summary>
+    [Parameter] public string? InitialTitle { get; set; }
+
+    /// <summary>Optional seed content to prefill when opening the create flow from a note.</summary>
+    [Parameter] public string? InitialContent { get; set; }
+
+    /// <summary>Optional source notes to pre-link when opening the create flow from a note.</summary>
+    [Parameter] public IReadOnlyList<Guid>? InitialSourceNoteIds { get; set; }
+
     private MudForm _form = null!;
     private bool _valid;
     private bool _saving;
@@ -131,6 +140,7 @@
     private string _content = "";
     private GeneratedOutputDraftDto? _generatedDraft;
     private byte[]? _rowVersion;
+    private List<Guid> _sourceNoteIds = [];
 
     private List<AreaDto> _areas = [];
     private List<ProjectDto> _projects = [];
@@ -165,7 +175,20 @@
             {
                 _content = detail.Content;
                 _rowVersion = detail.RowVersion;
+                _sourceNoteIds = detail.SourceNotes
+                    .Select(note => note.NoteId)
+                    .Distinct()
+                    .ToList();
             }
+        }
+        else
+        {
+            _title = InitialTitle?.Trim() ?? string.Empty;
+            _content = InitialContent ?? string.Empty;
+            _sourceNoteIds = InitialSourceNoteIds?
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToList() ?? [];
         }
     }
 
@@ -185,7 +208,7 @@
                     IsAiGenerated: _generatedDraft is null ? null : true,
                     Model: _generatedDraft?.Model,
                     PromptVersion: _generatedDraft?.PromptVersion,
-                    SourceNoteIds: _generatedDraft?.SourceNoteIds,
+                    SourceNoteIds: GetSourceNoteIdsOrNull(),
                     RowVersion: _rowVersion));
                 Snackbar.Add("Output updated.", Severity.Success);
             }
@@ -196,7 +219,7 @@
                     IsAiGenerated: _generatedDraft is not null,
                     Model: _generatedDraft?.Model,
                     PromptVersion: _generatedDraft?.PromptVersion,
-                    SourceNoteIds: _generatedDraft?.SourceNoteIds));
+                    SourceNoteIds: GetSourceNoteIdsOrNull()));
                 Snackbar.Add("Output created.", Severity.Success);
             }
             MudDialog.Close(DialogResult.Ok(true));
@@ -241,8 +264,31 @@
         {
             _generatedDraft = draft;
             _content = draft.Content;
+            MergeSourceNoteIds(draft.SourceNoteIds);
             Snackbar.Add("AI draft generated — review and save when ready.", Severity.Info);
         }
+    }
+
+    private IReadOnlyList<Guid>? GetSourceNoteIdsOrNull()
+    {
+        var distinctIds = _sourceNoteIds
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        return distinctIds.Count == 0 ? null : distinctIds;
+    }
+
+    private void MergeSourceNoteIds(IReadOnlyList<Guid>? sourceNoteIds)
+    {
+        if (sourceNoteIds is null || sourceNoteIds.Count == 0)
+            return;
+
+        _sourceNoteIds = _sourceNoteIds
+            .Concat(sourceNoteIds)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
     }
 
     internal static string FormatType(OutputType type) => type switch

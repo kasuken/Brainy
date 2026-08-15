@@ -82,7 +82,7 @@ internal sealed class ProjectService(
             {
                 p.Id, p.Name, p.Description, p.DesiredOutcome, p.Status, p.Priority,
                 p.StartDate, p.DueDate, p.CompletedDate, p.IsArchived, p.AreaId,
-                p.CreatedAtUtc, p.UpdatedAtUtc, p.ArchivedAtUtc,
+                p.CreatedAtUtc, p.UpdatedAtUtc, p.ArchivedAtUtc, p.ArchivedReason,
                 p.Emoji,
                 TotalTasks   = p.Tasks.Count(t => !t.IsArchived),
                 OpenTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status != TaskItemStatus.Done),
@@ -104,7 +104,8 @@ internal sealed class ProjectService(
             x.TotalTasks, x.OpenTasks, x.DoneTasks,
             x.TotalTasks > 0 ? Math.Round((double)x.DoneTasks / x.TotalTasks * 100, 1) : 0,
             x.OverdueTasks,
-            NormalizeEmoji(x.Emoji)))
+            NormalizeEmoji(x.Emoji),
+            x.ArchivedReason))
             .ToList();
     }
 
@@ -214,7 +215,7 @@ internal sealed class ProjectService(
             totalTasks, openTasks, doneTasks,
             totalTasks > 0 ? Math.Round((double)doneTasks / totalTasks * 100, 1) : 0,
             taskDtos, notes, resourceNotes,
-            NormalizeEmoji(project.Emoji));
+            NormalizeEmoji(project.Emoji), project.ArchivedReason);
     }
 
     public async Task<ProjectProgressDto?> GetProjectProgressAsync(Guid id, CancellationToken cancellationToken = default)
@@ -408,7 +409,7 @@ internal sealed class ProjectService(
         return ToDto(project);
     }
 
-    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
@@ -423,10 +424,12 @@ internal sealed class ProjectService(
 
         var now = DateTime.UtcNow;
         var archiveOperationId = Guid.NewGuid();
+        var normalizedReason = ArchiveReasonNormalizer.Normalize(archivedReason);
         project.StatusBeforeArchive = project.Status;
         project.ArchiveOperationId = archiveOperationId;
         project.IsArchived    = true;
         project.ArchivedAtUtc = now;
+        project.ArchivedReason = normalizedReason;
         project.Status        = ProjectStatus.Archived;
 
         // Cascade: archive all non-archived tasks belonging to the project
@@ -434,6 +437,7 @@ internal sealed class ProjectService(
         {
             task.IsArchived    = true;
             task.ArchivedAtUtc = now;
+            task.ArchivedReason = normalizedReason;
             task.ArchiveOperationId = archiveOperationId;
             task.IsCurrentTask = false;
         }
@@ -460,6 +464,7 @@ internal sealed class ProjectService(
         var archiveOperationId = project.ArchiveOperationId;
         project.IsArchived    = false;
         project.ArchivedAtUtc = null;
+        project.ArchivedReason = null;
         project.Status        = project.StatusBeforeArchive ?? ProjectStatus.NotStarted;
         project.StatusBeforeArchive = null;
         project.ArchiveOperationId = null;
@@ -471,6 +476,7 @@ internal sealed class ProjectService(
         {
             task.IsArchived    = false;
             task.ArchivedAtUtc = null;
+            task.ArchivedReason = null;
             task.ArchiveOperationId = null;
         }
 
@@ -519,7 +525,8 @@ internal sealed class ProjectService(
         p.GoalId,
         p.Goal?.Title,
         NormalizeEmoji(p.Emoji),
-        RowVersion: p.RowVersion);
+        RowVersion: p.RowVersion,
+        ArchivedReason: p.ArchivedReason);
 
     private static string NormalizeEmoji(string? emoji)
     {
@@ -614,6 +621,7 @@ internal sealed class ProjectService(
                 CreatedAtUtc = p.CreatedAtUtc,
                 UpdatedAtUtc = p.UpdatedAtUtc,
                 ArchivedAtUtc = p.ArchivedAtUtc,
+                ArchivedReason = p.ArchivedReason,
                 TotalTasks   = p.Tasks.Count(t => !t.IsArchived),
                 OpenTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status != TaskItemStatus.Done),
                 DoneTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status == TaskItemStatus.Done),
@@ -630,7 +638,8 @@ internal sealed class ProjectService(
         x.TotalTasks, x.OpenTasks, x.DoneTasks,
         x.TotalTasks > 0 ? Math.Round((double)x.DoneTasks / x.TotalTasks * 100, 1) : 0,
         x.OverdueTasks,
-        NormalizeEmoji(x.Emoji));
+        NormalizeEmoji(x.Emoji),
+        x.ArchivedReason);
 
     /// <summary>Anonymous-type-equivalent for EF projection in deadline queries.</summary>
     private sealed class DeadlineProjection
@@ -650,6 +659,7 @@ internal sealed class ProjectService(
         public DateTime CreatedAtUtc { get; init; }
         public DateTime UpdatedAtUtc { get; init; }
         public DateTime? ArchivedAtUtc { get; init; }
+        public string? ArchivedReason { get; init; }
         public int TotalTasks { get; init; }
         public int OpenTasks { get; init; }
         public int DoneTasks { get; init; }

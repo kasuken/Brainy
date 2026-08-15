@@ -22,6 +22,9 @@ public interface IOutputService
     /// <summary>Returns active outputs linked to a specific area.</summary>
     Task<IReadOnlyList<OutputDto>> GetByAreaAsync(Guid areaId, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns outputs that cite a specific note as source material.</summary>
+    Task<IReadOnlyList<OutputDto>> GetBySourceNoteAsync(Guid noteId, CancellationToken cancellationToken = default);
+
     /// <summary>Returns a lightweight projection of a single output, or <c>null</c> if not found.</summary>
     Task<OutputDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
@@ -43,7 +46,7 @@ public interface IOutputService
     Task<OutputDto> UpdateAsync(UpdateOutputDto dto, CancellationToken cancellationToken = default);
 
     /// <summary>Soft-archives the output. Sets IsArchived = true, ArchivedDate = UtcNow, Status = Archived.</summary>
-    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
+    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null);
 
     /// <summary>Restores an archived output. Clears IsArchived and ArchivedDate; resets Status to Draft.</summary>
     Task RestoreAsync(Guid id, CancellationToken cancellationToken = default);

@@ -4,8 +4,8 @@ using Brainy.Application.Interfaces.Services;
 namespace Brainy.Web.Endpoints;
 
 /// <summary>
-/// HTTP endpoints for serving note images stored in the database. Images are referenced
-/// from note Markdown as <c>/api/note-images/{id}</c>.
+/// HTTP endpoints for serving note attachments stored in the database. Markdown references
+/// binary assets through <c>/api/note-images/{id}</c>.
 /// </summary>
 public static class NoteImageEndpoints
 {

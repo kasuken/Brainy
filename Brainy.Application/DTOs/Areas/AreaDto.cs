@@ -12,4 +12,5 @@ public record AreaDto(
     DateTime? ArchivedAtUtc,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
-    string Emoji = AreaEmojiDefaults.DefaultEmoji);
+    string Emoji = AreaEmojiDefaults.DefaultEmoji,
+    string? ArchivedReason = null);

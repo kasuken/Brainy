@@ -13,7 +13,7 @@
 
     @* ── Mobile trigger (icon only, visible on < md) ── *@
     <button type="button" class="gsb__trigger d-flex d-md-none"
-            @onclick='() => Nav.NavigateTo("/search")'
+            @onclick="ToggleMobileSearchAsync"
             aria-label="Open search">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2.2"
@@ -55,8 +55,126 @@
         <kbd class="gsb__kbd" aria-hidden="true">Ctrl K</kbd>
     </div>
 
+    @if (_mobileOpen)
+    {
+        <div class="gsb__mobile-panel d-md-none">
+            <div class="gsb__mobile-shell">
+                <div class="gsb__mobile-bar">
+                    <button type="button"
+                            class="gsb__mobile-close"
+                            @onclick="CloseMobileSearchAsync"
+                            aria-label="Close search">
+                        <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                    </button>
+
+                    <span class="gsb__bar-icon" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2.2"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8" />
+                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        </svg>
+                    </span>
+
+                    <input @ref="_inputRef"
+                           class="gsb__input"
+                           type="search"
+                           placeholder="Search…"
+                           autocomplete="off"
+                           spellcheck="false"
+                           aria-label="Global search"
+                           role="combobox"
+                           aria-expanded="@_open.ToString().ToLowerInvariant()"
+                           aria-haspopup="listbox"
+                           aria-controls="global-search-results-mobile"
+                           aria-activedescendant="@GetActiveDescendantId()"
+                           value="@_query"
+                           @oninput="OnInputAsync"
+                           @onfocus="OnFocusAsync"
+                           @onkeydown="OnKeyDownAsync" />
+                </div>
+
+                @if (HasVisibleResults)
+                {
+                    <div id="global-search-results-mobile"
+                         class="gsb__overlay gsb__overlay--mobile"
+                         role="listbox"
+                         aria-label="Search results">
+
+                        @if (_searching)
+                        {
+                            <div class="gsb__state">
+                                <MudProgressCircular Indeterminate="true"
+                                                     Color="Color.Primary"
+                                                     Size="Size.Small"
+                                                     Class="gsb__spinner" />
+                                <span class="gsb__state-text">Searching…</span>
+                            </div>
+                        }
+                        else if (_noResults)
+                        {
+                            <div class="gsb__state">
+                                <MudIcon Icon="@Icons.Material.Outlined.SearchOff"
+                                         Class="gsb__state-icon" />
+                                <span class="gsb__state-text">
+                                    No results for <strong>"@_query"</strong>
+                                </span>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var group in _grouped)
+                            {
+                                <div class="gsb__group">
+                                    <div class="gsb__group-header" aria-hidden="true">
+                                        <MudIcon Icon="@TypeIcon(group.Key)"
+                                                 Class="gsb__group-icon"
+                                                 Size="Size.Small" />
+                                        <span class="gsb__group-label">@group.Key</span>
+                                    </div>
+
+                                    @foreach (var item in group.Value)
+                                    {
+                                        var localItem = item;
+                                        var isActive = _flatIndex.TryGetValue(localItem.Id, out var idx) &&
+                                                       _selectedIndex == idx;
+                                        <button class="gsb__item @(isActive ? "gsb__item--active" : "")"
+                                                id="@($"gsb-item-{localItem.Id}")"
+                                                role="option"
+                                                aria-selected="@isActive"
+                                                @onclick="() => NavigateTo(localItem)"
+                                                @onmouseenter="() => OnItemHover(localItem.Id)">
+                                            <span class="gsb__item-title">@localItem.Title</span>
+                                            @if (!string.IsNullOrWhiteSpace(localItem.ContentSnippet))
+                                            {
+                                                <span class="gsb__item-snippet">
+                                                    @TruncateSnippet(localItem.ContentSnippet)
+                                                </span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            }
+
+                            @if (_totalRaw > MaxDisplayResults)
+                            {
+                                <button class="gsb__more" @onclick="GoToFullSearchAsync">
+                                    See all results
+                                    <MudIcon Icon="@Icons.Material.Outlined.ArrowForward"
+                                             Class="gsb__more-icon"
+                                             Size="Size.Small" />
+                                </button>
+                            }
+                        }
+
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
     @* ── Results overlay ── *@
-    @if (_open && (_results.Count > 0 || _searching || _noResults))
+    @if (!_mobileOpen && _open && HasVisibleResults)
     {
         <div id="global-search-results" class="gsb__overlay" role="listbox" aria-label="Search results">
 
@@ -158,6 +276,50 @@
         background: var(--appbar-chip-bg-hover);
     }
 
+    .gsb__mobile-panel {
+        position: fixed;
+        inset: 0;
+        z-index: 10010;
+        padding: 0.75rem;
+        background: color-mix(in srgb, var(--appbar-overlay-bg) 78%, transparent);
+    }
+
+    .gsb__mobile-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+    }
+
+    .gsb__mobile-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        background: var(--appbar-chip-bg);
+        border: 1px solid var(--appbar-line);
+        border-radius: 12px;
+        padding: 0.5rem 0.65rem;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .gsb__mobile-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        padding: 0;
+        background: transparent;
+        border: none;
+        border-radius: 999px;
+        color: var(--appbar-text);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .gsb__mobile-close:hover {
+        background: var(--appbar-chip-bg-hover);
+    }
+
     /* ── Inline bar (md+) ── */
     .gsb__bar {
         align-items: center;
@@ -237,6 +399,16 @@
         z-index: 9999;
         overflow: hidden;
         animation: gsb-in 0.13s ease;
+    }
+
+    .gsb__overlay--mobile {
+        position: static;
+        transform: none;
+        width: 100%;
+        max-width: none;
+        max-height: min(70vh, calc(100dvh - 5.5rem));
+        overflow-y: auto;
+        animation: none;
     }
 
     @@keyframes gsb-in {
@@ -367,6 +539,12 @@
         width: 0.8rem !important;
         height: 0.8rem !important;
     }
+
+    @@media (min-width: 768px) {
+        .gsb__mobile-panel {
+            display: none !important;
+        }
+    }
 </style>
 
 @code {
@@ -379,6 +557,7 @@
 
     private string _query = string.Empty;
     private bool _open;
+    private bool _mobileOpen;
     private bool _searching;
     private bool _noResults;
     private int _selectedIndex;
@@ -409,22 +588,15 @@
     {
         _open = true;
         await InvokeAsync(StateHasChanged);
-        // Small delay so the input is present in the DOM after re-render
-        await Task.Delay(50).ConfigureAwait(false);
-        try
-        {
-            await JS.InvokeVoidAsync("brainySearch.focus", _inputRef).ConfigureAwait(false);
-        }
-        catch (JSDisconnectedException) { }
-        catch (ObjectDisposedException) { }
+        await FocusInputAsync().ConfigureAwait(false);
     }
 
     /// <summary>Closes the overlay when the user clicks outside the component.</summary>
     [JSInvokable]
     public async Task CloseFromOutsideAsync()
     {
-        if (!_open) return;
-        _open = false;
+        if (!_open && !_mobileOpen) return;
+        CloseSearch();
         await InvokeAsync(StateHasChanged);
     }
 
@@ -450,7 +622,7 @@
         if (string.IsNullOrWhiteSpace(_query))
         {
             ResetResults();
-            _open = false;
+            _open = _mobileOpen;
             StateHasChanged();
             return;
         }
@@ -465,11 +637,15 @@
             await Task.Delay(300, token).ConfigureAwait(false);
             if (token.IsCancellationRequested) return;
 
-            var raw = await SearchService.SearchAsync(_query, token).ConfigureAwait(false);
+            var raw = await SearchService.SearchAsync(
+                _query,
+                page: 1,
+                pageSize: MaxDisplayResults,
+                cancellationToken: token).ConfigureAwait(false);
             if (token.IsCancellationRequested) return;
 
-            _totalRaw = raw.Count;
-            _results = raw.Take(MaxDisplayResults).ToList();
+            _totalRaw = raw.TotalCount;
+            _results = raw.Items.ToList();
             _noResults = _results.Count == 0;
             RebuildGrouped();
         }
@@ -510,7 +686,7 @@
                 break;
 
             case "Escape":
-                _open = false;
+                CloseSearch();
                 StateHasChanged();
                 break;
         }
@@ -528,15 +704,14 @@
 
     private void NavigateTo(SearchResultDto result)
     {
-        _open = false;
-        _query = string.Empty;
+        CloseSearch(clearQuery: true);
         ResetResults();
         Nav.NavigateTo(BuildUrl(result));
     }
 
     private async Task GoToFullSearchAsync()
     {
-        _open = false;
+        CloseSearch();
         Nav.NavigateTo($"/search?q={Uri.EscapeDataString(_query)}");
         await Task.CompletedTask;
     }
@@ -613,6 +788,51 @@
         _open && _selectedIndex >= 0 && _selectedIndex < _flat.Count
             ? $"gsb-item-{_flat[_selectedIndex].Id}"
             : null;
+
+    private bool HasVisibleResults => _results.Count > 0 || _searching || _noResults;
+
+    private async Task ToggleMobileSearchAsync()
+    {
+        if (_mobileOpen)
+        {
+            CloseSearch();
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        _mobileOpen = true;
+        _open = true;
+        await InvokeAsync(StateHasChanged);
+        await FocusInputAsync().ConfigureAwait(false);
+    }
+
+    private async Task CloseMobileSearchAsync()
+    {
+        CloseSearch();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void CloseSearch(bool clearQuery = false)
+    {
+        _open = false;
+        _mobileOpen = false;
+
+        if (clearQuery)
+        {
+            _query = string.Empty;
+        }
+    }
+
+    private async Task FocusInputAsync()
+    {
+        await Task.Delay(50).ConfigureAwait(false);
+        try
+        {
+            await JS.InvokeVoidAsync("brainySearch.focus", _inputRef).ConfigureAwait(false);
+        }
+        catch (JSDisconnectedException) { }
+        catch (ObjectDisposedException) { }
+    }
 
     private static string TruncateSnippet(string snippet) =>
         snippet.Length <= SnippetDisplayLength

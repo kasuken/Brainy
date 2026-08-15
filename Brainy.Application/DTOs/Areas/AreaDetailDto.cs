@@ -15,4 +15,5 @@ public record AreaDetailDto(
     int ActiveProjectCount,
     int OpenTaskCount,
     int RecentNoteCount,
-    string Emoji = AreaEmojiDefaults.DefaultEmoji);
+    string Emoji = AreaEmojiDefaults.DefaultEmoji,
+    string? ArchivedReason = null);

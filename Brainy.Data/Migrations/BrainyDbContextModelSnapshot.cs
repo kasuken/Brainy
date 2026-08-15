@@ -199,6 +199,10 @@ namespace Brainy.Data.Migrations
                     b.Property<DateTime?>("ArchivedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("ArchivedReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -256,6 +260,10 @@ namespace Brainy.Data.Migrations
 
                     b.Property<DateTime?>("ArchivedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("ArchivedReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<Guid?>("AreaId")
                         .HasColumnType("uniqueidentifier");
@@ -447,6 +455,10 @@ namespace Brainy.Data.Migrations
                     b.Property<DateTime?>("ArchivedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("ArchivedReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<Guid?>("AreaId")
                         .HasColumnType("uniqueidentifier");
 
@@ -585,6 +597,10 @@ namespace Brainy.Data.Migrations
 
                     b.Property<DateTime?>("ArchivedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("ArchivedReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<Guid?>("AreaId")
                         .HasColumnType("uniqueidentifier");
@@ -774,6 +790,10 @@ namespace Brainy.Data.Migrations
                     b.Property<DateTime?>("ArchivedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("ArchivedReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<Guid?>("AreaId")
                         .HasColumnType("uniqueidentifier");
 
@@ -864,6 +884,10 @@ namespace Brainy.Data.Migrations
                     b.Property<DateTime?>("ArchivedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("ArchivedReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<Guid?>("AreaId")
                         .HasColumnType("uniqueidentifier");
 
@@ -952,6 +976,10 @@ namespace Brainy.Data.Migrations
 
                     b.Property<DateTime?>("ArchivedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("ArchivedReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<Guid?>("AreaId")
                         .HasColumnType("uniqueidentifier");
@@ -1186,6 +1214,10 @@ namespace Brainy.Data.Migrations
 
                     b.Property<DateTime?>("ArchivedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("ArchivedReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<DateTime?>("CompletedDate")
                         .HasColumnType("datetime2");

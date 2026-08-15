@@ -183,4 +183,43 @@ public class ProjectServiceTests
         tasks[active.Id].IsArchived.Should().BeFalse();
         tasks[active.Id].IsCurrentTask.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task ArchiveAndRestoreAsync_PersistsAndClearsArchivedReason()
+    {
+        var (projects, db) = BuildLifecycleServices(nameof(ArchiveAndRestoreAsync_PersistsAndClearsArchivedReason));
+        var project = new Project
+        {
+            Id = Guid.NewGuid(),
+            UserId = DefaultUserId,
+            Name = "Lifecycle",
+            Status = ProjectStatus.Active,
+            Priority = ProjectPriority.Medium
+        };
+        var active = new TaskItem
+        {
+            Id = Guid.NewGuid(),
+            UserId = DefaultUserId,
+            ProjectId = project.Id,
+            Title = "Active",
+            Status = TaskItemStatus.Todo
+        };
+        db.Projects.Add(project);
+        db.Tasks.Add(active);
+        await db.SaveChangesAsync();
+
+        await projects.ArchiveAsync(project.Id, archivedReason: "Completed and documented");
+
+        var archivedProject = await db.Projects.AsNoTracking().SingleAsync();
+        var archivedTask = await db.Tasks.AsNoTracking().SingleAsync();
+        archivedProject.ArchivedReason.Should().Be("Completed and documented");
+        archivedTask.ArchivedReason.Should().Be("Completed and documented");
+
+        await projects.RestoreAsync(project.Id);
+
+        var restoredProject = await db.Projects.AsNoTracking().SingleAsync();
+        var restoredTask = await db.Tasks.AsNoTracking().SingleAsync();
+        restoredProject.ArchivedReason.Should().BeNull();
+        restoredTask.ArchivedReason.Should().BeNull();
+    }
 }

@@ -253,6 +253,24 @@ public class TaskServiceTests
         refreshed.Status.Should().Be(TaskItemStatus.Done);
     }
 
+    [Fact]
+    public async Task ArchiveAsync_WithReason_PersistsReasonForTaskAndSubtasks()
+    {
+        var (sut, db) = BuildService(nameof(ArchiveAsync_WithReason_PersistsReasonForTaskAndSubtasks));
+        var project = CreateProject(DefaultUserId);
+        var parent = CreateTask(project.Id, DefaultUserId);
+        var subtask = CreateTask(project.Id, DefaultUserId, parentTaskId: parent.Id);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(parent, subtask);
+        await db.SaveChangesAsync();
+
+        await sut.ArchiveAsync(parent.Id, archivedReason: "Waiting for next quarter");
+
+        var tasks = await db.Tasks.AsNoTracking().ToDictionaryAsync(t => t.Id);
+        tasks[parent.Id].ArchivedReason.Should().Be("Waiting for next quarter");
+        tasks[subtask.Id].ArchivedReason.Should().Be("Waiting for next quarter");
+    }
+
     // ── Cascade completion down to subtasks ───────────────────────────────────
 
     [Fact]
@@ -418,6 +436,25 @@ public class TaskServiceTests
     }
 
     [Fact]
+    public async Task RestoreAsync_ClearsArchivedReasonFromRestoredTasks()
+    {
+        var (sut, db) = BuildService(nameof(RestoreAsync_ClearsArchivedReasonFromRestoredTasks));
+        var project = CreateProject(DefaultUserId);
+        var parent = CreateTask(project.Id, DefaultUserId);
+        var subtask = CreateTask(project.Id, DefaultUserId, parentTaskId: parent.Id);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(parent, subtask);
+        await db.SaveChangesAsync();
+
+        await sut.ArchiveAsync(parent.Id, archivedReason: "Reference only");
+        await sut.RestoreAsync(parent.Id);
+
+        var tasks = await db.Tasks.AsNoTracking().ToDictionaryAsync(t => t.Id);
+        tasks[parent.Id].ArchivedReason.Should().BeNull();
+        tasks[subtask.Id].ArchivedReason.Should().BeNull();
+    }
+
+    [Fact]
     public async Task RestoreAsync_WhenParentTaskIsArchived_RejectsSubtaskRestore()
     {
         var (sut, db) = BuildService(nameof(RestoreAsync_WhenParentTaskIsArchived_RejectsSubtaskRestore));
@@ -514,6 +551,113 @@ public class TaskServiceTests
 
         (await db.Tasks.AsNoTracking().CountAsync(t => t.RecurrenceSourceTaskId == task.Id)).Should().Be(0);
         (await db.Tasks.AsNoTracking().SingleAsync(t => t.Id == task.Id)).Status.Should().Be(TaskItemStatus.Done);
+    }
+
+    [Fact]
+    public void GetUpcomingOccurrences_ReturnsNextFiveDatesWithinEndDate()
+    {
+        var (sut, _) = BuildService(nameof(GetUpcomingOccurrences_ReturnsNextFiveDatesWithinEndDate));
+
+        var occurrences = sut.GetUpcomingOccurrences(
+            RecurrenceType.Weekly,
+            2,
+            new DateTime(2026, 8, 20, 14, 30, 0),
+            new DateTime(2026, 10, 20),
+            count: 5);
+
+        occurrences.Should().BeEquivalentTo(
+            [
+                new DateTime(2026, 8, 20),
+                new DateTime(2026, 9, 3),
+                new DateTime(2026, 9, 17),
+                new DateTime(2026, 10, 1),
+                new DateTime(2026, 10, 15)
+            ],
+            options => options.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void GetUpcomingOccurrences_WithIncompleteRule_ReturnsEmptyList()
+    {
+        var (sut, _) = BuildService(nameof(GetUpcomingOccurrences_WithIncompleteRule_ReturnsEmptyList));
+
+        var occurrences = sut.GetUpcomingOccurrences(
+            RecurrenceType.Monthly,
+            0,
+            new DateTime(2026, 8, 20),
+            null);
+
+        occurrences.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetRecurrenceSummary_FormatsReadableSchedule()
+    {
+        var (sut, _) = BuildService(nameof(GetRecurrenceSummary_FormatsReadableSchedule));
+
+        var summary = sut.GetRecurrenceSummary(
+            RecurrenceType.Weekly,
+            2,
+            new DateTime(2026, 8, 20),
+            new DateTime(2027, 1, 1));
+
+        summary.Should().Be("Every 2 weeks, next on Aug 20, 2026, ending Jan 1, 2027");
+    }
+
+    [Fact]
+    public async Task BulkUpdateStatusAsync_UpdatesAllOwnedTasks()
+    {
+        var (sut, db) = BuildService(nameof(BulkUpdateStatusAsync_UpdatesAllOwnedTasks));
+        var project = CreateProject(DefaultUserId);
+        var first = CreateTask(project.Id, DefaultUserId);
+        var second = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Waiting);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(first, second);
+        await db.SaveChangesAsync();
+
+        var updated = await sut.BulkUpdateStatusAsync([first.Id, second.Id], TaskItemStatus.Waiting);
+
+        updated.Should().Be(2);
+        var storedStatuses = await db.Tasks.AsNoTracking()
+            .Where(task => task.Id == first.Id || task.Id == second.Id)
+            .Select(task => task.Status)
+            .ToListAsync();
+        storedStatuses.Should().OnlyContain(status => status == TaskItemStatus.Waiting);
+    }
+
+    [Fact]
+    public async Task BulkUpdateStatusAsync_WithTaskOwnedByAnotherUser_ThrowsAndLeavesOwnedTasksUnchanged()
+    {
+        var (sut, db) = BuildService(nameof(BulkUpdateStatusAsync_WithTaskOwnedByAnotherUser_ThrowsAndLeavesOwnedTasksUnchanged));
+        var ownProject = CreateProject(DefaultUserId);
+        var ownTask = CreateTask(ownProject.Id, DefaultUserId);
+        var otherProject = CreateProject("u2");
+        var otherUsersTask = CreateTask(otherProject.Id, "u2");
+        db.Projects.AddRange(ownProject, otherProject);
+        db.Tasks.AddRange(ownTask, otherUsersTask);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.BulkUpdateStatusAsync([ownTask.Id, otherUsersTask.Id], TaskItemStatus.Waiting);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("*tasks were not found*");
+        (await db.Tasks.AsNoTracking().SingleAsync(task => task.Id == ownTask.Id)).Status.Should().Be(TaskItemStatus.Todo);
+    }
+
+    [Fact]
+    public async Task BulkUpdateStatusAsync_WithEmptyList_ReturnsZero()
+    {
+        var (sut, db) = BuildService(nameof(BulkUpdateStatusAsync_WithEmptyList_ReturnsZero));
+        var project = CreateProject(DefaultUserId);
+        var task = CreateTask(project.Id, DefaultUserId);
+        db.Projects.Add(project);
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync();
+
+        var updated = await sut.BulkUpdateStatusAsync([], TaskItemStatus.Waiting);
+
+        updated.Should().Be(0);
+        (await db.Tasks.AsNoTracking().SingleAsync(taskItem => taskItem.Id == task.Id)).Status.Should().Be(TaskItemStatus.Todo);
     }
 
     [Fact]

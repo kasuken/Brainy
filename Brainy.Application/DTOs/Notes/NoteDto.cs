@@ -28,4 +28,5 @@ public record NoteDto(
     /// <summary>Concurrency token captured at load time; pass back on update to detect conflicts.</summary>
     byte[]? RowVersion = null,
     /// <summary>Normalized display names of tags assigned to the note.</summary>
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    string? ArchivedReason = null);

@@ -96,7 +96,8 @@ public class SearchServiceTests
 
         var result = await sut.SearchAsync(query!);
 
-        result.Should().BeEmpty();
+        result.Items.Should().BeEmpty();
+        result.TotalCount.Should().Be(0);
     }
 
     // ── Matching & result types ───────────────────────────────────────────────
@@ -111,7 +112,7 @@ public class SearchServiceTests
 
         var result = await sut.SearchAsync("zettelkasten");
 
-        result.Should().ContainSingle()
+        result.Items.Should().ContainSingle()
             .Which.ResultType.Should().Be("Note");
     }
 
@@ -124,8 +125,26 @@ public class SearchServiceTests
 
         var result = await sut.SearchAsync("zettelkasten");
 
-        result.Should().ContainSingle()
+        result.Items.Should().ContainSingle()
             .Which.ContentSnippet.Should().Contain("zettelkasten");
+    }
+
+    [Fact]
+    public async Task SearchAsync_MatchesNoteByTag_AndReturnsTags()
+    {
+        var (sut, db) = BuildService(nameof(SearchAsync_MatchesNoteByTag_AndReturnsTags));
+        var tag = new Tag { Id = Guid.NewGuid(), UserId = DefaultUserId, Name = "voyager" };
+        var note = CreateNote(DefaultUserId, "Mission notes");
+        note.Tags.Add(tag);
+        db.AddRange(tag, note);
+        await db.SaveChangesAsync();
+
+        var result = await sut.SearchAsync("voyager");
+
+        var match = result.Items.Should().ContainSingle().Which;
+        match.ResultType.Should().Be("Note");
+        match.Tags.Should().Equal("voyager");
+        match.SnippetSource.Should().Be("Tags");
     }
 
     [Fact]
@@ -146,8 +165,9 @@ public class SearchServiceTests
 
         var result = await sut.SearchAsync("voyager");
 
-        result.Select(r => r.ResultType).Should()
+        result.Items.Select(r => r.ResultType).Should()
             .BeEquivalentTo("Note", "Output", "Project", "Area", "Task", "Goal", "Idea", "Resource");
+        result.TotalCount.Should().Be(8);
     }
 
     [Fact]
@@ -160,7 +180,7 @@ public class SearchServiceTests
 
         var result = await sut.SearchAsync("voyager");
 
-        var match = result.Should().ContainSingle().Which;
+        var match = result.Items.Should().ContainSingle().Which;
         match.ResultType.Should().Be("Resource");
         match.ParaCategory.Should().Be(ParaCategory.Resource);
         match.ResourceId.Should().Be(resource.Id);
@@ -179,31 +199,39 @@ public class SearchServiceTests
 
         var result = await sut.SearchAsync("voyager");
 
-        result.Should().HaveCount(2);
-        result[0].Id.Should().Be(titleMatch.Id);
-        result[1].Id.Should().Be(contentOnly.Id);
+        result.Items.Should().HaveCount(2);
+        result.Items[0].Id.Should().Be(titleMatch.Id);
+        result.Items[1].Id.Should().Be(contentOnly.Id);
     }
 
     [Fact]
-    public async Task SearchAsync_RanksBeforeApplyingPerEntityLimit()
+    public async Task SearchAsync_PaginatesAcrossResults_AndReturnsTotalCount()
     {
-        var (sut, db) = BuildService(nameof(SearchAsync_RanksBeforeApplyingPerEntityLimit));
-        db.Projects.AddRange(Enumerable.Range(1, 100)
-            .Select(index => new Project
+        var (sut, db) = BuildService(nameof(SearchAsync_PaginatesAcrossResults_AndReturnsTotalCount));
+        var notes = Enumerable.Range(1, 25)
+            .Select(index => new Note
             {
                 Id = Guid.NewGuid(),
                 UserId = DefaultUserId,
-                Name = $"Reference project {index}",
-                Description = "voyager",
-            }));
-        var titleMatch = CreateProject(DefaultUserId, "voyager priority project");
-        db.Projects.Add(titleMatch);
+                Title = $"voyager note {index:D2}",
+                UpdatedAtUtc = DateTime.UtcNow.AddMinutes(index)
+            })
+            .ToList();
+
+        db.Notes.AddRange(notes);
         await db.SaveChangesAsync();
 
-        var result = await sut.SearchAsync("voyager");
+        var result = await sut.SearchAsync("voyager", page: 2, pageSize: 10);
 
-        result.Should().HaveCount(100);
-        result[0].Id.Should().Be(titleMatch.Id);
+        result.TotalCount.Should().Be(25);
+        result.Page.Should().Be(2);
+        result.PageSize.Should().Be(10);
+        result.Items.Should().HaveCount(10);
+        result.Items.Select(item => item.Id).Should().Equal(notes
+            .OrderByDescending(note => note.UpdatedAtUtc)
+            .Skip(10)
+            .Take(10)
+            .Select(note => note.Id));
     }
 
     // ── Exclusions ────────────────────────────────────────────────────────────
@@ -235,7 +263,7 @@ public class SearchServiceTests
 
         var result = await sut.SearchAsync("voyager");
 
-        result.Should().BeEmpty();
+        result.Items.Should().BeEmpty();
     }
 
     [Fact]
@@ -251,22 +279,7 @@ public class SearchServiceTests
 
         var result = await sut.SearchAsync("voyager");
 
-        result.Should().BeEmpty();
-    }
-
-    // ── Result cap ────────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task SearchAsync_CapsResultsAtOneHundred()
-    {
-        var (sut, db) = BuildService(nameof(SearchAsync_CapsResultsAtOneHundred));
-        for (var i = 0; i < 110; i++)
-            db.Notes.Add(CreateNote(DefaultUserId, $"voyager note {i}"));
-        await db.SaveChangesAsync();
-
-        var result = await sut.SearchAsync("voyager");
-
-        result.Should().HaveCount(100);
+        result.Items.Should().BeEmpty();
     }
 
     // ── Snippets ──────────────────────────────────────────────────────────────
@@ -281,23 +294,51 @@ public class SearchServiceTests
 
         var result = await sut.SearchAsync("voyager");
 
-        var snippet = result.Single().ContentSnippet;
+        var snippet = result.Items.Single().ContentSnippet;
         snippet.Should().Contain("voyager");
         snippet.Should().StartWith("…").And.EndWith("…");
     }
 
     [Fact]
-    public async Task SearchAsync_SnippetFallsBackToContentStart_WhenTermOnlyInTitle()
+    public async Task SearchAsync_SnippetUsesMatchedTitle_WhenTermOnlyInTitle()
     {
-        var (sut, db) = BuildService(nameof(SearchAsync_SnippetFallsBackToContentStart_WhenTermOnlyInTitle));
-        var content = new string('x', 300);
-        db.Notes.Add(CreateNote(DefaultUserId, "voyager", content: content));
+        var (sut, db) = BuildService(nameof(SearchAsync_SnippetUsesMatchedTitle_WhenTermOnlyInTitle));
+        db.Notes.Add(CreateNote(DefaultUserId, "voyager plan", content: "background context"));
         await db.SaveChangesAsync();
 
         var result = await sut.SearchAsync("voyager");
 
-        var snippet = result.Single().ContentSnippet;
-        snippet.Should().StartWith("xxx").And.EndWith("…");
-        snippet.Length.Should().Be(201); // 200 chars + trailing ellipsis
+        var match = result.Items.Single();
+        match.SnippetSource.Should().Be("Title");
+        match.ContentSnippet.Should().Be("voyager plan");
+    }
+
+    [Fact]
+    public async Task SearchAsync_SnippetReturnsShortContentWithoutTruncation()
+    {
+        var (sut, db) = BuildService(nameof(SearchAsync_SnippetReturnsShortContentWithoutTruncation));
+        db.Notes.Add(CreateNote(DefaultUserId, "Meeting note", content: "Quick voyager summary"));
+        await db.SaveChangesAsync();
+
+        var result = await sut.SearchAsync("voyager");
+
+        var match = result.Items.Single();
+        match.SnippetSource.Should().Be("Content");
+        match.ContentSnippet.Should().Be("Quick voyager summary");
+    }
+
+    [Fact]
+    public async Task SearchAsync_SnippetStripsHtmlLikeContent_BeforeReturning()
+    {
+        var (sut, db) = BuildService(nameof(SearchAsync_SnippetStripsHtmlLikeContent_BeforeReturning));
+        db.Notes.Add(CreateNote(DefaultUserId, "Unsafe note", content: "Alpha <script>alert('x')</script> voyager <b>bold</b>"));
+        await db.SaveChangesAsync();
+
+        var result = await sut.SearchAsync("voyager");
+
+        var snippet = result.Items.Single().ContentSnippet;
+        snippet.Should().Contain("voyager");
+        snippet.Should().NotContain("<script>");
+        snippet.Should().NotContain("<b>");
     }
 }

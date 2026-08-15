@@ -47,6 +47,8 @@ public class Output : BaseEntity, IUserOwnedEntity
 
     public DateTime? ArchivedDate { get; set; }
 
+    public string? ArchivedReason { get; set; }
+
     public bool IsArchived { get; set; }
 
     /// <summary>The notes this output was distilled from.</summary>

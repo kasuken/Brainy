@@ -25,6 +25,8 @@ public class Area : BaseEntity, IUserOwnedEntity
     /// <summary>When this area was archived. Null if active.</summary>
     public DateTime? ArchivedAtUtc { get; set; }
 
+    public string? ArchivedReason { get; set; }
+
     public ICollection<Project> Projects { get; set; } = new List<Project>();
 
     public ICollection<Resource> Resources { get; set; } = new List<Resource>();

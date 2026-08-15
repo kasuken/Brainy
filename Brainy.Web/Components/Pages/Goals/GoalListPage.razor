@@ -12,7 +12,6 @@
 <PageTitle>Goals — Brainy</PageTitle>
 
 <style>
-    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
 
     .gp-page {
         max-width: 1500px;
@@ -345,6 +344,14 @@
                            OnClick="@(() => Nav.NavigateTo("/goals/metrics"))">
                     Metrics Dashboard
                 </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                           StartIcon="@Icons.Material.Outlined.ViewKanban"
+                           Size="Size.Large"
+                           Style="font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; border-radius: 8px;"
+                           FullWidth="true"
+                           OnClick="@(() => Nav.NavigateTo("/goals/kanban"))">
+                    Kanban View
+                </MudButton>
             </div>
 
             <div class="gp-widget">
@@ -639,5 +646,3 @@
         _ => "#9a9180"
     };
 }
-
-

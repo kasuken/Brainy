@@ -1,3 +1,4 @@
+using Brainy.Application.DTOs;
 using Brainy.Application.DTOs.Search;
 
 namespace Brainy.Application.Interfaces.Services;
@@ -13,9 +14,11 @@ public interface ISearchService
     /// &gt; content match), then by last-updated date descending.
     /// Use <see cref="Brainy.Application.DTOs.Search.SearchResultDto.ResultType"/> to
     /// distinguish result types: "Note", "Output", "Project", "Area", "Task", "Goal", "Idea".
-    /// Returns an empty list when <paramref name="query"/> is blank.
+    /// Returns an empty page when <paramref name="query"/> is blank.
     /// </summary>
-    Task<IReadOnlyList<SearchResultDto>> SearchAsync(
+    Task<PagedResult<SearchResultDto>> SearchAsync(
         string query,
+        int page = 1,
+        int pageSize = 20,
         CancellationToken cancellationToken = default);
 }

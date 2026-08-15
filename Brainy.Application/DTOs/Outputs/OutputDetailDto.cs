@@ -26,7 +26,8 @@ public record OutputDetailDto(
     DateTime UpdatedAtUtc,
     IReadOnlyList<OutputSourceNoteDto> SourceNotes,
     /// <summary>Concurrency token captured at load time; pass back on update or delete.</summary>
-    byte[]? RowVersion = null);
+    byte[]? RowVersion = null,
+    string? ArchivedReason = null);
 
 /// <summary>Lightweight reference to a <see cref="Domain.Entities.Note"/> that was used as source material for an output.</summary>
 public record OutputSourceNoteDto(Guid NoteId, string NoteTitle, DateTime CreatedAtUtc);

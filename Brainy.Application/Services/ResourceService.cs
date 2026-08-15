@@ -123,7 +123,8 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
             notes.Count,
             notes,
             NormalizeEmoji(resource.Emoji),
-            resource.RowVersion);
+            resource.RowVersion,
+            resource.ArchivedReason);
     }
 
     public async Task<ResourceDto> CreateAsync(CreateResourceDto dto, CancellationToken cancellationToken = default)
@@ -202,7 +203,7 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
         return ToDto(resource);
     }
 
-    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
@@ -211,8 +212,10 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Resource '{id}' was not found.");
 
+        var normalizedReason = ArchiveReasonNormalizer.Normalize(archivedReason);
         resource.IsArchived = true;
         resource.ArchivedAtUtc = DateTime.UtcNow;
+        resource.ArchivedReason = normalizedReason;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -231,6 +234,7 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
 
         resource.IsArchived = false;
         resource.ArchivedAtUtc = null;
+        resource.ArchivedReason = null;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -354,7 +358,8 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
         r.UpdatedAtUtc,
         r.Tags.Select(t => t.Name).OrderBy(n => n).ToList(),
         NormalizeEmoji(r.Emoji),
-        r.RowVersion);
+        r.RowVersion,
+        r.ArchivedReason);
 
     private static string NormalizeEmoji(string? emoji)
     {

@@ -134,7 +134,8 @@ internal sealed class GoalService(
             goal.UpdatedAtUtc,
             milestones,
             projects,
-            goal.RowVersion
+            goal.RowVersion,
+            goal.ArchivedReason
         );
     }
 
@@ -259,7 +260,7 @@ internal sealed class GoalService(
                ?? throw new InvalidOperationException("Failed to retrieve updated goal.");
     }
 
-    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
@@ -269,8 +270,10 @@ internal sealed class GoalService(
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Goal {id} not found.");
 
+        var normalizedReason = ArchiveReasonNormalizer.Normalize(archivedReason);
         goal.IsArchived = true;
         goal.ArchivedAtUtc = DateTime.UtcNow;
+        goal.ArchivedReason = normalizedReason;
         goal.Status = GoalStatus.Archived;
 
         context.GoalActivities.Add(new GoalActivity
@@ -299,6 +302,7 @@ internal sealed class GoalService(
 
         goal.IsArchived = false;
         goal.ArchivedAtUtc = null;
+        goal.ArchivedReason = null;
         goal.Status = GoalStatus.Planned;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -456,7 +460,8 @@ internal sealed class GoalService(
             progress,
             g.CreatedAtUtc,
             g.UpdatedAtUtc,
-            g.RowVersion
+            g.RowVersion,
+            g.ArchivedReason
         );
     }
 
@@ -492,4 +497,3 @@ internal sealed class GoalService(
             NewValue     = newValue,
         };
 }
-

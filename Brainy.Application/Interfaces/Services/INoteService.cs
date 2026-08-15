@@ -63,7 +63,7 @@ public interface INoteService
     Task<IReadOnlyList<NoteDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Marks a note as archived and records the archive timestamp.</summary>
-    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
+    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null);
 
     /// <summary>Restores an archived note, clearing the archive flag and timestamp.</summary>
     Task RestoreAsync(Guid id, CancellationToken cancellationToken = default);

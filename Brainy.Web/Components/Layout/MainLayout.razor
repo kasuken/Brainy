@@ -215,6 +215,15 @@
     {
         try
         {
+            var overrideTimeZoneId = await UserTimeZoneService.GetTimeZoneOverrideIdAsync();
+            if (!string.IsNullOrWhiteSpace(overrideTimeZoneId) &&
+                TimeZoneInfo.TryFindSystemTimeZoneById(overrideTimeZoneId, out var overrideTimeZone))
+            {
+                _userTimeZone = overrideTimeZone;
+                StateHasChanged();
+                return;
+            }
+
             var timeZoneId = await JSRuntime.InvokeAsync<string>("window.brainyTimeZone.get");
             if (TimeZoneInfo.TryFindSystemTimeZoneById(timeZoneId, out var browserTimeZone))
             {

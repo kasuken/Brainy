@@ -1,6 +1,7 @@
 @using Brainy.Application.DTOs.Tasks
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
+@using Brainy.Web.Components.Shared
 @inject ITaskService TaskService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -84,6 +85,8 @@ else
                 <div class="tl-col tl-col--title">Task</div>
                 <div class="tl-col tl-col--status">Status</div>
                 <div class="tl-col tl-col--priority">Priority</div>
+                <div class="tl-col tl-col--complexity">Size</div>
+                <div class="tl-col tl-col--dependencies">Deps</div>
                 <div class="tl-col tl-col--due">Due</div>
                 <div class="tl-col tl-col--actions"></div>
             </div>
@@ -91,6 +94,7 @@ else
             @foreach (var task in FilteredTasks)
             {
                 var overdue = task.DueDate.HasValue && task.DueDate < DateTime.Today && task.Status != TaskItemStatus.Done;
+                var dependency = GetDependencySummary(task);
 
                 <div class="tl-row @(task.Status == TaskItemStatus.Done ? "tl-row--done" : "") @(overdue ? "tl-row--overdue" : "")
                                    @(_expandedTasks.Contains(task.Id) ? "tl-row--expanded" : "")"
@@ -137,6 +141,9 @@ else
                                 @foreach (var sub in task.Subtasks)
                                 {
                                     <div class="tl-subtask @(sub.Status == TaskItemStatus.Done ? "tl-subtask--done" : "")">
+                                       @{
+                                           var subDependency = GetDependencySummary(sub);
+                                       }
                                         <div class="tl-strip--@sub.Priority.ToString().ToLower() tl-sub-strip"></div>
                                         <button class="tl-sub-check @(sub.Status == TaskItemStatus.Done ? "tl-sub-check--done" : "")"
                                                 @onclick="() => ToggleCompleteSubtask(sub)"
@@ -149,6 +156,13 @@ else
                                             }
                                         </button>
                                         <span class="tl-subtask__title">@sub.Title</span>
+                                        @if (subDependency.HasDependencies)
+                                        {
+                                           <span class="tl-subtask__dependency @(subDependency.IsBlocked ? "tl-subtask__dependency--blocked" : null)"
+                                                 title="@subDependency.Tooltip">
+                                               @(subDependency.IsBlocked ? $"⛔ {subDependency.UnresolvedCount}" : $"🔗 {subDependency.TotalCount}")
+                                           </span>
+                                        }
                                         @if (sub.DueDate.HasValue)
                                         {
                                             <span class="tl-subtask__due @(sub.DueDate < DateTime.Today && sub.Status != TaskItemStatus.Done ? "tl-due--overdue" : "")">
@@ -183,6 +197,33 @@ else
                         <span class="tl-priority-badge tl-pri--@task.Priority.ToString().ToLower()">
                             @PriorityLabel(task.Priority)
                         </span>
+                    </div>
+
+                    <div class="tl-col tl-col--complexity">
+                        @if (task.Complexity.HasValue)
+                        {
+                            <span class="tl-complexity-badge" title="@($"Complexity {task.Complexity.Value}")">
+                                @task.Complexity.Value
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="tl-complexity-empty">—</span>
+                        }
+                    </div>
+
+                    <div class="tl-col tl-col--dependencies">
+                       @if (dependency.HasDependencies)
+                       {
+                           <span class="tl-dependency-badge @(dependency.IsBlocked ? "tl-dependency-badge--blocked" : null)"
+                                 title="@dependency.Tooltip">
+                               @(dependency.IsBlocked ? $"⛔ {dependency.UnresolvedCount}" : $"🔗 {dependency.TotalCount}")
+                           </span>
+                       }
+                       else
+                       {
+                           <span class="tl-dependency-empty">—</span>
+                       }
                     </div>
 
                     <div class="tl-col tl-col--due">
@@ -369,7 +410,7 @@ else
 
 .tl-row {
     display: grid;
-    grid-template-columns: 4px 32px 1fr 110px 100px 80px 64px;
+    grid-template-columns: 4px 32px 1fr 110px 100px 72px 76px 80px 64px;
     align-items: center;
     border-bottom: 1px solid var(--line);
     transition: background .12s;
@@ -400,6 +441,16 @@ else
 }
 .tl-col--check { padding: .65rem .35rem .65rem .5rem; }
 .tl-col--title { padding: .65rem .6rem; }
+.tl-col--complexity {
+    text-align: center;
+    padding-left: .35rem;
+    padding-right: .35rem;
+}
+.tl-col--dependencies {
+    text-align: center;
+    padding-left: .35rem;
+    padding-right: .35rem;
+}
 .tl-col--due   { font-size: .78rem; color: var(--ink-soft); text-align: right; padding-right: .7rem; }
 .tl-col--actions {
     display: flex;
@@ -531,6 +582,21 @@ else
 }
 .tl-subtask__dot { font-size: .45rem; color: var(--ink-faint); }
 .tl-subtask__title { flex: 1; }
+.tl-subtask__dependency {
+    display: inline-flex;
+    align-items: center;
+    padding: .12rem .32rem;
+    border-radius: 999px;
+    background: var(--paper-raised);
+    color: var(--ink-soft);
+    font-size: .62rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.tl-subtask__dependency--blocked {
+    background: rgba(176,58,24,.08);
+    color: #b03a18;
+}
 .tl-subtask__due { font-size: .68rem; color: var(--ink-faint); flex-shrink: 0; }
 .tl-due--overdue { color: #b03a18 !important; font-weight: 700; }
 
@@ -599,6 +665,53 @@ else
 .tl-pri--medium   { color: #a07820; background: rgba(160,120,32,.10); }
 .tl-pri--low      { color: var(--sage); background: rgba(111,122,90,.10); }
 
+/* Complexity badges */
+.tl-complexity-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    padding: .18rem .4rem;
+    border-radius: 5px;
+    border: 1px dashed var(--line-strong);
+    background: var(--paper-sunk);
+    color: var(--ink-soft);
+    font-family: var(--font-display);
+    font-size: .66rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.tl-complexity-empty {
+    color: var(--ink-faint);
+    font-size: .82rem;
+}
+
+.tl-dependency-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    padding: .18rem .42rem;
+    border-radius: 5px;
+    border: 1px solid var(--line);
+    background: var(--paper-sunk);
+    color: var(--ink-soft);
+    font-size: .66rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.tl-dependency-badge--blocked {
+    border-color: rgba(176,58,24,.2);
+    background: rgba(176,58,24,.08);
+    color: #b03a18;
+}
+.tl-dependency-empty {
+    color: var(--ink-faint);
+    font-size: .82rem;
+}
+
 /* Due date */
 .tl-due {
     display: inline-flex;
@@ -636,6 +749,8 @@ else
         grid-template-columns: 4px 28px 1fr 80px 56px;
     }
     .tl-col--priority { display: none; }
+    .tl-col--complexity { display: none; }
+    .tl-col--dependencies { display: none; }
     .tl-col--actions  { display: none; }
 }
 @@media (max-width: 480px) {
@@ -798,18 +913,14 @@ else
 
     private async Task ArchiveSubtask(Guid subtaskId, string title)
     {
-        var confirmed = await DialogService.ShowMessageBox(
-            "Archive subtask",
-            $"Archive \"{title}\"? It will be hidden from active views.",
-            yesText: "Archive", cancelText: "Cancel");
+        var reason = await PromptArchiveReasonAsync("Archive subtask", $"Archive \"{title}\"? It will be hidden from active views.");
+        if (reason is null && !_archiveConfirmed)
+            return;
 
-        if (confirmed == true)
-        {
-            await TaskService.ArchiveAsync(subtaskId);
-            await LoadTasksAsync();
-            await OnTaskChanged.InvokeAsync();
-            Snackbar.Add($"\"{title}\" archived.", Severity.Success);
-        }
+        await TaskService.ArchiveAsync(subtaskId, archivedReason: reason);
+        await LoadTasksAsync();
+        await OnTaskChanged.InvokeAsync();
+        Snackbar.Add($"\"{title}\" archived.", Severity.Success);
     }
 
     private async Task OpenEditDialog(Guid taskId)
@@ -830,18 +941,112 @@ else
 
     private async Task ArchiveTask(Guid taskId, string title)
     {
-        var confirmed = await DialogService.ShowMessageBox(
-            "Archive task",
-            $"Archive \"{title}\"? It will be hidden from active views.",
-            yesText: "Archive", cancelText: "Cancel");
+        var reason = await PromptArchiveReasonAsync("Archive task", $"Archive \"{title}\"? It will be hidden from active views.");
+        if (reason is null && !_archiveConfirmed)
+            return;
 
-        if (confirmed == true)
+        await TaskService.ArchiveAsync(taskId, archivedReason: reason);
+        _allTasks.RemoveAll(t => t.Id == taskId);
+        await OnTaskChanged.InvokeAsync();
+        Snackbar.Add($"\"{title}\" archived.", Severity.Success);
+    }
+
+    private bool _archiveConfirmed;
+
+    private async Task<string?> PromptArchiveReasonAsync(string title, string message)
+    {
+        _archiveConfirmed = false;
+
+        var parameters = new DialogParameters<ArchiveReasonDialog>
         {
-            await TaskService.ArchiveAsync(taskId);
-            _allTasks.RemoveAll(t => t.Id == taskId);
-            await OnTaskChanged.InvokeAsync();
-            Snackbar.Add($"\"{title}\" archived.", Severity.Success);
+            { x => x.Title, title },
+            { x => x.Message, message }
+        };
+        var dialog = await DialogService.ShowAsync<ArchiveReasonDialog>(
+            title,
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled)
+        {
+            return null;
         }
+
+        _archiveConfirmed = true;
+        return result.Data as string;
+    }
+
+    private DependencySummary GetDependencySummary(TaskItemDto task)
+    {
+        var dependencyIds = task.DependsOnTaskIds?.Distinct().ToList() ?? [];
+        if (dependencyIds.Count == 0)
+            return new DependencySummary(0, 0, string.Empty);
+
+        var taskLookup = FlattenTasks(_allTasks)
+            .GroupBy(candidate => candidate.Id)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var unresolvedTitles = new List<string>();
+        var missingCount = 0;
+
+        foreach (var dependencyId in dependencyIds)
+        {
+            if (!taskLookup.TryGetValue(dependencyId, out var dependencyTask))
+            {
+                missingCount++;
+                continue;
+            }
+
+            if (dependencyTask.Status != TaskItemStatus.Done)
+                unresolvedTitles.Add(dependencyTask.Title);
+        }
+
+        var unresolvedCount = unresolvedTitles.Count + missingCount;
+        return new DependencySummary(
+            dependencyIds.Count,
+            unresolvedCount,
+            BuildDependencyTooltip(dependencyIds.Count, unresolvedCount, unresolvedTitles, missingCount));
+    }
+
+    private static IEnumerable<TaskItemDto> FlattenTasks(IEnumerable<TaskItemDto> tasks)
+    {
+        foreach (var task in tasks)
+        {
+            yield return task;
+
+            if (task.Subtasks is null)
+                continue;
+
+            foreach (var subtask in FlattenTasks(task.Subtasks))
+                yield return subtask;
+        }
+    }
+
+    private static string BuildDependencyTooltip(
+        int totalCount,
+        int unresolvedCount,
+        IReadOnlyCollection<string> unresolvedTitles,
+        int missingCount)
+    {
+        if (unresolvedCount == 0)
+            return $"All {totalCount} prerequisite{(totalCount == 1 ? string.Empty : "s")} are complete.";
+
+        var details = new List<string>();
+        if (unresolvedTitles.Count > 0)
+            details.Add(string.Join(", ", unresolvedTitles));
+        if (missingCount > 0)
+            details.Add($"{missingCount} unavailable prerequisite{(missingCount == 1 ? string.Empty : "s")}");
+
+        return details.Count == 0
+            ? $"Blocked by {unresolvedCount} unfinished prerequisite{(unresolvedCount == 1 ? string.Empty : "s")}."
+            : $"Blocked by {unresolvedCount} unfinished prerequisite{(unresolvedCount == 1 ? string.Empty : "s")}: {string.Join("; ", details)}.";
+    }
+
+    private readonly record struct DependencySummary(int TotalCount, int UnresolvedCount, string Tooltip)
+    {
+        public bool HasDependencies => TotalCount > 0;
+        public bool IsBlocked => UnresolvedCount > 0;
     }
 
     private static string StatusLabel(TaskItemStatus s) => s switch

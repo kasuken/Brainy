@@ -21,6 +21,9 @@ public class IdeaConfiguration : IEntityTypeConfiguration<Idea>
         builder.Property(i => i.Description)
             .HasMaxLength(2000);
 
+        builder.Property(i => i.ArchivedReason)
+            .HasMaxLength(2000);
+
         // Research, Competitors, Notes are nvarchar(max) — no length cap needed.
         builder.Property(i => i.Research);
         builder.Property(i => i.Competitors);

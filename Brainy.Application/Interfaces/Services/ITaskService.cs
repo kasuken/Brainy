@@ -22,6 +22,24 @@ public interface ITaskService
     Task<TaskItemDto> UpdateAsync(UpdateTaskDto dto, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Updates the status of multiple tasks owned by the current user.
+    /// Rejects the entire request when any supplied ID is not accessible to the user.
+    /// </summary>
+    Task<int> BulkUpdateStatusAsync(IEnumerable<Guid> taskIds, TaskItemStatus newStatus, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates the priority of multiple tasks owned by the current user.
+    /// Rejects the entire request when any supplied ID is not accessible to the user.
+    /// </summary>
+    Task<int> BulkUpdatePriorityAsync(IEnumerable<Guid> taskIds, TaskPriority newPriority, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Permanently deletes multiple tasks owned by the current user.
+    /// Rejects the entire request when any supplied ID is not accessible to the user.
+    /// </summary>
+    Task<int> BulkDeleteAsync(IEnumerable<Guid> taskIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Marks a task as <see cref="Domain.Enums.TaskItemStatus.Done"/> and records <c>CompletedDate</c>.
     /// Idempotent — calling on an already-done task is a no-op.
     /// </summary>
@@ -42,7 +60,7 @@ public interface ITaskService
     /// Soft-archives a task. Archived tasks are excluded from all active work views.
     /// Also archives any direct subtasks.
     /// </summary>
-    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
+    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null);
 
     /// <summary>
     /// Restores a manually archived task and the active subtasks archived in the same
@@ -81,6 +99,21 @@ public interface ITaskService
     /// The template's <see cref="Domain.Entities.TaskItem.NextOccurrenceDate"/> is advanced by one interval.
     /// </summary>
     Task<TaskItemDto?> CreateRecurringOccurrenceAsync(Guid taskId, CancellationToken ct = default);
+
+    /// <summary>Returns the next scheduled occurrence dates for a recurrence rule, capped by <paramref name="count"/>.</summary>
+    IReadOnlyList<DateTime> GetUpcomingOccurrences(
+        RecurrenceType? recurrenceType,
+        int? recurrenceInterval,
+        DateTime? nextOccurrenceDate,
+        DateTime? recurrenceEndDate,
+        int count = 5);
+
+    /// <summary>Formats a recurrence rule into human-readable text for the UI.</summary>
+    string GetRecurrenceSummary(
+        RecurrenceType? recurrenceType,
+        int? recurrenceInterval,
+        DateTime? nextOccurrenceDate,
+        DateTime? recurrenceEndDate);
 
     // ── Dependencies ─────────────────────────────────────────────────────────
 

@@ -9,11 +9,11 @@
 @inject IIdeaService IdeaService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject NavigationManager Nav
 
 <PageTitle>Ideas — Brainy</PageTitle>
 
 <style>
-    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
 
     .ip-page {
         max-width: 1500px;
@@ -296,6 +296,16 @@
                        FullWidth="true"
                        OnClick="OpenCreateDialog">
                 New Idea
+            </MudButton>
+
+            <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                       StartIcon="@Icons.Material.Filled.Insights"
+                       Size="Size.Large"
+                       Class="mb-6"
+                       Style="font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; border-radius: 8px;"
+                       FullWidth="true"
+                       OnClick='() => Nav.NavigateTo("/ideas/dashboard")'>
+                Idea Dashboard
             </MudButton>
 
             <div class="ip-widget">

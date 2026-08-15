@@ -21,5 +21,6 @@ public record GoalDetailDto(
     IReadOnlyList<GoalMilestoneDto> Milestones,
     IReadOnlyList<LinkedProjectDto> Projects,
     /// <summary>Concurrency token captured at load time; pass back on update or delete.</summary>
-    byte[]? RowVersion = null
+    byte[]? RowVersion = null,
+    string? ArchivedReason = null
 );

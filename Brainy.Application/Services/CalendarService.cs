@@ -63,7 +63,10 @@ internal sealed class CalendarService(
                 t.Project.Name,
                 t.Project.AreaId,
                 t.Project.Area != null ? t.Project.Area.Name : null,
-                t.DueDate!.Value < today && t.Status != TaskItemStatus.Done))
+                t.DueDate!.Value < today && t.Status != TaskItemStatus.Done,
+                t.Complexity,
+                t.Dependencies.Count(),
+                t.Dependencies.Count(d => d.DependsOnTask.IsArchived || d.DependsOnTask.Status != TaskItemStatus.Done)))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -93,7 +96,10 @@ internal sealed class CalendarService(
                 t.Project.Name,
                 t.Project.AreaId,
                 t.Project.Area != null ? t.Project.Area.Name : null,
-                t.DueDate!.Value < today && t.Status != TaskItemStatus.Done))
+                t.DueDate!.Value < today && t.Status != TaskItemStatus.Done,
+                t.Complexity,
+                t.Dependencies.Count(),
+                t.Dependencies.Count(d => d.DependsOnTask.IsArchived || d.DependsOnTask.Status != TaskItemStatus.Done)))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 

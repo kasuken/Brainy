@@ -27,6 +27,9 @@ public class AreaConfiguration : IEntityTypeConfiguration<Area>
         builder.Property(a => a.Purpose)
             .HasMaxLength(2000);
 
+        builder.Property(a => a.ArchivedReason)
+            .HasMaxLength(2000);
+
         builder.HasIndex(a => a.Name);
 
         builder.HasMany(a => a.Projects)

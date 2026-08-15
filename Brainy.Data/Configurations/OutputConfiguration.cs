@@ -38,6 +38,9 @@ public class OutputConfiguration : IEntityTypeConfiguration<Output>
         builder.Property(o => o.Description)
             .HasMaxLength(2000);
 
+        builder.Property(o => o.ArchivedReason)
+            .HasMaxLength(2000);
+
         builder.Property(o => o.IsArchived);
 
         builder.Property(o => o.PublishedDate);

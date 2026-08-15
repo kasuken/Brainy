@@ -21,6 +21,9 @@ public class GoalConfiguration : IEntityTypeConfiguration<Goal>
         builder.Property(g => g.Description)
             .HasMaxLength(2000);
 
+        builder.Property(g => g.ArchivedReason)
+            .HasMaxLength(2000);
+
         builder.Property(g => g.Status)
             .HasConversion<string>()
             .HasMaxLength(20);

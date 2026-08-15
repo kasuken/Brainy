@@ -267,7 +267,7 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
     }
 
     /// <summary>Soft-archives the idea. Sets IsArchived = true, ArchivedAtUtc = UtcNow. Status is left unchanged.</summary>
-    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
@@ -275,8 +275,10 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
             .FirstOrDefaultAsync(i => i.Id == id && i.UserId == userId, cancellationToken).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Idea '{id}' was not found.");
 
+        var normalizedReason = ArchiveReasonNormalizer.Normalize(archivedReason);
         idea.IsArchived    = true;
         idea.ArchivedAtUtc = DateTime.UtcNow;
+        idea.ArchivedReason = normalizedReason;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -295,6 +297,7 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
 
         idea.IsArchived    = false;
         idea.ArchivedAtUtc = null;
+        idea.ArchivedReason = null;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -391,7 +394,7 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
     private static IdeaDto ToDto(Idea i, string? areaName) => new(
         i.Id, i.Title, i.Description, i.AreaId, areaName,
         i.Priority, i.Status, i.IsArchived, i.ArchivedAtUtc,
-        i.CreatedAtUtc, i.UpdatedAtUtc, i.CommittedProjectId, i.RowVersion);
+        i.CreatedAtUtc, i.UpdatedAtUtc, i.CommittedProjectId, i.RowVersion, i.ArchivedReason);
 
     private static IdeaDetailDto ToDetailDto(Idea i, string? areaName) => new(
         i.Id, i.Title, i.Description, i.AreaId, areaName,
@@ -399,5 +402,5 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         i.CreatedAtUtc, i.UpdatedAtUtc,
         i.Research, i.Competitors, i.Notes,
         i.TargetUserAndProblem, i.SuitabilityReason, i.Evidence, i.ValidationExperiment, i.ReplacedCommitment,
-        i.CommittedProjectId, i.CommittedAtUtc, i.RowVersion);
+        i.CommittedProjectId, i.CommittedAtUtc, i.RowVersion, i.ArchivedReason);
 }

@@ -167,6 +167,26 @@ public class OutputServiceTests
         detail.SourceNotes.Should().ContainSingle().Which.NoteId.Should().Be(sourceNoteId);
     }
 
+    [Fact]
+    public async Task CreateAsync_WithSourceNoteLink_PersistsAssociation()
+    {
+        var dbName = nameof(CreateAsync_WithSourceNoteLink_PersistsAssociation);
+        var sut = BuildService(dbName);
+        var sourceNoteId = await SeedNoteAsync(dbName);
+
+        var created = await sut.CreateAsync(new CreateOutputDto(
+            "Seeded from note",
+            null,
+            OutputType.Report,
+            Content: "Draft body",
+            SourceNoteIds: [sourceNoteId]));
+
+        var detail = await sut.GetDetailAsync(created.Id);
+
+        detail.Should().NotBeNull();
+        detail!.SourceNotes.Should().ContainSingle().Which.NoteId.Should().Be(sourceNoteId);
+    }
+
     [Theory]
     [InlineData(true, NoteStatus.Inbox)]
     [InlineData(false, NoteStatus.Archived)]
@@ -316,6 +336,56 @@ public class OutputServiceTests
         var result = await sut.GetByGoalAsync(goalId);
 
         result.Should().ContainSingle().Which.Id.Should().Be(linked.Id);
+    }
+
+    [Fact]
+    public async Task GetBySourceNoteAsync_ReturnsOutputsLinkedToRequestedNote()
+    {
+        var dbName = nameof(GetBySourceNoteAsync_ReturnsOutputsLinkedToRequestedNote);
+        var sut = BuildService(dbName);
+        var requestedNoteId = await SeedNoteAsync(dbName);
+        var otherNoteId = await SeedNoteAsync(dbName);
+
+        var linkedFirst = await sut.CreateAsync(new CreateOutputDto(
+            "First linked",
+            null,
+            OutputType.BlogPost,
+            SourceNoteIds: [requestedNoteId]));
+        var linkedSecond = await sut.CreateAsync(new CreateOutputDto(
+            "Second linked",
+            null,
+            OutputType.Report,
+            SourceNoteIds: [requestedNoteId, otherNoteId]));
+        await sut.CreateAsync(new CreateOutputDto(
+            "Different source",
+            null,
+            OutputType.LinkedInPost,
+            SourceNoteIds: [otherNoteId]));
+
+        var result = await sut.GetBySourceNoteAsync(requestedNoteId);
+
+        result.Select(output => output.Id)
+            .Should().BeEquivalentTo([linkedFirst.Id, linkedSecond.Id]);
+    }
+
+    [Fact]
+    public async Task GetBySourceNoteAsync_WhenNoOutputsReferenceNote_ReturnsEmptyList()
+    {
+        var dbName = nameof(GetBySourceNoteAsync_WhenNoOutputsReferenceNote_ReturnsEmptyList);
+        var sut = BuildService(dbName);
+        var noteId = await SeedNoteAsync(dbName);
+        var otherNoteId = await SeedNoteAsync(dbName);
+
+        await sut.CreateAsync(new CreateOutputDto(
+            "Linked elsewhere",
+            null,
+            OutputType.BlogPost,
+            SourceNoteIds: [otherNoteId]));
+
+        var result = await sut.GetBySourceNoteAsync(noteId);
+
+        result.Should().NotBeNull();
+        result.Should().BeEmpty();
     }
 
     // ── Detail ────────────────────────────────────────────────────────────────

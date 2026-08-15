@@ -52,6 +52,41 @@
                     @Item.Priority.ToString()
                 </MudChip>
             </div>
+
+            @* Complexity *@
+            <div class="ced-meta-row">
+                <MudIcon Icon="@Icons.Material.Filled.Tune" Size="Size.Small" Class="ced-meta-icon" aria-hidden="true" />
+                @if (Item.Complexity.HasValue)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined" Class="ced-complexity-chip">
+                        @Item.Complexity.Value.ToString()
+                    </MudChip>
+                }
+                else
+                {
+                    <span class="ced-meta-value">Not estimated</span>
+                }
+            </div>
+
+            @* Dependencies *@
+            <div class="ced-meta-row">
+                <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" Class="ced-meta-icon" aria-hidden="true" />
+                @if (Item.DependencyCount > 0)
+                {
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@(Item.IsBlocked ? Color.Error : Color.Default)"
+                             Variant="Variant.Outlined"
+                             Class="ced-dependency-chip"
+                             title="@DependencyTooltip">
+                        @DependencyLabel
+                    </MudChip>
+                }
+                else
+                {
+                    <span class="ced-meta-value">No prerequisites</span>
+                }
+            </div>
         </div>
     </DialogContent>
     <DialogActions>
@@ -139,6 +174,17 @@
     letter-spacing: 0.06em;
     text-transform: uppercase;
 }
+
+.ced-complexity-chip {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.ced-dependency-chip {
+    font-weight: 600;
+}
 </style>
 
 @code {
@@ -190,6 +236,14 @@
         TaskItemStatus.Waiting    => Icons.Material.Filled.Pause,
         _                         => Icons.Material.Outlined.RadioButtonUnchecked,
     };
+
+    private string DependencyLabel => Item.IsBlocked
+        ? $"Blocked by {Item.UnresolvedDependencyCount}"
+        : $"{Item.DependencyCount} prerequisite{(Item.DependencyCount == 1 ? string.Empty : "s")}";
+
+    private string DependencyTooltip => Item.IsBlocked
+        ? $"Blocked by {Item.UnresolvedDependencyCount} unfinished prerequisite{(Item.UnresolvedDependencyCount == 1 ? string.Empty : "s")}."
+        : $"All {Item.DependencyCount} prerequisite{(Item.DependencyCount == 1 ? string.Empty : "s")} are complete.";
 
     private async Task CompleteAsync()
     {

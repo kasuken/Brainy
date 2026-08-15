@@ -2,13 +2,18 @@
 @rendermode InteractiveServer
 @attribute [Authorize]
 
+@using Brainy.Application.DTOs.DataImport
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Data.Identity
 @using Brainy.Web.Identity
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Identity
 
 @inject IDataExportService DataExportService
+@inject IDataImportService DataImportService
+@inject IArchiveRetentionService ArchiveRetentionService
+@inject IUserTimeZoneService UserTimeZoneService
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
@@ -21,8 +26,122 @@
     <header class="account-manage__header">
         <p class="account-manage__eyebrow">Account</p>
         <h1 id="account-manage-title">Account and data</h1>
-        <p>Protect your sign-in and download a portable copy of your Brainy information.</p>
+        <p>Protect your sign-in, choose how Brainy interprets your calendar day, tune archive cleanup rules, and move your data safely.</p>
     </header>
+
+    <section class="account-manage__cluster" aria-label="Preferences and retention">
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.Schedule" aria-hidden="true" />
+                <div>
+                    <h2>Time zone</h2>
+                    <p>Override the browser-detected time zone when you travel, plan in another region, or want a fixed calendar day.</p>
+                </div>
+            </div>
+
+            @if (_timeZoneError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_timeZoneError
+                </MudAlert>
+            }
+
+            <div class="account-manage__settings-stack">
+                <MudSelect T="string"
+                           @bind-Value="_selectedTimeZoneId"
+                           Label="Time zone"
+                           Variant="Variant.Outlined"
+                           Disabled="_savingTimeZone">
+                    <MudSelectItem T="string" Value="@BrowserTimeZoneOptionValue">@GetBrowserTimeZoneOptionLabel()</MudSelectItem>
+                    @foreach (var timeZone in TimeZoneOptions)
+                    {
+                        <MudSelectItem T="string" Value="@timeZone.Id">@timeZone.Label</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <div class="account-manage__meta-grid">
+                    <div>
+                        <span class="account-manage__meta-label">Effective time zone</span>
+                        <strong>@_effectiveTimeZoneId</strong>
+                    </div>
+                    <div>
+                        <span class="account-manage__meta-label">Mode</span>
+                        <strong>@(_selectedTimeZoneId == BrowserTimeZoneOptionValue ? "Browser-detected" : "Manual override")</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="account-manage__actions">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="_savingTimeZone"
+                           aria-busy="@_savingTimeZone.ToString().ToLowerInvariant()"
+                           OnClick="SaveTimeZoneAsync">
+                    @(_savingTimeZone ? "Saving time zone…" : "Save time zone")
+                </MudButton>
+                <span class="account-manage__status" role="status" aria-live="polite">@_timeZoneStatus</span>
+            </div>
+        </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.Inventory2" aria-hidden="true" />
+                <div>
+                    <h2>Archive retention</h2>
+                    <p>Decide when archived items become eligible for manual cleanup. Leave a rule blank to keep that kind of item forever.</p>
+                </div>
+            </div>
+
+            @if (_retentionError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_retentionError
+                </MudAlert>
+            }
+
+            <div class="account-manage__retention-grid">
+                @foreach (var entityType in RetentionEntityTypes)
+                {
+                    var type = entityType;
+                    <div class="account-manage__retention-card">
+                        <div>
+                            <h3>@GetRetentionTitle(type)</h3>
+                            <p>@GetRetentionDescription(type)</p>
+                        </div>
+
+                        <MudNumericField T="int?"
+                                         Value="@_retentionDays[type]"
+                                         ValueChanged="value => OnRetentionDaysChanged(type, value)"
+                                         Label="Days to keep"
+                                         Min="1"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Immediate="true"
+                                         Disabled="@IsSavingRetention(type)" />
+
+                        <div class="account-manage__retention-actions">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Dark"
+                                       Size="Size.Small"
+                                       Disabled="@IsSavingRetention(type)"
+                                       OnClick="() => SaveRetentionAsync(type)">
+                                @(IsSavingRetention(type) ? "Saving…" : "Save")
+                            </MudButton>
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Default"
+                                       Size="Size.Small"
+                                       Disabled="@IsSavingRetention(type)"
+                                       OnClick="() => ClearRetentionAsync(type)">
+                                Keep forever
+                            </MudButton>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <span class="account-manage__status" role="status" aria-live="polite">@_retentionStatus</span>
+        </MudPaper>
+    </section>
 
     <MudPaper Class="account-manage__card" Elevation="0">
         <div class="account-manage__card-heading">
@@ -76,55 +195,124 @@
         </div>
     </MudPaper>
 
-    <MudPaper Class="account-manage__card" Elevation="0">
-        <div class="account-manage__card-heading">
-            <MudIcon Icon="@Icons.Material.Outlined.Download" aria-hidden="true" />
-            <div>
-                <h2>Export Brainy data</h2>
-                <p>
-                    Creates a versioned JSON archive containing your notes, projects, tasks,
-                    areas, resources, goals, outputs, relationships, preferences, and stored images.
-                </p>
+    <section class="account-manage__cluster" aria-label="Import and export">
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.Download" aria-hidden="true" />
+                <div>
+                    <h2>Export Brainy data</h2>
+                    <p>
+                        Creates a versioned JSON archive containing your notes, projects, tasks,
+                        areas, resources, goals, outputs, relationships, preferences, and stored images.
+                    </p>
+                </div>
             </div>
-        </div>
 
-        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
-            Images are included as base64 with SHA-256 checksums. Brainy's account credentials,
-            password hashes, session tokens, configured AI provider keys, and application secrets
-            are excluded. Content you authored is exported as stored, so a secret written in a note
-            or source URL will still be present. Store the file securely.
-        </MudAlert>
-
-        @if (_error is not null)
-        {
-            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
-                @_error
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
+                Images are included as base64 with SHA-256 checksums. Brainy's account credentials,
+                password hashes, session tokens, configured AI provider keys, and application secrets
+                are excluded. Content you authored is exported as stored, so a secret written in a note
+                or source URL will still be present. Store the file securely.
             </MudAlert>
-        }
 
-        <div class="account-manage__actions">
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       StartIcon="@Icons.Material.Outlined.FileDownload"
-                       Disabled="_exporting"
-                       aria-busy="@_exporting.ToString().ToLowerInvariant()"
-                       OnClick="ExportAsync">
-                @if (_exporting)
-                {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                    <span>Preparing export…</span>
-                }
-                else
-                {
-                    <span>Download JSON export</span>
-                }
-            </MudButton>
+            @if (_exportError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_exportError
+                </MudAlert>
+            }
 
-            <span class="account-manage__status" role="status" aria-live="polite">
-                @_status
-            </span>
-        </div>
-    </MudPaper>
+            <div class="account-manage__actions">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Outlined.FileDownload"
+                           Disabled="_exporting"
+                           aria-busy="@_exporting.ToString().ToLowerInvariant()"
+                           OnClick="ExportAsync">
+                    @if (_exporting)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Preparing export…</span>
+                    }
+                    else
+                    {
+                        <span>Download JSON export</span>
+                    }
+                </MudButton>
+
+                <span class="account-manage__status" role="status" aria-live="polite">
+                    @_exportStatus
+                </span>
+            </div>
+        </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.UploadFile" aria-hidden="true" />
+                <div>
+                    <h2>Import Brainy data</h2>
+                    <p>Safely restore the parts of a Brainy export that this version can rebuild without broken ownership or missing relationships.</p>
+                </div>
+            </div>
+
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="account-manage__notice">
+                This first pass imports tags and standalone notes only. Projects, tasks, goals, outputs, images,
+                archive settings, dashboard preferences, and notes linked to projects, areas, resources, or sources
+                are detected and reported but not imported yet.
+            </MudAlert>
+
+            @if (_importError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_importError
+                </MudAlert>
+            }
+
+            @if (_importResult is not null)
+            {
+                <MudAlert Severity="@GetImportSeverity()" Variant="Variant.Outlined" Class="account-manage__notice">
+                    <div class="account-manage__import-summary">
+                        <strong>Import summary</strong>
+                        <ul>
+                            <li>@_importResult.ImportedTags tag(s) imported; @_importResult.ReusedTags existing tag(s) reused.</li>
+                            <li>@_importResult.ImportedNotes standalone note(s) imported; @_importResult.SkippedNotes note(s) skipped.</li>
+                            <li>@_importResult.LinkedNoteTags note-tag link(s) restored; @_importResult.SkippedNoteTagLinks link(s) skipped.</li>
+                        </ul>
+
+                        @if (_importResult.UnsupportedEntities.Count > 0)
+                        {
+                            <div>
+                                <span class="account-manage__meta-label">Not imported in this release</span>
+                                <ul>
+                                    @foreach (var item in _importResult.UnsupportedEntities)
+                                    {
+                                        <li>@item.EntityType: @item.Count</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                </MudAlert>
+            }
+
+            <div class="account-manage__import-picker">
+                <InputFile OnChange="HandleImportFileSelected" accept=".json,application/json" disabled="@_importing" />
+                <span class="account-manage__status">@(_importFileName ?? "Choose a Brainy JSON export")</span>
+            </div>
+
+            <div class="account-manage__actions">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Outlined.Publish"
+                           Disabled="@(_importing || _selectedImportFile is null)"
+                           aria-busy="@_importing.ToString().ToLowerInvariant()"
+                           OnClick="ImportAsync">
+                    @(_importing ? "Importing…" : "Import JSON export")
+                </MudButton>
+                <span class="account-manage__status" role="status" aria-live="polite">@_importStatus</span>
+            </div>
+        </MudPaper>
+    </section>
 
     <MudPaper Class="account-manage__card account-manage__danger" Elevation="0">
         <div class="account-manage__card-heading">
@@ -178,37 +366,316 @@
 </main>
 
 <style>
-    .account-manage { max-width: 820px; margin: 0 auto; display: grid; gap: 1.5rem; }
+    .account-manage { max-width: 1100px; margin: 0 auto; display: grid; gap: 1.5rem; }
+    .account-manage__cluster { display: grid; gap: 1.5rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .account-manage__header h1 { margin: 0; font-family: var(--font-display); color: var(--ink); font-size: clamp(2rem, 5vw, 3rem); }
     .account-manage__header > p:last-child { margin: .5rem 0 0; color: var(--ink-soft); }
     .account-manage__eyebrow { margin: 0 0 .35rem; color: var(--clay); font-size: .75rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
-    .account-manage__card { padding: clamp(1.25rem, 4vw, 2rem); border: 1px solid var(--line); border-radius: 18px; background: var(--paper-raised) !important; }
+    .account-manage__card { padding: clamp(1.25rem, 4vw, 2rem); border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(180deg, color-mix(in srgb, var(--paper-raised) 92%, white 8%), var(--paper-raised)) !important; }
     .account-manage__card-heading { display: flex; align-items: flex-start; gap: 1rem; }
     .account-manage__card-heading h2 { margin: 0 0 .4rem; font-family: var(--font-display); color: var(--ink); }
     .account-manage__card-heading p { margin: 0; color: var(--ink-soft); line-height: 1.6; }
     .account-manage__notice { margin-top: 1.25rem; }
+    .account-manage__settings-stack { margin-top: 1.25rem; display: grid; gap: 1rem; }
+    .account-manage__meta-grid { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 1rem; border-radius: 14px; background: color-mix(in srgb, var(--paper) 80%, transparent); border: 1px solid var(--line); }
+    .account-manage__meta-label { display: block; margin-bottom: .2rem; color: var(--ink-soft); font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .account-manage__retention-grid { margin-top: 1.25rem; display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .account-manage__retention-card { display: grid; gap: .85rem; padding: 1rem; border-radius: 16px; background: color-mix(in srgb, var(--paper) 75%, transparent); border: 1px solid var(--line); }
+    .account-manage__retention-card h3 { margin: 0; font-size: 1rem; color: var(--ink); }
+    .account-manage__retention-card p { margin: .25rem 0 0; color: var(--ink-soft); font-size: .9rem; line-height: 1.5; }
+    .account-manage__retention-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
     .account-manage__password-fields { margin-top: 1.25rem; display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .account-manage__deletion-fields { margin-top: 1.25rem; display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .account-manage__import-picker { margin-top: 1.25rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+    .account-manage__import-summary ul { margin: .5rem 0 0; padding-left: 1.1rem; }
+    .account-manage__import-summary li + li { margin-top: .25rem; }
     .account-manage__danger { border-color: var(--mud-palette-error); }
     .account-manage__actions { margin-top: 1.25rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
     .account-manage__status { color: var(--ink-soft); font-size: .875rem; }
-    @@media (max-width: 720px) { .account-manage__password-fields, .account-manage__deletion-fields { grid-template-columns: 1fr; } }
+
+    @@media (max-width: 900px) {
+        .account-manage__cluster,
+        .account-manage__retention-grid,
+        .account-manage__meta-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 720px) {
+        .account-manage__password-fields,
+        .account-manage__deletion-fields {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 
 @code {
+    private const string BrowserTimeZoneOptionValue = "__browser__";
+    private const long MaxImportFileBytes = 50L * 1024 * 1024;
+    private static readonly string[] RetentionEntityTypes = ["Project", "Area", "Resource", "Note"];
+    private static readonly IReadOnlyList<TimeZoneOption> TimeZoneOptions = TimeZoneInfo.GetSystemTimeZones()
+        .OrderBy(zone => zone.BaseUtcOffset)
+        .ThenBy(zone => zone.Id, StringComparer.Ordinal)
+        .Select(zone => new TimeZoneOption(zone.Id, $"{FormatOffset(zone.BaseUtcOffset)} {zone.Id} — {zone.DisplayName}"))
+        .ToArray();
+
     private bool _exporting;
-    private string? _error;
-    private string? _status;
+    private string? _exportError;
+    private string? _exportStatus;
+    private bool _importing;
+    private string? _importError;
+    private string? _importStatus;
+    private DataImportResultDto? _importResult;
+    private IBrowserFile? _selectedImportFile;
+    private string? _importFileName;
     private bool _changingPassword;
     private string _currentPassword = string.Empty;
     private string _newPassword = string.Empty;
     private string _confirmPassword = string.Empty;
     private string? _passwordError;
     private string? _passwordStatus;
+    private bool _savingTimeZone;
+    private string _selectedTimeZoneId = BrowserTimeZoneOptionValue;
+    private string _effectiveTimeZoneId = "UTC";
+    private string? _browserTimeZoneId;
+    private string? _timeZoneError;
+    private string? _timeZoneStatus;
+    private Dictionary<string, int?> _retentionDays = RetentionEntityTypes.ToDictionary(type => type, _ => (int?)null);
+    private Dictionary<string, bool> _savingRetention = RetentionEntityTypes.ToDictionary(type => type, _ => false);
+    private string? _retentionError;
+    private string? _retentionStatus;
     private bool _deletingAccount;
     private string _deletionPassword = string.Empty;
     private string _deletionConfirmation = string.Empty;
     private string? _deletionError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRetentionAsync();
+        await LoadTimeZoneAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        try
+        {
+            var browserTimeZoneId = await JS.InvokeAsync<string>("window.brainyTimeZone.get");
+            if (!string.IsNullOrWhiteSpace(browserTimeZoneId))
+            {
+                _browserTimeZoneId = browserTimeZoneId;
+                if (_selectedTimeZoneId == BrowserTimeZoneOptionValue)
+                {
+                    _effectiveTimeZoneId = browserTimeZoneId;
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Ignore prerender/browser disconnects. UTC remains a safe fallback label.
+        }
+        catch
+        {
+            // Ignore browser detection failures here; the persisted server-side value still works.
+        }
+    }
+
+    private async Task LoadRetentionAsync()
+    {
+        _retentionDays = RetentionEntityTypes.ToDictionary(type => type, _ => (int?)null);
+        _savingRetention = RetentionEntityTypes.ToDictionary(type => type, _ => false);
+
+        var rules = await ArchiveRetentionService.GetRulesAsync();
+        foreach (var rule in rules)
+        {
+            if (_retentionDays.ContainsKey(rule.EntityType))
+            {
+                _retentionDays[rule.EntityType] = rule.RetentionDays;
+            }
+        }
+    }
+
+    private async Task LoadTimeZoneAsync()
+    {
+        _effectiveTimeZoneId = await UserTimeZoneService.GetTimeZoneIdAsync();
+        _selectedTimeZoneId = await UserTimeZoneService.GetTimeZoneOverrideIdAsync() ?? BrowserTimeZoneOptionValue;
+    }
+
+    private async Task SaveTimeZoneAsync()
+    {
+        if (_savingTimeZone)
+            return;
+
+        _savingTimeZone = true;
+        _timeZoneError = null;
+        _timeZoneStatus = null;
+
+        try
+        {
+            if (_selectedTimeZoneId == BrowserTimeZoneOptionValue)
+            {
+                var browserTimeZoneId = _browserTimeZoneId ?? _effectiveTimeZoneId;
+                await UserTimeZoneService.SetTimeZoneIdAsync(browserTimeZoneId);
+                _timeZoneStatus = $"Using browser-detected time zone ({browserTimeZoneId}).";
+            }
+            else
+            {
+                await UserTimeZoneService.SetTimeZoneOverrideAsync(_selectedTimeZoneId);
+                _timeZoneStatus = $"Manual override saved for {_selectedTimeZoneId}.";
+            }
+
+            await LoadTimeZoneAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            _timeZoneError = ex.Message;
+        }
+        catch
+        {
+            _timeZoneError = "Brainy could not save your time zone. Try again.";
+        }
+        finally
+        {
+            _savingTimeZone = false;
+        }
+    }
+
+    private async Task SaveRetentionAsync(string entityType)
+    {
+        _retentionError = null;
+        _retentionStatus = null;
+        _savingRetention[entityType] = true;
+
+        try
+        {
+            await ArchiveRetentionService.UpsertRuleAsync(entityType, _retentionDays[entityType]);
+            _retentionStatus = $"{GetRetentionTitle(entityType)} retention saved.";
+        }
+        catch (Exception ex)
+        {
+            _retentionError = ex.Message;
+        }
+        finally
+        {
+            _savingRetention[entityType] = false;
+        }
+    }
+
+    private async Task ClearRetentionAsync(string entityType)
+    {
+        _retentionError = null;
+        _retentionStatus = null;
+        _savingRetention[entityType] = true;
+
+        try
+        {
+            await ArchiveRetentionService.DeleteRuleAsync(entityType);
+            _retentionDays[entityType] = null;
+            _retentionStatus = $"{GetRetentionTitle(entityType)} retention cleared.";
+        }
+        catch (Exception ex)
+        {
+            _retentionError = ex.Message;
+        }
+        finally
+        {
+            _savingRetention[entityType] = false;
+        }
+    }
+
+    private void OnRetentionDaysChanged(string entityType, int? value) => _retentionDays[entityType] = value;
+
+    private bool IsSavingRetention(string entityType) =>
+        _savingRetention.TryGetValue(entityType, out var saving) && saving;
+
+    private void HandleImportFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedImportFile = e.File;
+        _importFileName = _selectedImportFile?.Name;
+        _importError = null;
+        _importStatus = null;
+        _importResult = null;
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_importing || _selectedImportFile is null)
+            return;
+
+        _importing = true;
+        _importError = null;
+        _importStatus = "Validating your export and restoring supported records.";
+        _importResult = null;
+
+        try
+        {
+            await using var stream = _selectedImportFile.OpenReadStream(MaxImportFileBytes);
+            _importResult = await DataImportService.ImportCurrentUserAsync(stream);
+            _importStatus = $"Import checked schema {_importResult.SchemaVersion}.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            _importError = ex.Message;
+            _importStatus = null;
+        }
+        catch (IOException)
+        {
+            _importError = "The selected file could not be read. Choose the export again and retry.";
+            _importStatus = null;
+        }
+        catch
+        {
+            _importError = "Brainy could not import that file. No partial relationships were created for unsupported records.";
+            _importStatus = null;
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+
+    private Severity GetImportSeverity() =>
+        _importResult is not null &&
+        (_importResult.SkippedNotes > 0 ||
+         _importResult.SkippedTags > 0 ||
+         _importResult.UnsupportedEntities.Count > 0 ||
+         _importResult.SkippedNoteTagLinks > 0)
+            ? Severity.Warning
+            : Severity.Success;
+
+    private string GetBrowserTimeZoneOptionLabel() =>
+        string.IsNullOrWhiteSpace(_browserTimeZoneId)
+            ? "Use browser-detected time zone"
+            : $"Use browser-detected time zone ({_browserTimeZoneId})";
+
+    private static string GetRetentionTitle(string entityType) => entityType switch
+    {
+        "Project" => "Projects",
+        "Area" => "Areas",
+        "Resource" => "Resources",
+        _ => "Notes"
+    };
+
+    private static string GetRetentionDescription(string entityType) => entityType switch
+    {
+        "Project" => "Completed projects and their archived context.",
+        "Area" => "Inactive responsibilities you still want on record.",
+        "Resource" => "Reference material you no longer need in active views.",
+        _ => "Archived notes kept for later recall."
+    };
+
+    private static string FormatOffset(TimeSpan offset)
+    {
+        var sign = offset < TimeSpan.Zero ? "-" : "+";
+        var absolute = offset.Duration();
+        return $"UTC{sign}{absolute:hh\\:mm}";
+    }
+
+    private sealed record TimeZoneOption(string Id, string Label);
 
     private async Task ChangePasswordAsync()
     {
@@ -267,8 +734,8 @@
             return;
 
         _exporting = true;
-        _error = null;
-        _status = "Preparing your archive. Large image collections may take a moment.";
+        _exportError = null;
+        _exportStatus = "Preparing your archive. Large image collections may take a moment.";
 
         try
         {
@@ -283,17 +750,17 @@
                 export.ContentType,
                 streamReference);
 
-            _status = $"Export schema {export.SchemaVersion} downloaded.";
+            _exportStatus = $"Export schema {export.SchemaVersion} downloaded.";
         }
         catch (JSDisconnectedException)
         {
-            _error = "The browser connection closed before the download started. Reload this page and try again.";
-            _status = null;
+            _exportError = "The browser connection closed before the download started. Reload this page and try again.";
+            _exportStatus = null;
         }
         catch
         {
-            _error = "Brainy could not prepare your export. Your data was not changed. Try again.";
-            _status = null;
+            _exportError = "Brainy could not prepare your export. Your data was not changed. Try again.";
+            _exportStatus = null;
         }
         finally
         {

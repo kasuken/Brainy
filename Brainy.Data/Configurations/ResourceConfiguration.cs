@@ -27,6 +27,9 @@ public class ResourceConfiguration : IEntityTypeConfiguration<Resource>
         builder.Property(r => r.Topic)
             .HasMaxLength(200);
 
+        builder.Property(r => r.ArchivedReason)
+            .HasMaxLength(2000);
+
         builder.HasIndex(r => r.Name);
         builder.HasIndex(r => r.Topic);
 

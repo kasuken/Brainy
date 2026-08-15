@@ -28,6 +28,8 @@ public class Goal : BaseEntity, IUserOwnedEntity
 
     public DateTime? ArchivedAtUtc { get; set; }
 
+    public string? ArchivedReason { get; set; }
+
     public Guid? AreaId { get; set; }
 
     public Area? Area { get; set; }

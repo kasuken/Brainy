@@ -33,4 +33,5 @@ public record ProjectDetailDto(
     IReadOnlyList<TaskItemDto> Tasks,
     IReadOnlyList<NoteDto> Notes,
     IReadOnlyList<NoteDto> ResourceNotes,
-    string Emoji = ProjectEmojiDefaults.DefaultEmoji);
+    string Emoji = ProjectEmojiDefaults.DefaultEmoji,
+    string? ArchivedReason = null);

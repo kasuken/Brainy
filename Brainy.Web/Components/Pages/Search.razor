@@ -44,7 +44,8 @@
 
         @if (_hasSearched && _results.Count > 0)
         {
-            <div class="search-filter-bar mt-4" aria-label="Filter search results by type">
+            <div class="search-filter-group mt-4">
+            <div class="search-filter-bar" aria-label="Filter search results by type">
                 @foreach (var option in TypeFilterOptions.Where(option => option.Type == "All" || GetFilterCount(option.Type) > 0))
                 {
                     var isActive = _typeFilter == option.Type;
@@ -57,6 +58,35 @@
                         <span class="search-filter-chip__badge">@GetFilterCount(option.Type)</span>
                     </button>
                 }
+            </div>
+
+            @if (AvailableTags.Count > 0)
+            {
+                <div class="search-filter-group__row">
+                    <span class="search-filter-group__label">Tags</span>
+                    <div class="search-filter-bar" aria-label="Filter search results by tag">
+                        <button type="button"
+                                class="search-filter-chip @(_tagFilter is null ? "search-filter-chip--active" : null)"
+                                aria-pressed="@(_tagFilter is null)"
+                                @onclick="ClearTagFilter">
+                            All tags
+                            <span class="search-filter-chip__badge">@TypeScopedResults.Count()</span>
+                        </button>
+
+                        @foreach (var tag in AvailableTags)
+                        {
+                            var isActive = string.Equals(_tagFilter, tag.Name, StringComparison.OrdinalIgnoreCase);
+                            <button type="button"
+                                    class="search-filter-chip @(isActive ? "search-filter-chip--active" : null)"
+                                    aria-pressed="@isActive"
+                                    @onclick="() => SetTagFilter(tag.Name)">
+                                #@tag.Name
+                                <span class="search-filter-chip__badge">@tag.Count</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
             </div>
         }
     </div>
@@ -78,7 +108,7 @@
                 <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="RunSearchAsync" Class="ml-2">Retry</MudButton>
             </MudAlert>
         }
-        else if (!string.IsNullOrWhiteSpace(_query) && TotalResults == 0 && _hasSearched)
+        else if (!string.IsNullOrWhiteSpace(_query) && _results.Count == 0 && _hasSearched)
         {
             <div class="search-state">
                 <MudIcon Icon="@Icons.Material.Outlined.SearchOff"
@@ -99,12 +129,57 @@
                 </MudText>
             </div>
         }
-        else if (TotalResults > 0)
+        else if (VisibleResultsCount == 0 && _results.Count > 0)
+        {
+            <div class="search-state">
+                <MudIcon Icon="@Icons.Material.Outlined.FilterAltOff"
+                         Class="search-state__icon mud-secondary-text" />
+                <MudText Typo="Typo.h6" GutterBottom="true">No loaded results match the current filters</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Clear a filter or load more results to keep exploring matches for "@_lastQuery".
+                </MudText>
+            </div>
+
+            @if (HasMoreResults)
+            {
+                <div class="search-load-more">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               OnClick="LoadMoreAsync"
+                               Disabled="_loadingMore">
+                        @if (_loadingMore)
+                        {
+                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+                            <text>Loading…</text>
+                        }
+                        else
+                        {
+                            <text>Load more</text>
+                        }
+                    </MudButton>
+
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Loaded @_results.Count of @_totalCount total matches.
+                    </MudText>
+                </div>
+            }
+        }
+        else if (VisibleResultsCount > 0)
         {
             <div class="search-meta mb-4">
                 <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
-                    <strong>@TotalResults</strong> result@(TotalResults == 1 ? "" : "s")
-                    for <em>"@_lastQuery"</em>
+                    @if (HasActiveClientFilters)
+                    {
+                        <text>Showing <strong>@VisibleResultsCount</strong> visible result@(VisibleResultsCount == 1 ? "" : "s") from <strong>@_results.Count</strong> loaded for <em>"@_lastQuery"</em>.</text>
+                    }
+                    else if (HasMoreResults)
+                    {
+                        <text>Showing <strong>@_results.Count</strong> of <strong>@_totalCount</strong> result@( _totalCount == 1 ? "" : "s") for <em>"@_lastQuery"</em>.</text>
+                    }
+                    else
+                    {
+                        <text><strong>@VisibleResultsCount</strong> result@(VisibleResultsCount == 1 ? "" : "s") for <em>"@_lastQuery"</em>.</text>
+                    }
                 </MudText>
             </div>
 
@@ -153,6 +228,10 @@
                                 @if (!string.IsNullOrWhiteSpace(result.ContentSnippet))
                                 {
                                     <p class="search-card__snippet">
+                                        @if (!string.IsNullOrWhiteSpace(result.SnippetSource))
+                                        {
+                                            <span class="search-card__snippet-source">@result.SnippetSource:</span>
+                                        }
                                         @HighlightSnippet(result.ContentSnippet, _lastQuery)
                                     </p>
                                 }
@@ -187,7 +266,13 @@
                                     </MudText>
                                     @if (!string.IsNullOrWhiteSpace(result.ContentSnippet))
                                     {
-                                        <p class="search-card__snippet">@HighlightSnippet(result.ContentSnippet, _lastQuery)</p>
+                                        <p class="search-card__snippet">
+                                            @if (!string.IsNullOrWhiteSpace(result.SnippetSource))
+                                            {
+                                                <span class="search-card__snippet-source">@result.SnippetSource:</span>
+                                            }
+                                            @HighlightSnippet(result.ContentSnippet, _lastQuery)
+                                        </p>
                                     }
                                 </a>
                             }
@@ -195,6 +280,30 @@
                         </div>
                     </section>
                 }
+            }
+
+            @if (HasMoreResults)
+            {
+                <div class="search-load-more">
+                    <MudButton Variant="Variant.Outlined"
+                              Color="Color.Primary"
+                              OnClick="LoadMoreAsync"
+                              Disabled="_loadingMore">
+                        @if (_loadingMore)
+                        {
+                           <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+                           <text>Loading…</text>
+                        }
+                        else
+                        {
+                           <text>Load more</text>
+                        }
+                    </MudButton>
+
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Loaded @_results.Count of @_totalCount total matches.
+                    </MudText>
+                </div>
             }
         }
 
@@ -281,6 +390,27 @@
         flex-wrap: wrap;
         gap: 0.4rem;
         padding: 0 0.1rem;
+    }
+
+    .search-filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .search-filter-group__row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+    }
+
+    .search-filter-group__label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        padding-left: 0.1rem;
     }
 
     .search-filter-chip {
@@ -450,6 +580,24 @@
         overflow: hidden;
     }
 
+    .search-card__snippet-source {
+        font-size: 0.74rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin-right: 0.45rem;
+    }
+
+    .search-load-more {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.6rem;
+        margin-top: 1.5rem;
+        padding-bottom: 1rem;
+    }
+
     /* Highlighted match terms */
     .search-highlight {
         background: rgba(205, 154, 58, 0.28);
@@ -476,7 +624,7 @@
                 Points =
                 [
                     "Find any entity by title or content.",
-                    "Use type filter chips to narrow results to a specific entity type.",
+                    "Use type and tag filter chips to narrow results quickly.",
                     "Use relevance hints, dates, categories, and status chips to pick the right result."
                 ]
             },
@@ -501,6 +649,7 @@
                 [
                     "Type a word or phrase in the search box; results update after a short pause.",
                     "Use the type filter chips to focus on a specific entity type.",
+                    "If matching notes have tags, use the tag chips to narrow the list further.",
                     "Scan title-match badges, PARA category chips, statuses, and dates to judge relevance.",
                     "Click a card to navigate to the entity.",
                     "Clear the search box to reset the page."
@@ -529,9 +678,14 @@
     private string _query = string.Empty;
     private string _lastQuery = string.Empty;
     private string _typeFilter = "All";
-    private IReadOnlyList<SearchResultDto> _results = [];
+    private string? _tagFilter;
+    private List<SearchResultDto> _results = [];
     private bool _searching;
+    private bool _loadingMore;
     private bool _hasSearched;
+    private int _currentPage;
+    private int _totalCount;
+    private const int PageSize = 20;
     // CS0414 suppressed: Blazor's Razor compiler reads this field in BuildRenderTree;
     // Roslyn's data-flow analysis does not track template-side reads.
 #pragma warning disable CS0414
@@ -549,30 +703,42 @@
         await RunSearchAsync();
     }
 
-    /// <summary>Returns true when the section for the given type should be rendered.</summary>
-    private bool ShowSection(string type) => _typeFilter == "All" || _typeFilter == type;
+    private IEnumerable<SearchResultDto> TypeScopedResults =>
+        _typeFilter == "All"
+            ? _results
+            : _results.Where(result => result.ResultType == _typeFilter);
 
     private IEnumerable<SearchResultDto> ResultsFor(string type) =>
-        _results.Where(result => result.ResultType == type);
+        ApplyTagFilter(_results.Where(result => result.ResultType == type));
 
     private int GetFilterCount(string type) => type switch
     {
-        "All"      => _results.Count,
-        _          => _results.Count(r => r.ResultType == type),
+        "All"      => ApplyTagFilter(_results).Count(),
+        _          => ResultsFor(type).Count(),
     };
 
-    private int TotalResults => GetFilterCount(_typeFilter);
+    private int VisibleResultsCount => GetFilterCount(_typeFilter);
+    private bool HasActiveClientFilters => _typeFilter != "All" || !string.IsNullOrWhiteSpace(_tagFilter);
+    private bool HasMoreResults => _results.Count < _totalCount;
+
+    private IReadOnlyList<(string Name, int Count)> AvailableTags =>
+        TypeScopedResults
+            .SelectMany(result => result.Tags ?? [])
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .GroupBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+            .Select(group => (Name: group.First(), Count: group.Count()))
+            .OrderBy(group => group.Item1, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    /// <summary>Returns true when the section for the given type should be rendered.</summary>
+    private bool ShowSection(string type) =>
+        (_typeFilter == "All" || _typeFilter == type) && ResultsFor(type).Any();
 
     private Task OnTextChanged(string value)
     {
         _query = value;
         if (string.IsNullOrWhiteSpace(value))
-        {
-            _results = [];
-            _hasSearched = false;
-            _searchError = false;
-            _typeFilter = "All";
-        }
+            ResetSearchState();
 
         return Task.CompletedTask;
     }
@@ -580,35 +746,76 @@
     private async Task RunSearchAsync()
     {
         var term = _query?.Trim() ?? string.Empty;
+        await SearchPageAsync(resetResults: true);
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (!HasMoreResults || _loadingMore)
+            return;
+
+        await SearchPageAsync(resetResults: false);
+    }
+
+    private async Task SearchPageAsync(bool resetResults)
+    {
+        var term = _query?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(term))
         {
-            _results = [];
-            _hasSearched = false;
-            _searchError = false;
-            _typeFilter = "All";
+            ResetSearchState();
             return;
         }
 
-        _searching = true;
-        _hasSearched = true;
+        if (resetResults)
+        {
+            _searching = true;
+            _hasSearched = true;
+        }
+        else
+        {
+            _loadingMore = true;
+        }
+
         _searchError = false;
         StateHasChanged();
 
         try
         {
-            _results = await SearchService.SearchAsync(term);
-            if (_typeFilter != "All" && GetFilterCount(_typeFilter) == 0)
+            var nextPage = resetResults ? 1 : _currentPage + 1;
+            var page = await SearchService.SearchAsync(term, page: nextPage, pageSize: PageSize);
+
+            _currentPage = page.Page;
+            _totalCount = page.TotalCount;
+
+            if (resetResults)
+            {
+                _results = page.Items.ToList();
+            }
+            else
+            {
+                _results.AddRange(page.Items);
+            }
+
+            if (_typeFilter != "All" && !_results.Any(result => result.ResultType == _typeFilter))
                 _typeFilter = "All";
+
+            EnsureTagFilterIsAvailable();
             _lastQuery = term;
         }
         catch (Exception)
         {
             _searchError = true;
-            _results = [];
+            if (resetResults)
+            {
+                _results = [];
+                _totalCount = 0;
+                _currentPage = 0;
+            }
         }
         finally
         {
             _searching = false;
+            _loadingMore = false;
             StateHasChanged();
         }
     }
@@ -630,7 +837,43 @@
         await DialogService.ShowAsync<NoteEditorDialog>("", parameters, options);
     }
 
-    private void SetTypeFilter(string type) => _typeFilter = type;
+    private void SetTypeFilter(string type)
+    {
+        _typeFilter = type;
+        EnsureTagFilterIsAvailable();
+    }
+
+    private void SetTagFilter(string tag) => _tagFilter = tag;
+
+    private void ClearTagFilter() => _tagFilter = null;
+
+    private IEnumerable<SearchResultDto> ApplyTagFilter(IEnumerable<SearchResultDto> results) =>
+        string.IsNullOrWhiteSpace(_tagFilter)
+            ? results
+            : results.Where(result => (result.Tags ?? []).Contains(_tagFilter, StringComparer.OrdinalIgnoreCase));
+
+    private void EnsureTagFilterIsAvailable()
+    {
+        if (string.IsNullOrWhiteSpace(_tagFilter))
+            return;
+
+        if (!AvailableTags.Any(tag => string.Equals(tag.Name, _tagFilter, StringComparison.OrdinalIgnoreCase)))
+            _tagFilter = null;
+    }
+
+    private void ResetSearchState()
+    {
+        _results = [];
+        _hasSearched = false;
+        _searchError = false;
+        _searching = false;
+        _loadingMore = false;
+        _typeFilter = "All";
+        _tagFilter = null;
+        _lastQuery = string.Empty;
+        _currentPage = 0;
+        _totalCount = 0;
+    }
 
     private static string BuildResultUrl(SearchResultDto result) => result.ResultType switch
     {

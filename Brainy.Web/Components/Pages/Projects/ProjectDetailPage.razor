@@ -6,6 +6,7 @@
 @using Brainy.Application.DTOs.Outputs
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
+@using Brainy.Web.Components.Shared
 @using Brainy.Web.Components.Pages.Notes
 @attribute [Authorize]
 @implements IAsyncDisposable
@@ -1208,17 +1209,23 @@ else
     private async Task ConfirmArchive()
     {
         var name = _detail?.Name ?? "this project";
-        var confirmed = await DialogService.ShowMessageBox(
-            "Archive project",
-            $"Archive \"{name}\"? It will be hidden from active views.",
-            yesText: "Archive", cancelText: "Cancel");
-
-        if (confirmed == true)
+        var parameters = new DialogParameters<ArchiveReasonDialog>
         {
-            await ProjectService.ArchiveAsync(ProjectId);
-            Snackbar.Add($"\"{name}\" archived.", Severity.Success);
-            Nav.NavigateTo("/projects");
-        }
+            { x => x.Title, "Archive project" },
+            { x => x.Message, $"Archive \"{name}\"? It will be hidden from active views." }
+        };
+        var dialog = await DialogService.ShowAsync<ArchiveReasonDialog>(
+            "Archive project",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled)
+            return;
+
+        await ProjectService.ArchiveAsync(ProjectId, archivedReason: result.Data as string);
+        Snackbar.Add($"\"{name}\" archived.", Severity.Success);
+        Nav.NavigateTo("/projects");
     }
 
     private static string StatusLabel(ProjectStatus s) => s switch

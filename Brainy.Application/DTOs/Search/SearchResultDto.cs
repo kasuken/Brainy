@@ -30,4 +30,6 @@ public record SearchResultDto(
     /// <summary>Populated when <see cref="ResultType"/> is "Output".</summary>
     OutputStatus? OutputStatus = null,
     /// <summary>Tag names associated with the result, when supported by its entity type.</summary>
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    /// <summary>The field that produced the snippet, such as Content, Description, Topic, Title, or Tags.</summary>
+    string? SnippetSource = null);

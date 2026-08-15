@@ -24,7 +24,6 @@
 <PageTitle>Archives — Brainy</PageTitle>
 
 <style>
-    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
 
     .arc-page {
         max-width: 1500px;
@@ -305,6 +304,22 @@
         margin-top: 0.5rem;
     }
 
+    .arc-item-reason {
+        display: inline-flex;
+        align-items: flex-start;
+        gap: 0.35rem;
+        margin-top: 0.5rem;
+        font-size: 0.8rem;
+        color: var(--mud-palette-text-secondary);
+        line-height: 1.45;
+        cursor: help;
+    }
+
+    .arc-item-reason-icon {
+        color: var(--mud-palette-warning);
+        margin-top: 0.1rem;
+    }
+
     .arc-item-actions {
         display: flex;
         gap: 0.5rem;
@@ -371,6 +386,16 @@
         margin-bottom: 1rem;
         border-bottom: 1px solid var(--mud-palette-lines-default);
         padding-bottom: 0.5rem;
+    }
+
+    .arc-list-status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin: 0 0 0.75rem;
+        color: var(--mud-palette-text-secondary);
+        font-size: 0.8rem;
     }
 
 </style>
@@ -502,6 +527,8 @@
 
                 @if (_filtered.Count > 0)
                 {
+                    var visibleItems = VisibleItems;
+
                     @* ── Bulk actions toolbar ── *@
                     @if (_selectedItems.Count > 0)
                     {
@@ -531,23 +558,30 @@
                     }
 
                     <h2 class="arc-section-title">Items</h2>
+                    <div class="arc-list-status">
+                        <span>Showing @visibleItems.Count of @_filtered.Count archived items</span>
+                        @if (HasMoreItems)
+                        {
+                            <span>@(_filtered.Count - visibleItems.Count) more available</span>
+                        }
+                    </div>
                     <div class="arc-ledger">
                         @* Select-all header *@
                         <div class="arc-select-all-row">
                              <MudCheckBox T="bool"
-                                         aria-label="@($"Select all {_filtered.Count} archived items")"
-                                         Value="@(_filtered.Count > 0 && _filtered.All(i => _selectedItems.Contains(i.Id)))"
-                                         ValueChanged="ToggleSelectAllItems"
-                                         Size="Size.Small"
-                                         Color="Color.Primary" />
-                            <span class="arc-select-all-label">Select all (@_filtered.Count)</span>
+                                        aria-label="@($"Select all {visibleItems.Count} visible archived items")"
+                                        Value="@(visibleItems.Count > 0 && visibleItems.All(i => _selectedItems.Contains(i.Id)))"
+                                        ValueChanged="ToggleSelectAllItems"
+                                        Size="Size.Small"
+                                        Color="Color.Primary" />
+                           <span class="arc-select-all-label">Select visible (@visibleItems.Count)</span>
                         </div>
 
-                        @for (int i = 0; i < _filtered.Count; i++)
-                        {
-                            var item = _filtered[i];
-                            var idx = i;
-                            <div class="arc-ledger-item arc-row-in" style="animation-delay:@(idx * 25)ms;">
+                       @for (int i = 0; i < visibleItems.Count; i++)
+                       {
+                           var item = visibleItems[i];
+                           var idx = i;
+                           <div class="arc-ledger-item arc-row-in" style="animation-delay:@(idx * 25)ms;">
                                 <div style="display:flex; align-items:flex-start; padding-top:0.1rem;">
                                      <MudCheckBox T="bool"
                                                  aria-label="@($"Select {item.EntityType} {item.Name}")"
@@ -564,6 +598,15 @@
                                         <p class="arc-item-desc">@item.Description</p>
                                     }
                                     <div class="arc-item-meta">@GetArchivedLabel(item)</div>
+                                    @if (!string.IsNullOrWhiteSpace(item.ArchivedReason))
+                                    {
+                                        <MudTooltip Text="@item.ArchivedReason">
+                                            <div class="arc-item-reason">
+                                                <MudIcon Icon="@Icons.Material.Outlined.StickyNote2" Size="Size.Small" Class="arc-item-reason-icon" />
+                                                <span>@GetArchivedReasonPreview(item.ArchivedReason)</span>
+                                            </div>
+                                        </MudTooltip>
+                                    }
                                 </div>
                                 <div class="arc-item-actions">
                                     <MudButton Variant="Variant.Text"
@@ -590,10 +633,21 @@
                             </div>
                         }
                     </div>
+
+                    @if (HasMoreItems)
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Default"
+                                   OnClick="LoadMoreItems">
+                            Load more items
+                        </MudButton>
+                    }
                 }
 
                 @if (FilteredGoals.Any())
                 {
+                   var visibleGoals = VisibleGoals;
+
                     @* ── Goals bulk actions toolbar ── *@
                     @if (_selectedGoalIds.Count > 0)
                     {
@@ -623,26 +677,30 @@
                     }
 
                     <h2 class="arc-section-title" style="margin-top: 2rem;">Goals</h2>
+                    <div class="arc-list-status">
+                        <span>Showing @visibleGoals.Count of @FilteredGoals.Count() archived goals</span>
+                        @if (HasMoreGoals)
+                        {
+                            <span>@(FilteredGoals.Count() - visibleGoals.Count) more available</span>
+                        }
+                    </div>
                     <div class="arc-ledger">
                         @* Select-all header *@
-                        @{
-                            var filteredGoalsList = FilteredGoals.ToList();
-                        }
-                        <div class="arc-select-all-row">
-                            <MudCheckBox T="bool"
-                                         aria-label="@($"Select all {filteredGoalsList.Count} archived goals")"
-                                         Value="@(filteredGoalsList.Count > 0 && filteredGoalsList.All(g => _selectedGoalIds.Contains(g.Id)))"
-                                         ValueChanged="ToggleSelectAllGoals"
-                                         Size="Size.Small"
-                                         Color="Color.Primary" />
-                            <span class="arc-select-all-label">Select all (@filteredGoalsList.Count)</span>
-                        </div>
+                       <div class="arc-select-all-row">
+                           <MudCheckBox T="bool"
+                                        aria-label="@($"Select all {visibleGoals.Count} visible archived goals")"
+                                        Value="@(visibleGoals.Count > 0 && visibleGoals.All(g => _selectedGoalIds.Contains(g.Id)))"
+                                        ValueChanged="ToggleSelectAllGoals"
+                                        Size="Size.Small"
+                                        Color="Color.Primary" />
+                           <span class="arc-select-all-label">Select visible (@visibleGoals.Count)</span>
+                       </div>
 
-                        @for(int i = 0; i < filteredGoalsList.Count; i++)
-                        {
-                            var goal = filteredGoalsList[i];
-                            var idx = i;
-                            <div class="arc-ledger-item arc-row-in" style="animation-delay:@(idx * 25)ms;">
+                       @for(int i = 0; i < visibleGoals.Count; i++)
+                       {
+                           var goal = visibleGoals[i];
+                           var idx = i;
+                           <div class="arc-ledger-item arc-row-in" style="animation-delay:@(idx * 25)ms;">
                                 <div style="display:flex; align-items:flex-start; padding-top:0.1rem;">
                                      <MudCheckBox T="bool"
                                                  aria-label="@($"Select goal {goal.Title}")"
@@ -668,6 +726,15 @@
                                         }
                                         <span style="margin-left:1rem;">@goal.CompletedMilestones/@goal.TotalMilestones milestones</span>
                                     </div>
+                                    @if (!string.IsNullOrWhiteSpace(goal.ArchivedReason))
+                                    {
+                                        <MudTooltip Text="@goal.ArchivedReason">
+                                            <div class="arc-item-reason">
+                                                <MudIcon Icon="@Icons.Material.Outlined.StickyNote2" Size="Size.Small" Class="arc-item-reason-icon" />
+                                                <span>@GetArchivedReasonPreview(goal.ArchivedReason)</span>
+                                            </div>
+                                        </MudTooltip>
+                                    }
                                 </div>
                                 <div class="arc-item-actions">
                                     <MudButton Variant="Variant.Text"
@@ -693,6 +760,15 @@
                             </div>
                         }
                     </div>
+
+                    @if (HasMoreGoals)
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Default"
+                                   OnClick="LoadMoreGoals">
+                            Load more goals
+                        </MudButton>
+                    }
                 }
 
                 @* ── Retention Rules Footer Widget ── *@
@@ -836,6 +912,7 @@
 
     private static readonly string[] EntityTypes = ["Project", "Area", "Resource", "Note"];
     private static readonly string[] TypeFilters = ["All", "Project", "Task", "Area", "Resource", "Note"];
+    private const int PageSize = 25;
 
     private bool _loading = true;
     private string? _loadError;
@@ -849,6 +926,8 @@
     private string _typeFilter = "All";
     private DateTime? _dateFrom;
     private DateTime? _dateTo;
+    private int _visibleItemCount = PageSize;
+    private int _visibleGoalCount = PageSize;
 
     private Dictionary<string, int?> _retentionDays = new();
     private Dictionary<string, bool> _savingRetention = new();
@@ -880,6 +959,11 @@
                 g.Title.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
                 (g.Description?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true) ||
                 (g.AreaName?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true));
+
+    private IReadOnlyList<ArchiveItem> VisibleItems => [.. _filtered.Take(_visibleItemCount)];
+    private IReadOnlyList<GoalDto> VisibleGoals => [.. FilteredGoals.Take(_visibleGoalCount)];
+    private bool HasMoreItems => _filtered.Count > _visibleItemCount;
+    private bool HasMoreGoals => FilteredGoals.Skip(_visibleGoalCount).Any();
 
     private async Task LoadAsync()
     {
@@ -922,7 +1006,8 @@
                     p.Name,
                     BuildSnippet(p.Description ?? p.DesiredOutcome),
                     p.ArchivedAtUtc,
-                    p.UpdatedAtUtc)),
+                    p.UpdatedAtUtc,
+                    ArchivedReason: p.ArchivedReason)),
 
                 .._archivedAreas.Select(a => new ArchiveItem(
                     a.Id,
@@ -930,7 +1015,8 @@
                     a.Name,
                     BuildSnippet(a.Description ?? a.Purpose),
                     a.ArchivedAtUtc,
-                    a.UpdatedAtUtc)),
+                    a.UpdatedAtUtc,
+                    ArchivedReason: a.ArchivedReason)),
 
                 .._archivedResources.Select(r => new ArchiveItem(
                     r.Id,
@@ -939,7 +1025,8 @@
                     BuildSnippet(r.Description ?? r.Topic),
                     r.ArchivedAtUtc,
                     r.UpdatedAtUtc,
-                    RowVersion: r.RowVersion)),
+                    RowVersion: r.RowVersion,
+                    ArchivedReason: r.ArchivedReason)),
 
                 .._archivedNotes.Select(n => new ArchiveItem(
                     n.Id,
@@ -947,7 +1034,8 @@
                     n.Title,
                     BuildSnippet(n.Content),
                     n.ArchivedAtUtc,
-                    n.UpdatedAtUtc)),
+                    n.UpdatedAtUtc,
+                    ArchivedReason: n.ArchivedReason)),
 
                 .._archivedTasks.Select(t => new ArchiveItem(
                     t.Id,
@@ -959,7 +1047,8 @@
                     t.ArchivedAtUtc,
                     t.UpdatedAtUtc,
                     $"/projects/{t.ProjectId}",
-                    t.CanRestore))
+                    t.CanRestore,
+                    ArchivedReason: t.ArchivedReason))
             ];
 
             _allItems = [.. _allItems.OrderByDescending(item => item.ArchivedAtUtc ?? item.UpdatedAtUtc)];
@@ -1006,6 +1095,7 @@
         }
 
         _filtered = [.. query];
+        ResetVisibleCounts();
 
         // Clear stale selections whenever the visible set changes.
         _selectedItems.Clear();
@@ -1331,6 +1421,9 @@
         return normalized.Length <= 140 ? normalized : $"{normalized[..140]}…";
     }
 
+    private static string GetArchivedReasonPreview(string? value) =>
+        BuildSnippet(value) ?? string.Empty;
+
     private IEnumerable<ProjectDto> GetExpiredProjects(DateTime now)
     {
         if (!_retentionDays.TryGetValue("Project", out var days) || days is null)
@@ -1412,17 +1505,27 @@
     private void ToggleSelectAllItems(bool selectAll)
     {
         if (selectAll)
-            foreach (var item in _filtered) _selectedItems.Add(item.Id);
+            foreach (var item in VisibleItems) _selectedItems.Add(item.Id);
         else
-            _selectedItems.ExceptWith(_filtered.Select(i => i.Id));
+            _selectedItems.ExceptWith(VisibleItems.Select(i => i.Id));
     }
 
     private void ToggleSelectAllGoals(bool selectAll)
     {
         if (selectAll)
-            foreach (var goal in FilteredGoals) _selectedGoalIds.Add(goal.Id);
+            foreach (var goal in VisibleGoals) _selectedGoalIds.Add(goal.Id);
         else
-            _selectedGoalIds.ExceptWith(FilteredGoals.Select(g => g.Id));
+            _selectedGoalIds.ExceptWith(VisibleGoals.Select(g => g.Id));
+    }
+
+    private void LoadMoreItems() => _visibleItemCount += PageSize;
+
+    private void LoadMoreGoals() => _visibleGoalCount += PageSize;
+
+    private void ResetVisibleCounts()
+    {
+        _visibleItemCount = PageSize;
+        _visibleGoalCount = PageSize;
     }
 
     // ── Bulk restore (items) ──────────────────────────────────────────────────
@@ -1632,5 +1735,6 @@
         DateTime UpdatedAtUtc,
         string? NavigationUrl = null,
         bool CanRestore = true,
-        byte[]? RowVersion = null);
+        byte[]? RowVersion = null,
+        string? ArchivedReason = null);
 }

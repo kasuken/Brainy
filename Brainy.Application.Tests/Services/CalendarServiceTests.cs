@@ -85,7 +85,8 @@ public class CalendarServiceTests
         bool isArchived       = false,
         TaskItemStatus status  = TaskItemStatus.Todo,
         TaskPriority priority  = TaskPriority.Medium,
-        string title           = "Task") => new()
+        string title           = "Task",
+        TaskComplexity? complexity = null) => new()
     {
         Id           = Guid.NewGuid(),
         UserId       = userId,
@@ -93,6 +94,7 @@ public class CalendarServiceTests
         Title        = title,
         Status       = status,
         Priority     = priority,
+        Complexity   = complexity,
         DueDate      = dueDate,
         IsArchived   = isArchived,
         CreatedAtUtc = DateTime.UtcNow,
@@ -303,6 +305,56 @@ public class CalendarServiceTests
     }
 
     [Fact]
+    public async Task GetCalendarTasks_ProjectsComplexityEstimate()
+    {
+        var (sut, db) = BuildService(nameof(GetCalendarTasks_ProjectsComplexityEstimate));
+        var project   = CreateProject(DefaultUserId);
+        db.Projects.Add(project);
+        db.Tasks.Add(CreateTask(DefaultUserId, project.Id, dueDate: Today, complexity: TaskComplexity.XL));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetCalendarTasksAsync();
+
+        result.Should().ContainSingle()
+            .Which.Complexity.Should().Be(TaskComplexity.XL);
+    }
+
+    [Fact]
+    public async Task GetCalendarTasks_ProjectsBlockedDependencyCounts()
+    {
+        var (sut, db) = BuildService(nameof(GetCalendarTasks_ProjectsBlockedDependencyCounts));
+        var project = CreateProject(DefaultUserId);
+        var completedPrerequisite = CreateTask(DefaultUserId, project.Id, status: TaskItemStatus.Done, title: "Completed prerequisite");
+        var openPrerequisite = CreateTask(DefaultUserId, project.Id, title: "Open prerequisite");
+        var blockedTask = CreateTask(DefaultUserId, project.Id, dueDate: Today, title: "Blocked task");
+
+        db.Projects.Add(project);
+        db.Tasks.AddRange(completedPrerequisite, openPrerequisite, blockedTask);
+        db.TaskDependencies.AddRange(
+            new TaskDependency
+            {
+                Id = Guid.NewGuid(),
+                TaskId = blockedTask.Id,
+                DependsOnTaskId = completedPrerequisite.Id
+            },
+            new TaskDependency
+            {
+                Id = Guid.NewGuid(),
+                TaskId = blockedTask.Id,
+                DependsOnTaskId = openPrerequisite.Id
+            });
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetCalendarTasksAsync();
+
+        result.Should().ContainSingle(task => task.Id == blockedTask.Id)
+            .Which.Should().Match<CalendarTaskDto>(task =>
+                task.DependencyCount == 2 &&
+                task.UnresolvedDependencyCount == 1 &&
+                task.IsBlocked);
+    }
+
+    [Fact]
     public async Task GetCalendarTasks_ExcludesOtherUsersData()
     {
         // Arrange
@@ -359,6 +411,33 @@ public class CalendarServiceTests
             result.DueThisWeek.Should().ContainSingle(t => t.Title == "DueThisWeek");
         else
             result.DueThisWeek.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetUpcomingDeadlines_ProjectsBlockedDependencyCounts()
+    {
+        var (sut, db) = BuildService(nameof(GetUpcomingDeadlines_ProjectsBlockedDependencyCounts));
+        var project = CreateProject(DefaultUserId);
+        var prerequisite = CreateTask(DefaultUserId, project.Id, title: "Open prerequisite");
+        var blockedTask = CreateTask(DefaultUserId, project.Id, dueDate: Today, title: "Blocked today");
+
+        db.Projects.Add(project);
+        db.Tasks.AddRange(prerequisite, blockedTask);
+        db.TaskDependencies.Add(new TaskDependency
+        {
+            Id = Guid.NewGuid(),
+            TaskId = blockedTask.Id,
+            DependsOnTaskId = prerequisite.Id
+        });
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetUpcomingDeadlinesAsync();
+
+        result.DueToday.Should().ContainSingle(task => task.Id == blockedTask.Id)
+            .Which.Should().Match<CalendarTaskDto>(task =>
+                task.DependencyCount == 1 &&
+                task.UnresolvedDependencyCount == 1 &&
+                task.IsBlocked);
     }
 
     [Fact]

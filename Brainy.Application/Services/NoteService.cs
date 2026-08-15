@@ -136,6 +136,10 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         if (dto.Tags is not null)
             note.Tags = await ResolveTagsAsync(userId, dto.Tags, cancellationToken).ConfigureAwait(false);
 
+        // Force one Note UPDATE even when only tag join rows changed so the rowversion
+        // predicate is checked and the note's audit timestamp advances.
+        context.Entry(note).Property(n => n.UpdatedAtUtc).IsModified = true;
+
         if (dto.Status == NoteStatus.Archived)
         {
             note.IsArchived = true;
@@ -427,22 +431,25 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
                     .Where(t => t.UserId == userId)
                     .Select(t => t.Name)
                     .OrderBy(name => name)
-                    .ToList()))
+                    .ToList(),
+                ArchivedReason: n.ArchivedReason))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
 
-    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var note = await context.Notes
             .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{id}' was not found.");
+        var normalizedReason = ArchiveReasonNormalizer.Normalize(archivedReason);
         note.IsArchived = true;
         note.Status = NoteStatus.Archived;
         note.ParaCategory = ParaCategory.Archive;
         note.ArchivedAtUtc = DateTime.UtcNow;
+        note.ArchivedReason = normalizedReason;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -462,6 +469,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             note.Status = NoteStatus.Active;
         }
         note.ArchivedAtUtc = null;
+        note.ArchivedReason = null;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -552,7 +560,8 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         SourceUrl: n.Source?.Url,
         SourceTitle: n.Source?.Title,
         RowVersion: n.RowVersion,
-        Tags: n.Tags.Select(t => t.Name).OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList());
+        Tags: n.Tags.Select(t => t.Name).OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList(),
+        ArchivedReason: n.ArchivedReason);
 
     public async Task<NoteDto> ToggleFavoriteAsync(Guid id, CancellationToken cancellationToken = default)
     {

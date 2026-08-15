@@ -140,6 +140,28 @@ public class NoteServiceTests
         result.ResourceId.Should().Be(resource.Id);
     }
 
+    [Fact]
+    public async Task CreateAsync_WithTags_ReturnsAndPersistsNormalizedDistinctTags()
+    {
+        var dbName = nameof(CreateAsync_WithTags_ReturnsAndPersistsNormalizedDistinctTags);
+        var sut = BuildService(dbName);
+
+        var created = await sut.CreateAsync(new CreateNoteDto(
+            "Tagged note",
+            Tags: [" research ", "writing", "Research", "writing"]));
+
+        created.Tags.Should().Equal("research", "writing");
+
+        var options = new DbContextOptionsBuilder<BrainyDbContext>().UseInMemoryDatabase(dbName).Options;
+        await using var context = new BrainyDbContext(options);
+        var stored = await context.Notes
+            .Include(note => note.Tags)
+            .SingleAsync(note => note.Id == created.Id);
+
+        stored.Tags.Select(tag => tag.Name)
+            .Should().BeEquivalentTo(["research", "writing"]);
+    }
+
     // ── Read (single) ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -208,6 +230,42 @@ public class NoteServiceTests
         updated.AiSummary.Should().Be("AI summary text");
         updated.Status.Should().Be(NoteStatus.Distilled);
         updated.ParaCategory.Should().Be(ParaCategory.Archive);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithTagsOnly_ReplacesPersistedTagsAndRefreshesUpdatedTimestamp()
+    {
+        var dbName = nameof(UpdateAsync_WithTagsOnly_ReplacesPersistedTagsAndRefreshesUpdatedTimestamp);
+        var sut = BuildService(dbName);
+        var created = await sut.CreateAsync(new CreateNoteDto(
+            "Original",
+            Tags: ["alpha", "beta"]));
+
+        await Task.Delay(20);
+
+        var updated = await sut.UpdateAsync(new UpdateNoteDto(
+            created.Id,
+            created.Title,
+            created.Content,
+            created.AiSummary,
+            created.Status,
+            created.ParaCategory,
+            created.ProjectId,
+            created.AreaId,
+            created.ResourceId,
+            Tags: ["beta", "gamma"]));
+
+        updated.Tags.Should().Equal("beta", "gamma");
+        updated.UpdatedAtUtc.Should().BeAfter(created.UpdatedAtUtc);
+
+        var options = new DbContextOptionsBuilder<BrainyDbContext>().UseInMemoryDatabase(dbName).Options;
+        await using var context = new BrainyDbContext(options);
+        var stored = await context.Notes
+            .Include(note => note.Tags)
+            .SingleAsync(note => note.Id == created.Id);
+
+        stored.Tags.Select(tag => tag.Name)
+            .Should().BeEquivalentTo(["beta", "gamma"]);
     }
 
     [Fact]
@@ -305,6 +363,53 @@ public class NoteServiceTests
             RowVersion: [1, 2, 3]));
 
         await act.Should().ThrowAsync<ConcurrencyConflictException>();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithCurrentRowVersion_Succeeds()
+    {
+        var dbName = nameof(UpdateAsync_WithCurrentRowVersion_Succeeds);
+        var rowVersion = new byte[] { 4, 5, 6 };
+        var noteId = Guid.NewGuid();
+        var options = new DbContextOptionsBuilder<BrainyDbContext>().UseInMemoryDatabase(dbName).Options;
+
+        await using (var seedContext = new BrainyDbContext(options))
+        {
+            seedContext.Notes.Add(new Note
+            {
+                Id = noteId,
+                UserId = DefaultUserId,
+                Title = "Original",
+                Content = "Before",
+                Status = NoteStatus.Inbox,
+                ParaCategory = ParaCategory.Project,
+                CreatedAtUtc = DateTime.UtcNow,
+                UpdatedAtUtc = DateTime.UtcNow,
+                RowVersion = rowVersion
+            });
+
+            await seedContext.SaveChangesAsync();
+        }
+
+        var sut = BuildService(dbName);
+
+        var updated = await sut.UpdateAsync(new UpdateNoteDto(
+            noteId,
+            "Updated title",
+            "Updated content",
+            null,
+            NoteStatus.Distilled,
+            ParaCategory.Archive,
+            null,
+            null,
+            null,
+            RowVersion: rowVersion));
+
+        updated.Title.Should().Be("Updated title");
+        updated.Content.Should().Be("Updated content");
+        updated.Status.Should().Be(NoteStatus.Distilled);
+        updated.ParaCategory.Should().Be(ParaCategory.Archive);
+        updated.RowVersion.Should().Equal(rowVersion);
     }
 
     [Fact]

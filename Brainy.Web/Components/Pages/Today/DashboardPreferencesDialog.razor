@@ -1,0 +1,170 @@
+<MudDialog>
+    <DialogContent>
+        <div class="td-pref-dialog">
+            <div class="td-pref-dialog__intro">
+                <p class="td-pref-dialog__eyebrow">Today layout</p>
+                <h2 class="td-pref-dialog__title">Choose what stays in view</h2>
+                <p class="td-pref-dialog__copy">
+                    Toggle the sections you want on Today. Your current layout order stays intact.
+                </p>
+            </div>
+
+            <div class="td-pref-dialog__grid">
+                @foreach (var option in _options)
+                {
+                    <label class="td-pref-dialog__option">
+                        <div class="td-pref-dialog__option-copy">
+                            <span class="td-pref-dialog__option-title">@option.Title</span>
+                            <span class="td-pref-dialog__option-description">@option.Description</span>
+                        </div>
+                        <MudCheckBox T="bool"
+                                     @bind-Value="option.Enabled"
+                                     Color="Color.Primary"
+                                     Dense="true" />
+                    </label>
+                }
+            </div>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .td-pref-dialog {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .td-pref-dialog__intro {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .td-pref-dialog__eyebrow {
+        margin: 0;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .td-pref-dialog__title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: 1.4rem;
+        line-height: 1.1;
+    }
+
+    .td-pref-dialog__copy {
+        margin: 0;
+        color: var(--mud-palette-text-secondary);
+        font-size: 0.9rem;
+    }
+
+    .td-pref-dialog__grid {
+        display: grid;
+        gap: 0.75rem;
+    }
+
+    .td-pref-dialog__option {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.9rem 1rem;
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 14px;
+        background: rgba(192, 86, 29, 0.03);
+        cursor: pointer;
+        transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+    }
+
+    .td-pref-dialog__option:hover {
+        border-color: rgba(192, 86, 29, 0.35);
+        background: rgba(192, 86, 29, 0.06);
+        transform: translateY(-1px);
+    }
+
+    .td-pref-dialog__option-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .td-pref-dialog__option-title {
+        font-weight: 700;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .td-pref-dialog__option-description {
+        color: var(--mud-palette-text-secondary);
+        font-size: 0.84rem;
+        line-height: 1.35;
+    }
+ </style>
+
+@code {
+    private readonly List<WidgetToggleOption> _options =
+    [
+        new("daily-snapshot", "Daily snapshot", "Keep the top summary strip visible.", true),
+        new("current-focus", "Current focus", "Show your active task and focus controls.", true),
+        new("in-progress", "In Progress", "Surface work that is already underway.", true),
+        new("overdue", "Overdue", "Show tasks that already slipped past their due date.", true),
+        new("goal-deadlines", "Goal deadlines", "Show overdue and due-soon goals.", true),
+        new("due-today", "Due today", "Highlight work that must land today.", true),
+        new("high-priority-project-work", "High-priority project work", "Keep important project work front and center.", true),
+        new("due-this-week", "Due this week", "Show tasks approaching this week’s deadline.", true),
+        new("next-tasks", "Next tasks", "Surface the next upcoming work after this week.", true),
+        new("priority-projects", "Priority projects", "Keep your top projects visible at the bottom.", true)
+    ];
+
+    [Parameter] public IReadOnlyCollection<string>? EnabledWidgetKeys { get; set; }
+
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    protected override void OnParametersSet()
+    {
+        var enabled = EnabledWidgetKeys is null
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(EnabledWidgetKeys, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var option in _options)
+        {
+            option.Enabled = enabled.Count == 0 || enabled.Contains(option.Key);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Save()
+    {
+        var enabledKeys = _options
+            .Where(option => option.Enabled)
+            .Select(option => option.Key)
+            .ToArray();
+
+        MudDialog.Close(DialogResult.Ok(enabledKeys));
+    }
+
+    private sealed class WidgetToggleOption
+    {
+        public WidgetToggleOption(string key, string title, string description, bool enabled)
+        {
+            Key = key;
+            Title = title;
+            Description = description;
+            Enabled = enabled;
+        }
+
+        public string Key { get; }
+        public string Title { get; }
+        public string Description { get; }
+        public bool Enabled { get; set; }
+    }
+}

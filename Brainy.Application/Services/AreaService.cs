@@ -1,3 +1,4 @@
+using Brainy.Application.Common;
 using Brainy.Application.DTOs.Areas;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
@@ -78,7 +79,7 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
         return new AreaDetailDto(area.Id, area.Name, area.Description, area.Purpose,
             area.IsArchived, area.ArchivedAtUtc, area.CreatedAtUtc, area.UpdatedAtUtc,
             activeProjectCount, openTaskCount, recentNoteCount,
-            NormalizeEmoji(area.Emoji));
+            NormalizeEmoji(area.Emoji), area.ArchivedReason);
     }
 
     public async Task<AreaDto> CreateAsync(CreateAreaDto dto, CancellationToken cancellationToken = default)
@@ -125,7 +126,7 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
         return ToDto(area);
     }
 
-    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
@@ -161,8 +162,10 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
                 $"Area '{area.Name}' cannot be archived while it contains {string.Join(", ", blockers)}. " +
                 "Archive or reassign those items first.");
 
+        var normalizedReason = ArchiveReasonNormalizer.Normalize(archivedReason);
         area.IsArchived = true;
         area.ArchivedAtUtc = DateTime.UtcNow;
+        area.ArchivedReason = normalizedReason;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -185,6 +188,7 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
 
         area.IsArchived = false;
         area.ArchivedAtUtc = null;
+        area.ArchivedReason = null;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -263,7 +267,7 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
         a.Id, a.Name, a.Description, a.Purpose,
         a.IsArchived, a.ArchivedAtUtc,
         a.CreatedAtUtc, a.UpdatedAtUtc,
-        NormalizeEmoji(a.Emoji));
+        NormalizeEmoji(a.Emoji), a.ArchivedReason);
 
     private static string NormalizeEmoji(string? emoji)
     {

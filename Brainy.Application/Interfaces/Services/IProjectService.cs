@@ -55,7 +55,7 @@ public interface IProjectService
     /// </summary>
     Task<ProjectDto> CompleteAsync(Guid id, TaskCompletionAction taskAction, CancellationToken cancellationToken = default);
 
-    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
+    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null);
 
     /// <summary>
     /// Restores an archived project back to <see cref="Domain.Enums.ProjectStatus.NotStarted"/>.

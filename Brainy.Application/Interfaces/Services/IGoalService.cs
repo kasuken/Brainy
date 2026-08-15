@@ -27,7 +27,7 @@ public interface IGoalService
     Task<GoalDto> UpdateAsync(UpdateGoalDto dto, CancellationToken cancellationToken = default);
 
     /// <summary>Archives the goal — removes it from active views.</summary>
-    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);
+    Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null);
 
     /// <summary>Restores an archived goal back to Planned status.</summary>
     Task<GoalDto> RestoreAsync(Guid id, CancellationToken cancellationToken = default);

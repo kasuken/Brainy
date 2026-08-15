@@ -3,6 +3,7 @@
    Four outlined buttons: browse tasks, set focus, process inbox, new note.
 ───────────────────────────────────────────────────────────────────────────── *@
 @inject NavigationManager Nav
+@inject IDialogService DialogService
 
 <div class="td-section" style="display:flex; gap:0.5rem; flex-wrap:wrap; padding-bottom:0.5rem;">
 
@@ -23,7 +24,7 @@
     <MudButton Variant="Variant.Outlined" Size="Size.Small"
                StartIcon="@Icons.Material.Outlined.CenterFocusStrong"
                Style="border-color:var(--line-strong); color:var(--ink-soft); font-size:0.78rem;"
-               OnClick="@(() => Nav.NavigateTo("/projects"))">
+               OnClick="OpenFocusPickerAsync">
         Set Focus
     </MudButton>
 
@@ -45,4 +46,25 @@
 
 @code {
     [Parameter] public EventCallback OnAddTask { get; set; }
+    [Parameter] public Guid? CurrentTaskId { get; set; }
+    [Parameter] public EventCallback OnFocusChanged { get; set; }
+
+    private async Task OpenFocusPickerAsync()
+    {
+        var parameters = new DialogParameters<FocusPickerDialog>
+        {
+            { d => d.CurrentTaskId, CurrentTaskId }
+        };
+
+        var dialog = await DialogService.ShowAsync<FocusPickerDialog>(
+            "Choose your current focus",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await OnFocusChanged.InvokeAsync();
+        }
+    }
 }

@@ -15,6 +15,14 @@ public interface IUserTimeZoneService
     /// <summary>Updates the current user's time zone after validating the identifier.</summary>
     Task SetTimeZoneIdAsync(string timeZoneId, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns the current user's explicit override, if one is set.</summary>
+    Task<string?> GetTimeZoneOverrideIdAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stores an explicit user-selected time zone that takes precedence over browser detection.
+    /// </summary>
+    Task SetTimeZoneOverrideAsync(string timeZoneId, CancellationToken cancellationToken = default);
+
     /// <summary>Converts an inclusive local date range to an exclusive UTC range.</summary>
     Task<(DateTime StartUtc, DateTime EndUtc)> GetUtcRangeAsync(
         DateTime localStartDate,

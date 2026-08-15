@@ -22,4 +22,5 @@ public record OutputDto(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     /// <summary>Concurrency token captured at load time; pass back on update or delete.</summary>
-    byte[]? RowVersion = null);
+    byte[]? RowVersion = null,
+    string? ArchivedReason = null);

@@ -48,14 +48,15 @@ public class NoteImageServiceTests
         string contentType = "image/png",
         string fileName = "shot.png",
         Guid? noteId = null)
-        => new(data ?? CreateValidImageData(contentType), contentType, fileName, noteId);
+        => new(data ?? CreateValidAttachmentData(contentType), contentType, fileName, noteId);
 
-    private static byte[] CreateValidImageData(string contentType) => contentType.ToLowerInvariant() switch
+    private static byte[] CreateValidAttachmentData(string contentType) => contentType.ToLowerInvariant() switch
     {
         "image/jpeg" => [0xFF, 0xD8, 0xFF, 0x00],
         "image/gif" => "GIF89a"u8.ToArray(),
         "image/webp" => "RIFF1234WEBP"u8.ToArray(),
         "image/bmp" => "BM"u8.ToArray(),
+        "application/pdf" => "%PDF-1.7"u8.ToArray(),
         _ => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
     };
 
@@ -73,7 +74,7 @@ public class NoteImageServiceTests
         stored.UserId.Should().Be(DefaultUserId);
         stored.ContentType.Should().Be("image/png");
         stored.SizeBytes.Should().Be(8);
-        stored.Data.Should().Equal(CreateValidImageData("image/png"));
+        stored.Data.Should().Equal(CreateValidAttachmentData("image/png"));
     }
 
     [Fact]
@@ -112,9 +113,26 @@ public class NoteImageServiceTests
     {
         var (sut, _) = BuildService(nameof(UploadAsync_WithDisallowedContentType_ThrowsArgumentException));
 
-        var act = () => sut.UploadAsync(CreateUpload(contentType: "application/pdf"));
+        var act = () => sut.UploadAsync(CreateUpload(contentType: "application/zip"));
 
         await act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task UploadAsync_WithPdf_PersistsAttachment()
+    {
+        var (sut, db) = BuildService(nameof(UploadAsync_WithPdf_PersistsAttachment));
+
+        var result = await sut.UploadAsync(CreateUpload(
+            contentType: "application/pdf",
+            fileName: "paper.pdf"));
+
+        result.ContentType.Should().Be("application/pdf");
+        result.FileName.Should().Be("paper.pdf");
+
+        var stored = await db.NoteImages.AsNoTracking().SingleAsync();
+        stored.ContentType.Should().Be("application/pdf");
+        stored.Data.Should().Equal(CreateValidAttachmentData("application/pdf"));
     }
 
     [Fact]
@@ -136,7 +154,7 @@ public class NoteImageServiceTests
         var (sut, _) = BuildService(nameof(UploadAsync_WhenBytesDoNotMatchMimeType_ThrowsArgumentException));
 
         var act = () => sut.UploadAsync(CreateUpload(
-            data: CreateValidImageData("image/jpeg"),
+            data: CreateValidAttachmentData("image/jpeg"),
             contentType: "image/png"));
 
         await act.Should().ThrowAsync<ArgumentException>();
@@ -171,14 +189,14 @@ public class NoteImageServiceTests
     }
 
     [Fact]
-    public async Task UploadAsync_WithBlankFileName_DefaultsToImage()
+    public async Task UploadAsync_WithBlankFileName_DefaultsToAttachment()
     {
-        var (sut, db) = BuildService(nameof(UploadAsync_WithBlankFileName_DefaultsToImage));
+        var (sut, db) = BuildService(nameof(UploadAsync_WithBlankFileName_DefaultsToAttachment));
 
         await sut.UploadAsync(CreateUpload(fileName: "   "));
 
         var stored = await db.NoteImages.AsNoTracking().SingleAsync();
-        stored.FileName.Should().Be("image");
+        stored.FileName.Should().Be("attachment");
     }
 
     [Fact]
@@ -231,7 +249,7 @@ public class NoteImageServiceTests
             FileName = "existing.png",
             ContentType = "image/png",
             SizeBytes = INoteImageService.MaxUserStorageBytes,
-            Data = CreateValidImageData("image/png")
+            Data = CreateValidAttachmentData("image/png")
         });
         await db.SaveChangesAsync();
 
@@ -253,7 +271,7 @@ public class NoteImageServiceTests
             FileName = "foreign.png",
             ContentType = "image/png",
             SizeBytes = INoteImageService.MaxUserStorageBytes,
-            Data = CreateValidImageData("image/png")
+            Data = CreateValidAttachmentData("image/png")
         });
         await db.SaveChangesAsync();
 
@@ -275,7 +293,7 @@ public class NoteImageServiceTests
             FileName = "existing.png",
             ContentType = "image/png",
             SizeBytes = INoteImageService.MaxUserStorageBytes - 8,
-            Data = CreateValidImageData("image/png")
+            Data = CreateValidAttachmentData("image/png")
         });
         await db.SaveChangesAsync();
 
@@ -335,7 +353,7 @@ public class NoteImageServiceTests
         var result = await sut.GetContentAsync(uploaded.Id, DefaultUserId);
 
         result.Should().NotBeNull();
-        result!.Data.Should().Equal(CreateValidImageData("image/png"));
+        result!.Data.Should().Equal(CreateValidAttachmentData("image/png"));
         result.ContentType.Should().Be("image/png");
     }
 
@@ -397,6 +415,82 @@ public class NoteImageServiceTests
         await act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
+    // ── GetForNoteAsync ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetForNoteAsync_ReturnsOnlyOwnedImagesForRequestedNoteNewestFirst()
+    {
+        var (sut, db) = BuildService(nameof(GetForNoteAsync_ReturnsOnlyOwnedImagesForRequestedNoteNewestFirst));
+        var note = new Note { Id = Guid.NewGuid(), UserId = DefaultUserId, Title = "Owned" };
+        var otherNote = new Note { Id = Guid.NewGuid(), UserId = DefaultUserId, Title = "Other" };
+        var foreignNote = new Note { Id = Guid.NewGuid(), UserId = OtherUserId, Title = "Foreign" };
+        var older = CreateStoredImage(DefaultUserId, note.Id);
+        var newer = CreateStoredImage(DefaultUserId, note.Id);
+        var sibling = CreateStoredImage(DefaultUserId, otherNote.Id);
+        var foreign = CreateStoredImage(OtherUserId, note.Id);
+        db.AddRange(note, otherNote, foreignNote, older, newer, sibling, foreign);
+        await db.SaveChangesAsync();
+
+        older.CreatedAtUtc = DateTime.UtcNow.AddMinutes(-5);
+        newer.CreatedAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetForNoteAsync(note.Id);
+
+        result.Select(image => image.Id).Should().Equal(newer.Id, older.Id);
+    }
+
+    [Fact]
+    public async Task GetForNoteAsync_WithForeignNoteId_ThrowsKeyNotFoundException()
+    {
+        var (sut, db) = BuildService(nameof(GetForNoteAsync_WithForeignNoteId_ThrowsKeyNotFoundException));
+        var foreignNote = new Note { Id = Guid.NewGuid(), UserId = OtherUserId, Title = "Secret" };
+        db.Notes.Add(foreignNote);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.GetForNoteAsync(foreignNote.Id);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    // ── DeleteAsync ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteAsync_DeletesOnlyCurrentUsersImages()
+    {
+        var (sut, db) = BuildService(nameof(DeleteAsync_DeletesOnlyCurrentUsersImages));
+        var note = new Note { Id = Guid.NewGuid(), UserId = DefaultUserId, Title = "Owned" };
+        var ownedPending = CreateStoredImage(DefaultUserId);
+        var ownedAttached = CreateStoredImage(DefaultUserId, note.Id);
+        var foreignAttached = CreateStoredImage(OtherUserId, note.Id);
+        db.AddRange(note, ownedPending, ownedAttached, foreignAttached);
+        await db.SaveChangesAsync();
+
+        var deleted = await sut.DeleteAsync([ownedPending.Id, ownedAttached.Id, foreignAttached.Id]);
+
+        deleted.Should().Be(2);
+        var remainingIds = await db.NoteImages.AsNoTracking().Select(image => image.Id).ToListAsync();
+        remainingIds.Should().BeEquivalentTo([foreignAttached.Id]);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WithEmptyIds_ReturnsZero()
+    {
+        var (sut, _) = BuildService(nameof(DeleteAsync_WithEmptyIds_ReturnsZero));
+
+        (await sut.DeleteAsync([])).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WithNullIds_ThrowsArgumentNullException()
+    {
+        var (sut, _) = BuildService(nameof(DeleteAsync_WithNullIds_ThrowsArgumentNullException));
+
+        var act = () => sut.DeleteAsync(null!);
+
+        await act.Should().ThrowAsync<ArgumentNullException>();
+    }
+
     // ── DeletePendingAsync ───────────────────────────────────────────────────
 
     [Fact]
@@ -443,6 +537,6 @@ public class NoteImageServiceTests
         FileName = "stored.png",
         ContentType = "image/png",
         SizeBytes = 8,
-        Data = CreateValidImageData("image/png")
+        Data = CreateValidAttachmentData("image/png")
     };
 }

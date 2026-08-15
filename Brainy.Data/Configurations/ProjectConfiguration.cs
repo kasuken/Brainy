@@ -28,6 +28,9 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.Property(p => p.DesiredOutcome)
             .HasMaxLength(1000);
 
+        builder.Property(p => p.ArchivedReason)
+            .HasMaxLength(2000);
+
         builder.Property(p => p.Status)
             .HasConversion<string>()
             .HasMaxLength(20);

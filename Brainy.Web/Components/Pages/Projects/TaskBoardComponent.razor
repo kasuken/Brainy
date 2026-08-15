@@ -2,6 +2,7 @@
 @using Brainy.Application.DTOs.Tasks
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
+@using Brainy.Web.Components.Shared
 @inject ITaskService TaskService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -14,126 +15,292 @@
 }
 else
 {
-    <div class="tb-board">
-        @foreach (var col in _columns)
+    <div class="tb-shell">
+        <div class="tb-topbar">
+            <div class="tb-topbar__primary">
+                <MudButton Variant="@(_selectMode ? Variant.Filled : Variant.Outlined)"
+                           Color="@(_selectMode ? Color.Primary : Color.Default)"
+                           StartIcon="@(_selectMode ? Icons.Material.Filled.CheckBox : Icons.Material.Outlined.CheckBox)"
+                           Size="Size.Small"
+                           OnClick="ToggleSelectMode">
+                    @(_selectMode ? "Exit select mode" : "Select tasks")
+                </MudButton>
+
+                @if (_selectedTaskIds.Count > 0)
+                {
+                    <span class="tb-topbar__count">@_selectedTaskIds.Count selected</span>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Default"
+                               Size="Size.Small"
+                               StartIcon="@Icons.Material.Outlined.Clear"
+                               aria-label="Clear selected tasks"
+                               OnClick="ClearSelection">
+                        Clear
+                    </MudButton>
+                }
+            </div>
+        </div>
+
+        @if (_selectedTaskIds.Count > 0)
         {
-            var tasks = _tasksByStatus.GetValueOrDefault(col.Status) ?? [];
-            var isDragOver = _dragOverStatus == col.Status;
+            <MudToolBar Dense="true" Class="tb-bulkbar">
+                <MudText Typo="Typo.body2" Class="tb-bulkbar__label">
+                    Update @_selectedTaskIds.Count selected task@(_selectedTaskIds.Count == 1 ? string.Empty : "s")
+                </MudText>
+                <MudSpacer />
+                <MudSelect T="TaskItemStatus?"
+                           Value="_bulkStatusTarget"
+                           ValueChanged="OnBulkStatusChanged"
+                           Dense="true"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Label="Status"
+                           Class="tb-bulkbar__select">
+                    <MudSelectItem T="TaskItemStatus?" Value="@((TaskItemStatus?)null)">Choose status</MudSelectItem>
+                    @foreach (var status in _bulkStatuses)
+                    {
+                        <MudSelectItem T="TaskItemStatus?" Value="@((TaskItemStatus?)status)">@StatusLabel(status)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Small"
+                           Disabled="@(!_bulkStatusTarget.HasValue || _bulkBusy)"
+                           aria-label="Apply selected status to selected tasks"
+                           OnClick="ApplyBulkStatusAsync">
+                    Apply status
+                </MudButton>
 
-            <div class="tb-column @(isDragOver ? "tb-column--dragover" : "")"
-                 style="--col-color: @col.Color"
-                 @ondragenter="() => OnDragEnter(col.Status)"
-                 @ondragover:preventDefault
-                 @ondrop:preventDefault
-                 @ondrop="() => OnDrop(col.Status)">
+                <MudSelect T="TaskPriority?"
+                           Value="_bulkPriorityTarget"
+                           ValueChanged="OnBulkPriorityChanged"
+                           Dense="true"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Label="Priority"
+                           Class="tb-bulkbar__select">
+                    <MudSelectItem T="TaskPriority?" Value="@((TaskPriority?)null)">Choose priority</MudSelectItem>
+                    @foreach (var priority in Enum.GetValues<TaskPriority>().OrderByDescending(x => x))
+                    {
+                        <MudSelectItem T="TaskPriority?" Value="@((TaskPriority?)priority)">@PriorityLabel(priority)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Secondary"
+                           Size="Size.Small"
+                           Disabled="@(!_bulkPriorityTarget.HasValue || _bulkBusy)"
+                           aria-label="Apply selected priority to selected tasks"
+                           OnClick="ApplyBulkPriorityAsync">
+                    Apply priority
+                </MudButton>
 
-                <!-- Column header -->
-                <div class="tb-col-header">
-                    <div class="tb-col-accent"></div>
-                    <div class="tb-col-meta">
-                        <span class="tb-col-name">@col.Name</span>
-                        <span class="tb-col-count">@tasks.Count</span>
-                    </div>
-                </div>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Error"
+                           Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Delete"
+                           Disabled="_bulkBusy"
+                           aria-label="Delete selected tasks"
+                           OnClick="ConfirmBulkDeleteAsync">
+                    Delete
+                </MudButton>
+            </MudToolBar>
+        }
 
-                <!-- Card list (also a drop zone) -->
-                <div class="tb-col-body"
+        <div class="tb-sr-only" role="status" aria-live="polite" aria-atomic="true">@_liveAnnouncement</div>
+
+        <div class="tb-board" role="group" aria-label="Project task board grouped by status columns">
+            @foreach (var col in _columns)
+            {
+                var tasks = _tasksByStatus.GetValueOrDefault(col.Status) ?? [];
+                var isDragOver = !_selectMode && _dragOverStatus == col.Status;
+                var columnHeadingId = $"tb-col-{col.Status.ToString().ToLowerInvariant()}-heading";
+                var taskCountLabel = tasks.Count == 1 ? "1 task" : $"{tasks.Count} tasks";
+
+                <div class="tb-column @(isDragOver ? "tb-column--dragover" : "")"
+                     role="region"
+                     aria-labelledby="@columnHeadingId"
+                     style="--col-color: @col.Color"
+                     @ondragenter="() => OnDragEnter(col.Status)"
                      @ondragover:preventDefault
                      @ondrop:preventDefault
                      @ondrop="() => OnDrop(col.Status)">
 
-                    @if (!tasks.Any())
-                    {
-                        <div class="tb-col-empty">
-                            <span class="tb-col-empty__icon">@col.EmptyIcon</span>
-                            <span>@col.EmptyLabel</span>
+                    <!-- Column header -->
+                    <div class="tb-col-header">
+                        <div class="tb-col-accent" aria-hidden="true"></div>
+                        <div class="tb-col-meta">
+                            <h2 class="tb-col-name" id="@columnHeadingId" aria-label="@($"{col.Name}, {taskCountLabel}")">@col.Name</h2>
+                            <span class="tb-col-count" aria-hidden="true">@tasks.Count</span>
                         </div>
-                    }
-                    else
-                    {
-                        @foreach (var task in tasks)
+                    </div>
+
+                    <!-- Card list (also a drop zone) -->
+                    <div class="tb-col-body"
+                         role="list"
+                         aria-label="@($"{col.Name} tasks")"
+                         @ondragover:preventDefault
+                         @ondrop:preventDefault
+                         @ondrop="() => OnDrop(col.Status)">
+
+                        @if (!tasks.Any())
                         {
-                        <div class="tb-card @(task.Id == _draggingTaskId ? "tb-card--dragging" : "") @(task.Status == TaskItemStatus.Done ? "tb-card--done" : "") @(task.Id == _dragOverCardId ? "tb-card--drop-target" : "")"
-                                 draggable="true"
-                                 @ondragstart="() => OnDragStart(task.Id)"
-                                 @ondragend="OnDragEnd"
-                             @ondragenter:stopPropagation
-                             @ondragenter="() => OnDragEnterCard(task.Id)"
-                             @ondragover:preventDefault
-                             @ondrop:stopPropagation
-                             @ondrop:preventDefault
-                             @ondrop="() => OnDropOnCard(task.Id, col.Status)">
+                            <div class="tb-col-empty" role="note" aria-label="@($"{col.Name} column is empty")">
+                                <span class="tb-col-empty__icon" aria-hidden="true">@col.EmptyIcon</span>
+                                <span>@col.EmptyLabel</span>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var task in tasks)
+                            {
+                                var dependency = GetDependencySummary(task);
+                                var isSelected = _selectedTaskIds.Contains(task.Id);
+                                var taskAriaLabel = GetTaskAriaLabel(task, dependency, _selectMode);
+                                <div class="tb-card @(task.Id == _draggingTaskId ? "tb-card--dragging" : "") @(task.Status == TaskItemStatus.Done ? "tb-card--done" : "") @(task.Id == _dragOverCardId ? "tb-card--drop-target" : "") @(isSelected ? "tb-card--selected" : "") @(_selectMode ? "tb-card--select-mode" : "")"
+                                     role="article"
+                                     tabindex="0"
+                                     aria-label="@taskAriaLabel"
+                                     draggable="@(!_selectMode)"
+                                     @ondragstart="() => OnDragStart(task.Id)"
+                                     @ondragend="OnDragEnd"
+                                     @ondragenter:stopPropagation
+                                     @ondragenter="() => OnDragEnterCard(task.Id)"
+                                     @ondragover:preventDefault
+                                     @ondrop:stopPropagation
+                                     @ondrop:preventDefault
+                                     @ondrop="() => OnDropOnCard(task.Id, col.Status)">
 
-                                <div class="tb-card__strip tb-strip--@task.Priority.ToString().ToLower()"></div>
+                                    <div class="tb-card__strip tb-strip--@task.Priority.ToString().ToLower()"></div>
 
-                                <div class="tb-card__inner">
-                                    <div class="tb-card__title">@task.Title</div>
-
-                                    @if (!string.IsNullOrWhiteSpace(task.Description))
-                                    {
-                                        <div class="tb-card__desc">@task.Description</div>
-                                    }
-
-                                    @if (task.SubtaskCount > 0)
-                                    {
-                                        <div class="tb-card__subtasks">
-                                            <div class="tb-subtask-bar">
-                                                <div class="tb-subtask-bar__fill"
-                                                     style="width:@(task.SubtaskCount > 0 ? task.DoneSubtaskCount * 100 / task.SubtaskCount : 0)%">
-                                                </div>
-                                            </div>
-                                            <span>@task.DoneSubtaskCount/@task.SubtaskCount</span>
+                                    <div class="tb-card__inner">
+                                        <div class="tb-card__head">
+                                            <div class="tb-card__title">@task.Title</div>
+                                            @if (_selectMode || isSelected)
+                                            {
+                                                <label class="tb-card__checkbox-wrap"
+                                                       @onclick:stopPropagation>
+                                                    <input type="checkbox"
+                                                           class="tb-card__checkbox"
+                                                           checked="@isSelected"
+                                                           disabled="@_bulkBusy"
+                                                           aria-label="@($"Select task: {task.Title}")"
+                                                           @onchange="() => ToggleSelection(task.Id)" />
+                                                    <span class="tb-card__checkbox-box" aria-hidden="true">
+                                                        @if (isSelected)
+                                                        {
+                                                            <MudIcon Icon="@Icons.Material.Filled.Check" Class="tb-card__checkbox-check" />
+                                                        }
+                                                    </span>
+                                                </label>
+                                            }
                                         </div>
-                                    }
 
-                                    <div class="tb-card__footer">
-                                        @if (task.DueDate.HasValue)
+                                        @if (!string.IsNullOrWhiteSpace(task.Description))
                                         {
-                                            var overdue = task.DueDate < DateTime.Today && task.Status != TaskItemStatus.Done;
-                                            <span class="tb-card__due @(overdue ? "tb-card__due--overdue" : "")">
-                                                <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10">
-                                                    <path d="M11 6.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zm-3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zM3.5 6a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1zM11 9.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zm-3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zM3.5 9a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1z"/>
-                                                    <path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5zM1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4H1z"/>
-                                                </svg>
-                                                @task.DueDate.Value.ToString("MMM d")
-                                            </span>
+                                            <div class="tb-card__desc">@task.Description</div>
                                         }
-                                        <span class="tb-card__priority tb-p--@task.Priority.ToString().ToLower()">
-                                            @PriorityLabel(task.Priority)
-                                        </span>
-                                        <div class="tb-card__actions">
-                                            <button class="tb-action" @onclick="() => OpenAddSubtaskDialog(task.Id)" title="Add subtask">
-                                                <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                                                    <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/>
-                                                </svg>
-                                            </button>
-                                            <button class="tb-action" @onclick="() => OpenEditDialog(task.Id)" title="Edit task">
-                                                <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                                                    <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178z"/>
-                                                </svg>
-                                            </button>
-                                            <button class="tb-action tb-action--delete" @onclick="() => ConfirmDeleteTask(task.Id, task.Title)" title="Delete task">
-                                                <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                                                    <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
-                                                    <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
-                                                </svg>
-                                            </button>
+
+                                        @if (task.SubtaskCount > 0)
+                                        {
+                                            <div class="tb-card__subtasks">
+                                                <div class="tb-subtask-bar">
+                                                    <div class="tb-subtask-bar__fill"
+                                                         style="width:@(task.SubtaskCount > 0 ? task.DoneSubtaskCount * 100 / task.SubtaskCount : 0)%">
+                                                    </div>
+                                                </div>
+                                                <span>@task.DoneSubtaskCount/@task.SubtaskCount</span>
+                                            </div>
+                                        }
+
+                                        <div class="tb-card__footer">
+                                            @if (task.DueDate.HasValue)
+                                            {
+                                                var overdue = task.DueDate < DateTime.Today && task.Status != TaskItemStatus.Done;
+                                                <span class="tb-card__due @(overdue ? "tb-card__due--overdue" : "")">
+                                                    <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10" aria-hidden="true" focusable="false">
+                                                        <path d="M11 6.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zm-3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zM3.5 6a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1zM11 9.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zm-3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zM3.5 9a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1z"/>
+                                                        <path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5zM1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4H1z"/>
+                                                    </svg>
+                                                    @task.DueDate.Value.ToString("MMM d")
+                                                </span>
+                                            }
+                                            @if (task.Complexity.HasValue)
+                                            {
+                                                <span class="tb-card__complexity" title="@($"Complexity {task.Complexity.Value}")" aria-label="@($"Complexity {task.Complexity.Value}")">
+                                                    Cx @task.Complexity.Value
+                                                </span>
+                                            }
+                                            @if (dependency.HasDependencies)
+                                            {
+                                                <span class="tb-card__dependency @(dependency.IsBlocked ? "tb-card__dependency--blocked" : null)"
+                                                      title="@dependency.Tooltip"
+                                                      aria-label="@dependency.Tooltip">
+                                                    @(dependency.IsBlocked ? $"Blocked {dependency.UnresolvedCount}" : $"Deps {dependency.TotalCount}")
+                                                </span>
+                                            }
+                                            <span class="tb-card__priority tb-p--@task.Priority.ToString().ToLower()">
+                                                @PriorityLabel(task.Priority)
+                                            </span>
+                                            <div class="tb-card__actions">
+                                               @if (!_selectMode)
+                                               {
+                                                   <MudMenu Dense="true"
+                                                            Class="tb-action-menu"
+                                                            AnchorOrigin="Origin.BottomRight"
+                                                            TransformOrigin="Origin.TopRight">
+                                                       <ActivatorContent>
+                                                           <button type="button"
+                                                                   class="tb-action"
+                                                                   title="Move task"
+                                                                   aria-label="@($"Move task {task.Title}")">
+                                                               <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12" aria-hidden="true" focusable="false">
+                                                                   <path fill-rule="evenodd" d="M4.646 2.146a.5.5 0 0 1 .708 0l2.5 2.5a.5.5 0 0 1-.708.708L5.5 3.707V9.5a.5.5 0 0 1-1 0V3.707L2.854 5.354a.5.5 0 1 1-.708-.708l2.5-2.5zm6 6a.5.5 0 0 1 .708 0l2.5 2.5a.5.5 0 0 1 0 .708l-2.5 2.5a.5.5 0 1 1-.708-.708l1.646-1.646H6.5a.5.5 0 0 1 0-1h5.793l-1.647-1.646a.5.5 0 0 1 0-.708z"/>
+                                                               </svg>
+                                                           </button>
+                                                       </ActivatorContent>
+                                                       <ChildContent>
+                                                           @foreach (var targetColumn in GetMoveTargetColumns(task.Status))
+                                                           {
+                                                               <MudMenuItem OnClick="() => MoveTaskToStatusAsync(task.Id, targetColumn.Status)">
+                                                                   Move to @targetColumn.Name
+                                                               </MudMenuItem>
+                                                           }
+                                                       </ChildContent>
+                                                   </MudMenu>
+                                               }
+                                               <button type="button" class="tb-action" @onclick="() => OpenAddSubtaskDialog(task.Id)" title="Add subtask" aria-label="@($"Add subtask to {task.Title}")">
+                                                   <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12" aria-hidden="true" focusable="false">
+                                                       <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/>
+                                                   </svg>
+                                                </button>
+                                                <button type="button" class="tb-action" @onclick="() => OpenEditDialog(task.Id)" title="Edit task" aria-label="@($"Edit task {task.Title}")">
+                                                    <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12" aria-hidden="true" focusable="false">
+                                                        <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178z"/>
+                                                    </svg>
+                                                </button>
+                                                <button type="button" class="tb-action tb-action--delete" @onclick="() => ConfirmDeleteTask(task.Id, task.Title)" title="Delete task" aria-label="@($"Delete task {task.Title}")">
+                                                    <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12" aria-hidden="true" focusable="false">
+                                                        <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                                        <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                                    </svg>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            }
                         }
-                    }
 
-                    <button class="tb-add-btn" @onclick="() => OpenAddDialog(col.Status)">
-                        <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                            <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/>
-                        </svg>
-                        Add task
-                    </button>
+                        <button type="button" class="tb-add-btn" @onclick="() => OpenAddDialog(col.Status)" aria-label="@($"Add task in {col.Name}")">
+                            <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12" aria-hidden="true" focusable="false">
+                                <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/>
+                            </svg>
+                            Add task
+                        </button>
+                    </div>
                 </div>
-            </div>
-        }
+            }
+        </div>
     </div>
 }
 
@@ -146,6 +313,75 @@ else
     display: flex;
     justify-content: center;
     padding: 4rem;
+}
+
+.tb-shell {
+    display: flex;
+    flex-direction: column;
+    gap: .9rem;
+}
+
+.tb-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    padding: .85rem 1rem;
+    background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(244,239,230,.92));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 14px 32px rgba(33,29,23,.06);
+}
+
+.tb-topbar__primary {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    flex-wrap: wrap;
+}
+
+.tb-topbar__count {
+    display: inline-flex;
+    align-items: center;
+    padding: .22rem .65rem;
+    border-radius: 999px;
+    background: rgba(192,86,29,.10);
+    color: var(--clay);
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.tb-bulkbar {
+    gap: .65rem;
+    padding: .55rem .75rem;
+    border: 1px solid rgba(192,86,29,.18);
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(255,250,242,.96), rgba(249,243,232,.98));
+    box-shadow: 0 12px 28px rgba(33,29,23,.08);
+    flex-wrap: wrap;
+}
+
+.tb-bulkbar__label {
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.tb-bulkbar__select {
+    min-width: 180px;
+}
+
+.tb-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* Board grid */
@@ -192,6 +428,7 @@ else
     letter-spacing: .06em;
     text-transform: uppercase;
     color: var(--col-color);
+    margin: 0;
 }
 .tb-col-count {
     font-family: var(--font-display);
@@ -251,6 +488,11 @@ else
     box-shadow: 0 4px 14px rgba(33,29,23,.12);
     transform: translateY(-1px);
 }
+.tb-card:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--col-color, var(--clay)) 55%, white);
+    outline-offset: 2px;
+    box-shadow: 0 10px 24px rgba(33,29,23,.14);
+}
 .tb-card:active { cursor: grabbing; }
 .tb-card--dragging {
     opacity: .25;
@@ -263,6 +505,13 @@ else
 .tb-card--done .tb-card__title {
     text-decoration: line-through;
     color: var(--ink-soft);
+}
+.tb-card--selected {
+    border-color: color-mix(in srgb, var(--clay) 45%, var(--line));
+    box-shadow: 0 0 0 2px rgba(192,86,29,.12), 0 10px 24px rgba(33,29,23,.10);
+}
+.tb-card--select-mode {
+    cursor: default;
 }
 
 /* Drop-target indicator: thin colored bar above the card being hovered over */
@@ -295,12 +544,18 @@ else
     gap: .3rem;
     min-width: 0;
 }
+.tb-card__head {
+    display: flex;
+    align-items: flex-start;
+    gap: .55rem;
+}
 .tb-card__title {
     font-size: .88rem;
     font-weight: 600;
     color: var(--ink);
     line-height: 1.4;
     word-break: break-word;
+    flex: 1;
 }
 .tb-card__desc {
     font-size: .75rem;
@@ -370,6 +625,98 @@ else
 .tb-p--high     { color: #d4722a; background: rgba(212,114,42,.10); }
 .tb-p--medium   { color: #a07820; background: rgba(160,120,32,.10); }
 .tb-p--low      { color: var(--sage); background: rgba(111,122,90,.10); }
+.tb-card__complexity {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    padding: .1rem .38rem;
+    border-radius: 5px;
+    border: 1px dashed var(--line-strong);
+    background: var(--paper-sunk);
+    color: var(--ink-soft);
+    font-family: var(--font-display);
+    font-size: .67rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+.tb-card__dependency {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    padding: .1rem .38rem;
+    border-radius: 5px;
+    border: 1px solid var(--line);
+    background: var(--paper-sunk);
+    color: var(--ink-soft);
+    font-size: .67rem;
+    font-weight: 700;
+    letter-spacing: .03em;
+    flex-shrink: 0;
+}
+.tb-card__dependency--blocked {
+    border-color: rgba(176,58,24,.2);
+    background: rgba(176,58,24,.08);
+    color: #b03a18;
+}
+
+.tb-card__checkbox-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding-top: .08rem;
+    flex-shrink: 0;
+}
+
+.tb-card__checkbox {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.tb-card__checkbox-box {
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+    border: 1.5px solid var(--line-strong);
+    background: var(--paper-sunk);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--clay);
+    transition: border-color .15s, background .15s, transform .15s, box-shadow .15s;
+}
+
+.tb-card__checkbox-wrap:hover .tb-card__checkbox-box {
+    border-color: var(--clay);
+    transform: translateY(-1px);
+}
+
+.tb-card__checkbox:focus-visible + .tb-card__checkbox-box,
+.tb-card__checkbox-wrap:focus-within .tb-card__checkbox-box {
+    border-color: var(--clay);
+    box-shadow: 0 0 0 3px rgba(192,86,29,.22);
+}
+
+.tb-card--selected .tb-card__checkbox-box {
+    border-color: var(--clay);
+    background: rgba(192,86,29,.12);
+    box-shadow: 0 0 0 3px rgba(192,86,29,.08);
+}
+
+.tb-card__checkbox-check {
+    font-size: 1rem;
+}
 
 /* Card action buttons (revealed on hover) */
 .tb-card__actions {
@@ -381,7 +728,11 @@ else
     transition: opacity .15s;
     flex-shrink: 0;
 }
-.tb-card:hover .tb-card__actions { opacity: 1; }
+.tb-card:hover .tb-card__actions,
+.tb-card:focus-within .tb-card__actions { opacity: 1; }
+.tb-action-menu {
+    display: inline-flex;
+}
 .tb-action {
     background: none;
     border: none;
@@ -395,7 +746,16 @@ else
     transition: color .15s, background .15s;
 }
 .tb-action:hover { color: var(--clay); background: var(--clay-soft); }
+.tb-action:focus-visible {
+    outline: 2px solid var(--clay);
+    outline-offset: 2px;
+    background: var(--clay-soft);
+}
 .tb-action--delete:hover { color: #b03a18; background: rgba(176,58,24,.08); }
+.tb-action--delete:focus-visible {
+    outline-color: #b03a18;
+    background: rgba(176,58,24,.08);
+}
 
 /* Add task button */
 .tb-add-btn {
@@ -421,13 +781,31 @@ else
     border-color: var(--col-color);
     background: color-mix(in srgb, var(--col-color, var(--clay)) 4%, transparent);
 }
+.tb-add-btn:focus-visible {
+    outline: 2px solid var(--col-color, var(--clay));
+    outline-offset: 2px;
+    border-color: var(--col-color, var(--clay));
+}
 
 @@media (max-width: 900px) {
+    .tb-topbar,
+    .tb-bulkbar {
+        align-items: stretch;
+    }
+
+    .tb-bulkbar__select {
+        min-width: 100%;
+    }
+
     .tb-board {
         grid-template-columns: repeat(2, minmax(200px, 1fr));
     }
 }
 @@media (max-width: 560px) {
+    .tb-topbar {
+        padding: .75rem;
+    }
+
     .tb-board {
         grid-template-columns: 1fr;
     }
@@ -453,12 +831,21 @@ else
         new(TaskItemStatus.Done,       "Done",        "#6f7a5a", "✓", "Nothing complete yet"),
     ];
 
+    private static readonly TaskItemStatus[] _bulkStatuses =
+        [TaskItemStatus.Todo, TaskItemStatus.InProgress, TaskItemStatus.Waiting, TaskItemStatus.Done];
+
     private Dictionary<TaskItemStatus, List<TaskItemDto>> _tasksByStatus = new();
     private Guid? _draggingTaskId;
     private TaskItemStatus? _dragOverStatus;
     private Guid? _dragOverCardId;
     private bool _loading = true;
     private Guid _loadedProjectId;
+    private readonly HashSet<Guid> _selectedTaskIds = [];
+    private bool _selectMode;
+    private bool _bulkBusy;
+    private TaskItemStatus? _bulkStatusTarget;
+    private TaskPriority? _bulkPriorityTarget;
+    private string _liveAnnouncement = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -483,10 +870,57 @@ else
             [TaskItemStatus.Waiting]    = tasks.Where(t => t.Status == TaskItemStatus.Waiting).ToList(),
             [TaskItemStatus.Done]       = tasks.Where(t => t.Status == TaskItemStatus.Done).ToList(),
         };
+        _selectedTaskIds.IntersectWith(tasks.Select(task => task.Id));
         _loading = false;
     }
 
-    private void OnDragStart(Guid taskId) => _draggingTaskId = taskId;
+    private void ToggleSelectMode()
+    {
+        _selectMode = !_selectMode;
+        if (!_selectMode)
+        {
+            ResetBulkSelectionState();
+            Announce("Select mode off.");
+            return;
+        }
+
+        Announce("Select mode on. Choose tasks for bulk actions.");
+    }
+
+    private void ToggleSelection(Guid taskId)
+    {
+        _selectMode = true;
+
+        if (!_selectedTaskIds.Add(taskId))
+            _selectedTaskIds.Remove(taskId);
+
+        if (_selectedTaskIds.Count == 0)
+        {
+            ResetBulkSelectionTargets();
+            Announce("No tasks selected.");
+            return;
+        }
+
+        Announce($"{_selectedTaskIds.Count} task{(_selectedTaskIds.Count == 1 ? string.Empty : "s")} selected.");
+    }
+
+    private void ClearSelection()
+    {
+        ResetBulkSelectionState();
+        Announce("Selection cleared.");
+    }
+
+    private void OnBulkStatusChanged(TaskItemStatus? status) => _bulkStatusTarget = status;
+
+    private void OnBulkPriorityChanged(TaskPriority? priority) => _bulkPriorityTarget = priority;
+
+    private void OnDragStart(Guid taskId)
+    {
+        if (_selectMode)
+            return;
+
+        _draggingTaskId = taskId;
+    }
 
     private void OnDragEnter(TaskItemStatus status) => _dragOverStatus = status;
 
@@ -507,6 +941,9 @@ else
     /// <summary>Handles drops onto the column body (empty space) — moves card or reorders to end.</summary>
     private async Task OnDrop(TaskItemStatus targetStatus)
     {
+        if (_selectMode)
+            return;
+
         _dragOverStatus = null;
         _dragOverCardId = null;
         if (_draggingTaskId is null) return;
@@ -524,6 +961,7 @@ else
             list.RemoveAll(t => t.Id == taskId);
             list.Add(source);
             await PersistColumnOrderAsync(targetStatus, list);
+            Announce($"{source.Title} moved to the end of {StatusLabel(targetStatus)}.");
         }
         else
         {
@@ -536,6 +974,9 @@ else
     /// <summary>Handles drops onto a specific card — reorders within column or cross-column move.</summary>
     private async Task OnDropOnCard(Guid targetCardId, TaskItemStatus colStatus)
     {
+        if (_selectMode)
+            return;
+
         _dragOverStatus = null;
         _dragOverCardId = null;
         if (_draggingTaskId is null) return;
@@ -556,6 +997,7 @@ else
             var insertIdx = list.FindIndex(t => t.Id == targetCardId);
             list.Insert(insertIdx < 0 ? list.Count : insertIdx, source);
             await PersistColumnOrderAsync(colStatus, list);
+            Announce($"{source.Title} reordered in {StatusLabel(colStatus)}.");
         }
         else
         {
@@ -597,6 +1039,8 @@ else
                 _tasksByStatus[source.Status].RemoveAll(t => t.Id == taskId);
                 _tasksByStatus[targetStatus].Add(updated);
             }
+
+            Announce($"{source.Title} moved to {StatusLabel(targetStatus)}.");
         }
         catch (ConcurrencyConflictException ex)
         {
@@ -608,6 +1052,19 @@ else
         {
             Snackbar.Add($"Could not move task: {ex.Message}", Severity.Error);
         }
+    }
+
+    private async Task MoveTaskToStatusAsync(Guid taskId, TaskItemStatus targetStatus)
+    {
+        if (_selectMode)
+            return;
+
+        var source = _tasksByStatus.Values.SelectMany(list => list).FirstOrDefault(task => task.Id == taskId);
+        if (source is null || source.Status == targetStatus)
+            return;
+
+        await MoveToColumnAsync(source, taskId, targetStatus);
+        await OnTaskChanged.InvokeAsync();
     }
 
     private async Task OpenAddDialog(TaskItemStatus initialStatus)
@@ -670,9 +1127,229 @@ else
             await TaskService.DeleteAsync(taskId);
             foreach (var list in _tasksByStatus.Values)
                 list.RemoveAll(t => t.Id == taskId);
+            _selectedTaskIds.Remove(taskId);
+            Announce($"{title} deleted.");
             await OnTaskChanged.InvokeAsync();
         }
     }
+
+    private async Task ApplyBulkStatusAsync()
+    {
+        if (!_bulkStatusTarget.HasValue || _selectedTaskIds.Count == 0)
+            return;
+
+        try
+        {
+            _bulkBusy = true;
+            var updatedCount = await TaskService.BulkUpdateStatusAsync(_selectedTaskIds, _bulkStatusTarget.Value);
+            await LoadTasksAsync();
+            await OnTaskChanged.InvokeAsync();
+            Snackbar.ShowSuccess($"Updated status for {updatedCount} task{(updatedCount == 1 ? string.Empty : "s")}.");
+            ResetBulkSelectionState();
+            Announce($"Updated status for {updatedCount} task{(updatedCount == 1 ? string.Empty : "s")}.");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.ShowError($"Could not update task status: {ex.Message}");
+        }
+        finally
+        {
+            _bulkBusy = false;
+        }
+    }
+
+    private async Task ApplyBulkPriorityAsync()
+    {
+        if (!_bulkPriorityTarget.HasValue || _selectedTaskIds.Count == 0)
+            return;
+
+        try
+        {
+            _bulkBusy = true;
+            var updatedCount = await TaskService.BulkUpdatePriorityAsync(_selectedTaskIds, _bulkPriorityTarget.Value);
+            await LoadTasksAsync();
+            await OnTaskChanged.InvokeAsync();
+            Snackbar.ShowSuccess($"Updated priority for {updatedCount} task{(updatedCount == 1 ? string.Empty : "s")}.");
+            ResetBulkSelectionState();
+            Announce($"Updated priority for {updatedCount} task{(updatedCount == 1 ? string.Empty : "s")}.");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.ShowError($"Could not update task priority: {ex.Message}");
+        }
+        finally
+        {
+            _bulkBusy = false;
+        }
+    }
+
+    private async Task ConfirmBulkDeleteAsync()
+    {
+        if (_selectedTaskIds.Count == 0)
+            return;
+
+        var selectedCount = _selectedTaskIds.Count;
+        var confirmed = await DialogService.ShowMessageBox(
+            "Delete tasks",
+            $"Permanently delete {selectedCount} selected task{(selectedCount == 1 ? string.Empty : "s")}? This cannot be undone.",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (confirmed != true)
+            return;
+
+        try
+        {
+            _bulkBusy = true;
+            var deletedCount = await TaskService.BulkDeleteAsync(_selectedTaskIds);
+            await LoadTasksAsync();
+            await OnTaskChanged.InvokeAsync();
+            Snackbar.ShowSuccess($"Deleted {deletedCount} task{(deletedCount == 1 ? string.Empty : "s")}.");
+            ResetBulkSelectionState();
+            Announce($"Deleted {deletedCount} task{(deletedCount == 1 ? string.Empty : "s")}.");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.ShowError($"Could not delete selected tasks: {ex.Message}");
+        }
+        finally
+        {
+            _bulkBusy = false;
+        }
+    }
+
+    private void ResetBulkSelectionState()
+    {
+        _selectedTaskIds.Clear();
+        _selectMode = false;
+        ResetBulkSelectionTargets();
+    }
+
+    private void ResetBulkSelectionTargets()
+    {
+        _bulkStatusTarget = null;
+        _bulkPriorityTarget = null;
+    }
+
+    private void Announce(string message)
+    {
+        _liveAnnouncement = string.Empty;
+        _liveAnnouncement = message;
+    }
+
+    private DependencySummary GetDependencySummary(TaskItemDto task)
+    {
+        var dependencyIds = task.DependsOnTaskIds?.Distinct().ToList() ?? [];
+        if (dependencyIds.Count == 0)
+            return new DependencySummary(0, 0, string.Empty);
+
+        var taskLookup = FlattenTasks(_tasksByStatus.Values.SelectMany(tasks => tasks))
+            .GroupBy(candidate => candidate.Id)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var unresolvedTitles = new List<string>();
+        var missingCount = 0;
+
+        foreach (var dependencyId in dependencyIds)
+        {
+            if (!taskLookup.TryGetValue(dependencyId, out var dependencyTask))
+            {
+                missingCount++;
+                continue;
+            }
+
+            if (dependencyTask.Status != TaskItemStatus.Done)
+                unresolvedTitles.Add(dependencyTask.Title);
+        }
+
+        var unresolvedCount = unresolvedTitles.Count + missingCount;
+        return new DependencySummary(
+            dependencyIds.Count,
+            unresolvedCount,
+            BuildDependencyTooltip(dependencyIds.Count, unresolvedCount, unresolvedTitles, missingCount));
+    }
+
+    private static IEnumerable<TaskItemDto> FlattenTasks(IEnumerable<TaskItemDto> tasks)
+    {
+        foreach (var task in tasks)
+        {
+            yield return task;
+
+            if (task.Subtasks is null)
+                continue;
+
+            foreach (var subtask in FlattenTasks(task.Subtasks))
+                yield return subtask;
+        }
+    }
+
+    private static string BuildDependencyTooltip(
+        int totalCount,
+        int unresolvedCount,
+        IReadOnlyCollection<string> unresolvedTitles,
+        int missingCount)
+    {
+        if (unresolvedCount == 0)
+            return $"All {totalCount} prerequisite{(totalCount == 1 ? string.Empty : "s")} are complete.";
+
+        var details = new List<string>();
+        if (unresolvedTitles.Count > 0)
+            details.Add(string.Join(", ", unresolvedTitles));
+        if (missingCount > 0)
+            details.Add($"{missingCount} unavailable prerequisite{(missingCount == 1 ? string.Empty : "s")}");
+
+        return details.Count == 0
+            ? $"Blocked by {unresolvedCount} unfinished prerequisite{(unresolvedCount == 1 ? string.Empty : "s")}."
+            : $"Blocked by {unresolvedCount} unfinished prerequisite{(unresolvedCount == 1 ? string.Empty : "s")}: {string.Join("; ", details)}.";
+    }
+
+    private readonly record struct DependencySummary(int TotalCount, int UnresolvedCount, string Tooltip)
+    {
+        public bool HasDependencies => TotalCount > 0;
+        public bool IsBlocked => UnresolvedCount > 0;
+    }
+
+    private static IEnumerable<ColumnDef> GetMoveTargetColumns(TaskItemStatus currentStatus) =>
+        _columns.Where(column => column.Status != currentStatus);
+
+    private static string GetTaskAriaLabel(TaskItemDto task, DependencySummary dependency, bool selectMode)
+    {
+        var parts = new List<string>
+        {
+            task.Title,
+            $"Status {StatusLabel(task.Status)}",
+            $"Priority {PriorityAccessibleLabel(task.Priority)}"
+        };
+
+        if (task.Complexity.HasValue)
+            parts.Add($"Complexity {task.Complexity.Value}");
+
+        parts.Add(dependency.HasDependencies
+            ? dependency.IsBlocked
+                ? $"Blocked by {dependency.UnresolvedCount} prerequisite{(dependency.UnresolvedCount == 1 ? string.Empty : "s")}"
+                : $"{dependency.TotalCount} prerequisite{(dependency.TotalCount == 1 ? string.Empty : "s")} complete"
+            : "No dependencies");
+
+        parts.Add(selectMode ? "Select mode active" : "Move task menu available");
+
+        return string.Join(". ", parts);
+    }
+
+    private static string StatusLabel(TaskItemStatus status) => status switch
+    {
+        TaskItemStatus.Todo       => "To Do",
+        TaskItemStatus.InProgress => "In Progress",
+        _                         => status.ToString()
+    };
+
+    private static string PriorityAccessibleLabel(TaskPriority p) => p switch
+    {
+        TaskPriority.Critical => "Critical",
+        TaskPriority.High     => "High",
+        TaskPriority.Medium   => "Medium",
+        TaskPriority.Low      => "Low",
+        _                     => p.ToString()
+    };
 
     private static string PriorityLabel(TaskPriority p) => p switch
     {

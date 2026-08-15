@@ -1,5 +1,6 @@
 @page "/"
 @attribute [Authorize]
+@using System.Text.Json
 @using Brainy.Application.DTOs.Tasks
 @using Brainy.Application.DTOs.Today
 @using Brainy.Application.DTOs.Projects
@@ -105,6 +106,7 @@
         display: flex;
         gap: 0.5rem;
         flex-wrap: wrap;
+        align-items: center;
     }
 
     .td-nav-chip {
@@ -134,6 +136,10 @@
         color: var(--clay, #c0561d); 
         background: rgba(192, 86, 29, 0.04); 
         box-shadow: 0 2px 8px rgba(192, 86, 29, 0.05);
+    }
+
+    .td-nav-chip-icon {
+        padding-inline: 0.7rem;
     }
 
     .td-sidebar-widgets {
@@ -381,7 +387,7 @@
                     <p class="td-date">@_today.ToString("dddd, MMMM d, yyyy")</p>
                 </div>
                 
-                @if (!_loading && _loadError is null)
+                @if (!_loading && _loadError is null && IsWidgetVisible(DailySnapshotWidgetKey))
                 {
                     <div class="td-top-snapshot">
                         @* ── Daily snapshot strip ── *@
@@ -403,9 +409,17 @@
                 <a class="td-nav-chip" href="/archives">
                     <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" /> Archives
                 </a>
+                <button type="button"
+                        class="td-nav-chip td-nav-chip-icon"
+                        aria-label="Customize today widgets"
+                        title="Customize Today"
+                        @onclick="OpenDashboardPreferencesAsync">
+                    <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
+                    Customize
+                </button>
             </nav>
 
-            @if (!_loading && _loadError is null)
+            @if (!_loading && _loadError is null && IsWidgetVisible(CurrentFocusWidgetKey))
             {
                 <div class="td-sidebar-widgets">
                     @* ── Current focus ── *@
@@ -456,41 +470,66 @@
                 }
 
                 @* ── Quick actions toolbar ── *@
-                @* Removed quick actions per design update *@
+                <div class="td-quick-actions-wrap">
+                    <TodayQuickActions OnAddTask="OpenAddTaskDialogAsync"
+                                       CurrentTaskId="_aggregate?.CurrentTask?.Id"
+                                       OnFocusChanged="LoadAsync" />
+                </div>
 
                 @* ── Task sections ── *@
                 <div class="td-sections">
 
-                    <InProgressWidget Tasks="_aggregate?.InProgress ?? []"
-                                      OnComplete="HandleCompleted"
-                                      OnEdit="OpenEditTaskDialogAsync" />
+                    @if (IsWidgetVisible(InProgressWidgetKey))
+                    {
+                        <InProgressWidget Tasks="_aggregate?.InProgress ?? []"
+                                          OnComplete="HandleCompleted"
+                                          OnEdit="OpenEditTaskDialogAsync" />
+                    }
 
-                    <OverdueWidget Tasks="_aggregate?.Overdue ?? []"
-                                   OnComplete="HandleCompleted"
-                                   OnSetInProgress="HandleSetInProgress"
-                                   OnEdit="OpenEditTaskDialogAsync" />
-
-                    <GoalDeadlineWidget OverdueGoals="_overdueGoals"
-                                        DueSoonGoals="_dueSoonGoals" />
-
-                    <DueTodayWidget Tasks="_aggregate?.DueToday ?? []"
-                                    OnComplete="HandleCompleted"
-                                    OnSetInProgress="HandleSetInProgress"
-                                    OnEdit="OpenEditTaskDialogAsync" />
-
-                    <HighPriorityProjectWorkWidget Tasks="_aggregate?.HighPriorityWork ?? []"
-                                                   OnComplete="HandleCompleted"
-                                                   OnSetInProgress="HandleSetInProgress"
-                                                   OnEdit="OpenEditTaskDialogAsync" />
-
-                    <DueThisWeekWidget Tasks="_aggregate?.DueThisWeek ?? []"
+                    @if (IsWidgetVisible(OverdueWidgetKey))
+                    {
+                        <OverdueWidget Tasks="_aggregate?.Overdue ?? []"
                                        OnComplete="HandleCompleted"
                                        OnSetInProgress="HandleSetInProgress"
                                        OnEdit="OpenEditTaskDialogAsync" />
+                    }
 
-                    <NextTasksWidget Tasks="_aggregate?.NextTasks ?? []"
-                                     OnSetInProgress="HandleSetInProgress"
-                                     OnEdit="OpenEditTaskDialogAsync" />
+                    @if (IsWidgetVisible(GoalDeadlinesWidgetKey))
+                    {
+                        <GoalDeadlineWidget OverdueGoals="_overdueGoals"
+                                            DueSoonGoals="_dueSoonGoals" />
+                    }
+
+                    @if (IsWidgetVisible(DueTodayWidgetKey))
+                    {
+                        <DueTodayWidget Tasks="_aggregate?.DueToday ?? []"
+                                        OnComplete="HandleCompleted"
+                                        OnSetInProgress="HandleSetInProgress"
+                                        OnEdit="OpenEditTaskDialogAsync" />
+                    }
+
+                    @if (IsWidgetVisible(HighPriorityProjectWorkWidgetKey))
+                    {
+                        <HighPriorityProjectWorkWidget Tasks="_aggregate?.HighPriorityWork ?? []"
+                                                       OnComplete="HandleCompleted"
+                                                       OnSetInProgress="HandleSetInProgress"
+                                                       OnEdit="OpenEditTaskDialogAsync" />
+                    }
+
+                    @if (IsWidgetVisible(DueThisWeekWidgetKey))
+                    {
+                        <DueThisWeekWidget Tasks="_aggregate?.DueThisWeek ?? []"
+                                           OnComplete="HandleCompleted"
+                                           OnSetInProgress="HandleSetInProgress"
+                                           OnEdit="OpenEditTaskDialogAsync" />
+                    }
+
+                    @if (IsWidgetVisible(NextTasksWidgetKey))
+                    {
+                        <NextTasksWidget Tasks="_aggregate?.NextTasks ?? []"
+                                         OnSetInProgress="HandleSetInProgress"
+                                         OnEdit="OpenEditTaskDialogAsync" />
+                    }
 
                     @* Empty state — only shown when there is truly nothing to act on *@
                     @if ((_aggregate?.CurrentTask == null)
@@ -507,7 +546,7 @@
                 </div>
 
                 @* ── Priority projects (Bottom) ── *@
-                @if (_prioritizedProjects.Count > 0)
+                @if (IsWidgetVisible(PriorityProjectsWidgetKey) && _prioritizedProjects.Count > 0)
                 {
                     <div style="margin-top: 3.5rem;">
                         <div class="td-section-head">
@@ -580,6 +619,32 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
 
+    private const int DefaultInboxWarningThreshold = 10;
+    private const string DailySnapshotWidgetKey = "daily-snapshot";
+    private const string CurrentFocusWidgetKey = "current-focus";
+    private const string InProgressWidgetKey = "in-progress";
+    private const string OverdueWidgetKey = "overdue";
+    private const string GoalDeadlinesWidgetKey = "goal-deadlines";
+    private const string DueTodayWidgetKey = "due-today";
+    private const string HighPriorityProjectWorkWidgetKey = "high-priority-project-work";
+    private const string DueThisWeekWidgetKey = "due-this-week";
+    private const string NextTasksWidgetKey = "next-tasks";
+    private const string PriorityProjectsWidgetKey = "priority-projects";
+
+    private static readonly string[] DefaultWidgetKeys =
+    [
+        DailySnapshotWidgetKey,
+        CurrentFocusWidgetKey,
+        InProgressWidgetKey,
+        OverdueWidgetKey,
+        GoalDeadlinesWidgetKey,
+        DueTodayWidgetKey,
+        HighPriorityProjectWorkWidgetKey,
+        DueThisWeekWidgetKey,
+        NextTasksWidgetKey,
+        PriorityProjectsWidgetKey
+    ];
+
     private string DisplayName { get; set; } = "there";
     private bool _loading = true;
     private string? _loadError;
@@ -590,6 +655,8 @@
     private IReadOnlyList<ProjectSummaryDto> _prioritizedProjects = [];
     private IReadOnlyList<GoalDto> _overdueGoals = [];
     private IReadOnlyList<GoalDto> _dueSoonGoals = [];
+    private UserDashboardPreferenceDto? _dashboardPreferences;
+    private HashSet<string> _visibleWidgetKeys = new(DefaultWidgetKeys, StringComparer.OrdinalIgnoreCase);
 
     protected override async Task OnInitializedAsync()
     {
@@ -603,7 +670,23 @@
                 DisplayName = at > 0 ? name[..at] : name;
             }
         }
+
+        await LoadPreferencesAsync();
         await LoadAsync();
+    }
+
+    private async Task LoadPreferencesAsync()
+    {
+        try
+        {
+            _dashboardPreferences = await PreferenceService.GetOrCreateAsync();
+            ApplyDashboardPreferences(_dashboardPreferences);
+        }
+        catch
+        {
+            _dashboardPreferences = null;
+            _visibleWidgetKeys = new HashSet<string>(DefaultWidgetKeys, StringComparer.OrdinalIgnoreCase);
+        }
     }
 
     private async Task LoadAsync()
@@ -629,6 +712,40 @@
         {
             _loading = false;
             StateHasChanged();
+        }
+    }
+
+    private async Task OpenDashboardPreferencesAsync()
+    {
+        var parameters = new DialogParameters<DashboardPreferencesDialog>
+        {
+            { d => d.EnabledWidgetKeys, _visibleWidgetKeys.ToArray() }
+        };
+
+        var dialog = await DialogService.ShowAsync<DashboardPreferencesDialog>(
+            "Customize Today",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+
+        var result = await dialog.Result;
+        if (result is not { Canceled: false } || result.Data is not string[] enabledWidgetKeys)
+        {
+            return;
+        }
+
+        try
+        {
+            _dashboardPreferences = await PreferenceService.UpdateAsync(new UpdateDashboardPreferenceDto(
+                WidgetOrder: SerializeWidgetOrder(enabledWidgetKeys),
+                CollapsedWidgets: _dashboardPreferences?.CollapsedWidgets,
+                InboxWarningThreshold: _dashboardPreferences?.InboxWarningThreshold ?? DefaultInboxWarningThreshold));
+
+            ApplyDashboardPreferences(_dashboardPreferences);
+            Snackbar.Add("Today layout updated.", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Could not save your Today layout.", Severity.Error);
         }
     }
 
@@ -724,6 +841,43 @@
     }
 
     private void OpenProject(Guid id) => Nav.NavigateTo($"/projects/{id}");
+
+    private void ApplyDashboardPreferences(UserDashboardPreferenceDto preferences)
+    {
+        _visibleWidgetKeys = ParseWidgetKeys(preferences.WidgetOrder);
+    }
+
+    private bool IsWidgetVisible(string widgetKey) => _visibleWidgetKeys.Contains(widgetKey);
+
+    private static HashSet<string> ParseWidgetKeys(string? widgetOrder)
+    {
+        if (string.IsNullOrWhiteSpace(widgetOrder))
+        {
+            return new HashSet<string>(DefaultWidgetKeys, StringComparer.OrdinalIgnoreCase);
+        }
+
+        try
+        {
+            var keys = JsonSerializer.Deserialize<string[]>(widgetOrder) ?? [];
+            return keys
+                .Where(key => DefaultWidgetKeys.Contains(key, StringComparer.OrdinalIgnoreCase))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return new HashSet<string>(DefaultWidgetKeys, StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private static string SerializeWidgetOrder(IEnumerable<string> enabledWidgetKeys)
+    {
+        var enabled = enabledWidgetKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var orderedKeys = DefaultWidgetKeys
+            .Where(enabled.Contains)
+            .ToArray();
+
+        return JsonSerializer.Serialize(orderedKeys);
+    }
 
     private static Severity NotificationSeverity(TodayNotificationKind kind) => kind switch
     {
