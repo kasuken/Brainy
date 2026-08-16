@@ -1,0 +1,217 @@
+@page "/llm"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@using System.Text
+@using Brainy.Application.AI.Prompts
+@using Brainy.Application.Interfaces.Services
+
+@inject ILlmFocusExportService FocusExportService
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>LLM — Brainy</PageTitle>
+
+<main class="llm-page" aria-labelledby="llm-title">
+    <header class="llm-hero">
+        <div class="llm-hero__copy">
+            <p class="llm-kicker">External intelligence, grounded in your work</p>
+            <h1 id="llm-title">Give an LLM the right context.</h1>
+            <p class="llm-lede">
+                Brainy prepares a focused snapshot of your active projects, open tasks, dependencies,
+                goals, and inbox load. Pair it with the planning prompt below to turn status into a
+                realistic plan for the next few days and weeks.
+            </p>
+        </div>
+        <div class="llm-hero__mark" aria-hidden="true">
+            <span>01</span>
+            <MudIcon Icon="@Icons.Material.Outlined.Psychology" />
+            <span>CONTEXT</span>
+        </div>
+    </header>
+
+    <section class="llm-process" aria-label="How this works">
+        <article>
+            <span>01</span>
+            <h2>Prepare</h2>
+            <p>Brainy collects only planning-relevant status for your account.</p>
+        </article>
+        <article>
+            <span>02</span>
+            <h2>Review</h2>
+            <p>Check the exported text before sharing it with an external service.</p>
+        </article>
+        <article>
+            <span>03</span>
+            <h2>Plan</h2>
+            <p>Paste or upload the snapshot and let the included prompt structure the conversation.</p>
+        </article>
+    </section>
+
+    <section class="llm-workbench">
+        <div class="llm-workbench__heading">
+            <div>
+                <p class="llm-kicker">Prompt · @AiPrompts.FocusPlanningVersion</p>
+                <h2>Your focus-planning brief</h2>
+            </div>
+            <MudButton Variant="Variant.Text"
+                       StartIcon="@Icons.Material.Outlined.ContentCopy"
+                       OnClick="CopyPromptAsync">
+                Copy prompt
+            </MudButton>
+        </div>
+        <pre class="llm-prompt">@AiPrompts.FocusPlanning</pre>
+    </section>
+
+    <section class="llm-export" aria-labelledby="llm-export-title">
+        <div class="llm-export__copy">
+            <p class="llm-kicker">Private until you share it</p>
+            <h2 id="llm-export-title">Export your Brainy status</h2>
+            <p>
+                The JSON snapshot is compact, structured, and readable by ChatGPT, Claude, Gemini,
+                Copilot, and local models. Brainy never sends it automatically.
+            </p>
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true">
+                Project, task, and goal text is included as stored and may contain sensitive details.
+                Review the snapshot before sharing it.
+            </MudAlert>
+        </div>
+
+        <div class="llm-export__actions">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       StartIcon="@Icons.Material.Outlined.ContentCopy"
+                       Disabled="_working"
+                       OnClick="CopySnapshotAsync">
+                Copy status + prompt
+            </MudButton>
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       StartIcon="@Icons.Material.Outlined.Download"
+                       Disabled="_working"
+                       OnClick="DownloadSnapshotAsync">
+                Download JSON
+            </MudButton>
+            <span class="llm-export__status" role="status" aria-live="polite">@_status</span>
+        </div>
+    </section>
+</main>
+
+<style>
+    .llm-page { --llm-accent: #de5b38; max-width: 1120px; margin: 0 auto; display: grid; gap: 1.25rem; color: var(--ink); }
+    .llm-hero { min-height: 330px; padding: clamp(2rem, 6vw, 4.5rem); border: 1px solid var(--line); border-radius: 24px; background: var(--paper-raised); display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 2rem; align-items: center; overflow: hidden; position: relative; }
+    .llm-hero::after { content: ""; position: absolute; width: 260px; height: 260px; right: -100px; bottom: -160px; border: 42px solid color-mix(in srgb, var(--llm-accent) 18%, transparent); border-radius: 50%; }
+    .llm-kicker { margin: 0 0 .65rem; color: var(--llm-accent); font-size: .72rem; font-weight: 900; letter-spacing: .15em; text-transform: uppercase; }
+    .llm-hero h1 { max-width: 720px; margin: 0; font-family: var(--font-display); font-size: clamp(2.5rem, 7vw, 5.2rem); line-height: .96; letter-spacing: -.04em; }
+    .llm-lede { max-width: 710px; margin: 1.5rem 0 0; color: var(--ink-soft); font-size: 1.05rem; line-height: 1.75; }
+    .llm-hero__mark { justify-self: end; width: 148px; aspect-ratio: 1; padding: 1rem; border: 1px solid var(--ink); display: flex; flex-direction: column; justify-content: space-between; font-size: .65rem; font-weight: 900; letter-spacing: .15em; }
+    .llm-hero__mark .mud-icon-root { align-self: center; color: var(--llm-accent); font-size: 3.5rem; }
+    .llm-process { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--paper-raised); }
+    .llm-process article { padding: 1.5rem; border-right: 1px solid var(--line); }
+    .llm-process article:last-child { border-right: 0; }
+    .llm-process span { color: var(--llm-accent); font-size: .72rem; font-weight: 900; }
+    .llm-process h2 { margin: .65rem 0 .35rem; font-family: var(--font-display); font-size: 1.25rem; }
+    .llm-process p { margin: 0; color: var(--ink-soft); line-height: 1.55; font-size: .9rem; }
+    .llm-workbench, .llm-export { padding: clamp(1.5rem, 4vw, 2.5rem); border: 1px solid var(--line); border-radius: 20px; background: var(--paper-raised); }
+    .llm-workbench__heading { display: flex; justify-content: space-between; align-items: end; gap: 1rem; }
+    .llm-workbench h2, .llm-export h2 { margin: 0; font-family: var(--font-display); font-size: clamp(1.6rem, 4vw, 2.35rem); }
+    .llm-prompt { margin: 1.5rem 0 0; max-height: 410px; overflow: auto; padding: 1.5rem; border-left: 3px solid var(--llm-accent); background: color-mix(in srgb, var(--ink) 4%, var(--paper-raised)); color: var(--ink); white-space: pre-wrap; font: .9rem/1.7 ui-monospace, "Cascadia Code", monospace; }
+    .llm-export { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr); gap: 2.5rem; align-items: center; }
+    .llm-export__copy > p:not(.llm-kicker) { color: var(--ink-soft); line-height: 1.65; }
+    .llm-export__actions { display: grid; gap: .8rem; }
+    .llm-export__status { min-height: 1.25rem; color: var(--ink-soft); font-size: .82rem; text-align: center; }
+    @@media (max-width: 760px) {
+        .llm-hero { grid-template-columns: 1fr; min-height: auto; }
+        .llm-hero__mark { display: none; }
+        .llm-process { grid-template-columns: 1fr; }
+        .llm-process article { border-right: 0; border-bottom: 1px solid var(--line); }
+        .llm-process article:last-child { border-bottom: 0; }
+        .llm-workbench__heading { align-items: flex-start; flex-direction: column; }
+        .llm-export { grid-template-columns: 1fr; }
+    }
+</style>
+
+@code {
+    private bool _working;
+    private string? _status;
+
+    private async Task CopyPromptAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", AiPrompts.FocusPlanning);
+            Snackbar.Add("Focus-planning prompt copied.", Severity.Success);
+        }
+        catch (JSException)
+        {
+            Snackbar.Add("The browser blocked clipboard access.", Severity.Warning);
+        }
+    }
+
+    private async Task CopySnapshotAsync()
+    {
+        if (_working)
+            return;
+
+        _working = true;
+        _status = "Preparing your focused snapshot…";
+        try
+        {
+            var export = await FocusExportService.ExportCurrentUserAsync();
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", Encoding.UTF8.GetString(export.Content));
+            _status = $"Copied schema {export.SchemaVersion} with prompt {export.PromptVersion}.";
+            Snackbar.Add("Brainy status and planning prompt copied.", Severity.Success);
+        }
+        catch (JSException)
+        {
+            _status = "The browser blocked clipboard access.";
+            Snackbar.Add(_status, Severity.Warning);
+        }
+        catch
+        {
+            _status = "Brainy could not prepare the snapshot. Try again.";
+            Snackbar.Add(_status, Severity.Error);
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    private async Task DownloadSnapshotAsync()
+    {
+        if (_working)
+            return;
+
+        _working = true;
+        _status = "Preparing your focused snapshot…";
+        try
+        {
+            var export = await FocusExportService.ExportCurrentUserAsync();
+            await using var contentStream = new MemoryStream(export.Content, writable: false);
+            using var streamReference = new DotNetStreamReference(contentStream);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./dataExport.js");
+            await module.InvokeVoidAsync(
+                "downloadFileFromStream",
+                export.FileName,
+                export.ContentType,
+                streamReference);
+            _status = $"Downloaded schema {export.SchemaVersion}.";
+        }
+        catch (JSDisconnectedException)
+        {
+            _status = "The browser connection closed before the download started.";
+        }
+        catch
+        {
+            _status = "Brainy could not prepare the snapshot. Try again.";
+            Snackbar.Add(_status, Severity.Error);
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+}

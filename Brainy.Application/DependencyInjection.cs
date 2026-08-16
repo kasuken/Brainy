@@ -57,6 +57,7 @@ public static class DependencyInjection
         services.AddScoped<IActionItemService, ActionItemService>();
         services.AddScoped<IPulseService, PulseService>();
         services.AddScoped<IDataExportService, DataExportService>();
+        services.AddScoped<ILlmFocusExportService, LlmFocusExportService>();
         return services;
     }
 
