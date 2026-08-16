@@ -92,19 +92,21 @@ public class LlmFocusExportServiceTests
             Status = ProjectStatus.Archived,
             IsArchived = true
         };
+        var foreignTask = new TaskItem
+        {
+            UserId = "other-user",
+            Project = foreignProject,
+            Title = "FOREIGN-TASK",
+            Status = TaskItemStatus.Todo
+        };
         db.AddRange(
             project,
             task,
             prerequisite,
             new TaskDependency { Task = task, DependsOnTask = prerequisite },
             foreignProject,
-            new TaskItem
-            {
-                UserId = "other-user",
-                Project = foreignProject,
-                Title = "FOREIGN-TASK",
-                Status = TaskItemStatus.Todo
-            },
+            foreignTask,
+            new TaskDependency { Task = task, DependsOnTask = foreignTask },
             archivedProject);
         await db.SaveChangesAsync();
 
@@ -149,5 +151,14 @@ public class LlmFocusExportServiceTests
         root.GetProperty("prompt").GetProperty("text").GetString()
             .Should().Contain("Next 7 days");
         root.GetProperty("privacy").GetProperty("sentAutomatically").GetBoolean().Should().BeFalse();
+    }
+
+    private sealed class UnauthenticatedCurrentUserService : ICurrentUserService
+    {
+        public Task<string?> GetUserIdAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>(null);
+
+        public Task<string> GetRequiredUserIdAsync(CancellationToken cancellationToken = default) =>
+            Task.FromException<string>(new UnauthorizedAccessException());
     }
 }

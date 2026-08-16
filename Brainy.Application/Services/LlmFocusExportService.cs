@@ -41,7 +41,7 @@ internal sealed class LlmFocusExportService(
                 !project.IsArchived &&
                 project.Status != ProjectStatus.Completed &&
                 project.Status != ProjectStatus.Archived)
-            .OrderBy(project => project.Priority)
+            .OrderByDescending(project => project.Priority)
             .ThenBy(project => project.DueDate)
             .ThenBy(project => project.Name)
             .Select(project => new
@@ -77,7 +77,7 @@ internal sealed class LlmFocusExportService(
                 task.Status != TaskItemStatus.Archived)
             .OrderByDescending(task => task.IsCurrentTask)
             .ThenBy(task => task.DueDate)
-            .ThenBy(task => task.Priority)
+            .ThenByDescending(task => task.Priority)
             .ThenBy(task => task.Title)
             .Select(task => new
             {
@@ -137,7 +137,7 @@ internal sealed class LlmFocusExportService(
             .CountAsync(note =>
                 note.UserId == userId &&
                 !note.IsArchived &&
-                note.ParaCategory == ParaCategory.Inbox,
+                note.Status == NoteStatus.Inbox,
                 cancellationToken)
             .ConfigureAwait(false);
 
