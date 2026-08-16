@@ -1,5 +1,18 @@
 # Changelog
 
+## [4.0.13] - 2026-08-16
+
+### Added
+
+- **LLM focus export** — a new LLM page and navigation entry let users download a versioned, user-scoped JSON snapshot for external focus-planning workflows. The export includes active projects, open tasks, dependencies, goals, inbox metrics, the user's calendar date and time zone, and a versioned planning prompt.
+- **Privacy-aware LLM handoff** — the exported snapshot records that it is not sent automatically and reminds users to review project, task, and goal text before sharing it with an external LLM.
+
+### Improved
+
+- **Focus export prioritization and coverage** — projects and tasks are ordered by priority and due date, and inbox counting follows the note's actual Inbox status. Regression and production-surface tests cover the new LLM workflow and its navigation entry.
+
+---
+
 ## [4.0.12] - 2026-08-15
 
 ### Added
