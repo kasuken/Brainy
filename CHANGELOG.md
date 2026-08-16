@@ -1,5 +1,21 @@
 # Changelog
 
+## [4.0.12] - 2026-08-15
+
+### Added
+
+- **Archive reasons across the PARA model** — archived Projects, Areas, Resources, Notes, Tasks, Ideas, Goals, and Outputs now retain optional context explaining why they were archived, with a database migration and archive dialogs that capture the reason.
+- **Data import support** — account management now supports importing Brainy JSON exports with entity counts and a detailed import result for reviewing what was added or skipped.
+- **Today dashboard preferences** — users can choose which Today widgets are visible, including the daily snapshot, current focus, task sections, goals, and priority projects.
+- **Current focus picker** — the Today quick actions now open a focus-selection dialog for choosing the task currently being worked on.
+
+### Improved
+
+- **Search and content workflows refined** — search results now preserve and display snippet source context, while task, note, image, calendar, and output workflows receive broader dialog, validation, and interaction improvements.
+- **Account and responsive UI updates** — management, archive, project, task board, task list, calendar, and Today surfaces were updated to support the new dialogs, archive context, and streamlined interactions.
+
+---
+
 ## [4.0.11] - 2026-08-15
 
 ### Added
