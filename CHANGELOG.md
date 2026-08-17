@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.0.15] - 2026-08-17
+
+### Changed
+
+- **Project summary cards simplified** — removed the unused desired-outcome display so project cards focus on progress, status, and actionable project metrics.
+
+---
+
 ## [4.0.14] - 2026-08-17
 
 ### Changed
