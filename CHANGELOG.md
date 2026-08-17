@@ -1,5 +1,14 @@
 # Changelog
 
+## [4.0.14] - 2026-08-17
+
+### Changed
+
+- **Project status vocabulary clarified** — the former `Waiting` status is now `Blocked`, and a new `Parked` status distinguishes work intentionally paused from work awaiting an unblocker.
+- **Existing status data migrated** — projects stored with `Waiting` are converted to `Blocked` by an EF Core migration, with the updated statuses reflected throughout project editors, cards, detail pages, Areas, Goals, Today, and Tasks Hub views.
+
+---
+
 ## [4.0.13] - 2026-08-16
 
 ### Added
