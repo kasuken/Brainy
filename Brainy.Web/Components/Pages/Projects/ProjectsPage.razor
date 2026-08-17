@@ -437,7 +437,7 @@
     private bool _sortAsc;
 
     private static readonly ProjectStatus[] StatusFilters =
-        [ProjectStatus.NotStarted, ProjectStatus.Active, ProjectStatus.Waiting, ProjectStatus.Completed];
+        [ProjectStatus.NotStarted, ProjectStatus.Active, ProjectStatus.Blocked, ProjectStatus.Parked, ProjectStatus.Completed];
 
     private static readonly ProjectPriority[] PriorityFilters =
         [ProjectPriority.Critical, ProjectPriority.High, ProjectPriority.Medium, ProjectPriority.Low];
@@ -540,7 +540,8 @@
     {
         ProjectStatus.NotStarted => "Not Started",
         ProjectStatus.Active     => "Active",
-        ProjectStatus.Waiting    => "Waiting",
+        ProjectStatus.Blocked    => "Blocked",
+        ProjectStatus.Parked     => "Parked",
         ProjectStatus.Completed  => "Completed",
         ProjectStatus.Archived   => "Archived",
         _                        => s.ToString()
@@ -549,7 +550,8 @@
     private static string StatusColor(ProjectStatus s) => s switch
     {
         ProjectStatus.Active    => "#4a5c38",
-        ProjectStatus.Waiting   => "#7a5c0e",
+        ProjectStatus.Blocked   => "#7a5c0e",
+        ProjectStatus.Parked    => "#5c5c5c",
         ProjectStatus.Completed => "#9c4416",
         _                       => "#9a9180"
     };

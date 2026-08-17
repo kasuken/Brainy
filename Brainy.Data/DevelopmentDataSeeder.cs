@@ -179,7 +179,7 @@ internal static class DevelopmentDataSeeder
         {
             new { Name = "Launch Today Dashboard", Outcome = "Ship a focused execution screen that surfaces current work without showing archived tasks.", Priority = ProjectPriority.Critical, Status = ProjectStatus.Active, DueInDays = 12 },
             new { Name = "Distillation Workflow Beta", Outcome = "Validate highlights, summaries, and action extraction with ten pilot users.", Priority = ProjectPriority.High, Status = ProjectStatus.Active, DueInDays = 28 },
-            new { Name = "PARA Import Toolkit", Outcome = "Import notes from common tools and suggest initial PARA placement.", Priority = ProjectPriority.Medium, Status = ProjectStatus.Waiting, DueInDays = 45 },
+            new { Name = "PARA Import Toolkit", Outcome = "Import notes from common tools and suggest initial PARA placement.", Priority = ProjectPriority.Medium, Status = ProjectStatus.Blocked, DueInDays = 45 },
             new { Name = "Q2 Knowledge Audit", Outcome = "Clean up stale resources and archive inactive projects from the previous quarter.", Priority = ProjectPriority.Low, Status = ProjectStatus.Completed, DueInDays = -7 }
         };
 

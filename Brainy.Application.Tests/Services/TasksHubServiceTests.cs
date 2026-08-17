@@ -149,11 +149,11 @@ public class TasksHubServiceTests
     }
 
     [Fact]
-    public async Task GetActiveTasksAsync_WithWaitingProject_ExcludesIt()
+    public async Task GetActiveTasksAsync_WithBlockedProject_ExcludesIt()
     {
         // Arrange
-        var (sut, db) = BuildService(nameof(GetActiveTasksAsync_WithWaitingProject_ExcludesIt));
-        var project = CreateProject(DefaultUserId, status: ProjectStatus.Waiting);
+        var (sut, db) = BuildService(nameof(GetActiveTasksAsync_WithBlockedProject_ExcludesIt));
+        var project = CreateProject(DefaultUserId, status: ProjectStatus.Blocked);
         var task = CreateTask(project.Id, DefaultUserId);
         db.Projects.Add(project);
         db.Tasks.Add(task);

@@ -8,7 +8,10 @@ public enum ProjectStatus
 {
     NotStarted = 0,
     Active = 1,
-    Waiting = 2,
+    /// <summary>Blocked by someone or something outside the user's control.</summary>
+    Blocked = 2,
+    /// <summary>Intentionally parked/deprioritized by the user, not blocked externally.</summary>
+    Parked = 5,
     Completed = 3,
     Archived = 4
 }

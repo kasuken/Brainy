@@ -160,11 +160,11 @@ public class TodayServiceTests
     }
 
     [Fact]
-    public async Task GetOverdueAsync_WithWaitingProject_ExcludesIt()
+    public async Task GetOverdueAsync_WithBlockedProject_ExcludesIt()
     {
         // Arrange
-        var (sut, db) = BuildService(nameof(GetOverdueAsync_WithWaitingProject_ExcludesIt));
-        var project = CreateProject(DefaultUserId, status: ProjectStatus.Waiting);
+        var (sut, db) = BuildService(nameof(GetOverdueAsync_WithBlockedProject_ExcludesIt));
+        var project = CreateProject(DefaultUserId, status: ProjectStatus.Blocked);
         var task = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1));
         db.Projects.Add(project);
         db.Tasks.Add(task);
