@@ -10,6 +10,7 @@ public class AppThemesTests
     [InlineData(AppTheme.Brainy)]
     [InlineData(AppTheme.Minimal)]
     [InlineData(AppTheme.Dracula)]
+    [InlineData(AppTheme.MidnightBlush)]
     public void GetTheme_ReturnsNonNullThemeForEveryAppTheme(AppTheme theme)
     {
         var result = AppThemes.GetTheme(theme);
@@ -48,5 +49,22 @@ public class AppThemesTests
 
         // #bd93f9 (Dracula purple) as rgba.
         theme.PaletteDark.Primary.ToString().Should().Be("rgba(189,147,249,1)");
+    }
+
+    [Fact]
+    public void GetTheme_ForMidnightBlush_UsesMidnightBlushDarkPalette()
+    {
+        var theme = AppThemes.GetTheme(AppTheme.MidnightBlush);
+
+        theme.PaletteDark.Primary.ToString().Should().Be(AppThemes.MidnightBlushTheme.PaletteDark.Primary.ToString());
+    }
+
+    [Fact]
+    public void MidnightBlushTheme_UsesMidnightBlushPrimaryAccentColor()
+    {
+        var theme = AppThemes.MidnightBlushTheme;
+
+        // #db2777 (Midnight Blush rose) as rgba.
+        theme.PaletteDark.Primary.ToString().Should().Be("rgba(219,39,119,1)");
     }
 }

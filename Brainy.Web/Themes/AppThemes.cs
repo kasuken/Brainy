@@ -155,6 +155,66 @@ public static class AppThemes
         }
     };
 
+    /// <summary>
+    /// Midnight Blush theme: deep navy background with rose/purple accents,
+    /// based on https://github.com/MdUsmanAnsari/midnight-blush. Rendered via
+    /// MudTheme.PaletteDark together with MudThemeProvider.IsDarkMode.
+    /// </summary>
+    public static MudTheme MidnightBlushTheme => new MudTheme
+    {
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#db2777",
+            PrimaryContrastText = "#ffffff",
+            Secondary = "#c084fc",
+            SecondaryContrastText = "#1c1f2b",
+            Tertiary = "#2dd4bf",
+            TertiaryContrastText = "#1c1f2b",
+            Success = "#a9c77d",
+            SuccessContrastText = "#1c1f2b",
+            Info = "#82aaff",
+            InfoContrastText = "#1c1f2b",
+            Warning = "#ffeb95",
+            WarningContrastText = "#1c1f2b",
+            Error = "#f87171",
+            ErrorContrastText = "#1c1f2b",
+            Background = "#1c1f2b",
+            BackgroundGray = "#171a24",
+            Surface = "#1e293b",
+            AppbarBackground = "#1c1f2b",
+            AppbarText = "#f9f9fb",
+            DrawerBackground = "#1c1f2b",
+            DrawerText = "#d4d7e3",
+            DrawerIcon = "#94a3b8",
+            TextPrimary = "#d4d7e3",
+            TextSecondary = "#94a3b8",
+            TextDisabled = "#697098",
+            ActionDefault = "#94a3b8",
+            Divider = "#252837",
+            LinesDefault = "#252837",
+            LinesInputs = "#252837",
+            TableLines = "#252837",
+            HoverOpacity = 0.06,
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography { FontFamily = MinimalFontStack },
+            H1 = new H1Typography { FontFamily = MinimalFontStack, FontWeight = "700" },
+            H2 = new H2Typography { FontFamily = MinimalFontStack, FontWeight = "700" },
+            H3 = new H3Typography { FontFamily = MinimalFontStack, FontWeight = "600" },
+            H4 = new H4Typography { FontFamily = MinimalFontStack, FontWeight = "600" },
+            H5 = new H5Typography { FontFamily = MinimalFontStack, FontWeight = "600" },
+            H6 = new H6Typography { FontFamily = MinimalFontStack, FontWeight = "600" },
+            Subtitle1 = new Subtitle1Typography { FontFamily = MinimalFontStack },
+            Subtitle2 = new Subtitle2Typography { FontFamily = MinimalFontStack },
+            Button = new ButtonTypography { FontFamily = MinimalFontStack, FontWeight = "600", TextTransform = "none" },
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DefaultBorderRadius = "8px",
+        }
+    };
+
     // Notion's actual UI stack: system fonts, no webfont.
     private static readonly string[] MinimalFontStack =
     {
@@ -169,6 +229,7 @@ public static class AppThemes
     {
         AppTheme.Minimal => MinimalTheme,
         AppTheme.Dracula => DraculaTheme,
+        AppTheme.MidnightBlush => MidnightBlushTheme,
         _ => BrainyTheme,
     };
 }

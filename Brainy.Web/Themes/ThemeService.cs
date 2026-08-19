@@ -15,6 +15,9 @@ public enum AppTheme
 
     /// <summary>A dark theme based on the Dracula color scheme (draculatheme.com).</summary>
     Dracula,
+
+    /// <summary>A dark theme based on the Midnight Blush color scheme (deep navy with rose/purple accents).</summary>
+    MidnightBlush,
 }
 
 /// <summary>
