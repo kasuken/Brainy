@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.1.0] - 2026-08-19
+
+### Added
+
+- **Midnight Blush theme** — users can now choose a second dark theme with a deep navy background and rose, purple, and teal accents from the theme menu.
+- **Midnight Blush palette coverage** — added theme resolution and primary-accent tests for the new palette.
+
+---
+
 ## [5.0.1] - 2026-08-19
 
 ### Added
