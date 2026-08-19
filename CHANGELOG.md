@@ -1,5 +1,18 @@
 # Changelog
 
+## [4.0.16] - 2026-08-19
+
+### Improved
+
+- **Today snapshot navigation** — In Progress, Overdue, Due Today, Inbox, and Active Projects metrics now link directly to their relevant planning views, with descriptive labels for assistive technologies and visible keyboard focus states.
+- **Clearer task prerequisites** — the task editor now displays selected prerequisite task titles instead of opaque identifiers.
+
+### Changed
+
+- **Today notifications consolidated** — removed the duplicate notification display from the Today page so the daily dashboard keeps its focus on active work.
+
+---
+
 ## [4.0.15] - 2026-08-17
 
 ### Changed
