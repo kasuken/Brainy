@@ -12,7 +12,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Navigation
 
-<MudThemeProvider Theme="_currentTheme" />
+<MudThemeProvider Theme="_currentTheme" IsDarkMode="_isDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -36,16 +36,27 @@
             <Authorized>
                 <GlobalSearchBar />
                 <MudMenu Icon="@Icons.Material.Filled.Palette" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="mr-2" aria-label="Change theme">
-                    <MudMenuItem OnClick="() => SetThemeAsync(false)">
+                    <MudText Typo="Typo.subtitle2" Class="px-4 py-2 mud-text-secondary">Light Theme</MudText>
+                    <MudMenuItem OnClick="() => SetThemeAsync(AppTheme.Brainy)">
                         <div class="d-flex align-center gap-2">
                             <MudIcon Icon="@Icons.Material.Filled.AutoStories" Size="Size.Small" />
                             <span>Brainy Theme</span>
                         </div>
                     </MudMenuItem>
-                    <MudMenuItem OnClick="() => SetThemeAsync(true)">
+                    <MudMenuItem OnClick="() => SetThemeAsync(AppTheme.Minimal)">
                         <div class="d-flex align-center gap-2">
                             <MudIcon Icon="@Icons.Material.Filled.FormatPaint" Size="Size.Small" />
                             <span>Minimal</span>
+                        </div>
+                    </MudMenuItem>
+
+                    <MudDivider Class="my-2" />
+
+                    <MudText Typo="Typo.subtitle2" Class="px-4 py-2 mud-text-secondary">Dark Theme</MudText>
+                    <MudMenuItem OnClick="() => SetThemeAsync(AppTheme.Dracula)">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.DarkMode" Size="Size.Small" />
+                            <span>Dracula</span>
                         </div>
                     </MudMenuItem>
                 </MudMenu>
@@ -129,6 +140,7 @@
 @code {
     private bool _drawerOpen = true;
     private MudTheme _currentTheme = AppThemes.BrainyTheme;
+    private bool _isDarkMode;
     private TimeZoneInfo _userTimeZone = TimeZoneInfo.Utc;
 
     protected override void OnInitialized()
@@ -150,10 +162,10 @@
         {
             // Restore the persisted theme (the head script has already set the
             // data-theme attribute, so only the MudTheme needs syncing here).
-            var isMinimal = await GetPersistedThemeAsync();
-            if (isMinimal != ThemeService.IsMinimalTheme)
+            var persistedTheme = await GetPersistedThemeAsync();
+            if (persistedTheme != ThemeService.Theme)
             {
-                ThemeService.IsMinimalTheme = isMinimal;
+                ThemeService.Theme = persistedTheme;
             }
             else
             {
@@ -164,15 +176,16 @@
         }
     }
 
-    private async Task<bool> GetPersistedThemeAsync()
+    private async Task<AppTheme> GetPersistedThemeAsync()
     {
         try
         {
-            return await JSRuntime.InvokeAsync<bool>("window.brainyTheme.getTheme");
+            var key = await JSRuntime.InvokeAsync<string>("window.brainyTheme.getTheme");
+            return Enum.TryParse<AppTheme>(key, ignoreCase: true, out var theme) ? theme : AppTheme.Brainy;
         }
         catch (Exception)
         {
-            return false;
+            return AppTheme.Brainy;
         }
     }
 
@@ -190,12 +203,13 @@
 
     private void UpdateTheme()
     {
-        _currentTheme = ThemeService.IsMinimalTheme ? AppThemes.MinimalTheme : AppThemes.BrainyTheme;
+        _currentTheme = AppThemes.GetTheme(ThemeService.Theme);
+        _isDarkMode = ThemeService.Theme == AppTheme.Dracula;
     }
 
-    private async Task SetThemeAsync(bool isMinimal)
+    private async Task SetThemeAsync(AppTheme theme)
     {
-        ThemeService.IsMinimalTheme = isMinimal;
+        ThemeService.Theme = theme;
         await ApplyThemeToDomAsync();
     }
 
@@ -203,7 +217,7 @@
     {
         try
         {
-            await JSRuntime.InvokeVoidAsync("window.brainyTheme.setTheme", ThemeService.IsMinimalTheme);
+            await JSRuntime.InvokeVoidAsync("window.brainyTheme.setTheme", ThemeService.Theme.ToString().ToLowerInvariant());
         }
         catch (Exception)
         {

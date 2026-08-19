@@ -25,22 +25,25 @@
     <link rel="apple-touch-icon" href="@Assets["icons/apple-touch-icon.png"]" />
     <script>
         // Runs before first paint: apply the persisted theme to avoid a flash.
+        // 'brainy' is the default theme and has no data-theme attribute; every
+        // other theme (e.g. 'minimal', 'dracula') sets data-theme to its key.
         window.brainyTheme = {
             key: 'brainy-theme',
-            setTheme: function (isMinimal) {
-                if (isMinimal) {
-                    document.documentElement.setAttribute('data-theme', 'minimal');
+            setTheme: function (theme) {
+                if (theme && theme !== 'brainy') {
+                    document.documentElement.setAttribute('data-theme', theme);
                 } else {
                     document.documentElement.removeAttribute('data-theme');
                 }
-                try { localStorage.setItem(this.key, isMinimal ? 'minimal' : 'brainy'); } catch { }
+                try { localStorage.setItem(this.key, theme || 'brainy'); } catch { }
             },
             getTheme: function () {
-                try { return localStorage.getItem(this.key) === 'minimal'; } catch { return false; }
+                try { return localStorage.getItem(this.key) || 'brainy'; } catch { return 'brainy'; }
             }
         };
-        if (window.brainyTheme.getTheme()) {
-            document.documentElement.setAttribute('data-theme', 'minimal');
+        var brainyStoredTheme = window.brainyTheme.getTheme();
+        if (brainyStoredTheme && brainyStoredTheme !== 'brainy') {
+            document.documentElement.setAttribute('data-theme', brainyStoredTheme);
         }
         window.brainyTimeZone = {
             get: function () {
