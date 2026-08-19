@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.0.0] - 2026-08-19
+
+### Added
+
+- **Progressive Web App support** — Brainy now includes an installable web app manifest with app metadata, theme settings, responsive icons, and Apple touch icon support for a more native mobile launch experience.
+- **Service worker registration** — the app registers a lightweight pass-through service worker that satisfies browser installability requirements while continuing to serve requests from the network.
+
+---
+
 ## [4.0.16] - 2026-08-19
 
 ### Improved
