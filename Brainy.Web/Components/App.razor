@@ -4,6 +4,11 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1d1812" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Brainy" />
     <base href="/" />
     <ResourcePreloader />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -15,7 +20,9 @@
     <link rel="stylesheet" href="@Assets["brainy-design.css"]" />
     <link rel="stylesheet" href="@Assets["Brainy.Web.styles.css"]" />
     <ImportMap />
+    <link rel="manifest" href="@Assets["manifest.webmanifest"]" />
     <link rel="icon" type="image/png" href="img/logo.png" />
+    <link rel="apple-touch-icon" href="@Assets["icons/apple-touch-icon.png"]" />
     <script>
         // Runs before first paint: apply the persisted theme to avoid a flash.
         window.brainyTheme = {
@@ -55,6 +62,13 @@
     <script src="@Assets["brainyHelp.js"]"></script>
     <script src="@Assets["brainySearch.js"]"></script>
     <script src="@Assets["brainyCapture.js"]"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('service-worker.js').catch(() => { });
+            });
+        }
+    </script>
 </body>
 
 </html>
