@@ -13,7 +13,6 @@
 @using Brainy.Web.Components.Pages.Projects
 @inject ITodayService TodayService
 @inject ITaskService TaskService
-@inject ITodayNotificationService NotificationService
 @inject IUserDashboardPreferenceService PreferenceService
 @inject IUserTimeZoneService UserTimeZoneService
 @inject IProjectPrioritizationService ProjectPrioritizationService
@@ -178,13 +177,6 @@
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
-    }
-
-    .td-notifications {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        margin-bottom: 2rem;
     }
 
     .td-quick-actions-wrap {
@@ -451,24 +443,6 @@
             }
             else
             {
-                @* ── Notification bar ── *@
-                @if (_notifications.Count > 0)
-                {
-                    <div class="td-notifications">
-                        @for (var i = 0; i < _notifications.Count; i++)
-                        {
-                            var notification = _notifications[i];
-
-                            <MudAlert @key="i"
-                                      Severity="@NotificationSeverity(notification.Kind)"
-                                      Dense="true"
-                                      Variant="Variant.Outlined">
-                                @notification.Message
-                            </MudAlert>
-                        }
-                    </div>
-                }
-
                 @* ── Quick actions toolbar ── *@
                 <div class="td-quick-actions-wrap">
                     <TodayQuickActions OnAddTask="OpenAddTaskDialogAsync"
@@ -607,7 +581,7 @@
                 Points =
                 [
                     "Start with Current focus: mark it complete, clear it, switch tasks, or set the suggested task as focus.",
-                    "Use notifications and the Overdue section to clear anything already slipping.",
+                    "Use the daily snapshot and the Overdue section to clear anything already slipping.",
                     "Work Due Today and High-priority project work before moving to lower-pressure items.",
                     "Plan Due This Week and Next Tasks so upcoming work is visible early.",
                     "Use New Task, Process Inbox, or New Note from quick actions when work needs to be captured."
@@ -651,7 +625,6 @@
     private DateTime _today = DateTime.Today;
 
     private TodayAggregateDto? _aggregate;
-    private IReadOnlyList<TodayNotificationDto> _notifications = [];
     private IReadOnlyList<ProjectSummaryDto> _prioritizedProjects = [];
     private IReadOnlyList<GoalDto> _overdueGoals = [];
     private IReadOnlyList<GoalDto> _dueSoonGoals = [];
@@ -699,7 +672,6 @@
         {
             _today = await UserTimeZoneService.GetUserTodayAsync();
             _aggregate = await TodayService.GetTodayAggregateAsync();
-            _notifications = await NotificationService.GetNotificationsAsync();
             _prioritizedProjects = await ProjectPrioritizationService.GetPrioritizedProjectsAsync(5);
             _overdueGoals = await GoalService.GetOverdueAsync();
             _dueSoonGoals = await GoalService.GetDueSoonAsync();
@@ -879,10 +851,4 @@
         return JsonSerializer.Serialize(orderedKeys);
     }
 
-    private static Severity NotificationSeverity(TodayNotificationKind kind) => kind switch
-    {
-        TodayNotificationKind.OverdueTasks => Severity.Warning,
-        TodayNotificationKind.DueToday     => Severity.Warning,
-        _                                  => Severity.Info,
-    };
 }
