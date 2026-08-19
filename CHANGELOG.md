@@ -1,5 +1,18 @@
 # Changelog
 
+## [5.0.1] - 2026-08-19
+
+### Added
+
+- **Dracula theme** — users can now choose a dark Dracula-inspired theme from the theme menu, with a coordinated MudBlazor dark palette and Brainy design styling.
+
+### Improved
+
+- **Theme management** — theme selection now supports Brainy, Minimal, and Dracula themes, persists across sessions, restores before the first paint, and stays synchronized between the page styling and MudBlazor components.
+- **Theme coverage** — added focused tests for theme palettes, selection behavior, and change notifications.
+
+---
+
 ## [5.0.0] - 2026-08-19
 
 ### Added
