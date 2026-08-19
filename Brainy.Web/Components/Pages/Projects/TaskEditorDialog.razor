@@ -131,6 +131,7 @@
                 <MudSelect T="Guid"
                            @bind-SelectedValues="_selectedDependencyIds"
                            MultiSelection="true"
+                           MultiSelectionTextFunc="@FormatSelectedDependencies"
                            Label="Prerequisites"
                            HelperText="This task cannot start or finish until every selected task is done."
                            Variant="Variant.Outlined"
@@ -526,6 +527,12 @@
         TaskItemStatus.Done => "Done",
         _ => status.ToString()
     };
+
+    private string FormatSelectedDependencies(List<string> selectedIds) =>
+        string.Join(", ", selectedIds.Select(id =>
+            Guid.TryParse(id, out var taskId)
+                ? _dependencyCandidates.FirstOrDefault(task => task.Id == taskId)?.Title ?? id
+                : id));
 
     private static string FormatRecurrenceDate(DateTime date) => date.ToString("MMM d, yyyy");
 
