@@ -90,6 +90,14 @@
     private IdeaPriority _priority = IdeaPriority.Medium;
     private IdeaStatus _status = IdeaStatus.Captured;
     private byte[]? _rowVersion;
+    private string? _research;
+    private string? _competitors;
+    private string? _notes;
+    private string? _targetUserAndProblem;
+    private string? _suitabilityReason;
+    private string? _evidence;
+    private string? _validationExperiment;
+    private string? _replacedCommitment;
 
     private List<AreaDto> _areas = [];
 
@@ -100,7 +108,7 @@
 
         if (IdeaId.HasValue)
         {
-            var dto = await IdeaService.GetByIdAsync(IdeaId.Value);
+            var dto = await IdeaService.GetDetailAsync(IdeaId.Value);
             if (dto is not null)
             {
                 _title       = dto.Title;
@@ -109,6 +117,14 @@
                 _priority    = dto.Priority;
                 _status      = dto.Status;
                 _rowVersion  = dto.RowVersion;
+                _research = dto.Research;
+                _competitors = dto.Competitors;
+                _notes = dto.Notes;
+                _targetUserAndProblem = dto.TargetUserAndProblem;
+                _suitabilityReason = dto.SuitabilityReason;
+                _evidence = dto.Evidence;
+                _validationExperiment = dto.ValidationExperiment;
+                _replacedCommitment = dto.ReplacedCommitment;
             }
         }
     }
@@ -126,7 +142,9 @@
                 await IdeaService.UpdateAsync(new UpdateIdeaDto(
                     IdeaId.Value, _title, _description, _areaId,
                     _priority, _status,
-                    null, null, null,
+                    _research, _competitors, _notes,
+                    _targetUserAndProblem, _suitabilityReason, _evidence,
+                    _validationExperiment, _replacedCommitment,
                     RowVersion: _rowVersion));
             }
             else

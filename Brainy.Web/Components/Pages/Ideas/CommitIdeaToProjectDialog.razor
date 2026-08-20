@@ -1,0 +1,235 @@
+@using Brainy.Application.Common
+@using Brainy.Application.DTOs.Ideas
+@using Brainy.Application.Interfaces.Services
+@inject IIdeaService IdeaService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <div class="cip-title">
+            <MudIcon Icon="@Icons.Material.Outlined.AccountTree" Class="cip-title__icon" />
+            <div>
+                <MudText Typo="Typo.h6" Class="cip-title__text">Commit to a project</MudText>
+                <span class="cip-title__eyebrow">Decision checkpoint</span>
+            </div>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_loading)
+        {
+            <div class="cip-loading">
+                <MudProgressCircular Indeterminate="true" Color="Color.Secondary" />
+                <MudText Typo="Typo.body2">Loading the idea...</MudText>
+            </div>
+        }
+        else if (_idea is null)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                This idea is no longer available.
+            </MudAlert>
+        }
+        else
+        {
+            <div class="cip-body">
+                <div class="cip-idea">
+                    <span class="cip-idea__label">Project seed</span>
+                    <strong>@_idea.Title</strong>
+                    <span>A project will be created from this idea's title, description, and area.</span>
+                </div>
+
+                <MudAlert Severity="Severity.Info" Variant="Variant.Text" Dense="true">
+                    Complete all five decisions. They stay with the idea as the record of why you committed.
+                </MudAlert>
+
+                <MudForm @ref="_form" @bind-IsValid="_valid">
+                    <div class="cip-fields">
+                        <MudTextField @bind-Value="_targetUserAndProblem"
+                                      Label="1. Specific user and problem"
+                                      HelperText="Who exactly has this problem, and what is it?"
+                                      Variant="Variant.Outlined"
+                                      Lines="2"
+                                      Immediate="true"
+                                      Validation="@((Func<string?, string?>)ValidateDecision)" />
+                        <MudTextField @bind-Value="_suitabilityReason"
+                                      Label="2. Why you're suited to pursue it"
+                                      HelperText="What experience, access, or advantage do you bring?"
+                                      Variant="Variant.Outlined"
+                                      Lines="2"
+                                      Immediate="true"
+                                      Validation="@((Func<string?, string?>)ValidateDecision)" />
+                        <MudTextField @bind-Value="_evidence"
+                                      Label="3. One piece of real evidence"
+                                      HelperText="A conversation, data point, or signal that this is worth pursuing"
+                                      Variant="Variant.Outlined"
+                                      Lines="2"
+                                      Immediate="true"
+                                      Validation="@((Func<string?, string?>)ValidateDecision)" />
+                        <MudTextField @bind-Value="_validationExperiment"
+                                      Label="4. Small validation experiment"
+                                      HelperText="What low-cost test will reduce uncertainty?"
+                                      Variant="Variant.Outlined"
+                                      Lines="2"
+                                      Immediate="true"
+                                      Validation="@((Func<string?, string?>)ValidateDecision)" />
+                        <MudTextField @bind-Value="_replacedCommitment"
+                                      Label="5. Existing commitment this replaces"
+                                      HelperText="What will you stop, pause, or scale back?"
+                                      Variant="Variant.Outlined"
+                                      Lines="2"
+                                      Immediate="true"
+                                      Validation="@((Func<string?, string?>)ValidateDecision)" />
+                    </div>
+                </MudForm>
+
+                <p class="cip-footnote">
+                    Research, competitor notes, and working notes will leave the active idea after conversion.
+                    The new project and this decision record are preserved.
+                </p>
+            </div>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel" Disabled="_saving">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Secondary"
+                   StartIcon="@Icons.Material.Filled.Transform"
+                   OnClick="CommitAsync"
+                   Disabled="_loading || _idea is null || _saving || !CanCommit">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Create project
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .cip-title { display: flex; align-items: center; gap: .75rem; }
+    .cip-title__icon { color: var(--clay); }
+    .cip-title__text { font-family: var(--font-display); line-height: 1.1; }
+    .cip-title__eyebrow {
+        display: block;
+        margin-top: .15rem;
+        color: var(--ink-faint);
+        font-size: .65rem;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+    }
+    .cip-loading {
+        display: flex;
+        min-height: 12rem;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .75rem;
+    }
+    .cip-body { display: flex; flex-direction: column; gap: 1rem; }
+    .cip-idea {
+        display: grid;
+        gap: .2rem;
+        padding: .9rem 1rem;
+        border-left: 4px solid var(--clay);
+        border-radius: 0 8px 8px 0;
+        background: var(--paper-sunk);
+    }
+    .cip-idea strong { color: var(--ink); font-family: var(--font-display); font-size: 1.05rem; }
+    .cip-idea > span:last-child { color: var(--ink-soft); font-size: .78rem; }
+    .cip-idea__label {
+        color: var(--ink-faint);
+        font-size: .62rem;
+        font-weight: 800;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+    }
+    .cip-fields { display: flex; flex-direction: column; gap: .85rem; padding-top: .25rem; }
+    .cip-footnote { margin: 0; color: var(--ink-faint); font-size: .72rem; line-height: 1.5; }
+</style>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>The idea to commit to a project.</summary>
+    [Parameter, EditorRequired]
+    public Guid IdeaId { get; set; }
+
+    private MudForm _form = null!;
+    private IdeaDetailDto? _idea;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _valid;
+    private string? _targetUserAndProblem;
+    private string? _suitabilityReason;
+    private string? _evidence;
+    private string? _validationExperiment;
+    private string? _replacedCommitment;
+
+    private bool CanCommit =>
+        !string.IsNullOrWhiteSpace(_targetUserAndProblem) &&
+        !string.IsNullOrWhiteSpace(_suitabilityReason) &&
+        !string.IsNullOrWhiteSpace(_evidence) &&
+        !string.IsNullOrWhiteSpace(_validationExperiment) &&
+        !string.IsNullOrWhiteSpace(_replacedCommitment);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _idea = await IdeaService.GetDetailAsync(IdeaId);
+        if (_idea is not null)
+        {
+            _targetUserAndProblem = _idea.TargetUserAndProblem;
+            _suitabilityReason = _idea.SuitabilityReason;
+            _evidence = _idea.Evidence;
+            _validationExperiment = _idea.ValidationExperiment;
+            _replacedCommitment = _idea.ReplacedCommitment;
+        }
+
+        _loading = false;
+    }
+
+    private async Task CommitAsync()
+    {
+        await _form.Validate();
+        if (!_valid || !CanCommit || _idea is null)
+            return;
+
+        _saving = true;
+        try
+        {
+            var committed = await IdeaService.CommitToProjectAsync(new CommitIdeaToProjectDto(
+                _idea.Id,
+                _targetUserAndProblem,
+                _suitabilityReason,
+                _evidence,
+                _validationExperiment,
+                _replacedCommitment,
+                _idea.RowVersion));
+
+            MudDialog.Close(DialogResult.Ok(committed));
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not create the project: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private static string? ValidateDecision(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "This decision is required." : null;
+}

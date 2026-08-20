@@ -10,6 +10,7 @@
 @using Brainy.Domain.Enums
 @inject IIdeaService IdeaService
 @inject IAreaService AreaService
+@inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 
@@ -96,12 +97,7 @@ else
                                Color="Color.Secondary"
                                StartIcon="@Icons.Material.Filled.Transform"
                                Size="Size.Small"
-                               Disabled="_converting"
-                               OnClick="ConfirmConvertAsync">
-                        @if (_converting)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
-                        }
+                               OnClick="OpenCommitDialogAsync">
                         Commit to Project
                     </MudButton>
                 }
@@ -343,20 +339,6 @@ else
     </MessageContent>
     <YesButton>
         <MudButton Color="Color.Success" Variant="Variant.Filled">Restore</MudButton>
-    </YesButton>
-</MudMessageBox>
-
-<!-- Commit-to-Project confirmation -->
-<MudMessageBox @ref="_convertMsgBox" Title="Commit to Project?" CancelText="Cancel">
-    <MessageContent>
-        Commit this idea to a project? A new project will be created with the idea's title, description, and area,
-        and the idea's bulky content will move to the project — only a link and the decision record will remain here.
-    </MessageContent>
-    <YesButton>
-        <MudButton Color="Color.Secondary" Variant="Variant.Filled"
-                   StartIcon="@Icons.Material.Filled.Transform">
-            Commit
-        </MudButton>
     </YesButton>
 </MudMessageBox>
 
@@ -639,9 +621,6 @@ else
     // Confirmation dialogs
     private MudMessageBox _archiveMsgBox     = null!;
     private MudMessageBox _restoreMsgBox     = null!;
-    private MudMessageBox _convertMsgBox     = null!;
-
-    private bool _converting;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -861,25 +840,28 @@ else
 
     // ── Commit to Project ───────────────────────────────────────────────────
 
-    private async Task ConfirmConvertAsync()
+    private async Task OpenCommitDialogAsync()
     {
-        bool? confirmed = await _convertMsgBox.ShowAsync();
-        if (confirmed is not true) return;
-
-        _converting = true;
-        try
+        var parameters = new DialogParameters<CommitIdeaToProjectDialog>
         {
-            await IdeaService.CommitToProjectAsync(Id);
+            { dialog => dialog.IdeaId, Id }
+        };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true,
+            CloseOnEscapeKey = true
+        };
+        var dialog = await DialogService.ShowAsync<CommitIdeaToProjectDialog>(
+            "Commit to Project",
+            parameters,
+            options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
             Snackbar.Add("Idea committed to project!", Severity.Success);
             await LoadAsync();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
-        }
-        finally
-        {
-            _converting = false;
         }
     }
 

@@ -49,14 +49,16 @@ public interface IIdeaService
     Task DeleteAsync(Guid id, byte[]? rowVersion, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Commits the idea to a new project. Requires all five commitment criteria to already be
-    /// recorded on the idea: a specific user and problem, a suitability reason, one piece of real
-    /// evidence, a small validation experiment, and a conscious replaced-commitment decision.
+    /// Saves the five commitment criteria and commits the idea to a new project atomically.
     /// Throws <see cref="InvalidOperationException"/> if any criterion is missing or the idea is
     /// already committed. Creates a project from the idea's title, description, and area; sets
     /// the idea's status to Committed and clears its bulky content (Description, Research,
-    /// Competitors, Notes), leaving only a link to the project and the decision record
-    /// (the five criteria fields) in the Ideas database.
+    /// Competitors, Notes), leaving only a link to the project and the decision record.
     /// </summary>
-    Task<IdeaDto> CommitToProjectAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <param name="dto">The idea identifier, commitment decision, and concurrency token.</param>
+    /// <param name="cancellationToken">A token that cancels the operation.</param>
+    /// <returns>The committed idea.</returns>
+    Task<IdeaDto> CommitToProjectAsync(
+        CommitIdeaToProjectDto dto,
+        CancellationToken cancellationToken = default);
 }

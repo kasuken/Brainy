@@ -251,10 +251,20 @@ public class IdeaServiceTests
     // ── Commit to project ─────────────────────────────────────────────────────
 
     [Fact]
-    public async Task CommitToProjectAsync_WithAllCriteriaFilled_CreatesProjectAndMarksIdeaCommitted()
+    public async Task CommitToProjectAsync_WithNullDto_ThrowsArgumentNullException()
     {
-        var (sut, db) = BuildService(nameof(CommitToProjectAsync_WithAllCriteriaFilled_CreatesProjectAndMarksIdeaCommitted));
-        var idea = CreateIdea(DefaultUserId, "Launch newsletter", withCommitCriteria: true);
+        var (sut, _) = BuildService(nameof(CommitToProjectAsync_WithNullDto_ThrowsArgumentNullException));
+
+        var act = () => sut.CommitToProjectAsync(null!);
+
+        await act.Should().ThrowAsync<ArgumentNullException>();
+    }
+
+    [Fact]
+    public async Task CommitToProjectAsync_WithDecisionRecord_CreatesProjectAndMarksIdeaCommitted()
+    {
+        var (sut, db) = BuildService(nameof(CommitToProjectAsync_WithDecisionRecord_CreatesProjectAndMarksIdeaCommitted));
+        var idea = CreateIdea(DefaultUserId, "Launch newsletter");
         idea.Description = "A weekly roundup";
         idea.Research = "Some research";
         idea.Competitors = "Some competitors";
@@ -262,7 +272,14 @@ public class IdeaServiceTests
         db.Ideas.Add(idea);
         await db.SaveChangesAsync();
 
-        await sut.CommitToProjectAsync(idea.Id);
+        await sut.CommitToProjectAsync(new CommitIdeaToProjectDto(
+            idea.Id,
+            "  Solo founders who lose track of newsletter ideas  ",
+            "  I've built two newsletters before  ",
+            "  Three people asked me for this in the last week  ",
+            "  Ship a landing page and collect signups for a week  ",
+            "  Pausing the podcast side project  ",
+            idea.RowVersion));
 
         var project = await db.Projects.AsNoTracking().SingleAsync();
         project.Name.Should().Be("Launch newsletter");
@@ -279,7 +296,7 @@ public class IdeaServiceTests
         stored.Research.Should().BeNull();
         stored.Competitors.Should().BeNull();
         stored.Notes.Should().BeNull();
-        stored.TargetUserAndProblem.Should().NotBeNullOrWhiteSpace();
+        stored.TargetUserAndProblem.Should().Be("Solo founders who lose track of newsletter ideas");
     }
 
     [Fact]
@@ -290,7 +307,14 @@ public class IdeaServiceTests
         db.Ideas.Add(idea);
         await db.SaveChangesAsync();
 
-        var act = () => sut.CommitToProjectAsync(idea.Id);
+        var act = () => sut.CommitToProjectAsync(new CommitIdeaToProjectDto(
+            idea.Id,
+            idea.TargetUserAndProblem,
+            idea.SuitabilityReason,
+            idea.Evidence,
+            idea.ValidationExperiment,
+            idea.ReplacedCommitment,
+            idea.RowVersion));
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
@@ -303,10 +327,31 @@ public class IdeaServiceTests
         db.Ideas.Add(idea);
         await db.SaveChangesAsync();
 
-        var act = () => sut.CommitToProjectAsync(idea.Id);
+        var act = () => sut.CommitToProjectAsync(new CommitIdeaToProjectDto(
+            idea.Id, null, null, null, null, null, idea.RowVersion));
 
         await act.Should().ThrowAsync<InvalidOperationException>();
         (await db.Projects.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CommitToProjectAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException()
+    {
+        var (sut, db) = BuildService(nameof(CommitToProjectAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException));
+        var idea = CreateIdea(DefaultUserId);
+        db.Ideas.Add(idea);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.CommitToProjectAsync(new CommitIdeaToProjectDto(
+            idea.Id,
+            "A specific user and problem",
+            "Relevant experience",
+            "A customer conversation",
+            "Run a one-week landing page test",
+            "Pause another side project",
+            [1, 2, 3]));
+
+        await act.Should().ThrowAsync<ConcurrencyConflictException>();
     }
 
 

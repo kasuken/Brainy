@@ -327,30 +327,49 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         }
     }
 
-    public async Task<IdeaDto> CommitToProjectAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<IdeaDto> CommitToProjectAsync(
+        CommitIdeaToProjectDto dto,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(dto);
+
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
         var idea = await context.Ideas
-            .FirstOrDefaultAsync(i => i.Id == id && i.UserId == userId, cancellationToken).ConfigureAwait(false)
-            ?? throw new KeyNotFoundException($"Idea '{id}' was not found.");
+            .FirstOrDefaultAsync(i => i.Id == dto.Id && i.UserId == userId, cancellationToken).ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Idea '{dto.Id}' was not found.");
 
         await context.Areas.EnsureActiveOwnedAreaAsync(idea.AreaId, userId, cancellationToken)
             .ConfigureAwait(false);
 
         if (idea.Status == IdeaStatus.Committed)
-            throw new InvalidOperationException($"Idea '{id}' has already been committed.");
+            throw new InvalidOperationException($"Idea '{dto.Id}' has already been committed.");
+
+        var targetUserAndProblem = dto.TargetUserAndProblem?.Trim();
+        var suitabilityReason = dto.SuitabilityReason?.Trim();
+        var evidence = dto.Evidence?.Trim();
+        var validationExperiment = dto.ValidationExperiment?.Trim();
+        var replacedCommitment = dto.ReplacedCommitment?.Trim();
 
         var missing = new List<string>();
-        if (string.IsNullOrWhiteSpace(idea.TargetUserAndProblem)) missing.Add("a specific user and problem");
-        if (string.IsNullOrWhiteSpace(idea.SuitabilityReason)) missing.Add("a reason you are suited to build or write it");
-        if (string.IsNullOrWhiteSpace(idea.Evidence)) missing.Add("one piece of real evidence");
-        if (string.IsNullOrWhiteSpace(idea.ValidationExperiment)) missing.Add("a small validation experiment");
-        if (string.IsNullOrWhiteSpace(idea.ReplacedCommitment)) missing.Add("what existing commitment it will replace");
+        if (string.IsNullOrWhiteSpace(targetUserAndProblem)) missing.Add("a specific user and problem");
+        if (string.IsNullOrWhiteSpace(suitabilityReason)) missing.Add("a reason you are suited to build or write it");
+        if (string.IsNullOrWhiteSpace(evidence)) missing.Add("one piece of real evidence");
+        if (string.IsNullOrWhiteSpace(validationExperiment)) missing.Add("a small validation experiment");
+        if (string.IsNullOrWhiteSpace(replacedCommitment)) missing.Add("what existing commitment it will replace");
 
         if (missing.Count > 0)
             throw new InvalidOperationException(
-                $"Idea '{id}' cannot be committed yet. Missing: {string.Join("; ", missing)}.");
+                $"Idea '{dto.Id}' cannot be committed yet. Missing: {string.Join("; ", missing)}.");
+
+        if (dto.RowVersion is not null)
+            context.Entry(idea).Property(i => i.RowVersion).OriginalValue = dto.RowVersion;
+
+        idea.TargetUserAndProblem = targetUserAndProblem;
+        idea.SuitabilityReason = suitabilityReason;
+        idea.Evidence = evidence;
+        idea.ValidationExperiment = validationExperiment;
+        idea.ReplacedCommitment = replacedCommitment;
 
         var project = new Project
         {
@@ -375,7 +394,16 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         idea.Competitors  = null;
         idea.Notes        = null;
 
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            context.Entry(project).State = EntityState.Detached;
+            context.Entry(idea).State = EntityState.Detached;
+            throw new ConcurrencyConflictException("idea", ex);
+        }
 
         string? areaName = null;
         if (idea.AreaId.HasValue)

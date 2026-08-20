@@ -443,7 +443,7 @@
                                             @if (!idea.IsArchived && idea.Status != IdeaStatus.Committed)
                                             {
                                                 <button class="ip-btn-action ip-btn-action--convert" title="Commit to Project"
-                                                        @onclick="() => ConfirmConvert(idea)">
+                                                        @onclick="() => OpenCommitDialogAsync(idea)">
                                                     <MudIcon Icon="@Icons.Material.Outlined.AccountTree" Size="Size.Small" />
                                                 </button>
                                             }
@@ -701,25 +701,28 @@
         }
     }
 
-    private async Task ConfirmConvert(IdeaDto idea)
+    private async Task OpenCommitDialogAsync(IdeaDto idea)
     {
-        var confirmed = await DialogService.ShowMessageBox(
-            "Commit to Project",
-            $"Commit \"{idea.Title}\" into a new project? The idea's bulky content will move to the project — only a link and the decision record will remain here.",
-            yesText: "Commit", cancelText: "Cancel");
-
-        if (confirmed == true)
+        var parameters = new DialogParameters<CommitIdeaToProjectDialog>
         {
-            try
-            {
-                await IdeaService.CommitToProjectAsync(idea.Id);
-                Snackbar.Add($"\"{idea.Title}\" committed to a project.", Severity.Success);
-                await LoadAsync();
-            }
-            catch (InvalidOperationException ex)
-            {
-                Snackbar.Add(ex.Message, Severity.Error);
-            }
+            { dialog => dialog.IdeaId, idea.Id }
+        };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true,
+            CloseOnEscapeKey = true
+        };
+        var dialog = await DialogService.ShowAsync<CommitIdeaToProjectDialog>(
+            "Commit to Project",
+            parameters,
+            options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add($"\"{idea.Title}\" committed to a project.", Severity.Success);
+            await LoadAsync();
         }
     }
 
