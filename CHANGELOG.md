@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.3.2] - 2026-08-20
+
+### Improved
+
+- **Action-item project context** — action items now include the linked task's project ID and name, making their project context available to consuming workflows.
+- **SQL Server query compatibility** — action-item retrieval now uses EF Core projections verified against SQL Server, with integration coverage for linked and unlinked task scenarios.
+
+---
+
 ## [5.3.1] - 2026-08-20
 
 ### Fixed
