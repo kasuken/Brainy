@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.5.0] - 2026-08-20
+
+### Added
+
+- **Neurodivergent-friendly product messaging** — the public site now highlights Brainy's frictionless capture, calm Today screen, predictable low-stimulation interface, and non-judgmental deadline support for ADHD and AuDHD users.
+- **Focus-support feature detail** — the Features page now includes a dedicated neurodivergent-friendly focus capability alongside Brainy's existing PARA and CODE workflows.
+
+### Improved
+
+- **Marketing stylesheet delivery** — public pages now load their dedicated styling reliably even when individual routes provide page titles and metadata.
+- **Marketing regression coverage** — production-surface verification now checks that the landing page serves its marketing stylesheet.
+
+---
+
 ## [5.4.0] - 2026-08-20
 
 ### Added
