@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.3.0] - 2026-08-20
+
+### Added
+
+- **Linked project access for committed ideas** — committed ideas in the Ideas page now show a direct `View project` link to the project created from the idea, making the transition from incubation to execution easier to follow.
+
+---
+
 ## [5.2.0] - 2026-08-20
 
 ### Added
