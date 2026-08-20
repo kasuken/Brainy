@@ -1,5 +1,18 @@
 # Changelog
 
+## [5.2.0] - 2026-08-20
+
+### Added
+
+- **Commit idea to project workflow** — ideas can now be converted into projects through a guided decision checkpoint covering the target user and problem, suitability, evidence, a validation experiment, and the commitment being replaced.
+- **Decision record preservation** — committed projects retain the idea's title, description, area, and five commitment decisions, while the original idea is marked as converted and its working research notes are cleared from active idea context.
+
+### Improved
+
+- **Idea conversion reliability** — added ownership-aware conversion handling, concurrency conflict reporting, and focused service and dialog coverage for the new workflow.
+
+---
+
 ## [5.1.0] - 2026-08-19
 
 ### Added
