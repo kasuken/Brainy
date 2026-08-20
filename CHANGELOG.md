@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.4.0] - 2026-08-20
+
+### Added
+
+- **Public Brainy marketing site** — a new responsive landing page introduces Brainy's PARA organization model, CODE workflow, and Today execution surface to prospective users.
+- **Features and pricing pages** — dedicated product and pricing routes provide a clearer path from product discovery to account registration.
+- **Marketing navigation shell** — public pages now share a branded header and footer with direct links to features, pricing, sign-in, and registration.
+
+### Improved
+
+- **Authenticated entry path** — signed-in visitors who reach the public landing page are redirected to Today, keeping active users focused on their work.
+- **Production-surface coverage** — added route and markup checks for the public marketing experience and its navigation.
+
+---
+
 ## [5.3.2] - 2026-08-20
 
 ### Improved
