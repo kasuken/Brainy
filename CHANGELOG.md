@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.3.1] - 2026-08-20
+
+### Fixed
+
+- **Current task focus switching** — selecting a different current task now reliably clears the prior selection before assigning the new one, preventing unique-index conflicts and preserving one active focus task per user.
+- **Focus-switching regression coverage** — added a service test that verifies the new current task is selected and the previous one is cleared.
+
+---
+
 ## [5.3.0] - 2026-08-20
 
 ### Added
