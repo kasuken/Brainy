@@ -1,12 +1,9 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Navigation
 
-@* Static marketing shell: masthead, page body, footer. The stylesheet is
-   injected via HeadContent so it only loads on marketing routes. *@
-
-<HeadContent>
-    <link rel="stylesheet" href="@Assets["marketing.css"]" />
-</HeadContent>
+@* Static marketing shell: masthead, page body, footer. marketing.css is linked
+   from App.razor for marketing endpoints — a layout HeadContent would be
+   discarded because each page's own HeadContent (title/meta) replaces it. *@
 
 <div class="mkt-root">
     <header class="mkt-header">

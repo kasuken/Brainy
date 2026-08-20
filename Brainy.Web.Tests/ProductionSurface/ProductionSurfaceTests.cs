@@ -89,6 +89,7 @@ public sealed class ProductionSurfaceTests(BrainyWebApplicationFactory factory)
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         content.Should().Contain("second brain");
+        content.Should().MatchRegex("href=\"marketing[^\"]*\\.css\"");
     }
 
     [Fact]

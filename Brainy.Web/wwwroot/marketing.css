@@ -990,6 +990,89 @@
     color: var(--mkt-ink-soft);
 }
 
+/* ── Neurodivergent focus section (pinned index cards) ──────────────────── */
+
+.mkt-nd {
+    background: var(--mkt-paper-sunk);
+    border-top: 1px solid var(--mkt-line-strong);
+    border-bottom: 1px solid var(--mkt-line-strong);
+}
+
+.mkt-nd-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+}
+
+.mkt-note-card {
+    position: relative;
+    background: var(--mkt-paper-raised);
+    border: 1px solid var(--mkt-line-strong);
+    border-radius: 4px;
+    padding: 2rem 1.4rem 1.6rem;
+    box-shadow: 0 2px 6px rgba(33, 29, 23, 0.07), 0 10px 22px rgba(33, 29, 23, 0.07);
+    transform: rotate(-1.1deg);
+    transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease;
+}
+
+.mkt-note-card:nth-child(even) {
+    transform: rotate(1deg);
+}
+
+.mkt-note-card:hover {
+    transform: rotate(0deg) translateY(-5px);
+    box-shadow: var(--mkt-shadow-md);
+}
+
+.mkt-note-card::before {
+    /* washi tape */
+    content: "";
+    position: absolute;
+    top: -0.6rem;
+    left: 50%;
+    width: 4.6rem;
+    height: 1.15rem;
+    transform: translateX(-50%) rotate(-2.5deg);
+    background: rgba(205, 154, 58, 0.4);
+    border-left: 1px dashed rgba(33, 29, 23, 0.15);
+    border-right: 1px dashed rgba(33, 29, 23, 0.15);
+}
+
+.mkt-note-card:nth-child(even)::before {
+    transform: translateX(-50%) rotate(2deg);
+    background: rgba(192, 86, 29, 0.28);
+}
+
+.mkt-note-card h3 {
+    font-family: var(--mkt-display);
+    font-weight: 620;
+    font-size: 1.22rem;
+    margin: 0 0 0.55rem;
+    padding-bottom: 0.55rem;
+    border-bottom: 1px solid var(--mkt-line);
+}
+
+.mkt-note-card p {
+    margin: 0;
+    font-size: 0.92rem;
+    color: var(--mkt-ink-soft);
+}
+
+.mkt-nd__note {
+    margin: 2.75rem auto 0;
+    max-width: 34em;
+    text-align: center;
+    font-family: var(--mkt-display);
+    font-style: italic;
+    font-size: clamp(1.15rem, 2vw, 1.4rem);
+    color: var(--mkt-ink);
+}
+
+.mkt-nd__note strong {
+    color: var(--mkt-clay);
+    font-weight: 640;
+}
+
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 
 @media (max-width: 960px) {
@@ -1002,7 +1085,8 @@
     }
 
     .mkt-code-grid,
-    .mkt-para-grid {
+    .mkt-para-grid,
+    .mkt-nd-grid {
         grid-template-columns: repeat(2, 1fr);
     }
 
@@ -1031,7 +1115,8 @@
     }
 
     .mkt-code-grid,
-    .mkt-para-grid {
+    .mkt-para-grid,
+    .mkt-nd-grid {
         grid-template-columns: 1fr;
     }
 

@@ -19,6 +19,10 @@
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["brainy-design.css"]" />
     <link rel="stylesheet" href="@Assets["Brainy.Web.styles.css"]" />
+    @if (IsMarketingPage)
+    {
+        <link rel="stylesheet" href="@Assets["marketing.css"]" />
+    }
     <ImportMap />
     <link rel="manifest" href="@Assets["manifest.webmanifest"]" />
     <link rel="icon" type="image/png" href="img/logo.png" />
@@ -84,4 +88,12 @@
     // statically so server-side form posts and HttpContext access keep working.
     private IComponentRenderMode? PageRenderMode =>
         HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
+
+    // Marketing pages carry a dedicated stylesheet. It is linked here instead of
+    // via HeadContent in MarketingLayout because only the last-rendered
+    // HeadContent is applied — each page's own title/meta would replace it.
+    private bool IsMarketingPage =>
+        HttpContext.GetEndpoint()?.Metadata
+            .GetMetadata<Microsoft.AspNetCore.Components.Endpoints.ComponentTypeMetadata>()?
+            .Type.Namespace?.StartsWith("Brainy.Web.Components.Marketing", StringComparison.Ordinal) == true;
 }
