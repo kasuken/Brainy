@@ -233,6 +233,19 @@
     .ip-status--rejected { background: rgba(176,58,24,.10); color: #b03a18; }
     .ip-status--shipped { background: rgba(58,123,205,.14); color: #1a5aa0; }
 
+    .ip-project-link {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        margin-top: 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--clay, #c0561d);
+        text-decoration: none;
+        transition: opacity 0.15s;
+    }
+    .ip-project-link:hover { opacity: 0.7; text-decoration: underline; }
+
     .ip-actions {
         display: flex;
         gap: 0.4rem;
@@ -431,6 +444,13 @@
                                         <span class="ip-badge ip-status--@idea.Status.ToString().ToLowerInvariant()">
                                             @FormatStatus(idea.Status)
                                         </span>
+                                        @if (idea.Status == IdeaStatus.Committed && idea.CommittedProjectId.HasValue)
+                                        {
+                                            <a href="@($"/projects/{idea.CommittedProjectId}")" class="ip-project-link">
+                                                <MudIcon Icon="@Icons.Material.Outlined.AccountTree" Size="Size.Small" />
+                                                View project
+                                            </a>
+                                        }
                                     </td>
                                     <td>
                                         <div class="ip-actions" style="justify-content:flex-end;">
