@@ -414,6 +414,26 @@ public class TaskServiceTests
     }
 
     [Fact]
+    public async Task SetCurrentTaskAsync_WhenAnotherTaskIsCurrent_SwitchesFocusToNewTask()
+    {
+        var (sut, db) = BuildService(nameof(SetCurrentTaskAsync_WhenAnotherTaskIsCurrent_SwitchesFocusToNewTask));
+        var project = CreateProject(DefaultUserId);
+        var current = CreateTask(project.Id, DefaultUserId, TaskItemStatus.InProgress);
+        current.IsCurrentTask = true;
+        var next = CreateTask(project.Id, DefaultUserId, TaskItemStatus.Todo);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(current, next);
+        await db.SaveChangesAsync();
+
+        await sut.SetCurrentTaskAsync(next.Id);
+
+        var tasks = await db.Tasks.AsNoTracking().Where(t => t.ProjectId == project.Id).ToListAsync();
+        tasks.Single(t => t.Id == next.Id).IsCurrentTask.Should().BeTrue();
+        tasks.Single(t => t.Id == current.Id).IsCurrentTask.Should().BeFalse();
+        tasks.Count(t => t.IsCurrentTask).Should().Be(1);
+    }
+
+    [Fact]
     public async Task ArchiveAndRestoreAsync_RestoresOnlyTasksFromSameArchiveOperation()
     {
         var (sut, db) = BuildService(nameof(ArchiveAndRestoreAsync_RestoresOnlyTasksFromSameArchiveOperation));

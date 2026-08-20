@@ -678,8 +678,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        // Load and validate the target before changing the existing current task. All
-        // flag changes are persisted in one SaveChanges transaction.
+        // Load and validate the target before changing the existing current task.
         var candidates = await context.Tasks
             .Include(t => t.Project)
             .Where(t => t.UserId == userId && (t.Id == taskId || t.IsCurrentTask))
@@ -692,8 +691,20 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         if (task.IsArchived || task.Project.IsArchived || task.Status is TaskItemStatus.Done or TaskItemStatus.Archived)
             throw new InvalidOperationException("Only an active, incomplete task can be set as the current task.");
 
-        foreach (var current in candidates.Where(t => t.IsCurrentTask && t.Id != taskId))
-            current.IsCurrentTask = false;
+        var previousCurrent = candidates.Where(t => t.IsCurrentTask && t.Id != taskId).ToList();
+        if (previousCurrent.Count > 0)
+        {
+            // Persist clearing the previous current task(s) in its own SaveChanges call,
+            // strictly before the new flag is set below. The unique filtered index on
+            // Task (UserId WHERE IsCurrentTask = 1) allows only one current task per
+            // user, and EF Core does not guarantee statement order between unrelated
+            // tracked-entity updates within a single SaveChanges batch — flipping both
+            // flags in one call can transiently violate the index and fail the switch.
+            foreach (var previous in previousCurrent)
+                previous.IsCurrentTask = false;
+
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         if (task.Status != TaskItemStatus.InProgress)
         {
