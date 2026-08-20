@@ -1,0 +1,75 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+
+@* Static marketing shell: masthead, page body, footer. The stylesheet is
+   injected via HeadContent so it only loads on marketing routes. *@
+
+<HeadContent>
+    <link rel="stylesheet" href="@Assets["marketing.css"]" />
+</HeadContent>
+
+<div class="mkt-root">
+    <header class="mkt-header">
+        <div class="mkt-wrap mkt-header__inner">
+            <a class="mkt-wordmark" href="/">
+                <img src="img/logo.png" alt="Brainy logo" />
+                Brainy
+            </a>
+            <nav class="mkt-nav" aria-label="Marketing">
+                <a class="mkt-nav__link mkt-nav__link--collapsible" href="/features" aria-current="@AriaCurrent("/features")">Features</a>
+                <a class="mkt-nav__link mkt-nav__link--collapsible" href="/pricing" aria-current="@AriaCurrent("/pricing")">Pricing</a>
+                <a class="mkt-nav__link" href="/Account/Login">Sign in</a>
+                <a class="mkt-btn mkt-btn--primary mkt-btn--sm" href="/Account/Register">Get started</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        @Body
+    </main>
+
+    <footer class="mkt-footer">
+        <div class="mkt-wrap">
+            <div class="mkt-footer__grid">
+                <div class="mkt-footer__brand">
+                    <a class="mkt-wordmark" href="/">
+                        <img src="img/logo.png" alt="Brainy logo" />
+                        Brainy
+                    </a>
+                    <p>
+                        A practical second brain for professionals. Capture fast, organize
+                        with PARA, distill what matters, and turn what you know into real output.
+                    </p>
+                </div>
+                <div class="mkt-footer__links">
+                    <div>
+                        <h4>Product</h4>
+                        <ul>
+                            <li><a href="/features">Features</a></li>
+                            <li><a href="/pricing">Pricing</a></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4>Account</h4>
+                        <ul>
+                            <li><a href="/Account/Login">Sign in</a></li>
+                            <li><a href="/Account/Register">Create account</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="mkt-footer__legal">
+                <span>© @DateTime.UtcNow.Year Brainy. All rights reserved.</span>
+                <span>Built on the PARA method &amp; the CODE workflow.</span>
+            </div>
+        </div>
+    </footer>
+</div>
+
+@code {
+    private string? AriaCurrent(string path)
+        => string.Equals(Navigation.ToBaseRelativePath(Navigation.Uri).TrimEnd('/'),
+                         path.TrimStart('/'), StringComparison.OrdinalIgnoreCase)
+            ? "page"
+            : null;
+}

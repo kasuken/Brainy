@@ -76,6 +76,70 @@ public sealed class ProductionSurfaceTests(BrainyWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task AnonymousLandingPageRendersMarketingContent()
+    {
+        using var client = factory.CreateClient(new()
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        using var response = await client.GetAsync("/");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("second brain");
+    }
+
+    [Fact]
+    public async Task AnonymousFeaturesPageRendersStatically()
+    {
+        using var client = factory.CreateClient(new()
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        using var response = await client.GetAsync("/features");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("Everything a second brain needs");
+    }
+
+    [Fact]
+    public async Task AnonymousPricingPageRendersStatically()
+    {
+        using var client = factory.CreateClient(new()
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        using var response = await client.GetAsync("/pricing");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("Most popular");
+    }
+
+    [Fact]
+    public async Task TodayPageRequiresAuthentication()
+    {
+        using var client = factory.CreateClient(new()
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        using var response = await client.GetAsync("/today");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        response.Headers.Location?.AbsolutePath.Should().Be("/Account/Login");
+        response.Headers.Location?.Query.Should().Contain("ReturnUrl=%2Ftoday");
+    }
+
+    [Fact]
     public async Task LlmFocusPageRequiresAuthentication()
     {
         using var client = factory.CreateClient(new()
