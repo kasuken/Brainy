@@ -76,7 +76,7 @@ else
 
     private bool RegistrationEnabled => Configuration.GetValue("Identity:AllowRegistration", false);
 
-    [SupplyParameterFromForm]
+    [SupplyParameterFromForm(Name = nameof(FormInput))]
     private InputModel? Input { get; set; }
 
     private InputModel FormInput => Input ??= new();

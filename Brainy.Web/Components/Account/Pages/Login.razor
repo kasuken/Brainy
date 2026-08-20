@@ -73,7 +73,7 @@
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
 
-    [SupplyParameterFromForm]
+    [SupplyParameterFromForm(Name = nameof(FormInput))]
     private InputModel? Input { get; set; }
 
     private InputModel FormInput => Input ??= new();

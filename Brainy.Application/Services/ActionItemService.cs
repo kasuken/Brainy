@@ -33,11 +33,26 @@ internal sealed class ActionItemService(
         if (!noteExists)
             throw new KeyNotFoundException($"Note '{noteId}' was not found.");
 
-        return await QueryDtos(userId)
-            .Where(action => action.NoteId == noteId)
+        return await context.ActionItems.AsNoTracking()
+            .Where(action => action.UserId == userId && action.NoteId == noteId)
             .OrderBy(action => action.Status == ActionItemStatus.Done)
             .ThenBy(action => action.Status == ActionItemStatus.Dismissed)
             .ThenByDescending(action => action.CreatedAtUtc)
+            .Select(action => new ActionItemDto(
+                action.Id,
+                action.NoteId!.Value,
+                action.Title,
+                action.Description,
+                action.Status,
+                action.IsAiGenerated,
+                action.Model,
+                action.PromptVersion,
+                action.TaskItemId,
+                action.TaskItem != null ? action.TaskItem.ProjectId : null,
+                action.TaskItem != null ? action.TaskItem.Project.Name : null,
+                action.CreatedAtUtc,
+                action.UpdatedAtUtc,
+                action.RowVersion))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -224,9 +239,10 @@ internal sealed class ActionItemService(
         return ToDto(action, project.Id, project.Name);
     }
 
-    private IQueryable<ActionItemDto> QueryDtos(string userId) =>
+    private IQueryable<ActionItemDto> QueryDtos(string userId, Guid? id = null) =>
         context.ActionItems.AsNoTracking()
             .Where(action => action.UserId == userId && action.NoteId.HasValue)
+            .Where(action => id == null || action.Id == id)
             .Select(action => new ActionItemDto(
                 action.Id,
                 action.NoteId!.Value,
@@ -247,8 +263,8 @@ internal sealed class ActionItemService(
         Guid id,
         string userId,
         CancellationToken cancellationToken) =>
-        await QueryDtos(userId)
-            .FirstAsync(action => action.Id == id, cancellationToken)
+        await QueryDtos(userId, id: id)
+            .FirstAsync(cancellationToken)
             .ConfigureAwait(false);
 
     private async Task EnsureOwnedNoteAsync(
