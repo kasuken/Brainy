@@ -59,7 +59,7 @@ public sealed class ProductionSurfaceTests(BrainyWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task ProductionRegistrationIsClosedByDefault()
+    public async Task ProductionRegistrationIsOpen()
     {
         using var client = factory.CreateClient(new()
         {
@@ -71,8 +71,8 @@ public sealed class ProductionSurfaceTests(BrainyWebApplicationFactory factory)
         var content = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        content.Should().Contain("Registration is closed");
-        content.Should().NotContain("Create account");
+        content.Should().NotContain("Registration is closed");
+        content.Should().Contain("Create account");
     }
 
     [Fact]
