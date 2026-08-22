@@ -42,7 +42,9 @@ public static class DependencyInjection
         services.AddScoped<ICurrentTaskRecommendationService, CurrentTaskRecommendationService>();
         services.AddScoped<ITodayNotificationService, TodayNotificationService>();
         services.AddScoped<IUserDashboardPreferenceService, UserDashboardPreferenceService>();
-        services.AddScoped<IUserTimeZoneService, UserTimeZoneService>();
+        // Layouts and pages resolve this service concurrently during Blazor SSR.
+        // Keep its captured transient DbContext isolated per consumer.
+        services.AddTransient<IUserTimeZoneService, UserTimeZoneService>();
         services.AddScoped<IArchiveRetentionService, ArchiveRetentionService>();
         services.AddScoped<IInboxMetricsService, InboxMetricsService>();
         services.AddScoped<IInboxSuggestionsService, InboxSuggestionsService>();

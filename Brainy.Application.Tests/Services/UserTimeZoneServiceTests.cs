@@ -14,6 +14,17 @@ public sealed class UserTimeZoneServiceTests
 {
     private const string UserId = "timezone-user";
 
+    [Fact]
+    public void AddBrainyApplication_RegistersUserTimeZoneServiceAsTransient()
+    {
+        var services = new ServiceCollection();
+
+        services.AddBrainyApplication();
+
+        var registration = services.Single(service => service.ServiceType == typeof(IUserTimeZoneService));
+        registration.Lifetime.Should().Be(ServiceLifetime.Transient);
+    }
+
     private static (IUserTimeZoneService Sut, BrainyDbContext Db) BuildService(
         string databaseName,
         DateTimeOffset now)
