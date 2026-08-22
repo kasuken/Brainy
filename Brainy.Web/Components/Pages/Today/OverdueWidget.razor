@@ -40,12 +40,10 @@
                                 </span>
                             }
                         </div>
-                        @if (t.OverdueSubtaskCount > 0)
+                        @if (t.Subtasks.Count > 0)
                         {
-                            <div class="td-task-subtask-hint td-task-subtask-hint--overdue">
-                                <MudIcon Icon="@Icons.Material.Outlined.SubdirectoryArrowRight" Size="Size.Small" />
-                                <span>@t.OverdueSubtaskCount subtask@(t.OverdueSubtaskCount == 1 ? "" : "s") overdue — open to review</span>
-                            </div>
+                            <TaskSubtaskList Subtasks="t.Subtasks" Today="Today"
+                                             OnComplete="OnComplete" OnReopen="OnReopen" OnSetInProgress="OnSetInProgress" />
                         }
                     </div>
                     <MudTooltip Text="Edit task">
@@ -75,6 +73,9 @@
 
     /// <summary>Raised with the task ID when the user marks a task complete.</summary>
     [Parameter] public EventCallback<Guid> OnComplete { get; set; }
+
+    /// <summary>Raised with a subtask ID when the user unchecks a completed subtask.</summary>
+    [Parameter] public EventCallback<Guid> OnReopen { get; set; }
 
     /// <summary>Raised with the task ID when the user sets a task as In Progress.</summary>
     [Parameter] public EventCallback<Guid> OnSetInProgress { get; set; }

@@ -169,11 +169,14 @@ internal sealed class TodayService(
         // section it must not be repeated lower down. Precedence mirrors the Today
         // rendering order: Current focus -> In progress -> Overdue -> Due today ->
         // High priority -> This week -> Coming up.
+        // The Current focus task is intentionally NOT excluded from In Progress: it
+        // should always be visible there too when its status is In Progress. It is
+        // still excluded from every section below In Progress.
         var seen = new HashSet<Guid>();
+        inProgress = ExcludeSeen(inProgress, seen);
         if (currentTask is not null)
             seen.Add(currentTask.Id);
 
-        inProgress       = ExcludeSeen(inProgress, seen);
         overdue          = ExcludeSeen(overdue, seen);
         dueToday         = ExcludeSeen(dueToday, seen);
         highPriorityWork = ExcludeSeen(highPriorityWork, seen);
@@ -273,5 +276,10 @@ internal sealed class TodayService(
                 .Where(s => !s.IsArchived && s.Status != TaskItemStatus.Done && s.Status != TaskItemStatus.Archived)
                 .OrderBy(s => s.SortOrder)
                 .Select(s => s.Title)
-                .FirstOrDefault());
+                .FirstOrDefault(),
+            t.Subtasks
+                .Where(s => !s.IsArchived)
+                .OrderBy(s => s.SortOrder)
+                .Select(s => new TodaySubtaskItemDto(s.Id, s.Title, s.Status, s.DueDate))
+                .ToList());
 }

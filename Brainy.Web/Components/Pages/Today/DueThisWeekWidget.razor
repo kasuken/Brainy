@@ -43,6 +43,11 @@
                                         <span class="td-task-due">@t.DueDate.Value.ToString("ddd, MMM d")</span>
                                     }
                                 </div>
+                                @if (t.Subtasks.Count > 0)
+                                {
+                                    <TaskSubtaskList Subtasks="t.Subtasks"
+                                                     OnComplete="OnComplete" OnReopen="OnReopen" OnSetInProgress="OnSetInProgress" />
+                                }
                             </div>
                             <MudTooltip Text="Edit task">
                                 <MudIconButton Icon="@Icons.Material.Outlined.Edit"
@@ -73,6 +78,9 @@
 
     /// <summary>Raised with the task ID when the user marks a task complete.</summary>
     [Parameter] public EventCallback<Guid> OnComplete { get; set; }
+
+    /// <summary>Raised with a subtask ID when the user unchecks a completed subtask.</summary>
+    [Parameter] public EventCallback<Guid> OnReopen { get; set; }
 
     /// <summary>Raised with the task ID when the user sets a task as In Progress.</summary>
     [Parameter] public EventCallback<Guid> OnSetInProgress { get; set; }

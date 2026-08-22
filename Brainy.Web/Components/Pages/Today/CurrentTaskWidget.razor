@@ -54,10 +54,13 @@
                 }
 
                 <div class="td-focus-next-step" style="margin-bottom:0.9rem;">
-                    @if (!string.IsNullOrWhiteSpace(Task.NextSubtaskTitle))
+                    @if (Task.Subtasks.Count > 0)
                     {
-                        <span class="td-focus-next-step-label">Continue with:</span>
-                        <span class="td-focus-next-step-text">@Task.NextSubtaskTitle</span>
+                        <span class="td-focus-next-step-label">Subtasks:</span>
+                        <TaskSubtaskList Subtasks="Task.Subtasks" Today="Today"
+                                         OnComplete="HandleSubtaskCompleteAsync"
+                                         OnReopen="HandleSubtaskReopenAsync"
+                                         OnSetInProgress="HandleSubtaskSetInProgressAsync" />
                     }
                     else if (!string.IsNullOrWhiteSpace(Task.Description))
                     {
@@ -336,6 +339,48 @@
             Snackbar.Add("Could not clear focus.", Severity.Error);
         }
         finally { _busy = false; }
+    }
+
+    private async Task HandleSubtaskCompleteAsync(Guid subtaskId)
+    {
+        try
+        {
+            await TaskService.CompleteAsync(subtaskId);
+            Snackbar.Add("Subtask completed.", Severity.Success);
+            await OnChanged.InvokeAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not complete subtask.", Severity.Error);
+        }
+    }
+
+    private async Task HandleSubtaskReopenAsync(Guid subtaskId)
+    {
+        try
+        {
+            await TaskService.ReopenAsync(subtaskId);
+            Snackbar.Add("Subtask reopened.", Severity.Info);
+            await OnChanged.InvokeAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not reopen subtask.", Severity.Error);
+        }
+    }
+
+    private async Task HandleSubtaskSetInProgressAsync(Guid subtaskId)
+    {
+        try
+        {
+            await TaskService.SetInProgressAsync(subtaskId);
+            Snackbar.Add("Subtask moved to In Progress.", Severity.Info);
+            await OnChanged.InvokeAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not update subtask.", Severity.Error);
+        }
     }
 
     private async Task HandleSetFocusAsync()

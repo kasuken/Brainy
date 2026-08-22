@@ -18,4 +18,9 @@ public record TodayTaskItemDto(
     DateTime CreatedAtUtc,
     int OverdueSubtaskCount = 0,
     int DueTodaySubtaskCount = 0,
-    string? NextSubtaskTitle = null);
+    string? NextSubtaskTitle = null,
+    IReadOnlyList<TodaySubtaskItemDto>? Subtasks = null)
+{
+    /// <summary>Non-archived subtasks, ordered for display within the parent task's card.</summary>
+    public IReadOnlyList<TodaySubtaskItemDto> Subtasks { get; init; } = Subtasks ?? [];
+}

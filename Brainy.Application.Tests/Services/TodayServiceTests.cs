@@ -485,4 +485,47 @@ public class TodayServiceTests
         // Assert
         result.Should().BeEmpty();
     }
+
+    // ── Current focus / In Progress overlap ───────────────────────────────────
+
+    [Fact]
+    public async Task GetTodayAggregateAsync_WhenCurrentTaskIsInProgress_AlsoAppearsInInProgress()
+    {
+        // Arrange
+        var (sut, db) = BuildService(nameof(GetTodayAggregateAsync_WhenCurrentTaskIsInProgress_AlsoAppearsInInProgress));
+        var project = CreateProject(DefaultUserId);
+        var focusTask = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.InProgress);
+        focusTask.IsCurrentTask = true;
+        db.Projects.Add(project);
+        db.Tasks.Add(focusTask);
+        await db.SaveChangesAsync();
+
+        // Act
+        var result = await sut.GetTodayAggregateAsync();
+
+        // Assert
+        result.CurrentTask.Should().NotBeNull();
+        result.CurrentTask!.Id.Should().Be(focusTask.Id);
+        result.InProgress.Should().ContainSingle().Which.Id.Should().Be(focusTask.Id);
+    }
+
+    [Fact]
+    public async Task GetTodayAggregateAsync_WhenCurrentTaskOverdue_ExcludesItFromOverdueSection()
+    {
+        // Arrange
+        var (sut, db) = BuildService(nameof(GetTodayAggregateAsync_WhenCurrentTaskOverdue_ExcludesItFromOverdueSection));
+        var project = CreateProject(DefaultUserId);
+        var focusTask = CreateTask(project.Id, DefaultUserId, dueDate: Today.AddDays(-1));
+        focusTask.IsCurrentTask = true;
+        db.Projects.Add(project);
+        db.Tasks.Add(focusTask);
+        await db.SaveChangesAsync();
+
+        // Act
+        var result = await sut.GetTodayAggregateAsync();
+
+        // Assert
+        result.CurrentTask.Should().NotBeNull();
+        result.Overdue.Should().BeEmpty();
+    }
 }

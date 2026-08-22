@@ -459,6 +459,8 @@
                         <InProgressWidget Tasks="_aggregate?.InProgress ?? []"
                                           Today="_today"
                                           OnComplete="HandleCompleted"
+                                          OnReopen="HandleReopen"
+                                          OnSetInProgress="HandleSetInProgress"
                                           OnEdit="OpenEditTaskDialogAsync" />
                     }
 
@@ -467,6 +469,7 @@
                         <OverdueWidget Tasks="_aggregate?.Overdue ?? []"
                                        Today="_today"
                                        OnComplete="HandleCompleted"
+                                       OnReopen="HandleReopen"
                                        OnSetInProgress="HandleSetInProgress"
                                        OnEdit="OpenEditTaskDialogAsync" />
                     }
@@ -481,6 +484,7 @@
                     {
                         <DueTodayWidget Tasks="_aggregate?.DueToday ?? []"
                                         OnComplete="HandleCompleted"
+                                        OnReopen="HandleReopen"
                                         OnSetInProgress="HandleSetInProgress"
                                         OnEdit="OpenEditTaskDialogAsync" />
                     }
@@ -490,6 +494,7 @@
                         <HighPriorityProjectWorkWidget Tasks="_aggregate?.HighPriorityWork ?? []"
                                                        Today="_today"
                                                        OnComplete="HandleCompleted"
+                                                       OnReopen="HandleReopen"
                                                        OnSetInProgress="HandleSetInProgress"
                                                        OnEdit="OpenEditTaskDialogAsync" />
                     }
@@ -498,6 +503,7 @@
                     {
                         <DueThisWeekWidget Tasks="_aggregate?.DueThisWeek ?? []"
                                            OnComplete="HandleCompleted"
+                                           OnReopen="HandleReopen"
                                            OnSetInProgress="HandleSetInProgress"
                                            OnEdit="OpenEditTaskDialogAsync" />
                     }
@@ -505,6 +511,8 @@
                     @if (IsWidgetVisible(NextTasksWidgetKey))
                     {
                         <NextTasksWidget Tasks="_aggregate?.NextTasks ?? []"
+                                         OnComplete="HandleCompleted"
+                                         OnReopen="HandleReopen"
                                          OnSetInProgress="HandleSetInProgress"
                                          OnEdit="OpenEditTaskDialogAsync" />
                     }
@@ -750,6 +758,20 @@
         catch
         {
             Snackbar.Add("Could not update task.", Severity.Error);
+        }
+    }
+
+    private async Task HandleReopen(Guid taskId)
+    {
+        try
+        {
+            await TaskService.ReopenAsync(taskId);
+            Snackbar.Add("Task reopened.", Severity.Info);
+            await LoadAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Could not reopen task.", Severity.Error);
         }
     }
 

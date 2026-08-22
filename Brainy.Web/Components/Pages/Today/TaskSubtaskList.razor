@@ -1,0 +1,104 @@
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Domain.Enums
+
+@* ─────────────────────────────────────────────────────────────────────────────
+   TaskSubtaskList — renders a parent task's subtasks inline inside its own card
+   (never as separate cards) and lets the user change each subtask's status
+   directly from Today: complete, reopen, or set in progress.
+───────────────────────────────────────────────────────────────────────────── *@
+
+@if (Subtasks.Count > 0)
+{
+    <div class="td-subtask-list">
+        @foreach (var s in Subtasks)
+        {
+            var isDone = s.Status == TaskItemStatus.Done;
+            <div class="td-subtask-row">
+                <MudCheckBox T="bool" Value="isDone" Dense="true" Size="Size.Small"
+                             Color="Color.Success"
+                             ValueChanged="@(v => HandleToggleAsync(s.Id, v))" />
+                <span class="td-subtask-title @(isDone ? "td-subtask-title--done" : "")">@s.Title</span>
+                @if (s.DueDate.HasValue)
+                {
+                    <span class="td-subtask-due @(s.DueDate.Value.Date < Today && !isDone ? "td-subtask-due--overdue" : "")">
+                        @s.DueDate.Value.ToString("MMM d")
+                    </span>
+                }
+                @if (!isDone && s.Status != TaskItemStatus.InProgress)
+                {
+                    <MudTooltip Text="Set In Progress">
+                        <MudIconButton Icon="@Icons.Material.Outlined.PlayArrow" Size="Size.Small"
+                                       OnClick="() => OnSetInProgress.InvokeAsync(s.Id)" />
+                    </MudTooltip>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>The parent task's non-archived subtasks, in display order.</summary>
+    [Parameter] public IReadOnlyList<TodaySubtaskItemDto> Subtasks { get; set; } = [];
+
+    /// <summary>Raised with the subtask ID when the user marks it complete.</summary>
+    [Parameter] public EventCallback<Guid> OnComplete { get; set; }
+
+    /// <summary>Raised with the subtask ID when the user unchecks a completed subtask.</summary>
+    [Parameter] public EventCallback<Guid> OnReopen { get; set; }
+
+    /// <summary>Raised with the subtask ID when the user sets a subtask as In Progress.</summary>
+    [Parameter] public EventCallback<Guid> OnSetInProgress { get; set; }
+
+    /// <summary>The user's current calendar date (their timezone), used for overdue styling.</summary>
+    [Parameter] public DateTime Today { get; set; } = DateTime.Today;
+
+    private Task HandleToggleAsync(Guid subtaskId, bool isChecked) =>
+        isChecked ? OnComplete.InvokeAsync(subtaskId) : OnReopen.InvokeAsync(subtaskId);
+}
+
+<style>
+    .td-subtask-list {
+        margin-top: 0.5rem;
+        padding-left: 0.5rem;
+        border-left: 2px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+    }
+
+    .td-subtask-row {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.8rem;
+    }
+
+    .td-subtask-row .mud-checkbox {
+        padding: 2px;
+    }
+
+    .td-subtask-title {
+        flex: 1;
+        min-width: 0;
+        color: var(--ink-soft, var(--ink));
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .td-subtask-title--done {
+        text-decoration: line-through;
+        color: var(--ink-faint);
+    }
+
+    .td-subtask-due {
+        font-size: 0.7rem;
+        color: var(--ink-faint);
+        white-space: nowrap;
+    }
+
+    .td-subtask-due--overdue {
+        color: var(--mud-palette-error);
+        font-weight: 600;
+    }
+</style>
