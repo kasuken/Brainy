@@ -167,6 +167,44 @@ public class TasksHubServiceTests
     }
 
     [Fact]
+    public async Task GetActiveTasksAsync_WithBlockedProject_IncludedWhenScopeAllowsBlocked()
+    {
+        // Arrange
+        var (sut, db) = BuildService(nameof(GetActiveTasksAsync_WithBlockedProject_IncludedWhenScopeAllowsBlocked));
+        var project = CreateProject(DefaultUserId, status: ProjectStatus.Blocked);
+        var task = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Todo);
+        db.Projects.Add(project);
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync();
+
+        // Act
+        var result = await sut.GetActiveTasksAsync(TaskHubProjectScope.ActiveAndBlocked);
+
+        // Assert
+        result.Should().ContainSingle().Which.Id.Should().Be(task.Id);
+    }
+
+    [Fact]
+    public async Task GetActiveTasksAsync_WithParkedProject_IncludedOnlyWhenScopeAllowsParked()
+    {
+        // Arrange
+        var (sut, db) = BuildService(nameof(GetActiveTasksAsync_WithParkedProject_IncludedOnlyWhenScopeAllowsParked));
+        var project = CreateProject(DefaultUserId, status: ProjectStatus.Parked);
+        var task = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Todo);
+        db.Projects.Add(project);
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync();
+
+        // Act
+        var activeAndBlocked = await sut.GetActiveTasksAsync(TaskHubProjectScope.ActiveAndBlocked);
+        var includingParked = await sut.GetActiveTasksAsync(TaskHubProjectScope.ActiveBlockedAndParked);
+
+        // Assert
+        activeAndBlocked.Should().BeEmpty();
+        includingParked.Should().ContainSingle().Which.Id.Should().Be(task.Id);
+    }
+
+    [Fact]
     public async Task GetActiveTasksAsync_WithDoneTask_ExcludesIt()
     {
         // Arrange
@@ -823,6 +861,29 @@ public class TasksHubServiceTests
         // Assert
         result.TodoCount.Should().Be(1);
         result.InProgressCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetStatusSummaryAsync_WithBlockedProject_IncludedWhenScopeAllowsBlocked()
+    {
+        // Arrange
+        var (sut, db) = BuildService(nameof(GetStatusSummaryAsync_WithBlockedProject_IncludedWhenScopeAllowsBlocked));
+        var activeProject = CreateProject(DefaultUserId, status: ProjectStatus.Active);
+        var blockedProject = CreateProject(DefaultUserId, status: ProjectStatus.Blocked);
+
+        db.Projects.AddRange(activeProject, blockedProject);
+        db.Tasks.AddRange(
+            CreateTask(activeProject.Id, DefaultUserId, status: TaskItemStatus.Todo),
+            CreateTask(blockedProject.Id, DefaultUserId, status: TaskItemStatus.Todo));
+        await db.SaveChangesAsync();
+
+        // Act
+        var activeOnly = await sut.GetStatusSummaryAsync(TaskHubProjectScope.ActiveOnly);
+        var activeAndBlocked = await sut.GetStatusSummaryAsync(TaskHubProjectScope.ActiveAndBlocked);
+
+        // Assert
+        activeOnly.TodoCount.Should().Be(1);
+        activeAndBlocked.TodoCount.Should().Be(2);
     }
 
     // ── ComputeAttentionScore (pure unit tests, no DB) ────────────────────────

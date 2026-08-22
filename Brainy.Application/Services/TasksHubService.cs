@@ -13,7 +13,8 @@ namespace Brainy.Application.Services;
 
 /// <summary>
 /// Provides all aggregated task data and operations for the Tasks Hub dashboard.
-/// All active-task queries enforce: active project, non-archived task, top-level only.
+/// Active-task queries enforce non-archived task and top-level-only rules, with
+/// project lifecycle states controlled by <see cref="TaskHubProjectScope"/>.
 /// </summary>
 internal sealed class TasksHubService(
     IApplicationDbContext context,
@@ -33,17 +34,19 @@ internal sealed class TasksHubService(
     // Aggregate
     // ---------------------------------------------------------------------------
 
-    public async Task<TasksHubAggregateDto> GetHubAggregateAsync(CancellationToken cancellationToken = default)
+    public async Task<TasksHubAggregateDto> GetHubAggregateAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default)
     {
         // DbContext is not thread-safe — run sequentially.
-        var activeTasks       = await GetActiveTasksAsync(cancellationToken).ConfigureAwait(false);
-        var highPriorityTasks = await GetHighPriorityTasksAsync(cancellationToken).ConfigureAwait(false);
-        var onHoldTasks       = await GetOnHoldTasksAsync(cancellationToken).ConfigureAwait(false);
-        var overdueTasks      = await GetOverdueTasksAsync(cancellationToken).ConfigureAwait(false);
-        var needingAttention  = await GetTasksNeedingAttentionAsync(cancellationToken).ConfigureAwait(false);
-        var withoutDueDate    = await GetTasksWithoutDueDateAsync(cancellationToken).ConfigureAwait(false);
-        var staleTasks        = await GetStaleTasksAsync(cancellationToken).ConfigureAwait(false);
-        var statusSummary     = await GetStatusSummaryAsync(cancellationToken).ConfigureAwait(false);
+        var activeTasks       = await GetActiveTasksAsync(projectScope, cancellationToken).ConfigureAwait(false);
+        var highPriorityTasks = await GetHighPriorityTasksAsync(projectScope, cancellationToken).ConfigureAwait(false);
+        var onHoldTasks       = await GetOnHoldTasksAsync(projectScope, cancellationToken).ConfigureAwait(false);
+        var overdueTasks      = await GetOverdueTasksAsync(projectScope, cancellationToken).ConfigureAwait(false);
+        var needingAttention  = await GetTasksNeedingAttentionAsync(projectScope, cancellationToken).ConfigureAwait(false);
+        var withoutDueDate    = await GetTasksWithoutDueDateAsync(projectScope, cancellationToken).ConfigureAwait(false);
+        var staleTasks        = await GetStaleTasksAsync(projectScope, cancellationToken).ConfigureAwait(false);
+        var statusSummary     = await GetStatusSummaryAsync(projectScope, cancellationToken).ConfigureAwait(false);
 
         return new TasksHubAggregateDto(
             activeTasks, highPriorityTasks, onHoldTasks, overdueTasks,
@@ -54,11 +57,13 @@ internal sealed class TasksHubService(
     // Queries
     // ---------------------------------------------------------------------------
 
-    public async Task<IReadOnlyList<TasksHubTaskDto>> GetActiveTasksAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<TasksHubTaskDto>> GetActiveTasksAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId)
+        return await ActiveBase(userId, projectScope)
             .Where(t => !_inactiveStatuses.Contains(t.Status))
             .OrderByDescending(t => t.Priority)
             .ThenBy(t => t.DueDate)
@@ -67,11 +72,13 @@ internal sealed class TasksHubService(
             .ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<TasksHubTaskDto>> GetHighPriorityTasksAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<TasksHubTaskDto>> GetHighPriorityTasksAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId)
+        return await ActiveBase(userId, projectScope)
             .Where(t => t.Priority >= TaskPriority.High && !_inactiveStatuses.Contains(t.Status))
             .OrderByDescending(t => t.Priority)
             .ThenBy(t => t.DueDate)
@@ -80,11 +87,13 @@ internal sealed class TasksHubService(
             .ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<TasksHubTaskDto>> GetOnHoldTasksAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<TasksHubTaskDto>> GetOnHoldTasksAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId)
+        return await ActiveBase(userId, projectScope)
             .Where(t => t.Status == TaskItemStatus.Waiting)
             .OrderByDescending(t => t.Priority)
             .ThenBy(t => t.UpdatedAtUtc)
@@ -93,12 +102,14 @@ internal sealed class TasksHubService(
             .ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<TasksHubTaskDto>> GetOverdueTasksAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<TasksHubTaskDto>> GetOverdueTasksAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId)
+        return await ActiveBase(userId, projectScope)
             .Where(t => t.DueDate.HasValue && t.DueDate.Value.Date < today
                         && !_inactiveStatuses.Contains(t.Status))
             .OrderBy(t => t.DueDate)
@@ -107,27 +118,29 @@ internal sealed class TasksHubService(
             .ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<TasksHubTaskDto>> GetTasksNeedingAttentionAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<TasksHubTaskDto>> GetTasksNeedingAttentionAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
         // Fetch overdue, due-today, and critical tasks separately then union by Id.
-        var overdue = await ActiveBase(userId)
+        var overdue = await ActiveBase(userId, projectScope)
             .Where(t => t.DueDate.HasValue && t.DueDate.Value.Date < today
                         && !_inactiveStatuses.Contains(t.Status))
             .Select(ToDto)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var dueToday = await ActiveBase(userId)
+        var dueToday = await ActiveBase(userId, projectScope)
             .Where(t => t.DueDate.HasValue && t.DueDate.Value.Date == today
                         && !_inactiveStatuses.Contains(t.Status))
             .Select(ToDto)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var critical = await ActiveBase(userId)
+        var critical = await ActiveBase(userId, projectScope)
             .Where(t => t.Priority == TaskPriority.Critical && !_inactiveStatuses.Contains(t.Status))
             .Select(ToDto)
             .ToListAsync(cancellationToken)
@@ -144,11 +157,13 @@ internal sealed class TasksHubService(
         return result.OrderByDescending(t => t.Priority).ThenBy(t => t.DueDate).ToList();
     }
 
-    public async Task<IReadOnlyList<TasksHubTaskDto>> GetTasksWithoutDueDateAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<TasksHubTaskDto>> GetTasksWithoutDueDateAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId)
+        return await ActiveBase(userId, projectScope)
             .Where(t => !t.DueDate.HasValue && !_inactiveStatuses.Contains(t.Status))
             .OrderByDescending(t => t.Priority)
             .ThenBy(t => t.CreatedAtUtc)
@@ -157,12 +172,14 @@ internal sealed class TasksHubService(
             .ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<TasksHubTaskDto>> GetStaleTasksAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<TasksHubTaskDto>> GetStaleTasksAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var staleThreshold = timeProvider.GetUtcNow().UtcDateTime.AddDays(-30);
 
-        return await ActiveBase(userId)
+        return await ActiveBase(userId, projectScope)
             .Where(t => t.UpdatedAtUtc < staleThreshold && !_inactiveStatuses.Contains(t.Status))
             .OrderBy(t => t.UpdatedAtUtc)
             .Select(ToDto)
@@ -170,13 +187,14 @@ internal sealed class TasksHubService(
             .ConfigureAwait(false);
     }
 
-    public async Task<TaskStatusSummaryDto> GetStatusSummaryAsync(CancellationToken cancellationToken = default)
+    public async Task<TaskStatusSummaryDto> GetStatusSummaryAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var counts = await context.Tasks
+        var counts = await ScopedBase(userId, projectScope)
             .AsNoTracking()
-            .Where(t => t.UserId == userId && !t.IsArchived)
             .GroupBy(t => t.Status)
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken)
@@ -238,7 +256,11 @@ internal sealed class TasksHubService(
     // ---------------------------------------------------------------------------
 
     public async Task<PagedResult<TasksHubTaskDto>> SearchTasksAsync(
-        string searchTerm, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+        string searchTerm,
+        int page = 1,
+        int pageSize = 20,
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(searchTerm))
             return new PagedResult<TasksHubTaskDto>([], 0, page, pageSize);
@@ -248,7 +270,7 @@ internal sealed class TasksHubService(
         // database collation (and on the InMemory provider used in tests).
         var term = searchTerm.Trim().ToLower();
 
-        var query = ActiveBase(userId)
+        var query = ActiveBase(userId, projectScope)
             .Where(t => !_inactiveStatuses.Contains(t.Status)
                         && (t.Title.ToLower().Contains(term)
                             || (t.Description != null && t.Description.ToLower().Contains(term))));
@@ -267,12 +289,14 @@ internal sealed class TasksHubService(
     }
 
     public async Task<PagedResult<TasksHubTaskDto>> GetFilteredTasksAsync(
-        TasksHubFilterDto filter, CancellationToken cancellationToken = default)
+        TasksHubFilterDto filter,
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var query = ActiveBase(userId).AsQueryable();
+        var query = ActiveBase(userId, projectScope).AsQueryable();
 
         if (filter.ProjectId.HasValue)
             query = query.Where(t => t.ProjectId == filter.ProjectId.Value);
@@ -392,12 +416,32 @@ internal sealed class TasksHubService(
     // Helpers
     // ---------------------------------------------------------------------------
 
-    private IQueryable<TaskItem> ActiveBase(string userId) =>
-        context.Tasks
+    private IQueryable<TaskItem> ActiveBase(string userId, TaskHubProjectScope projectScope) =>
+        ScopedBase(userId, projectScope)
+            .Where(t => t.ParentTaskId == null);
+
+    private IQueryable<TaskItem> ScopedBase(string userId, TaskHubProjectScope projectScope) =>
+        ApplyProjectScope(
+            context.Tasks
             .AsNoTracking()
             .Where(t => t.UserId == userId
                         && !t.IsArchived
-                        && t.Project.Status == ProjectStatus.Active
-                        && !t.Project.IsArchived
-                        && t.ParentTaskId == null);
+                        && !t.Project.IsArchived),
+            projectScope);
+
+    private static IQueryable<TaskItem> ApplyProjectScope(
+        IQueryable<TaskItem> query,
+        TaskHubProjectScope projectScope) =>
+        projectScope switch
+        {
+            TaskHubProjectScope.ActiveOnly =>
+                query.Where(t => t.Project.Status == ProjectStatus.Active),
+            TaskHubProjectScope.ActiveAndBlocked =>
+                query.Where(t => t.Project.Status == ProjectStatus.Active || t.Project.Status == ProjectStatus.Blocked),
+            TaskHubProjectScope.ActiveBlockedAndParked =>
+                query.Where(t => t.Project.Status == ProjectStatus.Active
+                              || t.Project.Status == ProjectStatus.Blocked
+                              || t.Project.Status == ProjectStatus.Parked),
+            _ => query.Where(t => t.Project.Status == ProjectStatus.Active)
+        };
 }

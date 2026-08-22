@@ -7,31 +7,49 @@ namespace Brainy.Application.Interfaces.Services;
 public interface ITasksHubService
 {
     /// <summary>Returns the full hub aggregate for all active tasks.</summary>
-    Task<TasksHubAggregateDto> GetHubAggregateAsync(CancellationToken cancellationToken = default);
+    Task<TasksHubAggregateDto> GetHubAggregateAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Returns all active (non-archived, non-done) top-level tasks.</summary>
-    Task<IReadOnlyList<TasksHubTaskDto>> GetActiveTasksAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TasksHubTaskDto>> GetActiveTasksAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Returns high-priority (High + Critical) active tasks, ordered by priority then due date.</summary>
-    Task<IReadOnlyList<TasksHubTaskDto>> GetHighPriorityTasksAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TasksHubTaskDto>> GetHighPriorityTasksAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Returns tasks with Waiting status (on hold).</summary>
-    Task<IReadOnlyList<TasksHubTaskDto>> GetOnHoldTasksAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TasksHubTaskDto>> GetOnHoldTasksAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Returns active tasks past their due date, oldest first.</summary>
-    Task<IReadOnlyList<TasksHubTaskDto>> GetOverdueTasksAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TasksHubTaskDto>> GetOverdueTasksAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Returns tasks needing immediate attention: overdue + due today + critical priority.</summary>
-    Task<IReadOnlyList<TasksHubTaskDto>> GetTasksNeedingAttentionAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TasksHubTaskDto>> GetTasksNeedingAttentionAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Returns active tasks without a due date.</summary>
-    Task<IReadOnlyList<TasksHubTaskDto>> GetTasksWithoutDueDateAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TasksHubTaskDto>> GetTasksWithoutDueDateAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Returns active tasks not updated in 30+ days (stale).</summary>
-    Task<IReadOnlyList<TasksHubTaskDto>> GetStaleTasksAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TasksHubTaskDto>> GetStaleTasksAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Returns task status distribution counts.</summary>
-    Task<TaskStatusSummaryDto> GetStatusSummaryAsync(CancellationToken cancellationToken = default);
+    Task<TaskStatusSummaryDto> GetStatusSummaryAsync(
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Computes an attention score (0–100) for a task based on overdue days, priority, and due date proximity.
@@ -40,10 +58,18 @@ public interface ITasksHubService
     int ComputeAttentionScore(TasksHubTaskDto task);
 
     /// <summary>Searches active tasks by title, description. Supports pagination.</summary>
-    Task<PagedResult<TasksHubTaskDto>> SearchTasksAsync(string searchTerm, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
+    Task<PagedResult<TasksHubTaskDto>> SearchTasksAsync(
+        string searchTerm,
+        int page = 1,
+        int pageSize = 20,
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Filters and paginates active tasks by the provided criteria.</summary>
-    Task<PagedResult<TasksHubTaskDto>> GetFilteredTasksAsync(TasksHubFilterDto filter, CancellationToken cancellationToken = default);
+    Task<PagedResult<TasksHubTaskDto>> GetFilteredTasksAsync(
+        TasksHubFilterDto filter,
+        TaskHubProjectScope projectScope = TaskHubProjectScope.ActiveOnly,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Performs bulk operations on the specified tasks.</summary>
     Task<int> BulkOperationAsync(BulkTaskOperationDto dto, CancellationToken cancellationToken = default);

@@ -102,9 +102,19 @@
     .td-header-summary {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
         justify-content: flex-end;
         gap: 0.5rem;
-        max-width: 420px;
+        max-width: 520px;
+    }
+
+    .td-header-scope {
+        min-width: 260px;
+        width: min(100%, 320px);
+    }
+
+    .td-header-scope .mud-input-control {
+        margin-top: 0;
     }
 
     .td-header-pill {
@@ -530,6 +540,18 @@
                 @if (!_loading && _loadError is null)
                 {
                     <div class="td-header-summary" aria-label="Task hub summary">
+                        <div class="td-header-scope">
+                            <MudSelect T="TaskHubProjectScope"
+                                       Value="_projectScope"
+                                       ValueChanged="HandleProjectScopeChangedAsync"
+                                       Label="Project scope"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense">
+                                <MudSelectItem T="TaskHubProjectScope" Value="TaskHubProjectScope.ActiveOnly">Active projects only</MudSelectItem>
+                                <MudSelectItem T="TaskHubProjectScope" Value="TaskHubProjectScope.ActiveAndBlocked">Active + Blocked projects</MudSelectItem>
+                                <MudSelectItem T="TaskHubProjectScope" Value="TaskHubProjectScope.ActiveBlockedAndParked">Active + Blocked + Parked</MudSelectItem>
+                            </MudSelect>
+                        </div>
                         <span class="td-header-pill">
                             @ActiveTaskCount active task@(ActiveTaskCount == 1 ? "" : "s")
                         </span>
@@ -1020,6 +1042,7 @@
     private Guid?           _filterProjectId;
     private DateTime?       _filterDueAfter;
     private DateTime?       _filterDueBefore;
+    private TaskHubProjectScope _projectScope = TaskHubProjectScope.ActiveOnly;
     private IReadOnlyList<ProjectDto> _projects = [];
     private PagedResult<TasksHubTaskDto>? _filteredResults;
     private bool _filtersApplied;
@@ -1069,7 +1092,7 @@
 
         try
         {
-            _aggregate = await TasksHubService.GetHubAggregateAsync();
+            _aggregate = await TasksHubService.GetHubAggregateAsync(_projectScope);
         }
         catch
         {
@@ -1115,7 +1138,9 @@
 
         try
         {
-            _searchResults = await TasksHubService.SearchTasksAsync(_searchTerm.Trim());
+            _searchResults = await TasksHubService.SearchTasksAsync(
+                _searchTerm.Trim(),
+                projectScope: _projectScope);
         }
         catch
         {
@@ -1151,7 +1176,9 @@
                 DueBefore:   _filterDueBefore,
                 Complexity:  _filterComplexity);
 
-            _filteredResults = await TasksHubService.GetFilteredTasksAsync(filter);
+            _filteredResults = await TasksHubService.GetFilteredTasksAsync(
+                filter,
+                projectScope: _projectScope);
             _filtersApplied  = true;
             _selectedTaskIds.Clear();
             _bulkReschedulePanelOpen = false;
@@ -1177,6 +1204,24 @@
         _selectedTaskIds.Clear();
         _bulkReschedulePanelOpen = false;
         StateHasChanged();
+    }
+
+    private async Task HandleProjectScopeChangedAsync(TaskHubProjectScope value)
+    {
+        if (_projectScope == value)
+            return;
+
+        _projectScope = value;
+        _selectedTaskIds.Clear();
+        _bulkReschedulePanelOpen = false;
+
+        await LoadAsync();
+
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+            await HandleSearch();
+
+        if (_filtersApplied)
+            await ApplyFiltersAsync();
     }
 
     // ── Bulk selection ───────────────────────────────────────────────────────
