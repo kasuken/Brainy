@@ -14,13 +14,13 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
-    <PackageReference Include="Heron.MudCalendar" Version="3.4.0" />
+    <PackageReference Include="Heron.MudCalendar" Version="4.0.1" />
     <PackageReference Include="Markdig" Version="1.2.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="MudBlazor" Version="8.4.0" />
+    <PackageReference Include="MudBlazor" Version="9.8.0" />
   </ItemGroup>
 
 </Project>
