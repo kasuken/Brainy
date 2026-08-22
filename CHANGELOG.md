@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.8.0] - 2026-08-22
+
+### Improved
+
+- **User time-zone service concurrency** — registered `IUserTimeZoneService` as transient so concurrent Blazor SSR consumers keep their captured database contexts isolated.
+- **Dependency-injection regression coverage** — added a test that verifies the user time-zone service keeps its transient lifetime.
+
+---
+
 ## [5.7.0] - 2026-08-22
 
 ### Added
