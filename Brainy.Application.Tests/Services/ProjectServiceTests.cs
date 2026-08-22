@@ -222,4 +222,35 @@ public class ProjectServiceTests
         restoredProject.ArchivedReason.Should().BeNull();
         restoredTask.ArchivedReason.Should().BeNull();
     }
+
+    [Fact]
+    public async Task GetProjectDetailAsync_LoadsProjectWorkspaceData()
+    {
+        var (projects, db) = BuildLifecycleServices(nameof(GetProjectDetailAsync_LoadsProjectWorkspaceData));
+        var project = new Project
+        {
+            Id = Guid.NewGuid(), UserId = DefaultUserId, Name = "Workspace",
+            Status = ProjectStatus.Active, Priority = ProjectPriority.High,
+        };
+        var task = new TaskItem
+        {
+            Id = Guid.NewGuid(), UserId = DefaultUserId, ProjectId = project.Id,
+            Title = "Top-level task", Status = TaskItemStatus.InProgress,
+        };
+        var subtask = new TaskItem
+        {
+            Id = Guid.NewGuid(), UserId = DefaultUserId, ProjectId = project.Id,
+            ParentTaskId = task.Id, Title = "Subtask", Status = TaskItemStatus.Done,
+        };
+        db.Projects.Add(project);
+        db.Tasks.AddRange(task, subtask);
+        await db.SaveChangesAsync();
+
+        var detail = await projects.GetProjectDetailAsync(project.Id);
+
+        detail.Should().NotBeNull();
+        detail!.Tasks.Should().ContainSingle();
+        detail.Tasks[0].SubtaskCount.Should().Be(1);
+        detail.Tasks[0].DoneSubtaskCount.Should().Be(1);
+    }
 }
