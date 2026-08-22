@@ -1,5 +1,18 @@
 # Changelog
 
+## [5.7.0] - 2026-08-22
+
+### Added
+
+- **Tasks Hub project scope filtering** — task planning views now support explicit project scopes while keeping active projects as the default, making it easier to focus on the right project context.
+
+### Improved
+
+- **Development cookie compatibility** — authentication and antiforgery cookies now follow the request scheme during local development while retaining secure-only cookies in production.
+- **Project workspace coverage** — added regression coverage for loading project details with top-level tasks and completed subtasks.
+
+---
+
 ## [5.6.0] - 2026-08-22
 
 ### Added
