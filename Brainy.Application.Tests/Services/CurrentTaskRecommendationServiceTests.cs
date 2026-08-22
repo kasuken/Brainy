@@ -208,4 +208,61 @@ public class CurrentTaskRecommendationServiceTests
         result.Should().NotBeNull();
         result!.Id.Should().Be(parentTask.Id);
     }
+
+    [Fact]
+    public async Task GetRecommendationAsync_ExcludesWaitingTasks()
+    {
+        // Arrange
+        var (sut, db) = BuildService(nameof(GetRecommendationAsync_ExcludesWaitingTasks));
+        var project = CreateProject(DefaultUserId);
+
+        // Overdue critical but Waiting — must not be recommended even though it scores highest.
+        var waitingTask = CreateTask(project.Id, DefaultUserId,
+            dueDate: Today.AddDays(-2),
+            priority: TaskPriority.Critical,
+            status: TaskItemStatus.Waiting);
+
+        db.Projects.Add(project);
+        db.Tasks.Add(waitingTask);
+        await db.SaveChangesAsync();
+
+        // Act
+        var result = await sut.GetRecommendationAsync();
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetRecommendationAsync_ExcludesTasksWithUnresolvedDependencies()
+    {
+        // Arrange
+        var (sut, db) = BuildService(nameof(GetRecommendationAsync_ExcludesTasksWithUnresolvedDependencies));
+        var project = CreateProject(DefaultUserId);
+
+        var prerequisite = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Todo);
+
+        // Overdue critical but blocked on an incomplete prerequisite — must not be recommended.
+        var blockedTask = CreateTask(project.Id, DefaultUserId,
+            dueDate: Today.AddDays(-2),
+            priority: TaskPriority.Critical);
+
+        db.Projects.Add(project);
+        db.Tasks.AddRange(prerequisite, blockedTask);
+        db.TaskDependencies.Add(new TaskDependency
+        {
+            Id = Guid.NewGuid(),
+            TaskId = blockedTask.Id,
+            DependsOnTaskId = prerequisite.Id,
+        });
+        await db.SaveChangesAsync();
+
+        // Act
+        var result = await sut.GetRecommendationAsync();
+
+        // Assert — the blocked task must never be recommended; only the (unblocked)
+        // prerequisite itself is a legitimate candidate.
+        result.Should().NotBeNull();
+        result!.Id.Should().Be(prerequisite.Id);
+    }
 }

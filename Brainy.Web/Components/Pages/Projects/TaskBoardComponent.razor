@@ -6,6 +6,7 @@
 @inject ITaskService TaskService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IUserTimeZoneService UserTimeZoneService
 
 @if (_loading)
 {
@@ -215,7 +216,7 @@ else
                                         <div class="tb-card__footer">
                                             @if (task.DueDate.HasValue)
                                             {
-                                                var overdue = task.DueDate < DateTime.Today && task.Status != TaskItemStatus.Done;
+                                                var overdue = task.DueDate.Value.Date < _today.Date && task.Status != TaskItemStatus.Done;
                                                 <span class="tb-card__due @(overdue ? "tb-card__due--overdue" : "")">
                                                     <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10" aria-hidden="true" focusable="false">
                                                         <path d="M11 6.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zm-3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zM3.5 6a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1zM11 9.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zm-3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zM3.5 9a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1z"/>
@@ -839,6 +840,7 @@ else
     private TaskItemStatus? _dragOverStatus;
     private Guid? _dragOverCardId;
     private bool _loading = true;
+    private DateTime _today = DateTime.Today;
     private Guid _loadedProjectId;
     private readonly HashSet<Guid> _selectedTaskIds = [];
     private bool _selectMode;
@@ -860,6 +862,7 @@ else
 
     private async Task LoadTasksAsync()
     {
+        _today = (await UserTimeZoneService.GetUserTodayAsync()).Date;
         _loading = true;
         _loadedProjectId = ProjectId;
         var tasks = await TaskService.GetByProjectAsync(ProjectId);

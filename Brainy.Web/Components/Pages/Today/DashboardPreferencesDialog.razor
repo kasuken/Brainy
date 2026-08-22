@@ -9,6 +9,15 @@
                 </p>
             </div>
 
+            <div class="td-pref-dialog__presets">
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="ApplyMinimalPreset">
+                    Minimal Today (focus view)
+                </MudButton>
+                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ApplyAllPreset">
+                    Show all planning sections
+                </MudButton>
+            </div>
+
             <div class="td-pref-dialog__grid">
                 @foreach (var option in _options)
                 {
@@ -72,6 +81,12 @@
         gap: 0.75rem;
     }
 
+    .td-pref-dialog__presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
     .td-pref-dialog__option {
         display: flex;
         align-items: flex-start;
@@ -124,6 +139,15 @@
         new("priority-projects", "Priority projects", "Keep your top projects visible at the bottom.", true)
     ];
 
+    /// <summary>
+    /// Widget keys kept in the opt-in "Minimal Today" / focus-view preset: Current focus
+    /// (which includes the next-step cue) and Due today. Quick capture is always visible
+    /// via the toolbar and is not gated by a widget key.
+    /// </summary>
+    private static readonly HashSet<string> MinimalPresetKeys = new(
+        ["current-focus", "due-today"],
+        StringComparer.OrdinalIgnoreCase);
+
     [Parameter] public IReadOnlyCollection<string>? EnabledWidgetKeys { get; set; }
 
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
@@ -137,6 +161,22 @@
         foreach (var option in _options)
         {
             option.Enabled = enabled.Count == 0 || enabled.Contains(option.Key);
+        }
+    }
+
+    private void ApplyMinimalPreset()
+    {
+        foreach (var option in _options)
+        {
+            option.Enabled = MinimalPresetKeys.Contains(option.Key);
+        }
+    }
+
+    private void ApplyAllPreset()
+    {
+        foreach (var option in _options)
+        {
+            option.Enabled = true;
         }
     }
 

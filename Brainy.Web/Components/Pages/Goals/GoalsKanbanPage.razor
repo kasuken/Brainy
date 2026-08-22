@@ -10,6 +10,7 @@
 @inject IAreaService AreaService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
+@inject IUserTimeZoneService UserTimeZoneService
 
 <PageTitle>Goals Kanban — Brainy</PageTitle>
 
@@ -136,6 +137,7 @@
             </ChildContent>
             <ItemRenderer>
                 <GoalKanbanCard Goal="context"
+                                Today="_today"
                                 Areas="_areas"
                                 OnCardClicked="NavigateToGoal"
                                 OnAreaChanged="areaId => MoveGoalAsync(context, areaId)" />
@@ -209,6 +211,7 @@
     private List<GoalDto> _filteredGoals = [];
     private List<KanbanLane> _lanes = [];
     private List<AreaDto> _areas = [];
+    private DateTime _today = DateTime.Today;
     private bool _loading = true;
     private string? _loadError;
     private bool _showArchived;
@@ -223,6 +226,7 @@
 
     private async Task LoadAsync()
     {
+        _today = (await UserTimeZoneService.GetUserTodayAsync()).Date;
         _loading = true;
         _loadError = null;
 

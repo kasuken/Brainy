@@ -16,6 +16,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject IUserTimeZoneService UserTimeZoneService
 
 <PageTitle>@(_detail?.Name ?? "Area") — Brainy</PageTitle>
 
@@ -886,11 +887,13 @@ else
     // Confirmation dialogs
     private MudMessageBox _archiveMsgBox = null!;
     private MudMessageBox _restoreMsgBox = null!;
+    private DateTime _today = DateTime.Today;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
+        _today = (await UserTimeZoneService.GetUserTodayAsync()).Date;
         _loading = true;
         StateHasChanged();
 
@@ -1076,8 +1079,8 @@ else
         _                        => s.ToString()
     };
 
-    private static bool IsOverdue(TaskItemDto t) =>
-        t.DueDate.HasValue && t.DueDate.Value.Date < DateTime.Today && t.Status != TaskItemStatus.Done;
+    private bool IsOverdue(TaskItemDto t) =>
+        t.DueDate.HasValue && t.DueDate.Value.Date < _today.Date && t.Status != TaskItemStatus.Done;
 
     private static string TaskStatusLabel(TaskItemStatus s) => s switch
     {

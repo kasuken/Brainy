@@ -19,7 +19,7 @@ internal sealed class CurrentTaskRecommendationService(
     IUserTimeZoneService userTimeZone) : ICurrentTaskRecommendationService
 {
     private static readonly TaskItemStatus[] _excludedStatuses =
-        [TaskItemStatus.Done, TaskItemStatus.Archived];
+        [TaskItemStatus.Done, TaskItemStatus.Archived, TaskItemStatus.Waiting];
 
     public async Task<TodayTaskItemDto?> GetRecommendationAsync(CancellationToken cancellationToken = default)
     {
@@ -36,7 +36,10 @@ internal sealed class CurrentTaskRecommendationService(
                         && t.Project.Status == ProjectStatus.Active
                         && !t.Project.IsArchived
                         && t.ParentTaskId == null
-                        && !_excludedStatuses.Contains(t.Status))
+                        && !_excludedStatuses.Contains(t.Status)
+                        // A task blocked on an incomplete prerequisite is not actionable,
+                        // so it must never be recommended as the next focus.
+                        && !t.Dependencies.Any(d => d.DependsOnTask.Status != TaskItemStatus.Done))
             .Select(t => new
             {
                 t.Id,

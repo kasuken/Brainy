@@ -10,6 +10,7 @@
 @inject ITaskService TaskService
 @inject IProjectService ProjectService
 @inject ISnackbar Snackbar
+@inject IUserTimeZoneService UserTimeZoneService
 
 <PageTitle>Tasks Hub · Brainy</PageTitle>
 
@@ -912,10 +913,12 @@
                     @* ── Widget Sections Grid ── *@
                     <div class="td-sections">
                         <TasksNeedingAttentionWidget Tasks="_aggregate!.NeedingAttentionTasks"
+                                                     Today="_today"
                                                      OnComplete="HandleCompleted"
                                                      OnReschedule="HandleWidgetRescheduleAsync" />
 
                         <OverdueTasksWidget Tasks="_aggregate!.OverdueTasks"
+                                            Today="_today"
                                             OnComplete="HandleCompleted"
                                             OnReschedule="HandleWidgetRescheduleAsync" />
 
@@ -999,6 +1002,7 @@
     // ── Core state ──────────────────────────────────────────────────────────
 
     private bool _loading = true;
+    private DateTime _today = DateTime.Today;
     private string? _loadError;
     private string? _projectLoadError;
     private TasksHubAggregateDto? _aggregate;
@@ -1058,6 +1062,7 @@
 
     private async Task LoadAsync()
     {
+        _today = (await UserTimeZoneService.GetUserTodayAsync()).Date;
         _loading = true;
         _loadError = null;
         StateHasChanged();
@@ -1370,8 +1375,8 @@
             ?? _aggregate.StaleTasks.FirstOrDefault(t => t.Id == id);
     }
 
-    private static bool IsOverdue(TasksHubTaskDto t) =>
-        t.DueDate.HasValue && t.DueDate.Value.Date < DateTime.Today;
+    private bool IsOverdue(TasksHubTaskDto t) =>
+        t.DueDate.HasValue && t.DueDate.Value.Date < _today.Date;
 
     private static Color PriorityColor(TaskPriority p) => p switch
     {

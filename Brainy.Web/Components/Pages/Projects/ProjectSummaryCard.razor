@@ -63,8 +63,9 @@
 
             @if (Project.DueDate.HasValue)
             {
-                var dueCls = Project.DueDate < DateTime.Today ? "psc__stat--overdue"
-                           : Project.DueDate <= DateTime.Today.AddDays(7) ? "psc__stat--soon"
+                var today = (Today ?? DateTime.Today).Date;
+                var dueCls = Project.DueDate.Value.Date < today ? "psc__stat--overdue"
+                           : Project.DueDate.Value.Date <= today.AddDays(7) ? "psc__stat--soon"
                            : "";
                 <span class="psc__stat @dueCls">
                     <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 .5a.5.5 0 0 1 .5.5V2h5V1a.5.5 0 0 1 1 0v1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h1V1A.5.5 0 0 1 5 .5ZM3 3a1 1 0 0 0-1 1v1h12V4a1 1 0 0 0-1-1H3Zm11 3H2v8a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6Z"/></svg>
@@ -335,6 +336,9 @@
     /// <summary>The project to render. Required.</summary>
     [Parameter, EditorRequired]
     public ProjectSummaryDto Project { get; set; } = null!;
+
+    [Parameter]
+    public DateTime? Today { get; set; }
 
     /// <summary>When set, the card is clickable and navigates to the project detail.</summary>
     [Parameter]

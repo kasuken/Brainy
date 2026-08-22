@@ -39,7 +39,7 @@
                             </MudChip>
                             @if (t.DueDate.HasValue)
                             {
-                                var days = (int)(DateTime.Today - t.DueDate.Value.Date).TotalDays;
+                                var days = (int)(Today.Date - t.DueDate.Value.Date).TotalDays;
                                 <span class="td-task-due td-task-due--overdue">
                                     @days day@(days == 1 ? "" : "s") overdue
                                 </span>
@@ -87,6 +87,7 @@
 @code {
     /// <summary>Overdue tasks to display (oldest first).</summary>
     [Parameter] public IReadOnlyList<TasksHubTaskDto> Tasks { get; set; } = [];
+    [Parameter] public DateTime Today { get; set; } = DateTime.Today;
 
     /// <summary>Raised with the task ID when the user marks a task complete.</summary>
     [Parameter] public EventCallback<Guid> OnComplete { get; set; }
@@ -133,5 +134,4 @@
         _                     => "td-task--low",
     };
 }
-
 

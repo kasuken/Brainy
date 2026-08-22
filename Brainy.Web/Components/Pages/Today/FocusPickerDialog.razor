@@ -3,6 +3,7 @@
 @using Brainy.Domain.Enums
 @inject ITasksHubService TasksHubService
 @inject ITaskService TaskService
+@inject IUserTimeZoneService UserTimeZoneService
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -40,10 +41,12 @@
                 {
                     var t = task;
                     var isCurrent = t.Id == CurrentTaskId;
-                    var overdue = t.DueDate.HasValue && t.DueDate.Value.Date < DateTime.Today;
+                    var overdue = t.DueDate.HasValue && t.DueDate.Value.Date < _today;
+                    var isBlocked = t.Status == TaskItemStatus.Waiting || t.IsBlocked;
                     <button type="button"
-                            class=@($"fp-row{(isCurrent ? " fp-row--current" : string.Empty)}")
-                            disabled="@_busy"
+                            class=@($"fp-row{(isCurrent ? " fp-row--current" : string.Empty)}{(isBlocked ? " fp-row--blocked" : string.Empty)}")
+                            disabled="@(_busy || isBlocked)"
+                            title="@(isBlocked ? "Blocked: complete prerequisite tasks first." : null)"
                             @onclick="@(() => SelectAsync(t))">
                         <span class=@($"fp-dot fp-dot--{t.Priority.ToString().ToLowerInvariant()}")></span>
                         <span class="fp-row-body">
@@ -56,15 +59,19 @@
                                         @(overdue ? "Overdue · " : "Due ")@t.DueDate.Value.ToString("MMM d")
                                     </span>
                                 }
-                                @if (t.Status == TaskItemStatus.Waiting)
+                                @if (isBlocked)
                                 {
-                                    <span class="fp-row-waiting">Waiting</span>
+                                    <span class="fp-row-waiting">Blocked</span>
                                 }
                             </span>
                         </span>
                         @if (isCurrent)
                         {
                             <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Small" Color="Color.Success" />
+                        }
+                        else if (isBlocked)
+                        {
+                            <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Small" Style="color:var(--ink-faint);" />
                         }
                         else
                         {
@@ -129,6 +136,8 @@
 
     .fp-row:disabled { opacity: 0.6; cursor: default; }
 
+    .fp-row--blocked { cursor: not-allowed; }
+
     .fp-row--current {
         border-left: 4px solid var(--clay);
         background: var(--paper);
@@ -192,6 +201,7 @@
     private bool _busy;
     private string _search = string.Empty;
     private IReadOnlyList<TasksHubTaskDto> _tasks = [];
+    private DateTime _today = DateTime.Today;
 
     private List<TasksHubTaskDto> FilteredTasks
     {
@@ -222,6 +232,7 @@
     {
         try
         {
+            _today = await UserTimeZoneService.GetUserTodayAsync();
             _tasks = await TasksHubService.GetActiveTasksAsync();
         }
         catch
@@ -237,6 +248,8 @@
     private async Task SelectAsync(TasksHubTaskDto task)
     {
         if (_busy) return;
+
+        if (task.Status == TaskItemStatus.Waiting || task.IsBlocked) return;
 
         if (task.Id == CurrentTaskId)
         {

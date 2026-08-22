@@ -5,6 +5,7 @@
 @inject ITaskService TaskService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IUserTimeZoneService UserTimeZoneService
 
 <MudDialog Class="ted-dialog">
     <TitleContent>
@@ -170,8 +171,8 @@
                             @foreach (var sub in _existingSubtasks)
                             {
                                 var subDone     = sub.Status == TaskItemStatus.Done;
-                                var subOverdue  = !subDone && sub.DueDate.HasValue && sub.DueDate.Value.Date < DateTime.Today;
-                                var subDueToday = !subDone && sub.DueDate.HasValue && sub.DueDate.Value.Date == DateTime.Today;
+                                var subOverdue  = !subDone && sub.DueDate.HasValue && sub.DueDate.Value.Date < _today.Date;
+                                var subDueToday = !subDone && sub.DueDate.HasValue && sub.DueDate.Value.Date == _today.Date;
                                 var toggling    = _togglingSubtasks.Contains(sub.Id);
                                 <MudListItem T="string" Class="@($"ted-subtasks__item {(subOverdue ? "ted-subtasks__item--overdue" : subDueToday ? "ted-subtasks__item--due-today" : "")}")">
                                     <div class="ted-subtasks__row">
@@ -192,7 +193,7 @@
                                         {
                                             @if (subOverdue)
                                             {
-                                                var days = (int)(DateTime.Today - sub.DueDate.Value.Date).TotalDays;
+                                                var days = (int)(_today.Date - sub.DueDate.Value.Date).TotalDays;
                                                 <span class="ted-subtask-badge ted-subtask-badge--overdue">@days day@(days == 1 ? "" : "s") overdue</span>
                                             }
                                             else if (subDueToday)
@@ -386,6 +387,7 @@
     private TaskItemStatus _status = TaskItemStatus.Todo;
     private TaskComplexity? _complexity;
     private DateTime? _dueDate;
+    private DateTime _today = DateTime.Today;
     private bool _saving;
     // Concurrency token captured when the task was loaded; passed back on update.
     private byte[]? _rowVersion;
@@ -414,6 +416,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _today = (await UserTimeZoneService.GetUserTodayAsync()).Date;
         _status = InitialStatus;
 
         var projectTasks = await TaskService.GetByProjectAsync(ProjectId);

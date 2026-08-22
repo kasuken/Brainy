@@ -14,4 +14,5 @@ public record TasksHubTaskDto(
     string ProjectName,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
-    TaskComplexity? Complexity = null);
+    TaskComplexity? Complexity = null,
+    bool IsBlocked = false);

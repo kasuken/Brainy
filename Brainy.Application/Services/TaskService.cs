@@ -678,6 +678,18 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await context.ExecuteSerializedTaskDependencyMutationAsync(
+                userId,
+                transactionCancellationToken => SetCurrentTaskCoreAsync(taskId, userId, transactionCancellationToken),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<TaskItemDto> SetCurrentTaskCoreAsync(
+        Guid taskId,
+        string userId,
+        CancellationToken cancellationToken)
+    {
         // Load and validate the target before changing the existing current task.
         var candidates = await context.Tasks
             .Include(t => t.Project)
@@ -688,8 +700,13 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         var task = candidates.FirstOrDefault(t => t.Id == taskId)
             ?? throw new KeyNotFoundException($"Task '{taskId}' was not found.");
 
-        if (task.IsArchived || task.Project.IsArchived || task.Status is TaskItemStatus.Done or TaskItemStatus.Archived)
-            throw new InvalidOperationException("Only an active, incomplete task can be set as the current task.");
+        if (task.IsArchived || task.Project.IsArchived
+            || task.Status is TaskItemStatus.Done or TaskItemStatus.Archived or TaskItemStatus.Waiting)
+            throw new InvalidOperationException("Only an active, incomplete, unblocked task can be set as the current task.");
+
+        // A task waiting on incomplete prerequisites cannot be started, so it must not
+        // become the current focus either — mirrors the guard in SetInProgressAsync.
+        await EnsurePrerequisitesCompletedAsync(task.Id, userId, cancellationToken).ConfigureAwait(false);
 
         var previousCurrent = candidates.Where(t => t.IsCurrentTask && t.Id != taskId).ToList();
         if (previousCurrent.Count > 0)

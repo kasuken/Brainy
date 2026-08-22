@@ -1,6 +1,7 @@
 @using Brainy.Application.DTOs.Tasks
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
+@using Brainy.Web.Components.Pages.Projects
 @inject ITaskService TaskService
 @inject ICurrentTaskRecommendationService RecommendationService
 @inject ISnackbar Snackbar
@@ -34,15 +35,54 @@
                     </MudChip>
                 </div>
 
+                @{
+                    var isOverdue = Task.DueDate.HasValue && Task.DueDate.Value.Date < Today;
+                    var isHighPriority = Task.Priority is TaskPriority.High or TaskPriority.Critical;
+                }
+                @if (isOverdue || isHighPriority)
+                {
+                    <div class="td-focus-urgency" style="margin-bottom:0.5rem;">
+                        @if (isOverdue)
+                        {
+                            <span class="td-focus-urgency-badge td-focus-urgency-badge--overdue">Overdue</span>
+                        }
+                        @if (isHighPriority)
+                        {
+                            <span class="td-focus-urgency-badge">@(Task.Priority == TaskPriority.Critical ? "Critical priority" : "High priority")</span>
+                        }
+                    </div>
+                }
+
+                <div class="td-focus-next-step" style="margin-bottom:0.9rem;">
+                    @if (!string.IsNullOrWhiteSpace(Task.NextSubtaskTitle))
+                    {
+                        <span class="td-focus-next-step-label">Continue with:</span>
+                        <span class="td-focus-next-step-text">@Task.NextSubtaskTitle</span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(Task.Description))
+                    {
+                        <span class="td-focus-next-step-text">@Task.Description</span>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Outlined.PlaylistAdd"
+                                   OnClick="@(() => OpenEditForFirstStepAsync())">
+                            Add a first step
+                        </MudButton>
+                    }
+                </div>
+
                 <div class="td-task-meta" style="margin-bottom:0.9rem;">
                     <a class="td-task-project" href="@($"/projects/{Task.ProjectId}")">@Task.ProjectName</a>
                     @if (Task.DueDate.HasValue)
                     {
-                        <span class="td-task-due @(Task.DueDate.Value.Date < DateTime.Today ? "td-task-due--overdue" : "")">
+                        <span class="td-task-due @(Task.DueDate.Value.Date < Today ? "td-task-due--overdue" : "")">
                             Due @Task.DueDate.Value.ToString("MMM d")
                         </span>
                     }
                 </div>
+
 
                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                     <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
@@ -84,7 +124,7 @@
                     <a class="td-task-project" href="@($"/projects/{_recommendation.ProjectId}")">@_recommendation.ProjectName</a>
                     @if (_recommendation.DueDate.HasValue)
                     {
-                        <span class="td-task-due @(_recommendation.DueDate.Value.Date < DateTime.Today ? "td-task-due--overdue" : "")">
+                        <span class="td-task-due @(_recommendation.DueDate.Value.Date < Today ? "td-task-due--overdue" : "")">
                             Due @_recommendation.DueDate.Value.ToString("MMM d")
                         </span>
                     }
@@ -182,6 +222,46 @@
         align-items: flex-start;
         gap: 0.75rem;
     }
+
+    .td-focus-urgency {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+
+    .td-focus-urgency-badge {
+        display: inline-flex;
+        align-items: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        background: rgba(240, 173, 78, 0.15);
+        color: #8a5a12;
+    }
+
+    .td-focus-urgency-badge--overdue {
+        background: rgba(185, 28, 28, 0.12);
+        color: #b91c1c;
+    }
+
+    .td-focus-next-step {
+        font-size: 0.9rem;
+        color: var(--ink-soft, var(--ink));
+        line-height: 1.4;
+    }
+
+    .td-focus-next-step-label {
+        font-weight: 600;
+        margin-right: 0.35rem;
+        color: var(--ink-faint);
+    }
+
+    .td-focus-next-step-text {
+        color: var(--ink);
+    }
 </style>
 
 @code {
@@ -193,6 +273,9 @@
 
     /// <summary>Initial collapsed state, managed locally after first render.</summary>
     [Parameter] public bool Collapsed { get; set; }
+
+    /// <summary>The user's current calendar date (their timezone), used for overdue calculations.</summary>
+    [Parameter] public DateTime Today { get; set; } = DateTime.Today;
 
     private bool _collapsed;
     private bool _busy;
@@ -283,6 +366,28 @@
             "Choose your current focus",
             parameters,
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await OnChanged.InvokeAsync();
+        }
+    }
+
+    private async Task OpenEditForFirstStepAsync()
+    {
+        if (Task is null) return;
+
+        var parameters = new DialogParameters<TaskEditorDialog>
+        {
+            { d => d.TaskId, Task.Id },
+            { d => d.ProjectId, Task.ProjectId }
+        };
+
+        var dialog = await DialogService.ShowAsync<TaskEditorDialog>(
+            "Edit Task",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
 
         var result = await dialog.Result;
         if (result is { Canceled: false })

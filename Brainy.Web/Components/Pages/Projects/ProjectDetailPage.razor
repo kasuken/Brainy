@@ -17,6 +17,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject IUserTimeZoneService UserTimeZoneService
 
 <PageTitle>@(_detail?.Name ?? "Project") — Brainy</PageTitle>
 
@@ -148,10 +149,10 @@ else
         </div>
         @if (_detail.DueDate.HasValue)
         {
-            <div class="pd-stat @(_detail.DueDate < DateTime.Today ? "pd-stat--overdue" : "")">
+            <div class="pd-stat @(_detail.DueDate.Value.Date < _today.Date ? "pd-stat--overdue" : "")">
                 <span class="pd-stat__value">@_detail.DueDate.Value.ToString("MMM d")</span>
                 <span class="pd-stat__label">
-                    @(_detail.DueDate < DateTime.Today ? "Overdue" : "Due date")
+                    @(_detail.DueDate.Value.Date < _today.Date ? "Overdue" : "Due date")
                 </span>
             </div>
         }
@@ -357,7 +358,7 @@ else
                 {
                     <div class="pd-info-row">
                         <span class="pd-info-label">Due Date</span>
-                        <span class="@(_detail.DueDate < DateTime.Today ? "pd-overdue-text" : "")">
+                        <span class="@(_detail.DueDate.Value.Date < _today.Date ? "pd-overdue-text" : "")">
                             @_detail.DueDate.Value.ToString("MMMM d, yyyy")
                         </span>
                     </div>
@@ -1013,6 +1014,7 @@ else
     [Parameter] public Guid ProjectId { get; set; }
 
     private bool _loading = true;
+    private DateTime _today = DateTime.Today;
     private ProjectDetailDto? _detail;
     private IReadOnlyList<OutputDto> _outputs = [];
     private int _taskListRefreshVersion;
@@ -1049,6 +1051,7 @@ else
 
     private async Task LoadAsync()
     {
+        _today = (await UserTimeZoneService.GetUserTodayAsync()).Date;
         _loading = true;
         _detail = await ProjectService.GetProjectDetailAsync(ProjectId);
         _outputs = _detail is not null
@@ -1176,7 +1179,7 @@ else
         var overdueTasks = _detail.Tasks.Count(t => !t.IsArchived
             && t.Status != TaskItemStatus.Done
             && t.DueDate.HasValue
-            && t.DueDate.Value.Date < DateTime.Today);
+            && t.DueDate.Value.Date < _today.Date);
 
         var summary = new ProjectSummaryDto(
             _detail.Id, _detail.Name, _detail.Description, _detail.DesiredOutcome,

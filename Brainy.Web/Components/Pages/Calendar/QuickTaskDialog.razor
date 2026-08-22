@@ -56,6 +56,20 @@
                           Lines="2"
                           Variant="Variant.Outlined"
                           FullWidth="true" />
+
+            <div class="qtd-due-row">
+                <MudSwitch @bind-Value="_hasDueDate"
+                           Color="Color.Primary"
+                           Label="Set a due date" />
+                @if (_hasDueDate)
+                {
+                    <MudDatePicker @bind-Date="_dueDate"
+                                   Label="Due date"
+                                   Variant="Variant.Outlined"
+                                   Editable="true"
+                                   FullWidth="true" />
+                }
+            </div>
         </MudStack>
     </DialogContent>
     <DialogActions>
@@ -99,11 +113,23 @@
 }
 
 .qtd-form { padding: 0.25rem 0 0.5rem; }
+
+.qtd-due-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
 </style>
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
+    /// <summary>
+    /// When set to a real date (e.g. the user clicked a specific day on the calendar),
+    /// the due-date toggle is pre-checked with this date. Leave as default(DateTime)
+    /// when there is no explicit date context (e.g. opened from a generic "New Task"
+    /// action) so quick capture does not silently attach an artificial deadline.
+    /// </summary>
     [Parameter] public DateTime SelectedDate { get; set; }
     [Parameter] public IReadOnlyList<ProjectDto> Projects { get; set; } = [];
 
@@ -111,12 +137,22 @@
     private string? _description;
     private Guid _projectId;
     private TaskPriority _priority = TaskPriority.Medium;
+    private bool _hasDueDate;
+    private DateTime? _dueDate;
     private bool _saving;
+    private bool _initialized;
 
     protected override void OnParametersSet()
     {
         if (_projectId == Guid.Empty && Projects.Count > 0)
             _projectId = Projects[0].Id;
+
+        if (!_initialized)
+        {
+            _initialized = true;
+            _hasDueDate = SelectedDate != default;
+            _dueDate = SelectedDate != default ? SelectedDate.Date : null;
+        }
     }
 
     private async Task SubmitAsync()
@@ -131,7 +167,7 @@
                 _title.Trim(),
                 string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
                 _priority,
-                SelectedDate != default ? SelectedDate.Date : null);
+                _hasDueDate ? _dueDate?.Date : null);
 
             var created = await TaskService.CreateAsync(dto);
             MudDialog.Close(DialogResult.Ok(created));

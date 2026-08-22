@@ -25,7 +25,7 @@
         {
             @foreach (var t in OrderedTasks)
             {
-                var isOverdue = t.DueDate.HasValue && t.DueDate.Value.Date < DateTime.Today;
+                var isOverdue = t.DueDate.HasValue && t.DueDate.Value.Date < Today;
                 <div class="td-task @PriorityClass(t.Priority) @(isOverdue ? "td-task--overdue" : "")">
                     <div class="td-task-body">
                         <p class="td-task-title">@t.Title</p>
@@ -79,6 +79,9 @@
     /// <summary>Initial collapsed state, managed locally after first render.</summary>
     [Parameter] public bool Collapsed { get; set; }
 
+    /// <summary>The user's current calendar date (their timezone), used for overdue calculations.</summary>
+    [Parameter] public DateTime Today { get; set; } = DateTime.Today;
+
     private bool _collapsed;
 
     protected override void OnInitialized() => _collapsed = Collapsed;
@@ -91,11 +94,11 @@
              .ThenByDescending(t => (int)t.Priority)
              .ThenBy(t => t.DueDate ?? DateTime.MaxValue);
 
-    private static int DateBucket(TodayTaskItemDto t)
+    private int DateBucket(TodayTaskItemDto t)
     {
         if (!t.DueDate.HasValue) return 3;
-        if (t.DueDate.Value.Date < DateTime.Today) return 0; // overdue
-        if (t.DueDate.Value.Date == DateTime.Today) return 1; // due today
+        if (t.DueDate.Value.Date < Today) return 0; // overdue
+        if (t.DueDate.Value.Date == Today) return 1; // due today
         return 2; // future
     }
 

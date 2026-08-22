@@ -26,7 +26,8 @@ internal sealed class TasksHubService(
 
     private static readonly Expression<Func<TaskItem, TasksHubTaskDto>> ToDto =
         t => new TasksHubTaskDto(t.Id, t.Title, t.Description, t.Status, t.Priority,
-            t.DueDate, t.ProjectId, t.Project.Name, t.CreatedAtUtc, t.UpdatedAtUtc, t.Complexity);
+            t.DueDate, t.ProjectId, t.Project.Name, t.CreatedAtUtc, t.UpdatedAtUtc, t.Complexity,
+            t.Dependencies.Any(d => d.DependsOnTask.Status != TaskItemStatus.Done));
 
     // ---------------------------------------------------------------------------
     // Aggregate

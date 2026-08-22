@@ -82,6 +82,7 @@
 @code {
     /// <summary>Tasks needing attention.</summary>
     [Parameter] public IReadOnlyList<TasksHubTaskDto> Tasks { get; set; } = [];
+    [Parameter] public DateTime Today { get; set; } = DateTime.Today;
 
     /// <summary>Raised with the task ID when the user marks a task complete.</summary>
     [Parameter] public EventCallback<Guid> OnComplete { get; set; }
@@ -114,9 +115,9 @@
 
     private record AttentionReason(string Label, Color Color);
 
-    private static IReadOnlyList<AttentionReason> GetReasons(TasksHubTaskDto t)
+    private IReadOnlyList<AttentionReason> GetReasons(TasksHubTaskDto t)
     {
-        var today = DateTime.UtcNow.Date;
+        var today = Today.Date;
         var reasons = new List<AttentionReason>();
 
         if (t.DueDate.HasValue)
@@ -141,5 +142,4 @@
         _                     => "td-task--low",
     };
 }
-
 

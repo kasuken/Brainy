@@ -9,6 +9,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject IUserTimeZoneService UserTimeZoneService
 
 <PageTitle>Projects — Brainy</PageTitle>
 
@@ -361,6 +362,7 @@
                             var idx = i;
                             <div style="animation-delay:@(idx * 35)ms; animation: pp-card-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;">
                                 <ProjectSummaryCard Project="p"
+                                                    Today="_today"
                                                     OnNavigate="id => OpenDetail(id)"
                                                     OnEdit="proj => OpenEditDialog(proj)"
                                                     OnComplete="proj => OpenCompletionDialog(proj)"
@@ -428,6 +430,7 @@
     private string? _loadError;
     private List<ProjectSummaryDto>? _summaries;
     private List<ProjectSummaryDto>? _filtered;
+    private DateTime _today = DateTime.Today;
     private bool _tableViewEnabled;
 
     private string _searchText = "";
@@ -455,6 +458,7 @@
 
     private async Task LoadAsync()
     {
+        _today = (await UserTimeZoneService.GetUserTodayAsync()).Date;
         _loading = true;
         _loadError = null;
         try

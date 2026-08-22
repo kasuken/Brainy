@@ -155,15 +155,30 @@ internal sealed class TodayService(
         var today               = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
         var currentTask         = await GetCurrentTaskByFlagAsync(userId, today, cancellationToken).ConfigureAwait(false);
         var inProgress          = await GetCurrentTasksAsync(cancellationToken).ConfigureAwait(false);
-        var highPriorityWork    = await GetHighPriorityTasksAsync(cancellationToken).ConfigureAwait(false);
-        var overdue             = await GetOverdueAsync(cancellationToken).ConfigureAwait(false);
+        var overdue              = await GetOverdueAsync(cancellationToken).ConfigureAwait(false);
         var dueToday            = await GetDueTodayAsync(cancellationToken).ConfigureAwait(false);
+        var highPriorityWork    = await GetHighPriorityTasksAsync(cancellationToken).ConfigureAwait(false);
         var dueThisWeek         = await GetDueThisWeekAsync(cancellationToken).ConfigureAwait(false);
         var nextTasks           = await GetNextTasksAsync(cancellationToken).ConfigureAwait(false);
         var inboxCount          = await GetInboxCountAsync(cancellationToken).ConfigureAwait(false);
         var prioritizedProjects = await projectPrioritizationService
                                         .GetPrioritizedProjectsAsync(cancellationToken: cancellationToken)
                                         .ConfigureAwait(false);
+
+        // Deduplicate across sections: once a task appears in a higher-precedence
+        // section it must not be repeated lower down. Precedence mirrors the Today
+        // rendering order: Current focus -> In progress -> Overdue -> Due today ->
+        // High priority -> This week -> Coming up.
+        var seen = new HashSet<Guid>();
+        if (currentTask is not null)
+            seen.Add(currentTask.Id);
+
+        inProgress       = ExcludeSeen(inProgress, seen);
+        overdue          = ExcludeSeen(overdue, seen);
+        dueToday         = ExcludeSeen(dueToday, seen);
+        highPriorityWork = ExcludeSeen(highPriorityWork, seen);
+        dueThisWeek      = ExcludeSeen(dueThisWeek, seen);
+        nextTasks        = ExcludeSeen(nextTasks, seen);
 
         var prefs = await context.DashboardPreferences
             .AsNoTracking()
@@ -185,6 +200,21 @@ internal sealed class TodayService(
             inboxCount >= threshold,
             threshold,
             prioritizedProjects);
+    }
+
+    /// <summary>
+    /// Removes tasks already claimed by a higher-precedence Today section, then
+    /// registers the remaining tasks as seen so lower-precedence sections exclude them too.
+    /// </summary>
+    private static IReadOnlyList<TodayTaskItemDto> ExcludeSeen(
+        IReadOnlyList<TodayTaskItemDto> tasks,
+        HashSet<Guid> seen)
+    {
+        if (tasks.Count == 0)
+            return tasks;
+
+        var remaining = tasks.Where(t => seen.Add(t.Id)).ToList();
+        return remaining.Count == tasks.Count ? tasks : remaining;
     }
 
     // ---------------------------------------------------------------------------
@@ -238,5 +268,10 @@ internal sealed class TodayService(
                                    && s.Status != TaskItemStatus.Done
                                    && s.Status != TaskItemStatus.Archived
                                    && s.DueDate.HasValue
-                                   && s.DueDate.Value.Date == today));
+                                   && s.DueDate.Value.Date == today),
+            t.Subtasks
+                .Where(s => !s.IsArchived && s.Status != TaskItemStatus.Done && s.Status != TaskItemStatus.Archived)
+                .OrderBy(s => s.SortOrder)
+                .Select(s => s.Title)
+                .FirstOrDefault());
 }

@@ -16,6 +16,7 @@
 @inject IAreaService AreaService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IUserTimeZoneService UserTimeZoneService
 
 <PageTitle>Tasks Calendar · Brainy</PageTitle>
 
@@ -370,6 +371,7 @@
     private List<TaskCalendarItem> _calendarItems = [];
     private UpcomingDeadlinesDto? _deadlines;
     private IReadOnlyDictionary<DateOnly, int> _workload = new Dictionary<DateOnly, int>();
+    private DateTime _today = DateTime.Today;
 
     private IReadOnlyList<ProjectDto> _projects = [];
     private IReadOnlyList<AreaDto>    _areas    = [];
@@ -424,7 +426,8 @@
             _calendarItems = BuildCalendarItems(tasks);
             _deadlines     = await CalendarService.GetUpcomingDeadlinesAsync();
 
-            var today = DateOnly.FromDateTime(DateTime.Today);
+            _today = (await UserTimeZoneService.GetUserTodayAsync()).Date;
+            var today = DateOnly.FromDateTime(_today.Date);
             _workload = await CalendarService.GetWorkloadAsync(today, today.AddDays(13));
         }
         catch

@@ -434,6 +434,47 @@ public class TaskServiceTests
     }
 
     [Fact]
+    public async Task SetCurrentTaskAsync_WhenTargetIsWaiting_ThrowsAndLeavesCurrentTaskUnchanged()
+    {
+        var (sut, db) = BuildService(nameof(SetCurrentTaskAsync_WhenTargetIsWaiting_ThrowsAndLeavesCurrentTaskUnchanged));
+        var project = CreateProject(DefaultUserId);
+        var current = CreateTask(project.Id, DefaultUserId, TaskItemStatus.InProgress);
+        current.IsCurrentTask = true;
+        var waiting = CreateTask(project.Id, DefaultUserId, TaskItemStatus.Waiting);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(current, waiting);
+        await db.SaveChangesAsync();
+
+        var act = () => sut.SetCurrentTaskAsync(waiting.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        (await db.Tasks.AsNoTracking().SingleAsync(t => t.Id == current.Id)).IsCurrentTask.Should().BeTrue();
+        (await db.Tasks.AsNoTracking().SingleAsync(t => t.Id == waiting.Id)).IsCurrentTask.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SetCurrentTaskAsync_WhenTargetHasUnresolvedDependency_ThrowsAndLeavesCurrentTaskUnchanged()
+    {
+        var (sut, db) = BuildService(nameof(SetCurrentTaskAsync_WhenTargetHasUnresolvedDependency_ThrowsAndLeavesCurrentTaskUnchanged));
+        var project = CreateProject(DefaultUserId);
+        var current = CreateTask(project.Id, DefaultUserId, TaskItemStatus.InProgress);
+        current.IsCurrentTask = true;
+        var prerequisite = CreateTask(project.Id, DefaultUserId, TaskItemStatus.Todo);
+        var blocked = CreateTask(project.Id, DefaultUserId, TaskItemStatus.Todo);
+        db.Projects.Add(project);
+        db.Tasks.AddRange(current, prerequisite, blocked);
+        await db.SaveChangesAsync();
+        await sut.AddDependencyAsync(blocked.Id, prerequisite.Id);
+
+        var act = () => sut.SetCurrentTaskAsync(blocked.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*prerequisite*");
+        (await db.Tasks.AsNoTracking().SingleAsync(t => t.Id == current.Id)).IsCurrentTask.Should().BeTrue();
+        (await db.Tasks.AsNoTracking().SingleAsync(t => t.Id == blocked.Id)).IsCurrentTask.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task ArchiveAndRestoreAsync_RestoresOnlyTasksFromSameArchiveOperation()
     {
         var (sut, db) = BuildService(nameof(ArchiveAndRestoreAsync_RestoresOnlyTasksFromSameArchiveOperation));

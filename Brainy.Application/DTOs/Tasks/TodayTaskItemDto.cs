@@ -17,4 +17,5 @@ public record TodayTaskItemDto(
     string ProjectName,
     DateTime CreatedAtUtc,
     int OverdueSubtaskCount = 0,
-    int DueTodaySubtaskCount = 0);
+    int DueTodaySubtaskCount = 0,
+    string? NextSubtaskTitle = null);

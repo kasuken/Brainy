@@ -416,6 +416,7 @@
                 <div class="td-sidebar-widgets">
                     @* ── Current focus ── *@
                     <CurrentTaskWidget Task="_aggregate?.CurrentTask"
+                                       Today="_today"
                                        OnChanged="LoadAsync" />
                 </div>
             }
@@ -456,6 +457,7 @@
                     @if (IsWidgetVisible(InProgressWidgetKey))
                     {
                         <InProgressWidget Tasks="_aggregate?.InProgress ?? []"
+                                          Today="_today"
                                           OnComplete="HandleCompleted"
                                           OnEdit="OpenEditTaskDialogAsync" />
                     }
@@ -463,6 +465,7 @@
                     @if (IsWidgetVisible(OverdueWidgetKey))
                     {
                         <OverdueWidget Tasks="_aggregate?.Overdue ?? []"
+                                       Today="_today"
                                        OnComplete="HandleCompleted"
                                        OnSetInProgress="HandleSetInProgress"
                                        OnEdit="OpenEditTaskDialogAsync" />
@@ -485,6 +488,7 @@
                     @if (IsWidgetVisible(HighPriorityProjectWorkWidgetKey))
                     {
                         <HighPriorityProjectWorkWidget Tasks="_aggregate?.HighPriorityWork ?? []"
+                                                       Today="_today"
                                                        OnComplete="HandleCompleted"
                                                        OnSetInProgress="HandleSetInProgress"
                                                        OnEdit="OpenEditTaskDialogAsync" />
@@ -762,7 +766,6 @@
 
             var parameters = new DialogParameters<QuickTaskDialog>
             {
-                { d => d.SelectedDate, DateTime.Today },
                 { d => d.Projects, projects }
             };
 

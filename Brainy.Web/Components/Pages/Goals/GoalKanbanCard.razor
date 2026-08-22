@@ -62,6 +62,7 @@
 
 @code {
     [Parameter] public GoalDto Goal { get; set; } = default!;
+    [Parameter] public DateTime? Today { get; set; }
     [Parameter] public EventCallback<GoalDto> OnCardClicked { get; set; }
     [Parameter] public IReadOnlyList<AreaDto> Areas { get; set; } = [];
     [Parameter] public EventCallback<Guid?> OnAreaChanged { get; set; }
@@ -70,9 +71,12 @@
     private Task HandleAreaChanged(Guid? areaId) => OnAreaChanged.InvokeAsync(areaId);
 
     private bool IsTargetDateUrgent()
-        => Goal.TargetDate.HasValue
-           && Goal.TargetDate.Value.Date <= DateTime.Today.AddDays(7)
+    {
+        var today = (Today ?? DateTime.Today).Date;
+        return Goal.TargetDate.HasValue
+           && Goal.TargetDate.Value.Date <= today.AddDays(7)
            && Goal.Status is not GoalStatus.Achieved and not GoalStatus.Archived;
+    }
 
     private static string GetStatusColor(GoalStatus status) => status switch
     {

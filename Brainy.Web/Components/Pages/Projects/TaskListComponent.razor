@@ -5,6 +5,7 @@
 @inject ITaskService TaskService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IUserTimeZoneService UserTimeZoneService
 
 @if (_loading)
 {
@@ -93,7 +94,7 @@ else
 
             @foreach (var task in FilteredTasks)
             {
-                var overdue = task.DueDate.HasValue && task.DueDate < DateTime.Today && task.Status != TaskItemStatus.Done;
+                var overdue = task.DueDate.HasValue && task.DueDate.Value.Date < _today.Date && task.Status != TaskItemStatus.Done;
                 var dependency = GetDependencySummary(task);
 
                 <div class="tl-row @(task.Status == TaskItemStatus.Done ? "tl-row--done" : "") @(overdue ? "tl-row--overdue" : "")
@@ -165,7 +166,7 @@ else
                                         }
                                         @if (sub.DueDate.HasValue)
                                         {
-                                            <span class="tl-subtask__due @(sub.DueDate < DateTime.Today && sub.Status != TaskItemStatus.Done ? "tl-due--overdue" : "")">
+                                            <span class="tl-subtask__due @(sub.DueDate.Value.Date < _today.Date && sub.Status != TaskItemStatus.Done ? "tl-due--overdue" : "")">
                                                 @sub.DueDate.Value.ToString("MMM d")
                                             </span>
                                         }
@@ -772,6 +773,7 @@ else
     private bool _overdueOnly;
     private string _sortBy = "priority";
     private bool _loading = true;
+    private DateTime _today = DateTime.Today;
     private Guid _loadedProjectId;
     private int _loadedRefreshVersion = -1;
     private readonly HashSet<Guid> _expandedTasks = new();
@@ -792,7 +794,7 @@ else
                 q = q.Where(t => t.Priority == _priorityFilter.Value);
 
             if (_overdueOnly)
-                q = q.Where(t => t.DueDate.HasValue && t.DueDate < DateTime.Today && t.Status != TaskItemStatus.Done);
+                q = q.Where(t => t.DueDate.HasValue && t.DueDate.Value.Date < _today.Date && t.Status != TaskItemStatus.Done);
 
             q = _sortBy switch
             {
@@ -819,6 +821,7 @@ else
 
     private async Task LoadTasksAsync()
     {
+        _today = (await UserTimeZoneService.GetUserTodayAsync()).Date;
         _loading = true;
         _loadedProjectId = ProjectId;
         _loadedRefreshVersion = RefreshVersion;
