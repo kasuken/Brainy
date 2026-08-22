@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.9.0] - 2026-08-22
+
+### Added
+
+- **Today subtask management** — Today task cards now show non-archived subtasks inline, including their status and due date, so users can review and update task progress without leaving the daily workspace.
+
+### Improved
+
+- **Task status actions across Today widgets** — users can complete, reopen, or move tasks and subtasks to In Progress directly from the Today dashboard, with refreshed sections after each change.
+- **Today task data** — service projections now include ordered subtask details while preserving the existing project and task context.
+- **Today regression coverage** — added tests for subtask data and Today task behavior introduced by the new workflow.
+
+---
+
 ## [5.8.0] - 2026-08-22
 
 ### Improved
