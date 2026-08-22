@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.6.0] - 2026-08-22
+
+### Added
+
+- **Quick task due dates** — the quick task dialog now lets users add an optional due date during capture, making lightweight task creation better aligned with calendar and Today planning workflows.
+- **Today dashboard presets** — dashboard preferences now include preset choices for minimal and full widget layouts.
+
+### Improved
+
+- **User-calendar date handling** — task, project, goal, calendar, and Today surfaces now compare due and overdue work against the user's current date instead of a server-centric date.
+- **Current focus detail** — the current task widget now exposes richer task context, including due-date and project information surfaced from the application services.
+- **Pricing and registration defaults** — public pricing now reflects the latest currency and amounts, and registration is enabled by default for new deployments.
+
+---
+
 ## [5.5.0] - 2026-08-20
 
 ### Added
