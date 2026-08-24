@@ -201,6 +201,29 @@ public sealed class WeekServiceTests
     }
 
     [Fact]
+    public async Task GetCurrentWeekOverviewAsync_TracksWeeklySelectionCountsWithoutTranslationFailure()
+    {
+        var fixture = BuildFixture(nameof(GetCurrentWeekOverviewAsync_TracksWeeklySelectionCountsWithoutTranslationFailure));
+        var project = CreateProject(DefaultUserId, name: "Selected project");
+        var selectedTask = CreateTask(project, DefaultUserId, "Selected this week");
+        var unselectedTask = CreateTask(project, DefaultUserId, "Not selected");
+        fixture.Db.AddRange(project, selectedTask, unselectedTask);
+        fixture.Db.WeeklyTaskSelections.Add(new WeeklyTaskSelection
+        {
+            Id = Guid.NewGuid(),
+            UserId = DefaultUserId,
+            TaskId = selectedTask.Id,
+            WeekStartDate = new DateTime(2026, 6, 15)
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        var overview = await fixture.Week.GetCurrentWeekOverviewAsync();
+
+        overview.Projects.Should().ContainSingle(projectSummary => projectSummary.Id == project.Id);
+        overview.Projects.Single(projectSummary => projectSummary.Id == project.Id).WeeklySelectionCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task GetCurrentWeekOverviewAsync_KeepsCompletedSelections_AndShowsDueAttention()
     {
         var fixture = BuildFixture(nameof(GetCurrentWeekOverviewAsync_KeepsCompletedSelections_AndShowsDueAttention));

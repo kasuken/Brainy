@@ -559,10 +559,11 @@ internal sealed class WeekService(
                     task.Status != TaskItemStatus.Archived &&
                     task.DueDate.HasValue &&
                     task.DueDate.Value.Date < today),
-                context.WeeklyTaskSelections.Count(selection =>
-                    selection.UserId == userId &&
-                    selection.WeekStartDate == weekStartDate &&
-                    selection.Task.ProjectId == project.Id),
+                project.Tasks.Count(task =>
+                    context.WeeklyTaskSelections.Any(selection =>
+                        selection.UserId == userId &&
+                        selection.WeekStartDate == weekStartDate &&
+                        selection.TaskId == task.Id)),
                 project.RowVersion));
     }
 
