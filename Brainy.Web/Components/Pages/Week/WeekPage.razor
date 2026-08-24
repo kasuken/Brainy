@@ -321,6 +321,10 @@
         margin-top: 1rem;
     }
 
+    .wk-subsection:first-child {
+        margin-top: 0;
+    }
+
     .wk-subsection__title {
         margin: 0 0 .65rem;
         font-size: .85rem;
@@ -328,6 +332,14 @@
         text-transform: uppercase;
         color: var(--mud-palette-text-disabled);
         font-weight: 800;
+    }
+
+    .wk-task-project {
+        margin: 0 0 .2rem;
+        font-size: .78rem;
+        font-weight: 800;
+        letter-spacing: .04em;
+        color: var(--mud-palette-text-secondary);
     }
 
     .wk-inline-alert {
@@ -401,7 +413,7 @@
                 <div class="wk-panel__head">
                     <div>
                         <h2 id="projects-heading" class="wk-panel__title">Project overview</h2>
-                        <p class="wk-panel__caption">Review active and inactive work before you commit the week.</p>
+                        <p class="wk-panel__caption">Grouped by status, then ordered by priority, due date, and name.</p>
                     </div>
                 </div>
 
@@ -411,10 +423,14 @@
                 }
                 else
                 {
-                    <div class="wk-project-list">
-                        @foreach (var project in _overview.Projects)
+                    @foreach (var statusGroup in ProjectGroups)
+                    {
+                        <div class="wk-subsection" @key="statusGroup.Key">
+                            <h3 class="wk-subsection__title">@GetProjectStatusLabel(statusGroup.Key) · @statusGroup.Count() project@(statusGroup.Count() == 1 ? "" : "s")</h3>
+                            <div class="wk-project-list">
+                        @foreach (var project in statusGroup)
                         {
-                            <article class="wk-project-card">
+                            <article class="wk-project-card" @key="project.Id">
                                 <div class="wk-project-card__row">
                                     <div>
                                         <h3 class="wk-project-name">
@@ -466,7 +482,9 @@
                                 </div>
                             </article>
                         }
-                    </div>
+                            </div>
+                        </div>
+                    }
                 }
             </section>
 
@@ -476,6 +494,7 @@
                         <div class="wk-panel__head">
                             <div>
                                 <h2 id="workspace-heading" class="wk-panel__title">Task-selection workspace</h2>
+                                <p class="wk-panel__caption">Only active projects can receive new weekly commitments.</p>
                                 <p class="wk-panel__caption">Choose the tasks you intend to advance this week without changing their dates or status.</p>
                             </div>
                         </div>
@@ -488,8 +507,8 @@
                                        Variant="Variant.Outlined"
                                        Margin="Margin.Dense"
                                        Dense="true"
-                                       Disabled="@(_overview.Projects.Count == 0)">
-                                @foreach (var project in _overview.Projects)
+                                       Disabled="@(SelectableProjects.Count == 0)">
+                                @foreach (var project in SelectableProjects)
                                 {
                                     <MudSelectItem Value="@((Guid?)project.Id)">@project.Emoji @project.Name</MudSelectItem>
                                 }
@@ -523,6 +542,10 @@
                         else if (_pickerLoading)
                         {
                             <MudProgressLinear Indeterminate="true" Color="Color.Warning" />
+                        }
+                        else if (SelectableProjects.Count == 0)
+                        {
+                            <div class="wk-empty">No active projects are available. Activate a project to plan its tasks.</div>
                         }
                         else if (_picker is null)
                         {
@@ -728,10 +751,11 @@
                                         <h3 class="wk-subsection__title">Selected tasks that need replanning</h3>
                                         @foreach (var task in _overview.NeedsReplanning)
                                         {
-                                            <article class="wk-task-card">
+                                            <article class="wk-task-card" @key="task.Id">
                                                 <div class="wk-task-card__row">
                                                     <div>
-                                                        <h4 class="wk-task-title">@task.ProjectEmoji @task.Title</h4>
+                                                        <p class="wk-task-project">@task.ProjectEmoji @task.ProjectName</p>
+                                                        <h4 class="wk-task-title">@task.Title</h4>
                                                         <div class="wk-meta">
                                                             <span class="wk-meta__pill">@GetTaskStatusLabel(task.Status)</span>
                                                             <span class="wk-meta__pill">@GetProjectStatusLabel(task.ProjectStatus)</span>
@@ -834,6 +858,32 @@
         ? 0
         : _overview.OverdueAttention.Count + _overview.DueThisWeekAttention.Count + _overview.NeedsReplanning.Count;
 
+    // Groups render in this lifecycle order so execution-ready work sits at the top.
+    private static readonly ProjectStatus[] StatusGroupOrder =
+        [ProjectStatus.Active, ProjectStatus.Blocked, ProjectStatus.NotStarted, ProjectStatus.Parked];
+
+    private IEnumerable<IGrouping<ProjectStatus, WeekProjectOverviewDto>> ProjectGroups =>
+        (_overview?.Projects ?? [])
+            .OrderBy(project => GetStatusGroupRank(project.Status))
+            .ThenByDescending(project => project.Priority)
+            .ThenBy(project => project.DueDate ?? DateTime.MaxValue)
+            .ThenBy(project => project.Name, StringComparer.CurrentCultureIgnoreCase)
+            .GroupBy(project => project.Status);
+
+    private IReadOnlyList<WeekProjectOverviewDto> SelectableProjects =>
+        (_overview?.Projects ?? [])
+            .Where(project => project.Status == ProjectStatus.Active)
+            .OrderByDescending(project => project.Priority)
+            .ThenBy(project => project.DueDate ?? DateTime.MaxValue)
+            .ThenBy(project => project.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+    private static int GetStatusGroupRank(ProjectStatus status)
+    {
+        var index = Array.IndexOf(StatusGroupOrder, status);
+        return index < 0 ? StatusGroupOrder.Length : index;
+    }
+
     private string GetRangeLabel()
     {
         if (_overview is null)
@@ -852,15 +902,16 @@
             _overview = await WeekService.GetCurrentWeekOverviewAsync();
             SyncCarryForwardSelection();
 
-            if (_overview.Projects.Count == 0)
+            var selectable = SelectableProjects;
+            if (selectable.Count == 0)
             {
                 _selectedProjectId = null;
                 _picker = null;
             }
             else
             {
-                if (_selectedProjectId is null || !_overview.Projects.Any(project => project.Id == _selectedProjectId))
-                    _selectedProjectId = _overview.Projects[0].Id;
+                if (_selectedProjectId is null || !selectable.Any(project => project.Id == _selectedProjectId))
+                    _selectedProjectId = selectable[0].Id;
 
                 await ReloadPickerAsync();
             }
@@ -1066,7 +1117,8 @@
         @<article class="wk-task-card" @key="task.Id">
             <div class="wk-task-card__row">
                 <div>
-                    <h4 class="wk-task-title">@task.ProjectEmoji @task.Title</h4>
+                    <p class="wk-task-project">@task.ProjectEmoji @task.ProjectName</p>
+                    <h4 class="wk-task-title">@task.Title</h4>
                     <div class="wk-meta">
                         <span class="wk-meta__pill">@GetTaskStatusLabel(task.Status)</span>
                         @if (task.DueDate.HasValue)
