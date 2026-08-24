@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.11.0] - 2026-08-24
+
+### Added
+
+- **Planned this week Today widget** — weekly commitments now flow into Today with completion progress, active commitment counts, due-date context, project links, next-subtask visibility, and clear empty, completed, and replanning states.
+- **Weekly execution actions** — commitments can be edited, marked complete, or set as the current focus directly from the Today widget, with a direct link back to the Week planning workspace.
+- **Dashboard preference support** — the new weekly commitments widget can be enabled or hidden alongside the existing Today dashboard widgets.
+
+### Improved
+
+- **Today planning guidance** — Today’s guidance and execution flow now distinguish deliberate weekly commitments from general deadline-driven work.
+
+---
+
 ## [5.10.5] - 2026-08-24
 
 ### Improved
