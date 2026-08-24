@@ -1097,7 +1097,7 @@
         builder.AddAttribute(21, "Variant", Variant.Text);
         builder.AddAttribute(22, "Color", Color.Warning);
         builder.AddAttribute(23, "Disabled", !task.CanAddToWeek || _mutatingTaskIds.Contains(task.Id));
-        builder.AddAttribute(24, "OnClick", EventCallback.Factory.Create(this, () => AddToWeekAsync(task.Id)));
+        builder.AddAttribute(24, "OnClick", EventCallback.Factory.Create<MouseEventArgs>(this, () => AddToWeekAsync(task.Id)));
         builder.AddAttribute(25, "ChildContent", (RenderFragment)(button =>
         {
             button.AddContent(26, "Add to week");
