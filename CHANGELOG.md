@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.10.3] - 2026-08-24
+
+### Improved
+
+- **Weekly selection counts** — corrected weekly project selection counting to use task-level selection membership, avoiding query translation failures and accurately reporting the number of selected tasks.
+- **Weekly planning regression coverage** — added a service test covering selection counts for projects with both selected and unselected tasks.
+
+---
+
 ## [5.10.2] - 2026-08-24
 
 ### Improved
