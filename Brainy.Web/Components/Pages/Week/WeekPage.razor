@@ -341,7 +341,7 @@
             <div class="wk-hero__row">
                 <div>
                     <p class="wk-eyebrow">Deliberate weekly commitments</p>
-                    <h1 id="week-heading" class="wk-title">Week @(_overview?.WeekNumber ?? 0)</h1>
+                    <h1 id="week-heading" class="wk-title">@(_overview is null ? "Week" : $"Week {_overview.WeekNumber}")</h1>
                     <p class="wk-range">@GetRangeLabel()</p>
                 </div>
 
@@ -619,7 +619,7 @@
                             <div class="wk-plan-groups">
                                 @foreach (var group in _overview.SelectedTaskGroups)
                                 {
-                                    <article class="wk-plan-group">
+                                    <article class="wk-plan-group" @key="group.Project.Id">
                                         <div class="wk-plan-group__head">
                                             <div>
                                                 <h3 class="wk-project-name">
@@ -1062,60 +1062,33 @@
         _carryForwardTaskIds.RemoveWhere(taskId => !allowed.Contains(taskId));
     }
 
-    private RenderFragment RenderAttentionTask(WeekTaskCardDto task) => builder =>
-    {
-        builder.OpenElement(0, "article");
-        builder.AddAttribute(1, "class", "wk-task-card");
-        builder.AddMarkupContent(2, "<div class=\"wk-task-card__row\">");
-        builder.OpenElement(3, "div");
-        builder.OpenElement(4, "h4");
-        builder.AddAttribute(5, "class", "wk-task-title");
-        builder.AddContent(6, $"{task.ProjectEmoji} {task.Title}");
-        builder.CloseElement();
-        builder.OpenElement(7, "div");
-        builder.AddAttribute(8, "class", "wk-meta");
-        builder.OpenElement(9, "span");
-        builder.AddAttribute(10, "class", "wk-meta__pill");
-        builder.AddContent(11, GetTaskStatusLabel(task.Status));
-        builder.CloseElement();
-        if (task.DueDate.HasValue)
-        {
-            builder.OpenElement(12, "span");
-            builder.AddAttribute(13, "class", "wk-meta__pill");
-            builder.AddContent(14, $"Due {task.DueDate.Value:MMM d}");
-            builder.CloseElement();
-        }
-        builder.CloseElement();
-        builder.OpenElement(15, "p");
-        builder.AddAttribute(16, "class", "wk-task-note");
-        builder.AddContent(17, task.AttentionReason);
-        builder.CloseElement();
-        builder.CloseElement();
-        builder.OpenElement(18, "div");
-        builder.AddAttribute(19, "class", "wk-task-actions");
-        builder.OpenComponent<MudButton>(20);
-        builder.AddAttribute(21, "Variant", Variant.Text);
-        builder.AddAttribute(22, "Color", Color.Warning);
-        builder.AddAttribute(23, "Disabled", !task.CanAddToWeek || _mutatingTaskIds.Contains(task.Id));
-        builder.AddAttribute(24, "OnClick", EventCallback.Factory.Create<MouseEventArgs>(this, () => AddToWeekAsync(task.Id)));
-        builder.AddAttribute(25, "ChildContent", (RenderFragment)(button =>
-        {
-            button.AddContent(26, "Add to week");
-        }));
-        builder.CloseComponent();
-        builder.OpenComponent<MudButton>(27);
-        builder.AddAttribute(28, "Variant", Variant.Text);
-        builder.AddAttribute(29, "Color", Color.Default);
-        builder.AddAttribute(30, "Href", $"/projects/{task.ProjectId}");
-        builder.AddAttribute(31, "ChildContent", (RenderFragment)(button =>
-        {
-            button.AddContent(32, "Open project");
-        }));
-        builder.CloseComponent();
-        builder.CloseElement();
-        builder.AddMarkupContent(33, "</div>");
-        builder.CloseElement();
-    };
+    private RenderFragment<WeekTaskCardDto> RenderAttentionTask => task =>
+        @<article class="wk-task-card" @key="task.Id">
+            <div class="wk-task-card__row">
+                <div>
+                    <h4 class="wk-task-title">@task.ProjectEmoji @task.Title</h4>
+                    <div class="wk-meta">
+                        <span class="wk-meta__pill">@GetTaskStatusLabel(task.Status)</span>
+                        @if (task.DueDate.HasValue)
+                        {
+                            <span class="wk-meta__pill">Due @task.DueDate.Value.ToString("MMM d")</span>
+                        }
+                    </div>
+                    <p class="wk-task-note">@task.AttentionReason</p>
+                </div>
+                <div class="wk-task-actions">
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Warning"
+                               Disabled="@(!task.CanAddToWeek || _mutatingTaskIds.Contains(task.Id))"
+                               OnClick="() => AddToWeekAsync(task.Id)">
+                        Add to week
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Default" Href="@($"/projects/{task.ProjectId}")">
+                        Open project
+                    </MudButton>
+                </div>
+            </div>
+        </article>;
 
     private static string GetProjectStatusLabel(ProjectStatus status) => status switch
     {
