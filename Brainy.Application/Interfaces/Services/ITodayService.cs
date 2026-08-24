@@ -33,6 +33,12 @@ public interface ITodayService
     Task<IReadOnlyList<TodayTaskItemDto>> GetOverdueAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns the authenticated user's deliberate current-week commitments,
+    /// separated from deadline-driven "Due this week" work.
+    /// </summary>
+    Task<TodayPlannedWeekDto> GetPlannedThisWeekAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns non-done tasks due within the next 6 days (excluding today), ordered by due date.
     /// </summary>
     Task<IReadOnlyList<TodayTaskItemDto>> GetDueThisWeekAsync(CancellationToken cancellationToken = default);

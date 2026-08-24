@@ -91,6 +91,74 @@ internal sealed class TodayService(
             .ConfigureAwait(false);
     }
 
+    public async Task<TodayPlannedWeekDto> GetPlannedThisWeekAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
+        var week = WeekDateHelper.GetWeekContaining(today);
+
+        var selectionStates = await context.WeeklyTaskSelections
+            .AsNoTracking()
+            .Where(selection =>
+                selection.UserId == userId &&
+                selection.WeekStartDate == week.WeekStartDate &&
+                selection.Task.UserId == userId &&
+                selection.Task.Project.UserId == userId)
+            .Select(selection => new
+            {
+                selection.Task.Status,
+                IsActionable =
+                    !selection.Task.IsArchived &&
+                    selection.Task.ParentTaskId == null &&
+                    !selection.Task.Project.IsArchived &&
+                    selection.Task.Project.Status == ProjectStatus.Active &&
+                    (selection.Task.Status == TaskItemStatus.Todo ||
+                     selection.Task.Status == TaskItemStatus.InProgress) &&
+                    !selection.Task.Dependencies.Any(dependency =>
+                        dependency.DependsOnTask.IsArchived ||
+                        dependency.DependsOnTask.Status != TaskItemStatus.Done)
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var tasks = await context.WeeklyTaskSelections
+            .AsNoTracking()
+            .Where(selection =>
+                selection.UserId == userId &&
+                selection.WeekStartDate == week.WeekStartDate &&
+                selection.Task.UserId == userId &&
+                selection.Task.Project.UserId == userId &&
+                !selection.Task.IsArchived &&
+                selection.Task.ParentTaskId == null &&
+                !selection.Task.Project.IsArchived &&
+                selection.Task.Project.Status == ProjectStatus.Active &&
+                (selection.Task.Status == TaskItemStatus.Todo ||
+                 selection.Task.Status == TaskItemStatus.InProgress) &&
+                !selection.Task.Dependencies.Any(dependency =>
+                    dependency.DependsOnTask.IsArchived ||
+                    dependency.DependsOnTask.Status != TaskItemStatus.Done))
+            .OrderByDescending(selection => selection.Task.IsCurrentTask)
+            .ThenByDescending(selection => selection.Task.Status == TaskItemStatus.InProgress)
+            .ThenByDescending(selection => selection.Task.Priority)
+            .ThenBy(selection => selection.Task.DueDate)
+            .ThenBy(selection => selection.Task.Title)
+            .Select(selection => selection.Task)
+            .Select(BuildToDto(today))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var completedTaskCount = selectionStates.Count(state => state.Status == TaskItemStatus.Done);
+        var needsReplanningCount = selectionStates.Count(state =>
+            state.Status != TaskItemStatus.Done && !state.IsActionable);
+
+        return new TodayPlannedWeekDto(
+            selectionStates.Count,
+            completedTaskCount,
+            tasks.Count,
+            needsReplanningCount,
+            tasks);
+    }
+
     public async Task<IReadOnlyList<TodayTaskItemDto>> GetDueThisWeekAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
@@ -157,6 +225,7 @@ internal sealed class TodayService(
         var inProgress          = await GetCurrentTasksAsync(cancellationToken).ConfigureAwait(false);
         var overdue              = await GetOverdueAsync(cancellationToken).ConfigureAwait(false);
         var dueToday            = await GetDueTodayAsync(cancellationToken).ConfigureAwait(false);
+        var plannedThisWeek     = await GetPlannedThisWeekAsync(cancellationToken).ConfigureAwait(false);
         var highPriorityWork    = await GetHighPriorityTasksAsync(cancellationToken).ConfigureAwait(false);
         var dueThisWeek         = await GetDueThisWeekAsync(cancellationToken).ConfigureAwait(false);
         var nextTasks           = await GetNextTasksAsync(cancellationToken).ConfigureAwait(false);
@@ -168,7 +237,7 @@ internal sealed class TodayService(
         // Deduplicate across sections: once a task appears in a higher-precedence
         // section it must not be repeated lower down. Precedence mirrors the Today
         // rendering order: Current focus -> In progress -> Overdue -> Due today ->
-        // High priority -> This week -> Coming up.
+        // Planned this week -> High priority -> This week -> Coming up.
         // The Current focus task is intentionally NOT excluded from In Progress: it
         // should always be visible there too when its status is In Progress. It is
         // still excluded from every section below In Progress.
@@ -179,6 +248,7 @@ internal sealed class TodayService(
 
         overdue          = ExcludeSeen(overdue, seen);
         dueToday         = ExcludeSeen(dueToday, seen);
+        plannedThisWeek  = plannedThisWeek with { Tasks = ExcludeSeen(plannedThisWeek.Tasks, seen) };
         highPriorityWork = ExcludeSeen(highPriorityWork, seen);
         dueThisWeek      = ExcludeSeen(dueThisWeek, seen);
         nextTasks        = ExcludeSeen(nextTasks, seen);
@@ -197,6 +267,7 @@ internal sealed class TodayService(
             highPriorityWork,
             overdue,
             dueToday,
+            plannedThisWeek,
             dueThisWeek,
             nextTasks,
             inboxCount,

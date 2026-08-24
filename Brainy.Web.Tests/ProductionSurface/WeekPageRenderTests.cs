@@ -45,6 +45,29 @@ public sealed class WeekPageRenderTests
         content.Should().NotContain("Other selected task");
     }
 
+    [Fact]
+    public async Task AuthenticatedTodayPage_RendersCurrentUsersPlannedWeekAboveProjectWork()
+    {
+        await using var factory = new AuthenticatedWeekPageFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        await factory.SeedAsync();
+
+        using var response = await client.GetAsync("/today");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.EnsureSuccessStatusCode();
+        content.Should().Contain("Planned this week");
+        content.Should().Contain("Owner selected task");
+        content.Should().NotContain("Other selected task");
+        content.IndexOf("Planned this week", StringComparison.Ordinal)
+            .Should().BeLessThan(content.IndexOf("Priority Projects", StringComparison.Ordinal));
+    }
+
     private sealed class AuthenticatedWeekPageFactory : WebApplicationFactory<Program>
     {
         private const string DatabaseName = "WeekPageRenderTests";

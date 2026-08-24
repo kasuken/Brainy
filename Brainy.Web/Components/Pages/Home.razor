@@ -525,6 +525,7 @@
                          && !(_aggregate?.InProgress?.Any() ?? false)
                          && !(_aggregate?.Overdue?.Any() ?? false)
                          && !(_aggregate?.DueToday?.Any() ?? false)
+                         && !(_aggregate?.PlannedThisWeek.Tasks.Any() ?? false)
                          && !(_aggregate?.HighPriorityWork?.Any() ?? false)
                          && !(_aggregate?.DueThisWeek?.Any() ?? false)
                          && !(_aggregate?.NextTasks?.Any() ?? false))
@@ -533,6 +534,16 @@
                     }
 
                 </div>
+
+                @* ── Deliberate weekly commitments ── *@
+                @if (IsWidgetVisible(PlannedThisWeekWidgetKey) && _aggregate is not null)
+                {
+                    <PlannedThisWeekWidget Plan="_aggregate.PlannedThisWeek"
+                                           Today="_today"
+                                           OnFocus="HandleSetCurrentFocus"
+                                           OnComplete="HandleCompleted"
+                                           OnEdit="OpenEditTaskDialogAsync" />
+                }
 
                 @* ── Priority projects (Bottom) ── *@
                 @if (IsWidgetVisible(PriorityProjectsWidgetKey) && _prioritizedProjects.Count > 0)
@@ -572,6 +583,7 @@
                     "Track your Current focus alongside a daily snapshot and Inbox reminder.",
                     "See every task marked In Progress at the top of the execution flow.",
                     "Review overdue, due today, due this week, and next tasks in one execution flow.",
+                    "Bring deliberate weekly commitments into execution without confusing them with deadlines.",
                     "See high-priority project work, priority projects, and goal deadlines before they drift.",
                     "Use quick actions to add a task, process the Inbox, or create a note."
                 ]
@@ -598,7 +610,8 @@
                     "Start with Current focus: mark it complete, clear it, switch tasks, or set the suggested task as focus.",
                     "Use the daily snapshot and the Overdue section to clear anything already slipping.",
                     "Work Due Today and High-priority project work before moving to lower-pressure items.",
-                    "Plan Due This Week and Next Tasks so upcoming work is visible early.",
+                    "Use Planned this week to advance deliberate commitments before scanning general upcoming work.",
+                    "Plan Due This Week and Next Tasks so upcoming deadlines remain visible early.",
                     "Use New Task, Process Inbox, or New Note from quick actions when work needs to be captured."
                 ]
             }
@@ -618,6 +631,7 @@
     private const string HighPriorityProjectWorkWidgetKey = "high-priority-project-work";
     private const string DueThisWeekWidgetKey = "due-this-week";
     private const string NextTasksWidgetKey = "next-tasks";
+    private const string PlannedThisWeekWidgetKey = "planned-this-week";
     private const string PriorityProjectsWidgetKey = "priority-projects";
 
     private static readonly string[] DefaultWidgetKeys =
@@ -631,6 +645,7 @@
         HighPriorityProjectWorkWidgetKey,
         DueThisWeekWidgetKey,
         NextTasksWidgetKey,
+        PlannedThisWeekWidgetKey,
         PriorityProjectsWidgetKey
     ];
 
@@ -761,6 +776,20 @@
         catch
         {
             Snackbar.Add("Could not update task.", Severity.Error);
+        }
+    }
+
+    private async Task HandleSetCurrentFocus(Guid taskId)
+    {
+        try
+        {
+            await TaskService.SetCurrentTaskAsync(taskId);
+            Snackbar.Add("Current focus updated.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
         }
     }
 

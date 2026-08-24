@@ -13,6 +13,7 @@ public record TodayAggregateDto(
     IReadOnlyList<TodayTaskItemDto> HighPriorityWork,
     IReadOnlyList<TodayTaskItemDto> Overdue,
     IReadOnlyList<TodayTaskItemDto> DueToday,
+    TodayPlannedWeekDto PlannedThisWeek,
     IReadOnlyList<TodayTaskItemDto> DueThisWeek,
     IReadOnlyList<TodayTaskItemDto> NextTasks,
     int InboxCount,

@@ -48,11 +48,13 @@ public sealed class WeekSqlServerTests
         var overview = await fixture.WeekService.GetCurrentWeekOverviewAsync();
         var picker = await fixture.WeekService.GetSelectableTasksAsync(fixture.ProjectId);
         var carryForward = await fixture.WeekService.GetCarryForwardCandidatesAsync();
+        var today = await fixture.TodayService.GetTodayAggregateAsync();
 
         Assert.Equal(new DateTime(2026, 6, 15), overview.WeekStartDate);
         Assert.Single(overview.SelectedTaskGroups);
         Assert.NotEmpty(picker.Tasks);
         Assert.Single(carryForward);
+        Assert.Single(today.PlannedThisWeek.Tasks);
     }
 
     private sealed class SqlServerWeekFixture : IAsyncDisposable
@@ -73,6 +75,7 @@ public sealed class WeekSqlServerTests
         public Guid PrimaryTaskId { get; private set; }
         public BrainyDbContext Context => _provider.GetRequiredService<BrainyDbContext>();
         public IWeekService WeekService => _provider.GetRequiredService<IWeekService>();
+        public ITodayService TodayService => _provider.GetRequiredService<ITodayService>();
 
         public static async Task<SqlServerWeekFixture> CreateAsync()
         {
@@ -153,7 +156,7 @@ public sealed class WeekSqlServerTests
                 UserId = UserId,
                 Project = project,
                 Title = "Selected task",
-                Status = TaskItemStatus.InProgress
+                Status = TaskItemStatus.Todo
             };
             var dueTask = new TaskItem
             {

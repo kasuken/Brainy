@@ -74,7 +74,7 @@ internal static class DevelopmentDataSeeder
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
-            WidgetOrder = "[\"CurrentTask\",\"Overdue\",\"DueToday\",\"ThisWeek\",\"NextTasks\",\"HighPriority\",\"InboxReminder\",\"FocusSummary\"]",
+            WidgetOrder = "[\"daily-snapshot\",\"current-focus\",\"in-progress\",\"overdue\",\"goal-deadlines\",\"due-today\",\"high-priority-project-work\",\"due-this-week\",\"next-tasks\",\"planned-this-week\",\"priority-projects\"]",
             CollapsedWidgets = "[]",
             InboxWarningThreshold = 8,
             CreatedAtUtc = now.AddDays(-14),

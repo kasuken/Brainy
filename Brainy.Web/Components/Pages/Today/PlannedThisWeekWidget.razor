@@ -1,0 +1,404 @@
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.DTOs.Today
+@using Brainy.Domain.Enums
+
+<section class="td-week-plan" aria-labelledby="td-week-plan-title">
+    <div class="td-week-plan__glow" aria-hidden="true"></div>
+    <header class="td-week-plan__header">
+        <div>
+            <p class="td-week-plan__eyebrow">Weekly commitment</p>
+            <h2 id="td-week-plan-title" class="td-week-plan__title">Planned this week</h2>
+            <p class="td-week-plan__intro">The deliberate work you chose on Week, brought into today’s execution flow.</p>
+        </div>
+        <div class="td-week-plan__header-actions">
+            <a class="td-week-plan__open" href="/today/week">
+                Open Week
+                <MudIcon Icon="@Icons.Material.Outlined.ArrowForward" Size="Size.Small" />
+            </a>
+            <MudIconButton Icon="@(_collapsed ? Icons.Material.Outlined.ExpandMore : Icons.Material.Outlined.ExpandLess)"
+                           Size="Size.Small"
+                           Class="td-week-plan__collapse"
+                           aria-label="@(_collapsed ? "Expand planned this week" : "Collapse planned this week")"
+                           aria-expanded="@(!_collapsed)"
+                           OnClick="ToggleCollapsed" />
+        </div>
+    </header>
+
+    @if (!_collapsed)
+    {
+        <div class="td-week-plan__progress-row">
+            <div class="td-week-plan__progress-copy">
+                <strong>@Plan.CompletedTaskCount of @Plan.SelectedTaskCount complete</strong>
+                <span>@Plan.ActionableTaskCount active commitment@(Plan.ActionableTaskCount == 1 ? "" : "s")</span>
+            </div>
+            <div class="td-week-plan__track"
+                 role="progressbar"
+                 aria-label="Weekly plan completion"
+                 aria-valuemin="0"
+                 aria-valuemax="100"
+                 aria-valuenow="@CompletionPercent">
+                <span style="width:@($"{CompletionPercent}%")"></span>
+            </div>
+        </div>
+
+        @if (Plan.SelectedTaskCount == 0)
+        {
+            <div class="td-week-plan__empty">
+                <MudIcon Icon="@Icons.Material.Outlined.EventNote" Size="Size.Medium" />
+                <div>
+                    <strong>No weekly commitments yet</strong>
+                    <span>Choose the work you want to advance before the week fills itself.</span>
+                </div>
+                <MudButton Href="/today/week" Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small">
+                    Plan the week
+                </MudButton>
+            </div>
+        }
+        else if (Tasks.Count == 0 && Plan.ActionableTaskCount > 0)
+        {
+            <p class="td-week-plan__notice">
+                Every active weekly commitment is already visible in the higher-priority Today sections above.
+            </p>
+        }
+        else if (Tasks.Count == 0 && Plan.NeedsReplanningCount > 0)
+        {
+            <p class="td-week-plan__notice">
+                No actionable commitments remain here. Review the weekly items that need replanning.
+            </p>
+        }
+        else if (Tasks.Count == 0)
+        {
+            <p class="td-week-plan__notice td-week-plan__notice--complete">
+                Your actionable weekly commitments are complete.
+            </p>
+        }
+        else
+        {
+            <div class="td-week-plan__tasks">
+                @foreach (var task in Tasks)
+                {
+                    var isOverdue = task.DueDate.HasValue && task.DueDate.Value.Date < Today.Date;
+                    <article class="td-week-plan__task @PriorityClass(task.Priority)" @key="task.Id">
+                        <div class="td-week-plan__task-copy">
+                            <a class="td-week-plan__project" href="@($"/projects/{task.ProjectId}")">@task.ProjectName</a>
+                            <h3 class="td-week-plan__task-title">@task.Title</h3>
+                            <div class="td-week-plan__meta">
+                                <span>@task.Priority priority</span>
+                                @if (task.DueDate.HasValue)
+                                {
+                                    <span class="@(isOverdue ? "td-week-plan__due--overdue" : null)">
+                                        @(isOverdue ? "Overdue · " : "Due ")@task.DueDate.Value.ToString("MMM d")
+                                    </span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(task.NextSubtaskTitle))
+                            {
+                                <p class="td-week-plan__next">
+                                    <MudIcon Icon="@Icons.Material.Outlined.SubdirectoryArrowRight" Size="Size.Small" />
+                                    Next: @task.NextSubtaskTitle
+                                </p>
+                            }
+                        </div>
+                        <div class="td-week-plan__task-actions">
+                            <MudTooltip Text="Edit task">
+                                <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                               Size="Size.Small"
+                                               OnClick="() => OnEdit.InvokeAsync(task)" />
+                            </MudTooltip>
+                            <MudTooltip Text="Set as current focus">
+                                <MudIconButton Icon="@Icons.Material.Outlined.CenterFocusStrong"
+                                               Size="Size.Small"
+                                               Color="Color.Warning"
+                                               OnClick="() => OnFocus.InvokeAsync(task.Id)" />
+                            </MudTooltip>
+                            <MudTooltip Text="Mark complete">
+                                <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                                               Size="Size.Small"
+                                               Color="Color.Success"
+                                               OnClick="() => OnComplete.InvokeAsync(task.Id)" />
+                            </MudTooltip>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+
+        @if (Plan.NeedsReplanningCount > 0)
+        {
+            <a class="td-week-plan__replan" href="/today/week">
+                <MudIcon Icon="@Icons.Material.Outlined.Rule" Size="Size.Small" />
+                @Plan.NeedsReplanningCount commitment@(Plan.NeedsReplanningCount == 1 ? " needs" : "s need") replanning
+            </a>
+        }
+    }
+</section>
+
+<style>
+    .td-week-plan {
+        position: relative;
+        overflow: hidden;
+        margin-top: 3.5rem;
+        padding: clamp(1.15rem, 2.5vw, 1.7rem);
+        border: 1px solid rgba(124, 97, 65, .16);
+        border-radius: 24px;
+        background:
+            linear-gradient(120deg, rgba(255, 251, 245, .98), rgba(248, 242, 232, .94)),
+            var(--paper-raised);
+        box-shadow: 0 18px 48px rgba(63, 45, 32, .09);
+    }
+
+    .td-week-plan__glow {
+        position: absolute;
+        width: 15rem;
+        height: 15rem;
+        right: -7rem;
+        top: -9rem;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(205, 154, 58, .22), transparent 68%);
+        pointer-events: none;
+    }
+
+    .td-week-plan__header {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        justify-content: space-between;
+        margin-bottom: 1.1rem;
+    }
+
+    .td-week-plan__eyebrow {
+        margin: 0 0 .3rem;
+        color: var(--clay, #c0561d);
+        font-size: .68rem;
+        font-weight: 800;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+    }
+
+    .td-week-plan__title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: clamp(1.55rem, 3vw, 2.15rem);
+        line-height: 1.05;
+        color: var(--ink, var(--mud-palette-text-primary));
+    }
+
+    .td-week-plan__intro {
+        max-width: 46rem;
+        margin: .4rem 0 0;
+        color: var(--ink-soft, var(--mud-palette-text-secondary));
+        font-size: .9rem;
+    }
+
+    .td-week-plan__header-actions,
+    .td-week-plan__task-actions {
+        display: flex;
+        align-items: center;
+        gap: .2rem;
+    }
+
+    .td-week-plan__open {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        color: var(--clay, #c0561d);
+        font-size: .78rem;
+        font-weight: 800;
+        text-decoration: none;
+    }
+
+    .td-week-plan__open:hover { text-decoration: underline; }
+
+    .td-week-plan__progress-row {
+        display: grid;
+        gap: .6rem;
+        margin-bottom: 1rem;
+    }
+
+    .td-week-plan__progress-copy {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: .35rem 1rem;
+        color: var(--ink-soft, var(--mud-palette-text-secondary));
+        font-size: .78rem;
+    }
+
+    .td-week-plan__progress-copy strong { color: var(--ink, var(--mud-palette-text-primary)); }
+
+    .td-week-plan__track {
+        height: 6px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(124, 97, 65, .13);
+    }
+
+    .td-week-plan__track span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--clay, #c0561d), var(--gold, #cd9a3a));
+        transition: width .35s ease;
+    }
+
+    .td-week-plan__tasks {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
+        gap: .75rem;
+    }
+
+    .td-week-plan__task {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: .75rem;
+        min-width: 0;
+        padding: .9rem;
+        border: 1px solid rgba(124, 97, 65, .12);
+        border-left: 3px solid var(--sage, #708866);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, .72);
+        transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+
+    .td-week-plan__task:hover {
+        transform: translateY(-1px);
+        border-color: rgba(192, 86, 29, .28);
+        box-shadow: 0 8px 22px rgba(63, 45, 32, .07);
+    }
+
+    .td-week-plan__task--critical { border-left-color: #b91c1c; }
+    .td-week-plan__task--high { border-left-color: var(--clay, #c0561d); }
+    .td-week-plan__task--medium { border-left-color: var(--gold, #cd9a3a); }
+
+    .td-week-plan__task-copy { min-width: 0; }
+
+    .td-week-plan__project {
+        display: inline-block;
+        margin-bottom: .25rem;
+        color: var(--ink-faint, var(--mud-palette-text-secondary));
+        font-size: .65rem;
+        font-weight: 800;
+        letter-spacing: .09em;
+        text-transform: uppercase;
+        text-decoration: none;
+    }
+
+    .td-week-plan__project:hover { color: var(--clay, #c0561d); }
+
+    .td-week-plan__task-title {
+        margin: 0;
+        color: var(--ink, var(--mud-palette-text-primary));
+        font-size: .98rem;
+        line-height: 1.3;
+    }
+
+    .td-week-plan__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .3rem .7rem;
+        margin-top: .35rem;
+        color: var(--ink-faint, var(--mud-palette-text-secondary));
+        font-size: .72rem;
+    }
+
+    .td-week-plan__due--overdue { color: #b91c1c; font-weight: 700; }
+
+    .td-week-plan__next {
+        display: flex;
+        align-items: center;
+        gap: .25rem;
+        margin: .55rem 0 0;
+        color: var(--sage-deep, #536a4b);
+        font-size: .76rem;
+        font-weight: 650;
+    }
+
+    .td-week-plan__empty {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: .7rem;
+        padding: 1rem;
+        border: 1px dashed rgba(192, 86, 29, .28);
+        border-radius: 14px;
+        color: var(--ink-soft, var(--mud-palette-text-secondary));
+    }
+
+    .td-week-plan__empty div { display: grid; gap: .15rem; }
+    .td-week-plan__empty strong { color: var(--ink, var(--mud-palette-text-primary)); }
+    .td-week-plan__empty span { font-size: .82rem; }
+
+    .td-week-plan__notice {
+        margin: 0;
+        padding: .85rem 1rem;
+        border-radius: 12px;
+        background: rgba(112, 136, 102, .1);
+        color: var(--sage-deep, #536a4b);
+        font-size: .84rem;
+        font-weight: 650;
+    }
+
+    .td-week-plan__notice--complete { background: rgba(205, 154, 58, .1); }
+
+    .td-week-plan__replan {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        margin-top: .85rem;
+        color: var(--clay-deep, #934018);
+        font-size: .76rem;
+        font-weight: 750;
+        text-decoration: none;
+    }
+
+    .td-week-plan__replan:hover { text-decoration: underline; }
+
+    @@media (min-width: 720px) {
+        .td-week-plan__header { flex-direction: row; align-items: flex-start; }
+        .td-week-plan__empty { flex-direction: row; align-items: center; }
+        .td-week-plan__empty div { flex: 1; }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .td-week-plan__task,
+        .td-week-plan__track span { transition: none; }
+        .td-week-plan__task:hover { transform: none; }
+    }
+</style>
+
+@code {
+    /// <summary>The current user's current-week planning summary.</summary>
+    [Parameter, EditorRequired] public TodayPlannedWeekDto Plan { get; set; } = null!;
+
+    /// <summary>The user's current calendar date, used for deadline labels.</summary>
+    [Parameter] public DateTime Today { get; set; } = DateTime.Today;
+
+    /// <summary>Raised when a task becomes the user's current focus.</summary>
+    [Parameter] public EventCallback<Guid> OnFocus { get; set; }
+
+    /// <summary>Raised when a task is completed.</summary>
+    [Parameter] public EventCallback<Guid> OnComplete { get; set; }
+
+    /// <summary>Raised when a task is opened for editing.</summary>
+    [Parameter] public EventCallback<TodayTaskItemDto> OnEdit { get; set; }
+
+    private bool _collapsed;
+
+    private IReadOnlyList<TodayTaskItemDto> Tasks => Plan.Tasks;
+
+    private int CompletionPercent => Plan.SelectedTaskCount == 0
+        ? 0
+        : (int)Math.Round(Plan.CompletedTaskCount * 100d / Plan.SelectedTaskCount);
+
+    private void ToggleCollapsed() => _collapsed = !_collapsed;
+
+    private static string PriorityClass(TaskPriority priority) => priority switch
+    {
+        TaskPriority.Critical => "td-week-plan__task--critical",
+        TaskPriority.High => "td-week-plan__task--high",
+        TaskPriority.Medium => "td-week-plan__task--medium",
+        _ => "td-week-plan__task--low"
+    };
+}

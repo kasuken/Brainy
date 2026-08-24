@@ -528,4 +528,67 @@ public class TodayServiceTests
         result.CurrentTask.Should().NotBeNull();
         result.Overdue.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task GetPlannedThisWeekAsync_ReturnsOnlyCurrentUsersCurrentWeekActionableSelections()
+    {
+        var (sut, db) = BuildService(nameof(GetPlannedThisWeekAsync_ReturnsOnlyCurrentUsersCurrentWeekActionableSelections));
+        var project = CreateProject(DefaultUserId);
+        var selected = CreateTask(project.Id, DefaultUserId);
+        var completed = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Done);
+        var waiting = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Waiting);
+        var previousWeek = CreateTask(project.Id, DefaultUserId);
+        var otherProject = CreateProject("other-user");
+        var otherTask = CreateTask(otherProject.Id, "other-user");
+
+        db.Projects.AddRange(project, otherProject);
+        db.Tasks.AddRange(selected, completed, waiting, previousWeek, otherTask);
+        db.WeeklyTaskSelections.AddRange(
+            CreateWeeklySelection(DefaultUserId, selected.Id, Today),
+            CreateWeeklySelection(DefaultUserId, completed.Id, Today),
+            CreateWeeklySelection(DefaultUserId, waiting.Id, Today),
+            CreateWeeklySelection(DefaultUserId, previousWeek.Id, Today.AddDays(-7)),
+            CreateWeeklySelection("other-user", otherTask.Id, Today));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetPlannedThisWeekAsync();
+
+        result.SelectedTaskCount.Should().Be(3);
+        result.CompletedTaskCount.Should().Be(1);
+        result.ActionableTaskCount.Should().Be(1);
+        result.NeedsReplanningCount.Should().Be(1);
+        result.Tasks.Should().ContainSingle().Which.Id.Should().Be(selected.Id);
+    }
+
+    [Fact]
+    public async Task GetTodayAggregateAsync_PrioritizesWeeklyPlanBeforePriorityAndDueThisWeek()
+    {
+        var (sut, db) = BuildService(nameof(GetTodayAggregateAsync_PrioritizesWeeklyPlanBeforePriorityAndDueThisWeek));
+        var project = CreateProject(DefaultUserId);
+        var selected = CreateTask(
+            project.Id,
+            DefaultUserId,
+            dueDate: Today.AddDays(1),
+            priority: TaskPriority.Critical);
+
+        db.Projects.Add(project);
+        db.Tasks.Add(selected);
+        db.WeeklyTaskSelections.Add(CreateWeeklySelection(DefaultUserId, selected.Id, Today));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetTodayAggregateAsync();
+
+        result.PlannedThisWeek.Tasks.Should().ContainSingle().Which.Id.Should().Be(selected.Id);
+        result.HighPriorityWork.Should().BeEmpty();
+        result.DueThisWeek.Should().BeEmpty();
+    }
+
+    private static WeeklyTaskSelection CreateWeeklySelection(string userId, Guid taskId, DateTime weekStartDate) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            TaskId = taskId,
+            WeekStartDate = weekStartDate.Date
+        };
 }
