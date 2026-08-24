@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.10.5] - 2026-08-24
+
+### Improved
+
+- **Weekly project overview** — projects are now grouped by status and ordered by priority, due date, and name so execution-ready work is easier to scan.
+- **Weekly task planning context** — task cards now show their project name, while the selection workspace limits new commitments to active projects and explains when none are available.
+
+---
+
 ## [5.10.4] - 2026-08-24
 
 ### Fixed
