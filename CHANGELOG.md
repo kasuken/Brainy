@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.10.0] - 2026-08-24
+
+### Added
+
+- **Weekly planning workspace** — a new Week view helps users choose the projects and tasks they are committing to for the current week, review next actions, and keep planning connected to project context.
+- **Weekly task selections** — weekly commitments are persisted per user and week, with support for adding and removing tasks, setting the current focus, and carrying unfinished selections forward from the previous week.
+- **Weekly planning coverage** — added application-service, SQL Server integration, and production-surface tests for weekly planning, persistence, carry-forward behavior, and navigation.
+
+### Improved
+
+- **Execution navigation** — Today and Week now share a view switch so users can move between daily execution and weekly planning without losing context.
+- **Weekly project planning** — project status and task actions can be updated directly from the weekly workspace, with replanning and attention details surfaced alongside each commitment.
+
+---
+
 ## [5.9.0] - 2026-08-22
 
 ### Added
