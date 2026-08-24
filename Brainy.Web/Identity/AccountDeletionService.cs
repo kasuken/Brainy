@@ -127,6 +127,8 @@ public sealed class AccountDeletionService(
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await context.LifecycleActivities.Where(activity => activity.UserId == userId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await context.WeeklyTaskSelections.Where(selection => selection.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
         await context.Outputs.Where(output => output.UserId == userId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
@@ -239,11 +241,17 @@ public sealed class AccountDeletionService(
                 (output.UserId != userId && output.SourceNotes.Any(note => note.UserId == userId)),
             cancellationToken).ConfigureAwait(false);
 
+        var hasCrossUserWeeklySelection = await context.WeeklyTaskSelections.AnyAsync(selection =>
+                selection.UserId != selection.Task.UserId ||
+                (selection.UserId == userId && selection.Task.UserId != userId) ||
+                (selection.UserId != userId && selection.Task.UserId == userId),
+            cancellationToken).ConfigureAwait(false);
+
         if (hasForeignTaskReference || hasForeignProjectReference || hasForeignResourceReference ||
             hasForeignGoalReference || hasForeignIdeaReference || hasForeignOutputReference ||
             hasForeignNoteReference || hasForeignImageReference || hasForeignActionReference ||
             hasCrossUserTaskDependency || hasCrossUserNoteRelationship || hasCrossUserNoteTag ||
-            hasCrossUserResourceTag || hasCrossUserOutputNote)
+            hasCrossUserResourceTag || hasCrossUserOutputNote || hasCrossUserWeeklySelection)
         {
             throw new InvalidOperationException(
                 "Account deletion was stopped because inconsistent cross-account relationships were detected.");

@@ -50,7 +50,7 @@ public sealed class DataImportServiceTests
         var act = () => sut.ImportCurrentUserAsync(new MemoryStream(Encoding.UTF8.GetBytes(json)));
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*schema 1.0 files only*");
+            .WithMessage("*schema 1.1 files only*");
         (await db.Tags.CountAsync()).Should().Be(0);
         (await db.Notes.CountAsync()).Should().Be(0);
     }
@@ -78,7 +78,7 @@ public sealed class DataImportServiceTests
 
         var json = $$"""
             {
-              "schemaVersion": "1.0",
+              "schemaVersion": "1.1",
               "product": "Brainy",
               "exportedAtUtc": "2026-08-15T00:00:00Z",
               "security": {
@@ -168,7 +168,7 @@ public sealed class DataImportServiceTests
         var result = await sut.ImportCurrentUserAsync(new MemoryStream(Encoding.UTF8.GetBytes(json)));
 
         result.Should().BeEquivalentTo(new DataImportResultDto(
-            "1.0",
+            "1.1",
             ImportedTags: 1,
             ReusedTags: 1,
             SkippedTags: 0,

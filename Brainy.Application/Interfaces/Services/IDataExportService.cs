@@ -9,7 +9,7 @@ public interface IDataExportService
     /// Stable schema identifier. Breaking changes require a new major version; additive
     /// backward-compatible changes require a new minor version.
     /// </summary>
-    const string SchemaVersion = "1.0";
+    const string SchemaVersion = "1.1";
 
     /// <summary>Builds a UTF-8 JSON archive without Identity credentials or application secrets.</summary>
     Task<DataExportFileDto> ExportCurrentUserAsync(CancellationToken cancellationToken = default);

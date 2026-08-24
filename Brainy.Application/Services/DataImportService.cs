@@ -36,7 +36,8 @@ internal sealed class DataImportService(
         ["goalActivities"] = "Goal activities",
         ["archiveRetentionRules"] = "Archive retention rules",
         ["dashboardPreferences"] = "Dashboard preferences",
-        ["lifecycleActivities"] = "Lifecycle activities"
+        ["lifecycleActivities"] = "Lifecycle activities",
+        ["weeklyTaskSelections"] = "Weekly task selections"
     };
 
     public async Task<DataImportResultDto> ImportCurrentUserAsync(Stream content, CancellationToken cancellationToken = default)

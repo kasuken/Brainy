@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<INoteRelationshipService, NoteRelationshipService>();
         services.AddScoped<IRelatedNotesService, RelatedNotesService>();
         services.AddScoped<ITodayService, TodayService>();
+        services.AddScoped<IWeekService, WeekService>();
         services.AddScoped<IProjectPrioritizationService, ProjectPrioritizationService>();
         services.AddScoped<ICurrentTaskRecommendationService, CurrentTaskRecommendationService>();
         services.AddScoped<ITodayNotificationService, TodayNotificationService>();

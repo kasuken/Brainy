@@ -25,6 +25,7 @@ public interface IApplicationDbContext
     DbSet<NoteRelationship> NoteRelationships { get; }
     DbSet<TaskItem> Tasks { get; }
     DbSet<TaskDependency> TaskDependencies { get; }
+    DbSet<WeeklyTaskSelection> WeeklyTaskSelections { get; }
     DbSet<Output> Outputs { get; }
     DbSet<ArchiveRetentionRule> ArchiveRetentionRules { get; }
     DbSet<UserDashboardPreference> DashboardPreferences { get; }

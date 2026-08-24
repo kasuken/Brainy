@@ -248,6 +248,13 @@ public sealed class AccountDeletionServiceTests
                 new GoalMilestone { Id = Guid.NewGuid(), Goal = goal, Title = "Milestone" },
                 new GoalActivity { Id = Guid.NewGuid(), Goal = goal, Description = "Created" },
                 new TaskDependency { Id = Guid.NewGuid(), Task = childTask, DependsOnTask = parentTask },
+                new WeeklyTaskSelection
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = CurrentUserId,
+                    Task = parentTask,
+                    WeekStartDate = new DateTime(2026, 6, 15)
+                },
                 new NoteRelationship
                 {
                     Id = Guid.NewGuid(), SourceNote = sourceNote, TargetNote = targetNote
@@ -289,6 +296,7 @@ public sealed class AccountDeletionServiceTests
             (await Context.Outputs.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.Ideas.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.ActionItems.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
+            (await Context.WeeklyTaskSelections.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.ArchiveRetentionRules.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.DashboardPreferences.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.LifecycleActivities.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();

@@ -48,6 +48,8 @@ public class BrainyDbContext(
 
     public DbSet<TaskDependency> TaskDependencies => Set<TaskDependency>();
 
+    public DbSet<WeeklyTaskSelection> WeeklyTaskSelections => Set<WeeklyTaskSelection>();
+
     public DbSet<Output> Outputs => Set<Output>();
 
     public DbSet<ArchiveRetentionRule> ArchiveRetentionRules => Set<ArchiveRetentionRule>();

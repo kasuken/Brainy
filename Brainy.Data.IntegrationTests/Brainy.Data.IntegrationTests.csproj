@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Brainy.Application\Brainy.Application.csproj" />
     <ProjectReference Include="..\Brainy.Data\Brainy.Data.csproj" />
   </ItemGroup>
 </Project>

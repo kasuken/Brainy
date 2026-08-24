@@ -11,6 +11,7 @@
 @using Brainy.Web.Components.Pages.Today
 @using Brainy.Web.Components.Pages.Calendar
 @using Brainy.Web.Components.Pages.Projects
+@using Brainy.Web.Components.Pages.Week
 @inject ITodayService TodayService
 @inject ITaskService TaskService
 @inject IUserDashboardPreferenceService PreferenceService
@@ -387,6 +388,8 @@
                     </div>
                 }
             </div>
+
+            <ExecutionViewSwitch IsToday="true" />
 
             <nav class="td-nav">
                 <button type="button" class="td-nav-chip td-nav-chip-primary" @onclick="OpenAddTaskDialogAsync">

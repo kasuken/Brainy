@@ -482,6 +482,20 @@ internal sealed class DataExportService(
             })
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
+        var weeklyTaskSelections = await context.WeeklyTaskSelections.AsNoTracking()
+            .Where(selection => selection.UserId == userId)
+            .OrderBy(selection => selection.WeekStartDate)
+            .ThenBy(selection => selection.TaskId)
+            .Select(selection => new
+            {
+                selection.Id,
+                selection.TaskId,
+                selection.WeekStartDate,
+                selection.CreatedAtUtc,
+                selection.UpdatedAtUtc
+            })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
         var archive = new
         {
             SchemaVersion = IDataExportService.SchemaVersion,
@@ -524,7 +538,8 @@ internal sealed class DataExportService(
                 GoalActivities = goalActivities,
                 ArchiveRetentionRules = archiveRetentionRules,
                 DashboardPreferences = dashboardPreferences,
-                LifecycleActivities = lifecycleActivities
+                LifecycleActivities = lifecycleActivities,
+                WeeklyTaskSelections = weeklyTaskSelections
             }
         };
 

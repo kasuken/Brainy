@@ -1,0 +1,1168 @@
+@page "/today/week"
+@attribute [Authorize]
+@using System.Globalization
+@using Brainy.Application.Common
+@using Brainy.Application.DTOs.Projects
+@using Brainy.Application.DTOs.Week
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Common
+@using Brainy.Domain.Enums
+@using Brainy.Web.Components.Pages.Projects
+@inject IWeekService WeekService
+@inject ITaskService TaskService
+@inject IProjectService ProjectService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Week · Brainy</PageTitle>
+
+<style>
+    @@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
+
+    .wk-page {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 1rem 0 2rem;
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
+
+    .wk-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 1.6rem;
+    }
+
+    .wk-hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 28px;
+        padding: 1.6rem;
+        background:
+            radial-gradient(circle at top left, rgba(255, 249, 242, .95), rgba(255,255,255,.9) 48%, rgba(251, 245, 236, .95)),
+            linear-gradient(135deg, rgba(192, 86, 29, .06), transparent 60%);
+        border: 1px solid rgba(124, 97, 65, .12);
+        box-shadow: 0 22px 60px rgba(72, 54, 33, .10);
+    }
+
+    .wk-hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -6rem -6rem auto;
+        width: 14rem;
+        height: 14rem;
+        background: radial-gradient(circle, rgba(245, 190, 102, .18), transparent 70%);
+        pointer-events: none;
+    }
+
+    .wk-hero__row {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    @@media (min-width: 1024px) {
+        .wk-hero__row {
+            flex-direction: row;
+            align-items: flex-end;
+            justify-content: space-between;
+        }
+    }
+
+    .wk-eyebrow {
+        margin: 0 0 .55rem;
+        font-size: .76rem;
+        font-weight: 800;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+    }
+
+    .wk-title {
+        margin: 0;
+        font-family: 'Fraunces', serif;
+        font-size: clamp(2.4rem, 6vw, 4rem);
+        line-height: .95;
+        letter-spacing: -.03em;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .wk-range {
+        margin: .55rem 0 0;
+        font-size: 1rem;
+        color: var(--mud-palette-text-secondary);
+        font-weight: 500;
+    }
+
+    .wk-hero__meta {
+        display: flex;
+        flex-direction: column;
+        gap: .8rem;
+        align-items: flex-start;
+    }
+
+    .wk-stat-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .8rem;
+    }
+
+    @@media (min-width: 900px) {
+        .wk-stat-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+    }
+
+    .wk-stat {
+        padding: 1rem 1.05rem;
+        border-radius: 18px;
+        background: rgba(255,255,255,.75);
+        border: 1px solid rgba(124, 97, 65, .10);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+    }
+
+    .wk-stat__label {
+        margin: 0 0 .35rem;
+        font-size: .72rem;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 800;
+    }
+
+    .wk-stat__value {
+        margin: 0;
+        font-family: 'Fraunces', serif;
+        font-size: clamp(1.4rem, 3vw, 2rem);
+        color: var(--mud-palette-text-primary);
+    }
+
+    .wk-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1.2rem;
+    }
+
+    @@media (min-width: 1200px) {
+        .wk-grid {
+            grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+            align-items: start;
+        }
+    }
+
+    .wk-column {
+        display: flex;
+        flex-direction: column;
+        gap: 1.2rem;
+        min-width: 0;
+    }
+
+    .wk-panel {
+        border-radius: 24px;
+        padding: 1.2rem;
+        background: linear-gradient(180deg, rgba(255,255,255,.97), rgba(251,247,241,.96));
+        border: 1px solid rgba(124, 97, 65, .11);
+        box-shadow: 0 16px 40px rgba(72, 54, 33, .08);
+    }
+
+    .wk-panel__head {
+        display: flex;
+        justify-content: space-between;
+        gap: .8rem;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+    }
+
+    .wk-panel__title {
+        margin: 0;
+        font-family: 'Fraunces', serif;
+        font-size: 1.35rem;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .wk-panel__caption {
+        margin: .18rem 0 0;
+        font-size: .9rem;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .wk-project-list,
+    .wk-task-list,
+    .wk-carry-list,
+    .wk-attention-list,
+    .wk-plan-groups {
+        display: flex;
+        flex-direction: column;
+        gap: .9rem;
+    }
+
+    .wk-project-card,
+    .wk-task-card,
+    .wk-carry-card {
+        border-radius: 18px;
+        padding: 1rem;
+        background: rgba(255,255,255,.82);
+        border: 1px solid rgba(124, 97, 65, .11);
+    }
+
+    .wk-project-card__row,
+    .wk-task-card__row {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .wk-project-name,
+    .wk-task-title {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .wk-project-name a,
+    .wk-task-title a {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .wk-project-name a:hover,
+    .wk-task-title a:hover {
+        color: var(--clay, #c0561d);
+    }
+
+    .wk-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+        margin-top: .55rem;
+    }
+
+    .wk-meta__pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .32rem;
+        padding: .26rem .56rem;
+        border-radius: 999px;
+        font-size: .74rem;
+        font-weight: 700;
+        color: var(--mud-palette-text-secondary);
+        background: rgba(100, 84, 61, .07);
+    }
+
+    .wk-project-outcome,
+    .wk-task-note {
+        margin: .55rem 0 0;
+        color: var(--mud-palette-text-secondary);
+        font-size: .88rem;
+    }
+
+    .wk-task-actions,
+    .wk-project-actions,
+    .wk-carry-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .55rem;
+        align-items: center;
+    }
+
+    .wk-task-groups {
+        display: flex;
+        flex-direction: column;
+        gap: .85rem;
+    }
+
+    .wk-plan-group {
+        border-radius: 20px;
+        padding: 1rem;
+        background: rgba(255,255,255,.8);
+        border: 1px solid rgba(124, 97, 65, .11);
+    }
+
+    .wk-plan-group__head {
+        display: flex;
+        justify-content: space-between;
+        gap: .75rem;
+        margin-bottom: .8rem;
+        flex-wrap: wrap;
+    }
+
+    .wk-empty {
+        padding: 1rem;
+        border-radius: 16px;
+        border: 1px dashed rgba(124, 97, 65, .24);
+        color: var(--mud-palette-text-secondary);
+        background: rgba(255,255,255,.55);
+    }
+
+    .wk-picker-bar {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: .8rem;
+        margin-bottom: 1rem;
+    }
+
+    @@media (min-width: 900px) {
+        .wk-picker-bar {
+            grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr) auto;
+            align-items: center;
+        }
+    }
+
+    .wk-status-select {
+        min-width: 13rem;
+    }
+
+    .wk-subsection {
+        margin-top: 1rem;
+    }
+
+    .wk-subsection__title {
+        margin: 0 0 .65rem;
+        font-size: .85rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 800;
+    }
+
+    .wk-inline-alert {
+        margin-top: .65rem;
+    }
+</style>
+
+<div class="wk-page">
+    <div class="wk-stack">
+        <section class="wk-hero" aria-labelledby="week-heading">
+            <div class="wk-hero__row">
+                <div>
+                    <p class="wk-eyebrow">Deliberate weekly commitments</p>
+                    <h1 id="week-heading" class="wk-title">Week @(_overview?.WeekNumber ?? 0)</h1>
+                    <p class="wk-range">@GetRangeLabel()</p>
+                </div>
+
+                <div class="wk-hero__meta">
+                    <ExecutionViewSwitch IsToday="false" />
+                </div>
+            </div>
+
+            <div class="wk-stat-grid mt-4" aria-label="Week summary">
+                <div class="wk-stat">
+                    <p class="wk-stat__label">Selected</p>
+                    <p class="wk-stat__value">@(_overview?.SelectedTaskCount ?? 0)</p>
+                </div>
+                <div class="wk-stat">
+                    <p class="wk-stat__label">Completed</p>
+                    <p class="wk-stat__value">@(_overview?.CompletedSelectedTaskCount ?? 0)</p>
+                </div>
+                <div class="wk-stat">
+                    <p class="wk-stat__label">Projects</p>
+                    <p class="wk-stat__value">@(_overview?.RepresentedProjectCount ?? 0)</p>
+                </div>
+                <div class="wk-stat">
+                    <p class="wk-stat__label">Attention</p>
+                    <p class="wk-stat__value">@AttentionCount</p>
+                </div>
+            </div>
+
+            @if (_overview is not null && (_overview.SelectedTaskCount >= 8 || _overview.RepresentedProjectCount >= 5))
+            {
+                <MudAlert Severity="Severity.Info"
+                          Dense="true"
+                          Variant="Variant.Outlined"
+                          Class="wk-inline-alert">
+                    This plan spans @_overview.SelectedTaskCount task@(_overview.SelectedTaskCount == 1 ? "" : "s")
+                    across @_overview.RepresentedProjectCount project@(_overview.RepresentedProjectCount == 1 ? "" : "s").
+                    Consider pruning it to protect execution time.
+                </MudAlert>
+            }
+        </section>
+
+        @if (_loading)
+        {
+            <MudProgressCircular Indeterminate="true" Size="Size.Large" Color="Color.Warning" />
+        }
+        else if (_loadError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled">
+                <div class="d-flex flex-column gap-2">
+                    <span>@_loadError</span>
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ReloadAsync">Retry</MudButton>
+                </div>
+            </MudAlert>
+        }
+        else if (_overview is not null)
+        {
+            <section class="wk-panel" aria-labelledby="projects-heading">
+                <div class="wk-panel__head">
+                    <div>
+                        <h2 id="projects-heading" class="wk-panel__title">Project overview</h2>
+                        <p class="wk-panel__caption">Review active and inactive work before you commit the week.</p>
+                    </div>
+                </div>
+
+                @if (_overview.Projects.Count == 0)
+                {
+                    <div class="wk-empty">No non-archived projects are available for weekly planning yet.</div>
+                }
+                else
+                {
+                    <div class="wk-project-list">
+                        @foreach (var project in _overview.Projects)
+                        {
+                            <article class="wk-project-card">
+                                <div class="wk-project-card__row">
+                                    <div>
+                                        <h3 class="wk-project-name">
+                                            <a href="@($"/projects/{project.Id}")">@project.Emoji @project.Name</a>
+                                        </h3>
+                                        @if (!string.IsNullOrWhiteSpace(project.DesiredOutcome))
+                                        {
+                                            <p class="wk-project-outcome">@project.DesiredOutcome</p>
+                                        }
+                                        <div class="wk-meta">
+                                            <span class="wk-meta__pill">@GetProjectStatusLabel(project.Status)</span>
+                                            <span class="wk-meta__pill">@GetPriorityLabel(project.Priority)</span>
+                                            <span class="wk-meta__pill">@project.OpenTaskCount open</span>
+                                            <span class="wk-meta__pill">@project.OverdueTaskCount overdue</span>
+                                            <span class="wk-meta__pill">@project.WeeklySelectionCount in week</span>
+                                            @if (project.DueDate.HasValue)
+                                            {
+                                                <span class="wk-meta__pill">Due @project.DueDate.Value.ToString("MMM d")</span>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div class="wk-project-actions">
+                                        <MudSelect T="ProjectStatus"
+                                                   Value="@project.Status"
+                                                   ValueChanged="status => UpdateProjectStatusAsync(project, status)"
+                                                   Label="Status"
+                                                   Variant="Variant.Outlined"
+                                                   Dense="true"
+                                                   Margin="Margin.Dense"
+                                                   Class="wk-status-select"
+                                                   Disabled="@_savingProjectIds.Contains(project.Id)"
+                                                   AdornmentIcon="@Icons.Material.Outlined.SyncAlt"
+                                                   aria-label="@($"Change status for {project.Name}")">
+                                            <MudSelectItem Value="ProjectStatus.NotStarted">Not started</MudSelectItem>
+                                            <MudSelectItem Value="ProjectStatus.Active">Active</MudSelectItem>
+                                            <MudSelectItem Value="ProjectStatus.Blocked">Blocked</MudSelectItem>
+                                            <MudSelectItem Value="ProjectStatus.Parked">Parked</MudSelectItem>
+                                        </MudSelect>
+
+                                        <MudButton Variant="Variant.Text"
+                                                   Color="Color.Success"
+                                                   StartIcon="@Icons.Material.Outlined.CheckCircle"
+                                                   OnClick="() => OpenCompletionDialogAsync(project)"
+                                                   aria-label="@($"Complete {project.Name}")">
+                                            Complete
+                                        </MudButton>
+                                    </div>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+
+            <div class="wk-grid">
+                <div class="wk-column">
+                    <section class="wk-panel" aria-labelledby="workspace-heading">
+                        <div class="wk-panel__head">
+                            <div>
+                                <h2 id="workspace-heading" class="wk-panel__title">Task-selection workspace</h2>
+                                <p class="wk-panel__caption">Choose the tasks you intend to advance this week without changing their dates or status.</p>
+                            </div>
+                        </div>
+
+                        <div class="wk-picker-bar">
+                            <MudSelect T="Guid?"
+                                       Label="Project"
+                                       Value="_selectedProjectId"
+                                       ValueChanged="SelectProjectAsync"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Dense="true"
+                                       Disabled="@(_overview.Projects.Count == 0)">
+                                @foreach (var project in _overview.Projects)
+                                {
+                                    <MudSelectItem Value="@((Guid?)project.Id)">@project.Emoji @project.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+
+                            <MudTextField @bind-Value="_searchTerm"
+                                          Label="Search tasks in project"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Immediate="true"
+                                          Placeholder="Search by title or description" />
+
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Warning"
+                                       StartIcon="@Icons.Material.Outlined.Search"
+                                       OnClick="ReloadPickerAsync"
+                                       Disabled="@(_selectedProjectId is null)">
+                                Search
+                            </MudButton>
+                        </div>
+
+                        @if (_pickerError is not null)
+                        {
+                            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                                <div class="d-flex flex-column gap-2">
+                                    <span>@_pickerError</span>
+                                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="ReloadPickerAsync">Retry</MudButton>
+                                </div>
+                            </MudAlert>
+                        }
+                        else if (_pickerLoading)
+                        {
+                            <MudProgressLinear Indeterminate="true" Color="Color.Warning" />
+                        }
+                        else if (_picker is null)
+                        {
+                            <div class="wk-empty">Select a project to load task candidates.</div>
+                        }
+                        else if (_picker.Tasks.Count == 0)
+                        {
+                            <div class="wk-empty">No top-level tasks matched this project search.</div>
+                        }
+                        else
+                        {
+                            <div class="wk-task-list">
+                                @foreach (var task in _picker.Tasks)
+                                {
+                                    <article class="wk-task-card">
+                                        <div class="wk-task-card__row">
+                                            <div>
+                                                <h3 class="wk-task-title">
+                                                    <a href="@($"/projects/{task.ProjectId}")">@task.Title</a>
+                                                </h3>
+                                                <div class="wk-meta">
+                                                    <span class="wk-meta__pill">@GetTaskStatusLabel(task.Status)</span>
+                                                    <span class="wk-meta__pill">@GetPriorityLabel(task.Priority)</span>
+                                                    @if (task.Complexity.HasValue)
+                                                    {
+                                                        <span class="wk-meta__pill">@GetComplexityLabel(task.Complexity.Value)</span>
+                                                    }
+                                                    @if (task.DueDate.HasValue)
+                                                    {
+                                                        <span class="wk-meta__pill">Due @task.DueDate.Value.ToString("MMM d")</span>
+                                                    }
+                                                    @if (task.OverdueSubtaskCount > 0)
+                                                    {
+                                                        <span class="wk-meta__pill">@task.OverdueSubtaskCount overdue subtask@(task.OverdueSubtaskCount == 1 ? "" : "s")</span>
+                                                    }
+                                                    @if (task.DueThisWeekSubtaskCount > 0)
+                                                    {
+                                                        <span class="wk-meta__pill">@task.DueThisWeekSubtaskCount due-this-week subtask@(task.DueThisWeekSubtaskCount == 1 ? "" : "s")</span>
+                                                    }
+                                                </div>
+
+                                                @if (task.NextAction is not null)
+                                                {
+                                                    <p class="wk-task-note">Next unfinished subtask: <strong>@task.NextAction.Title</strong></p>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(task.SelectionBlockReason))
+                                                {
+                                                    <p class="wk-task-note">@task.SelectionBlockReason</p>
+                                                }
+                                            </div>
+
+                                            <div class="wk-task-actions">
+                                                @if (task.IsSelectedForCurrentWeek)
+                                                {
+                                                    <MudButton Variant="Variant.Text"
+                                                               Color="Color.Default"
+                                                               StartIcon="@Icons.Material.Outlined.RemoveCircle"
+                                                               OnClick="() => RemoveFromWeekAsync(task.Id)">
+                                                        Remove from week
+                                                    </MudButton>
+                                                }
+                                                else
+                                                {
+                                                    <MudButton Variant="Variant.Filled"
+                                                               Color="Color.Warning"
+                                                               StartIcon="@Icons.Material.Outlined.AddTask"
+                                                               Disabled="@( !task.CanAddToWeek || _mutatingTaskIds.Contains(task.Id))"
+                                                               OnClick="() => AddToWeekAsync(task.Id)">
+                                                        Add to week
+                                                    </MudButton>
+                                                }
+                                            </div>
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </section>
+
+                    <section class="wk-panel" aria-labelledby="plan-heading">
+                        <div class="wk-panel__head">
+                            <div>
+                                <h2 id="plan-heading" class="wk-panel__title">This week's plan</h2>
+                                <p class="wk-panel__caption">Selected tasks stay visible even after completion so progress remains legible.</p>
+                            </div>
+                        </div>
+
+                        @if (_overview.SelectedTaskGroups.Count == 0)
+                        {
+                            <div class="wk-empty">No weekly commitments selected yet.</div>
+                        }
+                        else
+                        {
+                            <div class="wk-plan-groups">
+                                @foreach (var group in _overview.SelectedTaskGroups)
+                                {
+                                    <article class="wk-plan-group">
+                                        <div class="wk-plan-group__head">
+                                            <div>
+                                                <h3 class="wk-project-name">
+                                                    <a href="@($"/projects/{group.Project.Id}")">@group.Project.Emoji @group.Project.Name</a>
+                                                </h3>
+                                                <div class="wk-meta">
+                                                    <span class="wk-meta__pill">@GetProjectStatusLabel(group.Project.Status)</span>
+                                                    <span class="wk-meta__pill">@group.Tasks.Count task@(group.Tasks.Count == 1 ? "" : "s")</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="wk-task-groups">
+                                            @foreach (var task in group.Tasks)
+                                            {
+                                                <article class="wk-task-card">
+                                                    <div class="wk-task-card__row">
+                                                        <div>
+                                                            <h4 class="wk-task-title">@task.Title</h4>
+                                                            <div class="wk-meta">
+                                                                <span class="wk-meta__pill">@GetTaskStatusLabel(task.Status)</span>
+                                                                <span class="wk-meta__pill">@GetPriorityLabel(task.Priority)</span>
+                                                                @if (task.DueDate.HasValue)
+                                                                {
+                                                                    <span class="wk-meta__pill">Due @task.DueDate.Value.ToString("MMM d")</span>
+                                                                }
+                                                                @if (task.IsCurrentFocus)
+                                                                {
+                                                                    <span class="wk-meta__pill">Current focus</span>
+                                                                }
+                                                            </div>
+                                                            @if (task.NextAction is not null)
+                                                            {
+                                                                <p class="wk-task-note">Next unfinished subtask: <strong>@task.NextAction.Title</strong></p>
+                                                            }
+                                                        </div>
+
+                                                        <div class="wk-task-actions">
+                                                            <MudButton Variant="Variant.Text"
+                                                                       Color="Color.Warning"
+                                                                       StartIcon="@Icons.Material.Outlined.CenterFocusStrong"
+                                                                       Disabled="@(task.IsCurrentFocus || _mutatingTaskIds.Contains(task.Id))"
+                                                                       OnClick="() => SetCurrentFocusAsync(task.Id)">
+                                                                Set current focus
+                                                            </MudButton>
+
+                                                            <MudButton Variant="Variant.Text"
+                                                                       Color="Color.Default"
+                                                                       StartIcon="@Icons.Material.Outlined.RemoveCircle"
+                                                                       OnClick="() => RemoveFromWeekAsync(task.Id)">
+                                                                Remove
+                                                            </MudButton>
+                                                        </div>
+                                                    </div>
+                                                </article>
+                                            }
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </section>
+                </div>
+
+                <div class="wk-column">
+                    <section class="wk-panel" aria-labelledby="attention-heading">
+                        <div class="wk-panel__head">
+                            <div>
+                                <h2 id="attention-heading" class="wk-panel__title">Needs attention</h2>
+                                <p class="wk-panel__caption">Deadlines do not automatically become weekly commitments.</p>
+                            </div>
+                        </div>
+
+                        @if (AttentionCount == 0)
+                        {
+                            <div class="wk-empty">Nothing urgent is sitting outside this week's plan.</div>
+                        }
+                        else
+                        {
+                            <div class="wk-attention-list">
+                                @if (_overview.OverdueAttention.Count > 0)
+                                {
+                                    <div class="wk-subsection">
+                                        <h3 class="wk-subsection__title">Overdue and not selected</h3>
+                                        @foreach (var task in _overview.OverdueAttention)
+                                        {
+                                            @RenderAttentionTask(task)
+                                        }
+                                    </div>
+                                }
+
+                                @if (_overview.DueThisWeekAttention.Count > 0)
+                                {
+                                    <div class="wk-subsection">
+                                        <h3 class="wk-subsection__title">Due this week and not selected</h3>
+                                        @foreach (var task in _overview.DueThisWeekAttention)
+                                        {
+                                            @RenderAttentionTask(task)
+                                        }
+                                    </div>
+                                }
+
+                                @if (_overview.NeedsReplanning.Count > 0)
+                                {
+                                    <div class="wk-subsection">
+                                        <h3 class="wk-subsection__title">Selected tasks that need replanning</h3>
+                                        @foreach (var task in _overview.NeedsReplanning)
+                                        {
+                                            <article class="wk-task-card">
+                                                <div class="wk-task-card__row">
+                                                    <div>
+                                                        <h4 class="wk-task-title">@task.ProjectEmoji @task.Title</h4>
+                                                        <div class="wk-meta">
+                                                            <span class="wk-meta__pill">@GetTaskStatusLabel(task.Status)</span>
+                                                            <span class="wk-meta__pill">@GetProjectStatusLabel(task.ProjectStatus)</span>
+                                                        </div>
+                                                        <p class="wk-task-note">@task.ReplanningReason</p>
+                                                    </div>
+                                                    <div class="wk-task-actions">
+                                                        <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="() => RemoveFromWeekAsync(task.Id)">
+                                                            Remove from week
+                                                        </MudButton>
+                                                        <MudButton Variant="Variant.Text" Color="Color.Warning" Href="@($"/projects/{task.ProjectId}")">
+                                                            Open project
+                                                        </MudButton>
+                                                    </div>
+                                                </div>
+                                            </article>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </section>
+
+                    <section class="wk-panel" aria-labelledby="carry-forward-heading">
+                        <div class="wk-panel__head">
+                            <div>
+                                <h2 id="carry-forward-heading" class="wk-panel__title">Carry forward</h2>
+                                <p class="wk-panel__caption">Last week's unfinished commitments stay historical until you explicitly carry them forward.</p>
+                            </div>
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Warning"
+                                       StartIcon="@Icons.Material.Outlined.Forward"
+                                       Disabled="@(_carryForwardTaskIds.Count == 0 || _carryingForward)"
+                                       OnClick="CarryForwardSelectedAsync">
+                                Carry selected
+                            </MudButton>
+                        </div>
+
+                        @if (_overview.CarryForwardCandidates.Count == 0)
+                        {
+                            <div class="wk-empty">No unfinished selections from last week are waiting to be reviewed.</div>
+                        }
+                        else
+                        {
+                            <div class="wk-carry-list">
+                                @foreach (var candidate in _overview.CarryForwardCandidates)
+                                {
+                                    <article class="wk-carry-card">
+                                        <div class="wk-task-card__row">
+                                            <div>
+                                                <h3 class="wk-task-title">@candidate.Task.ProjectEmoji @candidate.Task.Title</h3>
+                                                <div class="wk-meta">
+                                                    <span class="wk-meta__pill">From @candidate.PreviousWeekStartDate.ToString("MMM d")</span>
+                                                    <span class="wk-meta__pill">@GetTaskStatusLabel(candidate.Task.Status)</span>
+                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(candidate.CarryForwardReason))
+                                                {
+                                                    <p class="wk-task-note">@candidate.CarryForwardReason</p>
+                                                }
+                                            </div>
+                                            <div class="wk-carry-actions">
+                                                <MudCheckBox T="bool"
+                                                             Value="@_carryForwardTaskIds.Contains(candidate.Task.Id)"
+                                                             ValueChanged="value => ToggleCarryForward(candidate.Task.Id, value)"
+                                                             Disabled="@(!candidate.CanCarryForward)"
+                                                             Label="Carry into this week" />
+                                            </div>
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </section>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private WeekOverviewDto? _overview;
+    private Guid? _selectedProjectId;
+    private WeekTaskPickerDto? _picker;
+    private string _searchTerm = string.Empty;
+    private string? _loadError;
+    private string? _pickerError;
+    private bool _loading = true;
+    private bool _pickerLoading;
+    private bool _carryingForward;
+    private readonly HashSet<Guid> _mutatingTaskIds = [];
+    private readonly HashSet<Guid> _savingProjectIds = [];
+    private readonly HashSet<Guid> _carryForwardTaskIds = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private int AttentionCount => _overview is null
+        ? 0
+        : _overview.OverdueAttention.Count + _overview.DueThisWeekAttention.Count + _overview.NeedsReplanning.Count;
+
+    private string GetRangeLabel()
+    {
+        if (_overview is null)
+            return "Loading the current Monday-Sunday planning window…";
+
+        return $"{_overview.WeekStartDate:dddd, MMM d} – {_overview.WeekEndDate:dddd, MMM d}";
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _loadError = null;
+
+        try
+        {
+            _overview = await WeekService.GetCurrentWeekOverviewAsync();
+            SyncCarryForwardSelection();
+
+            if (_overview.Projects.Count == 0)
+            {
+                _selectedProjectId = null;
+                _picker = null;
+            }
+            else
+            {
+                if (_selectedProjectId is null || !_overview.Projects.Any(project => project.Id == _selectedProjectId))
+                    _selectedProjectId = _overview.Projects[0].Id;
+
+                await ReloadPickerAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ReloadPickerAsync()
+    {
+        if (_selectedProjectId is null)
+        {
+            _picker = null;
+            return;
+        }
+
+        _pickerLoading = true;
+        _pickerError = null;
+        try
+        {
+            _picker = await WeekService.GetSelectableTasksAsync(_selectedProjectId.Value, _searchTerm);
+        }
+        catch (Exception ex)
+        {
+            _pickerError = ex.Message;
+        }
+        finally
+        {
+            _pickerLoading = false;
+        }
+    }
+
+    private async Task SelectProjectAsync(Guid? projectId)
+    {
+        _selectedProjectId = projectId;
+        await ReloadPickerAsync();
+    }
+
+    private async Task AddToWeekAsync(Guid taskId)
+    {
+        _mutatingTaskIds.Add(taskId);
+        try
+        {
+            await WeekService.AddTaskToCurrentWeekAsync(taskId);
+            Snackbar.Add("Task added to this week.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _mutatingTaskIds.Remove(taskId);
+        }
+    }
+
+    private async Task RemoveFromWeekAsync(Guid taskId)
+    {
+        _mutatingTaskIds.Add(taskId);
+        try
+        {
+            await WeekService.RemoveTaskFromCurrentWeekAsync(taskId);
+            Snackbar.Add("Task removed from this week.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _mutatingTaskIds.Remove(taskId);
+        }
+    }
+
+    private async Task SetCurrentFocusAsync(Guid taskId)
+    {
+        _mutatingTaskIds.Add(taskId);
+        try
+        {
+            await TaskService.SetCurrentTaskAsync(taskId);
+            Snackbar.Add("Current focus updated.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _mutatingTaskIds.Remove(taskId);
+        }
+    }
+
+    private async Task UpdateProjectStatusAsync(WeekProjectOverviewDto project, ProjectStatus status)
+    {
+        if (project.Status == status)
+            return;
+
+        _savingProjectIds.Add(project.Id);
+        try
+        {
+            await WeekService.UpdateProjectStatusAsync(new WeekProjectStatusUpdateDto(project.Id, status, project.RowVersion));
+            Snackbar.Add($"{project.Name} is now {GetProjectStatusLabel(status).ToLowerInvariant()}.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingProjectIds.Remove(project.Id);
+        }
+    }
+
+    private async Task OpenCompletionDialogAsync(WeekProjectOverviewDto project)
+    {
+        try
+        {
+            var summary = (await ProjectService.GetProjectSummariesAsync()).FirstOrDefault(candidate => candidate.Id == project.Id);
+            if (summary is null)
+            {
+                Snackbar.Add("Could not load the project completion summary.", Severity.Error);
+                return;
+            }
+
+            var parameters = new DialogParameters<ProjectCompletionDialog> { { dialog => dialog.Project, summary } };
+            var dialog = await DialogService.ShowAsync<ProjectCompletionDialog>(
+                "Complete Project",
+                parameters,
+                new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+
+            var result = await dialog.Result;
+            if (result is not null && !result.Canceled)
+                await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private void ToggleCarryForward(Guid taskId, bool selected)
+    {
+        if (selected)
+            _carryForwardTaskIds.Add(taskId);
+        else
+            _carryForwardTaskIds.Remove(taskId);
+    }
+
+    private async Task CarryForwardSelectedAsync()
+    {
+        if (_carryForwardTaskIds.Count == 0)
+            return;
+
+        _carryingForward = true;
+        try
+        {
+            await WeekService.CarryForwardTasksAsync(_carryForwardTaskIds.ToList());
+            Snackbar.Add("Selected tasks were carried into this week.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _carryingForward = false;
+        }
+    }
+
+    private void SyncCarryForwardSelection()
+    {
+        if (_overview is null)
+        {
+            _carryForwardTaskIds.Clear();
+            return;
+        }
+
+        var allowed = _overview.CarryForwardCandidates
+            .Where(candidate => candidate.CanCarryForward)
+            .Select(candidate => candidate.Task.Id)
+            .ToHashSet();
+
+        _carryForwardTaskIds.RemoveWhere(taskId => !allowed.Contains(taskId));
+    }
+
+    private RenderFragment RenderAttentionTask(WeekTaskCardDto task) => builder =>
+    {
+        builder.OpenElement(0, "article");
+        builder.AddAttribute(1, "class", "wk-task-card");
+        builder.AddMarkupContent(2, "<div class=\"wk-task-card__row\">");
+        builder.OpenElement(3, "div");
+        builder.OpenElement(4, "h4");
+        builder.AddAttribute(5, "class", "wk-task-title");
+        builder.AddContent(6, $"{task.ProjectEmoji} {task.Title}");
+        builder.CloseElement();
+        builder.OpenElement(7, "div");
+        builder.AddAttribute(8, "class", "wk-meta");
+        builder.OpenElement(9, "span");
+        builder.AddAttribute(10, "class", "wk-meta__pill");
+        builder.AddContent(11, GetTaskStatusLabel(task.Status));
+        builder.CloseElement();
+        if (task.DueDate.HasValue)
+        {
+            builder.OpenElement(12, "span");
+            builder.AddAttribute(13, "class", "wk-meta__pill");
+            builder.AddContent(14, $"Due {task.DueDate.Value:MMM d}");
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+        builder.OpenElement(15, "p");
+        builder.AddAttribute(16, "class", "wk-task-note");
+        builder.AddContent(17, task.AttentionReason);
+        builder.CloseElement();
+        builder.CloseElement();
+        builder.OpenElement(18, "div");
+        builder.AddAttribute(19, "class", "wk-task-actions");
+        builder.OpenComponent<MudButton>(20);
+        builder.AddAttribute(21, "Variant", Variant.Text);
+        builder.AddAttribute(22, "Color", Color.Warning);
+        builder.AddAttribute(23, "Disabled", !task.CanAddToWeek || _mutatingTaskIds.Contains(task.Id));
+        builder.AddAttribute(24, "OnClick", EventCallback.Factory.Create(this, () => AddToWeekAsync(task.Id)));
+        builder.AddAttribute(25, "ChildContent", (RenderFragment)(button =>
+        {
+            button.AddContent(26, "Add to week");
+        }));
+        builder.CloseComponent();
+        builder.OpenComponent<MudButton>(27);
+        builder.AddAttribute(28, "Variant", Variant.Text);
+        builder.AddAttribute(29, "Color", Color.Default);
+        builder.AddAttribute(30, "Href", $"/projects/{task.ProjectId}");
+        builder.AddAttribute(31, "ChildContent", (RenderFragment)(button =>
+        {
+            button.AddContent(32, "Open project");
+        }));
+        builder.CloseComponent();
+        builder.CloseElement();
+        builder.AddMarkupContent(33, "</div>");
+        builder.CloseElement();
+    };
+
+    private static string GetProjectStatusLabel(ProjectStatus status) => status switch
+    {
+        ProjectStatus.NotStarted => "Not started",
+        ProjectStatus.Active => "Active",
+        ProjectStatus.Blocked => "Blocked",
+        ProjectStatus.Parked => "Parked",
+        ProjectStatus.Completed => "Completed",
+        ProjectStatus.Archived => "Archived",
+        _ => status.ToString()
+    };
+
+    private static string GetTaskStatusLabel(TaskItemStatus status) => status switch
+    {
+        TaskItemStatus.Todo => "Todo",
+        TaskItemStatus.InProgress => "In progress",
+        TaskItemStatus.Waiting => "Waiting",
+        TaskItemStatus.Done => "Done",
+        TaskItemStatus.Archived => "Archived",
+        _ => status.ToString()
+    };
+
+    private static string GetPriorityLabel(ProjectPriority priority) => priority switch
+    {
+        ProjectPriority.Critical => "Critical priority",
+        ProjectPriority.High => "High priority",
+        ProjectPriority.Medium => "Medium priority",
+        ProjectPriority.Low => "Low priority",
+        _ => priority.ToString()
+    };
+
+    private static string GetPriorityLabel(TaskPriority priority) => priority switch
+    {
+        TaskPriority.Critical => "Critical priority",
+        TaskPriority.High => "High priority",
+        TaskPriority.Medium => "Medium priority",
+        TaskPriority.Low => "Low priority",
+        _ => priority.ToString()
+    };
+
+    private static string GetComplexityLabel(TaskComplexity complexity) => complexity switch
+    {
+        TaskComplexity.XS => "Complexity XS",
+        TaskComplexity.S => "Complexity S",
+        TaskComplexity.M => "Complexity M",
+        TaskComplexity.L => "Complexity L",
+        TaskComplexity.XL => "Complexity XL",
+        _ => complexity.ToString()
+    };
+}

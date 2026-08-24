@@ -58,7 +58,7 @@ public class DataExportServiceTests
 
         export.SchemaVersion.Should().Be(IDataExportService.SchemaVersion);
         export.ContentType.Should().Be("application/json;charset=utf-8");
-        export.FileName.Should().Be("brainy-data-export-20260813-101112Z-v1.0.json");
+        export.FileName.Should().Be("brainy-data-export-20260813-101112Z-v1.1.json");
 
         var json = Encoding.UTF8.GetString(export.Content);
         json.Should().Contain("MINE");
@@ -85,6 +85,7 @@ public class DataExportServiceTests
 
         data.GetProperty("noteRelationships").GetArrayLength().Should().Be(1);
         data.GetProperty("taskDependencies").GetArrayLength().Should().Be(1);
+        data.GetProperty("weeklyTaskSelections").GetArrayLength().Should().Be(1);
         data.GetProperty("noteTagLinks").GetArrayLength().Should().Be(1);
         data.GetProperty("resourceTagLinks").GetArrayLength().Should().Be(1);
         data.GetProperty("outputSourceNoteLinks").GetArrayLength().Should().Be(1);
@@ -107,7 +108,7 @@ public class DataExportServiceTests
             "security",
             "images",
             "data");
-        root.GetProperty("schemaVersion").GetString().Should().Be("1.0");
+        root.GetProperty("schemaVersion").GetString().Should().Be("1.1");
         var security = root.GetProperty("security");
         security.EnumerateObject().Select(property => property.Name).Should().Equal(
             "accountCredentialsIncluded",
@@ -143,7 +144,8 @@ public class DataExportServiceTests
             "goalActivities",
             "archiveRetentionRules",
             "dashboardPreferences",
-            "lifecycleActivities");
+            "lifecycleActivities",
+            "weeklyTaskSelections");
 
         data.GetProperty("notes")[0].EnumerateObject().Select(property => property.Name).Should().Equal(
             "id",
@@ -257,6 +259,13 @@ public class DataExportServiceTests
             new TaskDependency
             {
                 Id = Guid.NewGuid(), Task = secondTask, DependsOnTask = firstTask
+            },
+            new WeeklyTaskSelection
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Task = firstTask,
+                WeekStartDate = new DateTime(2026, 8, 10)
             },
             new Idea { Id = Guid.NewGuid(), UserId = userId, Title = $"{marker} idea", Area = area },
             new GoalMilestone { Id = Guid.NewGuid(), Goal = goal, Title = $"{marker} milestone" },
