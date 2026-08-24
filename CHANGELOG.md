@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.10.4] - 2026-08-24
+
+### Fixed
+
+- **Production weekly planning query** — includes the corrected task-level weekly selection count query in the production release, preventing the Week page from failing when SQL Server translates project overview data.
+
+---
+
 ## [5.10.3] - 2026-08-24
 
 ### Improved
