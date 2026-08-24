@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.10.2] - 2026-08-24
+
+### Improved
+
+- **Weekly planning rendering** — simplified attention-task markup into declarative Razor and added stable keys for weekly task groups and attention cards, improving list updates and component state preservation.
+- **Week loading heading** — the Week page now shows a clean `Week` heading while weekly data is loading instead of displaying a placeholder week number.
+
+---
+
 ## [5.10.1] - 2026-08-24
 
 ### Fixed
