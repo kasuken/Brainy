@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.10.1] - 2026-08-24
+
+### Fixed
+
+- **Weekly task capture interaction** — corrected the `Add to week` button event callback typing so the weekly planning page compiles and handles the action reliably.
+
+---
+
 ## [5.10.0] - 2026-08-24
 
 ### Added
