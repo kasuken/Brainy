@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.12.1] - 2026-08-26
+
+### Improved
+
+- **Inbox note review** — processing a note now lets users revise its title and content before moving it into a PARA category, with active project grouping in the destination selector.
+- **Note validation and concurrency handling** — blank reviewed titles are rejected and stale note updates surface as concurrency conflicts instead of silently overwriting newer changes.
+- **Note-processing regression coverage** — added service tests for reviewed content updates, blank-title validation, and stale row-version conflicts.
+
+---
+
 ## [5.12.0] - 2026-08-26
 
 ### Improved
