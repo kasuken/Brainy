@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.12.2] - 2026-08-26
+
+### Improved
+
+- **Multi-section task visibility in Today** — weekly commitments are now treated as planning labels rather than owning task card display exclusively, allowing planned tasks to remain visible in all applicable execution sections (such as In Progress, Overdue, High Priority, and Due This Week).
+- **Today aggregate regression coverage** — updated Today service tests to verify that weekly commitments appear concurrently across relevant status and priority task lists.
+
+---
+
 ## [5.12.1] - 2026-08-26
 
 ### Improved
