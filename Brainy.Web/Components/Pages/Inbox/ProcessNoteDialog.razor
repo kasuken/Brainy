@@ -1,5 +1,4 @@
 @using Brainy.Application.DTOs.Areas
-@using Brainy.Application.DTOs.Inbox
 @using Brainy.Application.DTOs.Notes
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.DTOs.Resources
@@ -9,7 +8,6 @@
 @inject IProjectService ProjectService
 @inject IAreaService AreaService
 @inject IResourceService ResourceService
-@inject IInboxSuggestionsService SuggestionsService
 
 <MudDialog Class="pnd">
 
@@ -25,31 +23,25 @@
     <DialogContent>
         <div class="pnd__body">
 
-            @* Note preview *@
-            <div class="pnd__preview">
-                <p class="pnd__preview-label">Note</p>
-                <p class="pnd__preview-title">@Note.Title</p>
-                @if (!string.IsNullOrWhiteSpace(Note.Content))
-                {
-                    <p class="pnd__preview-snippet">@Snippet</p>
-                }
+            <div class="pnd__editor">
+                <p class="pnd__section-label">Review note</p>
+                <MudTextField @bind-Value="_title"
+                              Label="Title"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Required="true"
+                              RequiredError="Title is required"
+                              MaxLength="500"
+                              Counter="500"
+                              Class="pnd__title-field" />
+                <MudTextField @bind-Value="_content"
+                              Label="Content"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Lines="5"
+                              AutoGrow="true"
+                              MaxLines="10" />
             </div>
-
-            @* AI/Heuristic suggestion banner *@
-            @if (_suggestion is not null)
-            {
-                <div class="pnd__suggestion">
-                    <div class="pnd__suggestion-header">
-                        <span class="pnd__suggestion-badge">✦ Suggested</span>
-                        <span class="pnd__suggestion-category">@_suggestion.SuggestedCategory</span>
-                    </div>
-                    <p class="pnd__suggestion-reason">@_suggestion.Reasoning</p>
-                    <button type="button" class="pnd__suggestion-apply"
-                            @onclick="ApplySuggestion">
-                        Apply suggestion →
-                    </button>
-                </div>
-            }
 
             @* PARA category *@
             <p class="pnd__section-label">Where does this belong?</p>
@@ -83,9 +75,17 @@
                            Variant="Variant.Outlined"
                            Dense="true"
                            Class="pnd__dest-select">
-                    @foreach (var p in _projects)
+                    @foreach (var group in _projects
+                        .GroupBy(p => p.Status)
+                        .OrderBy(group => ProjectStatusOrder(group.Key)))
                     {
-                        <MudSelectItem T="Guid?" Value="@p.Id">@p.Name</MudSelectItem>
+                        <MudSelectItem T="Guid?" Disabled="true" Class="pnd__project-group">
+                            @ProjectStatusLabel(group.Key)
+                        </MudSelectItem>
+                        @foreach (var project in group)
+                        {
+                            <MudSelectItem T="Guid?" Value="@project.Id">@project.Name</MudSelectItem>
+                        }
                     }
                 </MudSelect>
             }
@@ -147,6 +147,7 @@
                    Color="Color.Primary"
                    StartIcon="@Icons.Material.Filled.Check"
                    OnClick="Confirm"
+                   Disabled="@string.IsNullOrWhiteSpace(_title)"
                    Class="pnd__btn-confirm">
             Process note
         </MudButton>
@@ -178,99 +179,20 @@
         padding: 0.25rem 0 0.5rem;
     }
 
-    /* ── Suggestion banner ── */
-    .pnd__suggestion {
-        margin-bottom: 1rem;
-        padding: 0.75rem 0.9rem;
-        background: var(--clay-soft, rgba(192,86,29,0.08));
-        border: 1.5px solid rgba(192,86,29,0.2);
-        border-radius: 10px;
-        display: flex;
-        flex-direction: column;
-        gap: 0.35rem;
-    }
-
-    .pnd__suggestion-header {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .pnd__suggestion-badge {
-        font-size: 0.65rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--clay, #c0561d);
-        background: rgba(192,86,29,0.12);
-        padding: 0.1rem 0.45rem;
-        border-radius: 999px;
-    }
-
-    .pnd__suggestion-category {
-        font-weight: 700;
-        font-size: 0.88rem;
-        color: var(--clay-deep, #8b3d14);
-        font-family: var(--font-display, 'Fraunces', serif);
-    }
-
-    .pnd__suggestion-reason {
-        font-size: 0.78rem;
-        color: var(--ink-soft, #5a4e3c);
-        margin: 0;
-        line-height: 1.5;
-    }
-
-    .pnd__suggestion-apply {
-        background: none;
-        border: none;
-        padding: 0;
-        font-size: 0.78rem;
-        font-weight: 600;
-        color: var(--clay, #c0561d);
-        cursor: pointer;
-        text-align: left;
-        font-family: var(--font-body, 'Hanken Grotesk', sans-serif);
-        transition: opacity 0.15s;
-    }
-
-    .pnd__suggestion-apply:hover { opacity: 0.7; }
-
-    /* ── Preview ── */
-    .pnd__preview {
-        background: var(--paper-sunk);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 0.85rem 1rem;
+    .pnd__editor {
         margin-bottom: 1.5rem;
     }
 
-    .pnd__preview-label {
+    .pnd__title-field {
+        margin-bottom: 0.5rem;
+    }
+
+    .pnd__project-group {
+        color: var(--ink-faint) !important;
         font-size: 0.7rem;
         font-weight: 700;
-        text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: var(--ink-faint);
-        margin: 0 0 0.3rem;
-    }
-
-    .pnd__preview-title {
-        font-family: var(--font-display);
-        font-size: 1rem;
-        font-weight: 600;
-        color: var(--ink);
-        margin: 0 0 0.4rem;
-    }
-
-    .pnd__preview-snippet {
-        font-size: 0.8rem;
-        color: var(--ink-soft);
-        margin: 0;
-        line-height: 1.55;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
+        text-transform: uppercase;
     }
 
     /* ── Section label ── */
@@ -421,22 +343,20 @@
     private Guid? _projectId;
     private Guid? _areaId;
     private Guid? _resourceId;
-    private InboxSuggestionDto? _suggestion;
+    private string _title = string.Empty;
+    private string _content = string.Empty;
 
     private IReadOnlyList<ProjectDto> _projects = [];
     private IReadOnlyList<AreaDto> _areas = [];
     private IReadOnlyList<ResourceDto> _resources = [];
 
-    private string Snippet => Note.Content.Length <= 140
-        ? Note.Content
-        : Note.Content[..140] + "…";
-
     protected override async Task OnInitializedAsync()
     {
-        _projects  = await ProjectService.GetAllActiveAsync();
+        _title = Note.Title;
+        _content = Note.Content;
+        _projects  = await ProjectService.GetAllNonArchivedAsync();
         _areas     = await AreaService.GetAllActiveAsync();
         _resources = await ResourceService.GetAllActiveAsync();
-        _suggestion = await SuggestionsService.SuggestAsync(Note);
     }
 
     private void OnCategoryChanged(ParaCategory cat)
@@ -447,19 +367,10 @@
         _resourceId = null;
     }
 
-    private void ApplySuggestion()
-    {
-        if (_suggestion is null)
-        {
-            return;
-        }
-
-        OnCategoryChanged(_suggestion.SuggestedCategory);
-    }
-
     private void Confirm() =>
         MudDialog.Close(DialogResult.Ok(new ProcessNoteDto(
-            Note.Id, _category, _status, _projectId, _areaId, _resourceId)));
+            Note.Id, _category, _status, _projectId, _areaId, _resourceId,
+            _title, _content, Note.RowVersion)));
 
     private void Cancel() => MudDialog.Cancel();
 
@@ -487,5 +398,21 @@
         NoteStatus.Distilled => Icons.Material.Outlined.AutoAwesome,
         NoteStatus.Archived  => Icons.Material.Outlined.Archive,
         _                    => Icons.Material.Outlined.Circle
+    };
+
+    private static int ProjectStatusOrder(ProjectStatus status) => status switch
+    {
+        ProjectStatus.Active => 0,
+        ProjectStatus.NotStarted => 1,
+        ProjectStatus.Blocked => 2,
+        ProjectStatus.Parked => 3,
+        ProjectStatus.Completed => 4,
+        _ => 5
+    };
+
+    private static string ProjectStatusLabel(ProjectStatus status) => status switch
+    {
+        ProjectStatus.NotStarted => "Not started",
+        _ => status.ToString()
     };
 }

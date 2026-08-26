@@ -831,7 +831,7 @@
             try
             {
                 await NoteService.ProcessNoteAsync(dto);
-                Snackbar.Add($"\"{note.Title}\" moved to {dto.ParaCategory}.", Severity.Success);
+                Snackbar.Add($"\"{dto.Title ?? note.Title}\" moved to {dto.ParaCategory}.", Severity.Success);
                 _selectedIds.Remove(note.Id);
                 _notes = await NoteService.GetInboxAsync();
                 await LoadSuggestionsAsync(_notes);

@@ -516,6 +516,56 @@ public class NoteServiceTests
     }
 
     [Fact]
+    public async Task ProcessNoteAsync_WithReviewedContent_UpdatesNoteAndProcessesItTogether()
+    {
+        var sut = BuildService(nameof(ProcessNoteAsync_WithReviewedContent_UpdatesNoteAndProcessesItTogether));
+        var created = await sut.CreateAsync(new CreateNoteDto("Rough title", "Rough content"));
+
+        var updated = await sut.ProcessNoteAsync(new ProcessNoteDto(
+            created.Id,
+            ParaCategory.Resource,
+            NoteStatus.Distilled,
+            Title: "Reviewed title",
+            Content: "Reviewed content",
+            RowVersion: created.RowVersion));
+
+        updated.Title.Should().Be("Reviewed title");
+        updated.Content.Should().Be("Reviewed content");
+        updated.Status.Should().Be(NoteStatus.Distilled);
+        updated.ParaCategory.Should().Be(ParaCategory.Resource);
+        updated.ProcessedAtUtc.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task ProcessNoteAsync_WithBlankReviewedTitle_ThrowsArgumentException()
+    {
+        var sut = BuildService(nameof(ProcessNoteAsync_WithBlankReviewedTitle_ThrowsArgumentException));
+        var created = await sut.CreateAsync(new CreateNoteDto("Inbox item"));
+
+        var act = () => sut.ProcessNoteAsync(new ProcessNoteDto(
+            created.Id,
+            ParaCategory.Project,
+            Title: " "));
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task ProcessNoteAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException()
+    {
+        var sut = BuildService(nameof(ProcessNoteAsync_WithStaleRowVersion_ThrowsConcurrencyConflictException));
+        var created = await sut.CreateAsync(new CreateNoteDto("Inbox item"));
+
+        var act = () => sut.ProcessNoteAsync(new ProcessNoteDto(
+            created.Id,
+            ParaCategory.Project,
+            Title: "Reviewed title",
+            RowVersion: [1, 2, 3]));
+
+        await act.Should().ThrowAsync<ConcurrencyConflictException>();
+    }
+
+    [Fact]
     public async Task GetAllArchivedAsync_IncludesLegacyStatusArchivedNotes()
     {
         var dbName = nameof(GetAllArchivedAsync_IncludesLegacyStatusArchivedNotes);

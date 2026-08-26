@@ -237,6 +237,20 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         await context.EnsureNoteLinksOwnedAsync(
             userId, dto.ProjectId, dto.AreaId, dto.ResourceId, cancellationToken).ConfigureAwait(false);
 
+        if (dto.Title is not null)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Title))
+                throw new ArgumentException("A note title is required.", nameof(dto));
+
+            note.Title = dto.Title.Trim();
+        }
+
+        if (dto.Content is not null)
+            note.Content = dto.Content;
+
+        if (dto.RowVersion is not null)
+            context.Entry(note).Property(n => n.RowVersion).OriginalValue = dto.RowVersion;
+
         note.Status          = dto.Status;
         note.ParaCategory    = dto.ParaCategory;
         note.ProjectId       = dto.ProjectId;
@@ -255,7 +269,14 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             note.ArchivedAtUtc = null;
         }
 
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException("note", ex);
+        }
 
         return ToDto(note);
     }
