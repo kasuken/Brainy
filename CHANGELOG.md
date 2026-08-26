@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.12.0] - 2026-08-26
+
+### Improved
+
+- **Weekly commitments stay visible in Today** — planned weekly tasks now remain in the Planned this week widget even when they are overdue or in progress, keeping deliberate weekly planning context intact.
+- **Today section deduplication order** — task de-duplication now prioritizes weekly commitments before generic status sections so selected weekly work is shown in its intended planning surface.
+- **Weekly widget placement and preference fallback** — the Planned this week widget now appears in the main Today task section and remains visible when users already have selected weekly tasks, even if older dashboard preferences did not include the widget.
+
+### Added
+
+- **Weekly planning regression coverage** — added service and production-surface tests that verify overdue/in-progress weekly selections stay in the weekly plan and remain visible in Today.
+
+---
+
 ## [5.11.0] - 2026-08-24
 
 ### Added
