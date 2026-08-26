@@ -68,6 +68,26 @@ public sealed class WeekPageRenderTests
             .Should().BeLessThan(content.IndexOf("Priority Projects", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task AuthenticatedTodayPage_WhenPlannedWeekIsDisabled_DoesNotRenderIt()
+    {
+        await using var factory = new AuthenticatedWeekPageFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        await factory.SeedAsync();
+        await factory.SetWidgetOrderAsync("[\"current-focus\",\"in-progress\",\"priority-projects\"]");
+
+        using var response = await client.GetAsync("/today");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.EnsureSuccessStatusCode();
+        content.Should().NotContain("Planned this week");
+    }
+
     private sealed class AuthenticatedWeekPageFactory : WebApplicationFactory<Program>
     {
         private const string DatabaseName = "WeekPageRenderTests";
@@ -171,14 +191,21 @@ public sealed class WeekPageRenderTests
                     UserId = OtherUserId,
                     Task = otherTask,
                     WeekStartDate = new DateTime(2026, 6, 15)
-                },
-                new UserDashboardPreference
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = UserId,
-                    WidgetOrder = "[\"current-focus\",\"in-progress\",\"priority-projects\"]"
                 });
 
+            await db.SaveChangesAsync();
+        }
+
+        public async Task SetWidgetOrderAsync(string widgetOrder)
+        {
+            await using var scope = Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<BrainyDbContext>();
+            db.DashboardPreferences.Add(new UserDashboardPreference
+            {
+                Id = Guid.NewGuid(),
+                UserId = UserId,
+                WidgetOrder = widgetOrder
+            });
             await db.SaveChangesAsync();
         }
 
