@@ -457,6 +457,20 @@
                 @* ── Task sections ── *@
                 <div class="td-sections">
 
+                    @* Weekly commitments are a core execution surface. Keep them
+                       visible when the user has a plan, including for users whose
+                       saved dashboard preferences predate the Week feature. *@
+                    @if (_aggregate is not null
+                         && (_aggregate.PlannedThisWeek.SelectedTaskCount > 0
+                             || IsWidgetVisible(PlannedThisWeekWidgetKey)))
+                    {
+                        <PlannedThisWeekWidget Plan="_aggregate.PlannedThisWeek"
+                                               Today="_today"
+                                               OnFocus="HandleSetCurrentFocus"
+                                               OnComplete="HandleCompleted"
+                                               OnEdit="OpenEditTaskDialogAsync" />
+                    }
+
                     @if (IsWidgetVisible(InProgressWidgetKey))
                     {
                         <InProgressWidget Tasks="_aggregate?.InProgress ?? []"
@@ -534,16 +548,6 @@
                     }
 
                 </div>
-
-                @* ── Deliberate weekly commitments ── *@
-                @if (IsWidgetVisible(PlannedThisWeekWidgetKey) && _aggregate is not null)
-                {
-                    <PlannedThisWeekWidget Plan="_aggregate.PlannedThisWeek"
-                                           Today="_today"
-                                           OnFocus="HandleSetCurrentFocus"
-                                           OnComplete="HandleCompleted"
-                                           OnEdit="OpenEditTaskDialogAsync" />
-                }
 
                 @* ── Priority projects (Bottom) ── *@
                 @if (IsWidgetVisible(PriorityProjectsWidgetKey) && _prioritizedProjects.Count > 0)

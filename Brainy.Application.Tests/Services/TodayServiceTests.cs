@@ -583,6 +583,29 @@ public class TodayServiceTests
         result.DueThisWeek.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task GetTodayAggregateAsync_WhenWeeklyTaskIsInProgressAndOverdue_KeepsItInWeeklyPlan()
+    {
+        var (sut, db) = BuildService(nameof(GetTodayAggregateAsync_WhenWeeklyTaskIsInProgressAndOverdue_KeepsItInWeeklyPlan));
+        var project = CreateProject(DefaultUserId);
+        var selected = CreateTask(
+            project.Id,
+            DefaultUserId,
+            dueDate: Today.AddDays(-1),
+            status: TaskItemStatus.InProgress);
+
+        db.Projects.Add(project);
+        db.Tasks.Add(selected);
+        db.WeeklyTaskSelections.Add(CreateWeeklySelection(DefaultUserId, selected.Id, Today));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetTodayAggregateAsync();
+
+        result.PlannedThisWeek.Tasks.Should().ContainSingle().Which.Id.Should().Be(selected.Id);
+        result.InProgress.Should().BeEmpty();
+        result.Overdue.Should().BeEmpty();
+    }
+
     private static WeeklyTaskSelection CreateWeeklySelection(string userId, Guid taskId, DateTime weekStartDate) =>
         new()
         {

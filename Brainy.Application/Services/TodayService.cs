@@ -234,21 +234,18 @@ internal sealed class TodayService(
                                         .GetPrioritizedProjectsAsync(cancellationToken: cancellationToken)
                                         .ConfigureAwait(false);
 
-        // Deduplicate across sections: once a task appears in a higher-precedence
-        // section it must not be repeated lower down. Precedence mirrors the Today
-        // rendering order: Current focus -> In progress -> Overdue -> Due today ->
-        // Planned this week -> High priority -> This week -> Coming up.
-        // The Current focus task is intentionally NOT excluded from In Progress: it
-        // should always be visible there too when its status is In Progress. It is
-        // still excluded from every section below In Progress.
+        // Deliberate weekly commitments own their task cards on Today. Generic task
+        // sections must not hide that planning context or repeat the same work lower
+        // down. Current focus remains a separate execution surface and may therefore
+        // also appear in the weekly plan.
         var seen = new HashSet<Guid>();
+        plannedThisWeek = plannedThisWeek with { Tasks = ExcludeSeen(plannedThisWeek.Tasks, seen) };
         inProgress = ExcludeSeen(inProgress, seen);
         if (currentTask is not null)
             seen.Add(currentTask.Id);
 
         overdue          = ExcludeSeen(overdue, seen);
         dueToday         = ExcludeSeen(dueToday, seen);
-        plannedThisWeek  = plannedThisWeek with { Tasks = ExcludeSeen(plannedThisWeek.Tasks, seen) };
         highPriorityWork = ExcludeSeen(highPriorityWork, seen);
         dueThisWeek      = ExcludeSeen(dueThisWeek, seen);
         nextTasks        = ExcludeSeen(nextTasks, seen);

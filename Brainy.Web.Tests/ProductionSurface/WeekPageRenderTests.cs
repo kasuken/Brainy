@@ -142,7 +142,7 @@ public sealed class WeekPageRenderTests
                 UserId = UserId,
                 Project = ownerProject,
                 Title = "Owner selected task",
-                Status = TaskItemStatus.Todo
+                Status = TaskItemStatus.InProgress
             };
             var otherTask = new TaskItem
             {
@@ -171,6 +171,12 @@ public sealed class WeekPageRenderTests
                     UserId = OtherUserId,
                     Task = otherTask,
                     WeekStartDate = new DateTime(2026, 6, 15)
+                },
+                new UserDashboardPreference
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = UserId,
+                    WidgetOrder = "[\"current-focus\",\"in-progress\",\"priority-projects\"]"
                 });
 
             await db.SaveChangesAsync();
