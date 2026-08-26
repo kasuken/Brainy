@@ -561,9 +561,9 @@ public class TodayServiceTests
     }
 
     [Fact]
-    public async Task GetTodayAggregateAsync_PrioritizesWeeklyPlanBeforePriorityAndDueThisWeek()
+    public async Task GetTodayAggregateAsync_WeeklyTaskAlsoAppearsInPriorityAndDueThisWeek()
     {
-        var (sut, db) = BuildService(nameof(GetTodayAggregateAsync_PrioritizesWeeklyPlanBeforePriorityAndDueThisWeek));
+        var (sut, db) = BuildService(nameof(GetTodayAggregateAsync_WeeklyTaskAlsoAppearsInPriorityAndDueThisWeek));
         var project = CreateProject(DefaultUserId);
         var selected = CreateTask(
             project.Id,
@@ -579,14 +579,14 @@ public class TodayServiceTests
         var result = await sut.GetTodayAggregateAsync();
 
         result.PlannedThisWeek.Tasks.Should().ContainSingle().Which.Id.Should().Be(selected.Id);
-        result.HighPriorityWork.Should().BeEmpty();
-        result.DueThisWeek.Should().BeEmpty();
+        result.HighPriorityWork.Should().ContainSingle().Which.Id.Should().Be(selected.Id);
+        result.DueThisWeek.Should().ContainSingle().Which.Id.Should().Be(selected.Id);
     }
 
     [Fact]
-    public async Task GetTodayAggregateAsync_WhenWeeklyTaskIsInProgressAndOverdue_KeepsItInWeeklyPlan()
+    public async Task GetTodayAggregateAsync_WhenWeeklyTaskIsInProgressAndOverdue_AlsoAppearsInStatusLists()
     {
-        var (sut, db) = BuildService(nameof(GetTodayAggregateAsync_WhenWeeklyTaskIsInProgressAndOverdue_KeepsItInWeeklyPlan));
+        var (sut, db) = BuildService(nameof(GetTodayAggregateAsync_WhenWeeklyTaskIsInProgressAndOverdue_AlsoAppearsInStatusLists));
         var project = CreateProject(DefaultUserId);
         var selected = CreateTask(
             project.Id,
@@ -602,8 +602,8 @@ public class TodayServiceTests
         var result = await sut.GetTodayAggregateAsync();
 
         result.PlannedThisWeek.Tasks.Should().ContainSingle().Which.Id.Should().Be(selected.Id);
-        result.InProgress.Should().BeEmpty();
-        result.Overdue.Should().BeEmpty();
+        result.InProgress.Should().ContainSingle().Which.Id.Should().Be(selected.Id);
+        result.Overdue.Should().ContainSingle().Which.Id.Should().Be(selected.Id);
     }
 
     private static WeeklyTaskSelection CreateWeeklySelection(string userId, Guid taskId, DateTime weekStartDate) =>

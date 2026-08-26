@@ -11,8 +11,8 @@ namespace Brainy.Application.DTOs.Today;
 /// <param name="ActionableTaskCount">Unfinished selections that are still actionable.</param>
 /// <param name="NeedsReplanningCount">Unfinished selections that are no longer actionable.</param>
 /// <param name="Tasks">
-/// Actionable selected tasks. The aggregate may remove tasks already claimed by
-/// a higher-precedence Today section before returning the final snapshot.
+/// Actionable selected tasks. A task may also appear in other Today sections when
+/// its status, priority, or due date makes it applicable there.
 /// </param>
 public record TodayPlannedWeekDto(
     int SelectedTaskCount,

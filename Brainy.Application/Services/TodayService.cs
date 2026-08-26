@@ -234,21 +234,10 @@ internal sealed class TodayService(
                                         .GetPrioritizedProjectsAsync(cancellationToken: cancellationToken)
                                         .ConfigureAwait(false);
 
-        // Deliberate weekly commitments own their task cards on Today. Generic task
-        // sections must not hide that planning context or repeat the same work lower
-        // down. Current focus remains a separate execution surface and may therefore
-        // also appear in the weekly plan.
-        var seen = new HashSet<Guid>();
-        plannedThisWeek = plannedThisWeek with { Tasks = ExcludeSeen(plannedThisWeek.Tasks, seen) };
-        inProgress = ExcludeSeen(inProgress, seen);
-        if (currentTask is not null)
-            seen.Add(currentTask.Id);
-
-        overdue          = ExcludeSeen(overdue, seen);
-        dueToday         = ExcludeSeen(dueToday, seen);
-        highPriorityWork = ExcludeSeen(highPriorityWork, seen);
-        dueThisWeek      = ExcludeSeen(dueThisWeek, seen);
-        nextTasks        = ExcludeSeen(nextTasks, seen);
+        // A weekly commitment is a planning label, not ownership of the task card.
+        // Keep planned tasks visible in every applicable execution section as well.
+        if (currentTask is not null && !plannedThisWeek.Tasks.Any(task => task.Id == currentTask.Id))
+            overdue = overdue.Where(task => task.Id != currentTask.Id).ToList();
 
         var prefs = await context.DashboardPreferences
             .AsNoTracking()
@@ -271,21 +260,6 @@ internal sealed class TodayService(
             inboxCount >= threshold,
             threshold,
             prioritizedProjects);
-    }
-
-    /// <summary>
-    /// Removes tasks already claimed by a higher-precedence Today section, then
-    /// registers the remaining tasks as seen so lower-precedence sections exclude them too.
-    /// </summary>
-    private static IReadOnlyList<TodayTaskItemDto> ExcludeSeen(
-        IReadOnlyList<TodayTaskItemDto> tasks,
-        HashSet<Guid> seen)
-    {
-        if (tasks.Count == 0)
-            return tasks;
-
-        var remaining = tasks.Where(t => seen.Add(t.Id)).ToList();
-        return remaining.Count == tasks.Count ? tasks : remaining;
     }
 
     // ---------------------------------------------------------------------------
