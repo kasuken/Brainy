@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.12.3] - 2026-08-28
+
+### Improved
+
+- **Areas and Resources card styling** — refreshed card icons and simplified page headers to make PARA organization views clearer and more consistent.
+
+---
+
 ## [5.12.2] - 2026-08-26
 
 ### Improved
