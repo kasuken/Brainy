@@ -243,11 +243,13 @@
     }
 
     .ap-card-icon {
-        color: var(--mud-palette-text-disabled);
-    }
-
-    .ap-card:hover .ap-card-icon {
-        color: #ed6c02;
+        flex: none;
+        width: 1.6rem;
+        font-size: 1.45rem;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .ap-card-title {
@@ -427,15 +429,8 @@
                             </div>
                             
                             <div class="ap-card-header">
-                                @if (a.IsArchived)
-                                {
-                                    <MudIcon Icon="@Icons.Material.Filled.Archive" Size="Size.Medium" Class="ap-card-icon" />
-                                }
-                                else
-                                {
-                                    <MudIcon Icon="@Icons.Material.Filled.FolderSpecial" Size="Size.Medium" Class="ap-card-icon" />
-                                }
-                                <h3 class="ap-card-title"><a class="ap-card-link" href="@($"/areas/{a.Id}")">@a.Emoji @a.Name</a></h3>
+                                <span class="ap-card-icon" aria-hidden="true">@a.Emoji</span>
+                                <h3 class="ap-card-title"><a class="ap-card-link" href="@($"/areas/{a.Id}")">@a.Name</a></h3>
                             </div>
                             <p class="ap-card-desc">@(string.IsNullOrWhiteSpace(a.Description) ? "No description" : a.Description)</p>
                             

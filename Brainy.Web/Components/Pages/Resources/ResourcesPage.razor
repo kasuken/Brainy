@@ -244,12 +244,14 @@
     }
 
     .rep-card-icon {
-        color: var(--mud-palette-text-disabled);
+        flex: none;
+        width: 1.6rem;
         margin-top: 2px;
-    }
-
-    .rep-card:hover .rep-card-icon {
-        color: #e5a400;
+        font-size: 1.45rem;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .rep-card-title {
@@ -460,16 +462,9 @@
                             </div>
                             
                             <div class="rep-card-header">
-                                @if (r.IsArchived)
-                                {
-                                    <MudIcon Icon="@Icons.Material.Filled.Archive" Size="Size.Medium" Class="rep-card-icon" />
-                                }
-                                else
-                                {
-                                    <MudIcon Icon="@Icons.Material.Outlined.MenuBook" Size="Size.Medium" Class="rep-card-icon" />
-                                }
+                                <span class="rep-card-icon" aria-hidden="true">@r.Emoji</span>
                                 <div style="display:flex; flex-direction:column; gap:0.2rem;">
-                                    <h3 class="rep-card-title">@r.Emoji @r.Name</h3>
+                                    <h3 class="rep-card-title">@r.Name</h3>
                                     @if (!string.IsNullOrWhiteSpace(r.Topic))
                                     {
                                         <span class="rep-card-topic">@r.Topic</span>
