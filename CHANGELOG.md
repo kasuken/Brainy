@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.12.4] - 2026-08-28
+
+### Added
+
+- **In Progress current-focus action** — tasks in the Today In Progress widget can now be set as the current focus directly from the task card.
+
+### Improved
+
+- **Weekly planning production-surface coverage** — verifies that the current-focus action remains available for planned weekly work rendered in Today.
+
+---
+
 ## [5.12.3] - 2026-08-28
 
 ### Improved
