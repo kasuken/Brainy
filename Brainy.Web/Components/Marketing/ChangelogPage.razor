@@ -1,0 +1,38 @@
+@page "/changelog"
+@layout MarketingLayout
+@using Brainy.Web.Security
+
+<PageTitle>Changelog — Brainy</PageTitle>
+<HeadContent>
+    <meta name="description" content="See what is new in Brainy." />
+</HeadContent>
+
+<section class="mkt-hero">
+    <div class="mkt-wrap">
+        <span class="mkt-eyebrow mkt-rise">Release notes</span>
+        <h1 class="mkt-title mkt-rise mkt-d1">What’s new in <em>Brainy</em>.</h1>
+        <p class="mkt-lead mkt-rise mkt-d2">A complete record of product updates and improvements.</p>
+    </div>
+</section>
+
+<section class="mkt-section">
+    <div class="mkt-wrap">
+        <article class="mkt-changelog">
+            @ChangelogContent
+        </article>
+    </div>
+</section>
+
+@code {
+    private MarkupString ChangelogContent { get; set; }
+
+    protected override void OnInitialized()
+    {
+        var assembly = typeof(ChangelogPage).Assembly;
+        using var stream = assembly.GetManifestResourceStream("Brainy.Web.CHANGELOG.md");
+        using var reader = stream is null ? null : new StreamReader(stream);
+        var changelog = reader?.ReadToEnd() ?? "Changelog is temporarily unavailable.";
+
+        ChangelogContent = new MarkupString(MarkdownHtmlRenderer.Render(changelog));
+    }
+}
