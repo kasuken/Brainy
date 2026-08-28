@@ -56,6 +56,13 @@
                                        Size="Size.Small" Color="Color.Default"
                                        OnClick="() => OnEdit.InvokeAsync(t)" />
                     </MudTooltip>
+                    <MudTooltip Text="Set as current focus">
+                        <MudIconButton Icon="@Icons.Material.Outlined.CenterFocusStrong"
+                                       Size="Size.Small"
+                                       Color="Color.Warning"
+                                       aria-label="Set as current focus"
+                                       OnClick="() => OnFocus.InvokeAsync(t.Id)" />
+                    </MudTooltip>
                     <MudTooltip Text="Mark complete">
                         <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
                                        Size="Size.Small" Color="Color.Success"
@@ -79,6 +86,9 @@
 
     /// <summary>Raised with a subtask ID when the user sets it as In Progress.</summary>
     [Parameter] public EventCallback<Guid> OnSetInProgress { get; set; }
+
+    /// <summary>Raised with the task ID when the user sets it as their current focus.</summary>
+    [Parameter] public EventCallback<Guid> OnFocus { get; set; }
 
     /// <summary>Raised with the selected task when the user wants to edit it.</summary>
     [Parameter] public EventCallback<TodayTaskItemDto> OnEdit { get; set; }

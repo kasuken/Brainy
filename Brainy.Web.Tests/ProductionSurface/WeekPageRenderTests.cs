@@ -63,6 +63,7 @@ public sealed class WeekPageRenderTests
         response.EnsureSuccessStatusCode();
         content.Should().Contain("Planned this week");
         content.Should().Contain("Owner selected task");
+        content.Should().Contain("Set as current focus");
         content.Should().NotContain("Other selected task");
         content.IndexOf("Planned this week", StringComparison.Ordinal)
             .Should().BeLessThan(content.IndexOf("Priority Projects", StringComparison.Ordinal));
