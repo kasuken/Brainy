@@ -389,6 +389,61 @@
     margin-top: 1.1rem;
 }
 
+/* ── Changelog ───────────────────────────────────────────────────────────── */
+
+.mkt-changelog {
+    max-width: 48rem;
+    color: var(--mkt-ink-soft);
+    font-size: 1rem;
+    line-height: 1.7;
+}
+
+.mkt-changelog > :first-child {
+    margin-top: 0;
+}
+
+.mkt-changelog h1,
+.mkt-changelog h2,
+.mkt-changelog h3 {
+    color: var(--mkt-ink);
+    font-family: var(--mkt-display);
+    line-height: 1.15;
+}
+
+.mkt-changelog h1 {
+    display: none;
+}
+
+.mkt-changelog h2 {
+    margin: 3.5rem 0 1.25rem;
+    font-size: clamp(1.7rem, 3vw, 2.2rem);
+}
+
+.mkt-changelog h3 {
+    margin: 1.75rem 0 0.5rem;
+    font-size: 1.3rem;
+}
+
+.mkt-changelog ul {
+    padding-left: 1.25rem;
+}
+
+.mkt-changelog li + li {
+    margin-top: 0.5rem;
+}
+
+.mkt-changelog hr {
+    margin: 3rem 0;
+    border: 0;
+    border-top: 1px solid var(--mkt-line-strong);
+}
+
+.mkt-changelog a {
+    color: var(--mkt-clay);
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.15em;
+}
+
 /* ── CODE columns (numbered editorial) ──────────────────────────────────── */
 
 .mkt-code-grid {
