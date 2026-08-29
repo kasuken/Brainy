@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.13.0] - 2026-08-29
+
+### Added
+
+- **Public changelog page** — visitors can now browse Brainy's complete release history from the marketing site, with direct navigation links in the header and footer.
+
+### Improved
+
+- **Priority Projects responsiveness** — the Today priority-project cards now use a responsive grid, while task controls and content preserve their layout on smaller screens.
+
+---
+
 ## [5.12.4] - 2026-08-28
 
 ### Added
