@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.13.1] - 2026-08-31
+
+### Improved
+
+- **Today task card maintainability** — Today widgets now share a reusable task-card component for consistent task actions, due-date formatting, priority styling, and cleaner widget markup.
+
+---
+
 ## [5.13.0] - 2026-08-29
 
 ### Added
