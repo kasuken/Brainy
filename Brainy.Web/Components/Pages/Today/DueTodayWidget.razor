@@ -24,41 +24,12 @@
         {
             @foreach (var t in Tasks)
             {
-                <div class="td-task @PriorityClass(t.Priority)">
-                    <div class="td-task-body">
-                        <p class="td-task-title">@t.Title</p>
-                        <div class="td-task-meta">
-                            <a class="td-task-project" href="@($"/projects/{t.ProjectId}")">@t.ProjectName</a>
-                            <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
-                                @t.Priority.ToString()
-                            </MudChip>
-                            @if (t.DueDate.HasValue && t.DueDate.Value.TimeOfDay != TimeSpan.Zero)
-                            {
-                                <span class="td-task-due">@t.DueDate.Value.ToString("h:mm tt")</span>
-                            }
-                        </div>
-                        @if (t.Subtasks.Count > 0)
-                        {
-                            <TaskSubtaskList Subtasks="t.Subtasks"
-                                             OnComplete="OnComplete" OnReopen="OnReopen" OnSetInProgress="OnSetInProgress" />
-                        }
-                    </div>
-                    <MudTooltip Text="Edit task">
-                        <MudIconButton Icon="@Icons.Material.Outlined.Edit"
-                                       Size="Size.Small" Color="Color.Default"
-                                       OnClick="() => OnEdit.InvokeAsync(t)" />
-                    </MudTooltip>
-                    <MudTooltip Text="Set In Progress">
-                        <MudIconButton Icon="@Icons.Material.Outlined.PlayArrow"
-                                       Size="Size.Small" Color="Color.Info"
-                                       OnClick="() => OnSetInProgress.InvokeAsync(t.Id)" />
-                    </MudTooltip>
-                    <MudTooltip Text="Mark complete">
-                        <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
-                                       Size="Size.Small" Color="Color.Success"
-                                       OnClick="() => OnComplete.InvokeAsync(t.Id)" />
-                    </MudTooltip>
-                </div>
+                <TodayTaskCard Task="t"
+                               DueText="@(t.DueDate.HasValue && t.DueDate.Value.TimeOfDay != TimeSpan.Zero ? t.DueDate.Value.ToString("h:mm tt") : null)"
+                               OnComplete="OnComplete"
+                               OnReopen="OnReopen"
+                               OnSetInProgress="OnSetInProgress"
+                               OnEdit="OnEdit" />
             }
         }
     }
@@ -87,21 +58,6 @@
 
     protected override void OnInitialized() => _collapsed = Collapsed;
 
-    private static Color PriorityColor(TaskPriority p) => p switch
-    {
-        TaskPriority.Critical => Color.Error,
-        TaskPriority.High     => Color.Warning,
-        TaskPriority.Medium   => Color.Info,
-        _                     => Color.Default,
-    };
-
-    private static string PriorityClass(TaskPriority p) => p switch
-    {
-        TaskPriority.Critical => "td-task--critical",
-        TaskPriority.High     => "td-task--high",
-        TaskPriority.Medium   => "td-task--medium",
-        _                     => "td-task--low",
-    };
 }
 
 <style>

@@ -1,0 +1,111 @@
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Domain.Enums
+
+<div class="td-task @PriorityClass(Task.Priority) @AdditionalClass">
+    <div class="td-task-body">
+        <p class="td-task-title">@Task.Title</p>
+        <div class="td-task-meta">
+            <a class="td-task-project" href="@($"/projects/{Task.ProjectId}")">@Task.ProjectName</a>
+            <MudChip T="string" Size="Size.Small" Color="@PriorityColor(Task.Priority)" Variant="Variant.Outlined">
+                @Task.Priority.ToString()
+            </MudChip>
+            @if (!string.IsNullOrWhiteSpace(DueText))
+            {
+                <span class="td-task-due @(IsDueOverdue ? "td-task-due--overdue" : "")">@DueText</span>
+            }
+        </div>
+        @if (Task.Subtasks.Count > 0)
+        {
+            <TaskSubtaskList Subtasks="Task.Subtasks" Today="Today"
+                             OnComplete="OnComplete" OnReopen="OnReopen" OnSetInProgress="OnSetInProgress" />
+        }
+    </div>
+
+    @if (OnEdit.HasDelegate)
+    {
+        <MudTooltip Text="Edit task">
+            <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                           Size="Size.Small" Color="Color.Default"
+                           OnClick="() => OnEdit.InvokeAsync(Task)" />
+        </MudTooltip>
+    }
+    @if (OnFocus.HasDelegate)
+    {
+        <MudTooltip Text="Set as current focus">
+            <MudIconButton Icon="@Icons.Material.Outlined.CenterFocusStrong"
+                           Size="Size.Small" Color="Color.Warning"
+                           aria-label="Set as current focus"
+                           OnClick="() => OnFocus.InvokeAsync(Task.Id)" />
+        </MudTooltip>
+    }
+    @if (ShowSetInProgressAction && OnSetInProgress.HasDelegate)
+    {
+        <MudTooltip Text="Set In Progress">
+            <MudIconButton Icon="@Icons.Material.Outlined.PlayArrow"
+                           Size="Size.Small" Color="Color.Info"
+                           OnClick="() => OnSetInProgress.InvokeAsync(Task.Id)" />
+        </MudTooltip>
+    }
+    @if (ShowCompleteAction && OnComplete.HasDelegate)
+    {
+        <MudTooltip Text="Mark complete">
+            <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                           Size="Size.Small" Color="Color.Success"
+                           OnClick="() => OnComplete.InvokeAsync(Task.Id)" />
+        </MudTooltip>
+    }
+</div>
+
+@code {
+    /// <summary>The task displayed by the card.</summary>
+    [Parameter, EditorRequired] public TodayTaskItemDto Task { get; set; } = default!;
+
+    /// <summary>The user's calendar date, used when rendering subtasks.</summary>
+    [Parameter] public DateTime Today { get; set; } = DateTime.Today;
+
+    /// <summary>An optional state class applied to the card.</summary>
+    [Parameter] public string? AdditionalClass { get; set; }
+
+    /// <summary>The optional due-date text to display.</summary>
+    [Parameter] public string? DueText { get; set; }
+
+    /// <summary>Whether the due-date text represents an overdue task.</summary>
+    [Parameter] public bool IsDueOverdue { get; set; }
+
+    /// <summary>Whether to render the set-in-progress action.</summary>
+    [Parameter] public bool ShowSetInProgressAction { get; set; } = true;
+
+    /// <summary>Whether to render the complete action.</summary>
+    [Parameter] public bool ShowCompleteAction { get; set; } = true;
+
+    /// <summary>Raised when the task is marked complete.</summary>
+    [Parameter] public EventCallback<Guid> OnComplete { get; set; }
+
+    /// <summary>Raised when a completed subtask is reopened.</summary>
+    [Parameter] public EventCallback<Guid> OnReopen { get; set; }
+
+    /// <summary>Raised when the task or one of its subtasks is set in progress.</summary>
+    [Parameter] public EventCallback<Guid> OnSetInProgress { get; set; }
+
+    /// <summary>Raised when the task is set as the current focus.</summary>
+    [Parameter] public EventCallback<Guid> OnFocus { get; set; }
+
+    /// <summary>Raised when the task is selected for editing.</summary>
+    [Parameter] public EventCallback<TodayTaskItemDto> OnEdit { get; set; }
+
+    private static Color PriorityColor(TaskPriority priority) => priority switch
+    {
+        TaskPriority.Critical => Color.Error,
+        TaskPriority.High => Color.Warning,
+        TaskPriority.Medium => Color.Info,
+        _ => Color.Default,
+    };
+
+    private static string PriorityClass(TaskPriority priority) => priority switch
+    {
+        TaskPriority.Critical => "td-task--critical",
+        TaskPriority.High => "td-task--high",
+        TaskPriority.Medium => "td-task--medium",
+        _ => "td-task--low",
+    };
+}

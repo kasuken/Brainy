@@ -2,7 +2,7 @@
 @using Brainy.Domain.Enums
 
 @* ─────────────────────────────────────────────────────────────────────────────
-   DueThisWeekWidget — tasks due within the next 6 days, grouped by project.
+   DueThisWeekWidget — tasks due within the next 6 days.
 ───────────────────────────────────────────────────────────────────────────── *@
 
 <div class="td-widget td-section">
@@ -22,51 +22,14 @@
         }
         else
         {
-            @foreach (var group in Tasks.GroupBy(t => new { t.ProjectId, t.ProjectName }))
+            @foreach (var t in Tasks)
             {
-                <div style="margin-bottom:0.85rem;">
-                    <a href="@($"/projects/{group.Key.ProjectId}")"
-                       style="display:inline-block; font-size:0.7rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:0.35rem; padding-left:0.1rem; text-decoration:none;">
-                        @group.Key.ProjectName
-                    </a>
-                    @foreach (var t in group)
-                    {
-                        <div class="td-task @PriorityClass(t.Priority)">
-                            <div class="td-task-body">
-                                <p class="td-task-title">@t.Title</p>
-                                <div class="td-task-meta">
-                                    <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
-                                        @t.Priority.ToString()
-                                    </MudChip>
-                                    @if (t.DueDate.HasValue)
-                                    {
-                                        <span class="td-task-due">@t.DueDate.Value.ToString("ddd, MMM d")</span>
-                                    }
-                                </div>
-                                @if (t.Subtasks.Count > 0)
-                                {
-                                    <TaskSubtaskList Subtasks="t.Subtasks"
-                                                     OnComplete="OnComplete" OnReopen="OnReopen" OnSetInProgress="OnSetInProgress" />
-                                }
-                            </div>
-                            <MudTooltip Text="Edit task">
-                                <MudIconButton Icon="@Icons.Material.Outlined.Edit"
-                                               Size="Size.Small" Color="Color.Default"
-                                               OnClick="() => OnEdit.InvokeAsync(t)" />
-                            </MudTooltip>
-                            <MudTooltip Text="Set In Progress">
-                                <MudIconButton Icon="@Icons.Material.Outlined.PlayArrow"
-                                               Size="Size.Small" Color="Color.Info"
-                                               OnClick="() => OnSetInProgress.InvokeAsync(t.Id)" />
-                            </MudTooltip>
-                            <MudTooltip Text="Mark complete">
-                                <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
-                                               Size="Size.Small" Color="Color.Success"
-                                               OnClick="() => OnComplete.InvokeAsync(t.Id)" />
-                            </MudTooltip>
-                        </div>
-                    }
-                </div>
+                <TodayTaskCard Task="t"
+                               DueText="@(t.DueDate?.ToString("ddd, MMM d"))"
+                               OnComplete="OnComplete"
+                               OnReopen="OnReopen"
+                               OnSetInProgress="OnSetInProgress"
+                               OnEdit="OnEdit" />
             }
         }
     }
@@ -95,19 +58,4 @@
 
     protected override void OnInitialized() => _collapsed = Collapsed;
 
-    private static Color PriorityColor(TaskPriority p) => p switch
-    {
-        TaskPriority.Critical => Color.Error,
-        TaskPriority.High     => Color.Warning,
-        TaskPriority.Medium   => Color.Info,
-        _                     => Color.Default,
-    };
-
-    private static string PriorityClass(TaskPriority p) => p switch
-    {
-        TaskPriority.Critical => "td-task--critical",
-        TaskPriority.High     => "td-task--high",
-        TaskPriority.Medium   => "td-task--medium",
-        _                     => "td-task--low",
-    };
 }

@@ -24,36 +24,13 @@
         {
             @foreach (var t in VisibleTasks)
             {
-                <div class="td-task @PriorityClass(t.Priority)">
-                    <div class="td-task-body">
-                        <p class="td-task-title">@t.Title</p>
-                        <div class="td-task-meta">
-                            <a class="td-task-project" href="@($"/projects/{t.ProjectId}")">@t.ProjectName</a>
-                            <MudChip T="string" Size="Size.Small" Color="@PriorityColor(t.Priority)" Variant="Variant.Outlined">
-                                @t.Priority.ToString()
-                            </MudChip>
-                            @if (t.DueDate.HasValue)
-                            {
-                                <span class="td-task-due">@t.DueDate.Value.ToString("MMM d")</span>
-                            }
-                        </div>
-                        @if (t.Subtasks.Count > 0)
-                        {
-                            <TaskSubtaskList Subtasks="t.Subtasks"
-                                             OnComplete="OnComplete" OnReopen="OnReopen" OnSetInProgress="OnSetInProgress" />
-                        }
-                    </div>
-                    <MudTooltip Text="Set In Progress">
-                        <MudIconButton Icon="@Icons.Material.Outlined.PlayArrow"
-                                       Size="Size.Small" Color="Color.Info"
-                                       OnClick="() => OnSetInProgress.InvokeAsync(t.Id)" />
-                    </MudTooltip>
-                    <MudTooltip Text="Edit task">
-                        <MudIconButton Icon="@Icons.Material.Outlined.Edit"
-                                       Size="Size.Small" Color="Color.Default"
-                                       OnClick="() => OnEdit.InvokeAsync(t)" />
-                    </MudTooltip>
-                </div>
+                <TodayTaskCard Task="t"
+                               DueText="@(t.DueDate?.ToString("MMM d"))"
+                               OnComplete="OnComplete"
+                               OnReopen="OnReopen"
+                               OnSetInProgress="OnSetInProgress"
+                               ShowCompleteAction="false"
+                               OnEdit="OnEdit" />
             }
 
             @if (!_showAll && Tasks.Count > PageSize)
@@ -107,19 +84,4 @@
     private IEnumerable<TodayTaskItemDto> VisibleTasks =>
         _showAll ? Tasks : Tasks.Take(PageSize);
 
-    private static Color PriorityColor(TaskPriority p) => p switch
-    {
-        TaskPriority.Critical => Color.Error,
-        TaskPriority.High     => Color.Warning,
-        TaskPriority.Medium   => Color.Info,
-        _                     => Color.Default,
-    };
-
-    private static string PriorityClass(TaskPriority p) => p switch
-    {
-        TaskPriority.Critical => "td-task--critical",
-        TaskPriority.High     => "td-task--high",
-        TaskPriority.Medium   => "td-task--medium",
-        _                     => "td-task--low",
-    };
 }
