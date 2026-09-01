@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.13.2] - 2026-09-01
+
+### Added
+
+- **Application-level caching** — added a user-scoped caching layer with consistent cache keys, 5-minute TTL entries, lock coalescing, and tag-based invalidation for expensive application-service queries.
+
+### Improved
+
+- **Service query performance** — integrated caching across application services for notes, projects, areas, resources, tasks, Today, Week, goals, search, outputs, summaries, and related planning surfaces.
+- **Cache invalidation safety** — mutations now invalidate related entity and user-scoped cache entries so updated knowledge, task, and planning data stays fresh.
+- **Caching regression coverage** — added unit coverage for cache behavior plus account-deletion coverage that verifies cached data is invalidated when a user account is removed.
+
+---
+
 ## [5.13.1] - 2026-08-31
 
 ### Improved
