@@ -1,8 +1,11 @@
+using Brainy.Application.Caching;
 using Brainy.Application.Common;
 using Brainy.Application.DTOs.Tasks;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,7 +19,8 @@ namespace Brainy.Application.Services;
 internal sealed class CurrentTaskRecommendationService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    IUserTimeZoneService userTimeZone) : ICurrentTaskRecommendationService
+    IUserTimeZoneService userTimeZone,
+    IApplicationCache cache) : ICurrentTaskRecommendationService
 {
     private static readonly TaskItemStatus[] _excludedStatuses =
         [TaskItemStatus.Done, TaskItemStatus.Archived, TaskItemStatus.Waiting];
@@ -25,6 +29,25 @@ internal sealed class CurrentTaskRecommendationService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
+
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"tasks:recommendation:{today:yyyy-MM-dd}",
+            [
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<TaskDependency>(),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            ct => GetRecommendationCoreAsync(userId, today, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<TodayTaskItemDto?> GetRecommendationCoreAsync(
+        string userId,
+        DateTime today,
+        CancellationToken cancellationToken)
+    {
         var weekEnd = today.AddDays(7);
 
         // Fetch all eligible candidates in one query; scoring is done in memory

@@ -1,4 +1,6 @@
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Archives;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -7,18 +9,26 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Brainy.Application.Services;
 
-internal sealed class ArchiveRetentionService(IApplicationDbContext context, ICurrentUserService currentUser) : IArchiveRetentionService
+internal sealed class ArchiveRetentionService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : IArchiveRetentionService
 {
     public async Task<IReadOnlyList<ArchiveRetentionRuleDto>> GetRulesAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        return await context.ArchiveRetentionRules
-            .AsNoTracking()
-            .Where(r => r.UserId == userId)
-            .OrderBy(r => r.EntityType)
-            .Select(r => new ArchiveRetentionRuleDto(r.Id, r.EntityType, r.RetentionDays))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "archive-retention:rules",
+            [ApplicationCacheKey.EntityTypeTag<ArchiveRetentionRule>()],
+            async ct => await context.ArchiveRetentionRules
+                .AsNoTracking()
+                .Where(r => r.UserId == userId)
+                .OrderBy(r => r.EntityType)
+                .Select(r => new ArchiveRetentionRuleDto(r.Id, r.EntityType, r.RetentionDays))
+                .ToListAsync(ct)
+                .ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpsertRuleAsync(string entityType, int? retentionDays, CancellationToken cancellationToken = default)
@@ -30,11 +40,12 @@ internal sealed class ArchiveRetentionService(IApplicationDbContext context, ICu
             .FirstOrDefaultAsync(r => r.UserId == userId && r.EntityType == entityType, cancellationToken)
             .ConfigureAwait(false);
 
+        var ruleId = existing?.Id ?? Guid.NewGuid();
         if (existing is null)
         {
             context.ArchiveRetentionRules.Add(new ArchiveRetentionRule
             {
-                Id = Guid.NewGuid(),
+                Id = ruleId,
                 UserId = userId,
                 EntityType = entityType,
                 RetentionDays = retentionDays
@@ -46,6 +57,13 @@ internal sealed class ArchiveRetentionService(IApplicationDbContext context, ICu
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<ArchiveRetentionRule>(),
+                ApplicationCacheKey.EntityTag<ArchiveRetentionRule>(ruleId)
+            ],
+            CancellationToken.None).ConfigureAwait(false);
     }
 
     public async Task DeleteRuleAsync(string entityType, CancellationToken cancellationToken = default)
@@ -58,6 +76,13 @@ internal sealed class ArchiveRetentionService(IApplicationDbContext context, ICu
         {
             context.ArchiveRetentionRules.Remove(rule);
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await cache.InvalidateTagsAsync(
+                userId,
+                [
+                    ApplicationCacheKey.EntityTypeTag<ArchiveRetentionRule>(),
+                    ApplicationCacheKey.EntityTag<ArchiveRetentionRule>(rule.Id)
+                ],
+                CancellationToken.None).ConfigureAwait(false);
         }
     }
 

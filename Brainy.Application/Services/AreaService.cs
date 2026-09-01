@@ -1,5 +1,7 @@
 using Brainy.Application.Common;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Areas;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -14,72 +16,110 @@ namespace Brainy.Application.Services;
 /// Handles CRUD operations for <see cref="Area"/> entities, scoped to the current user.
 /// Active areas exclude archived entries; reads use <c>AsNoTracking</c>.
 /// </summary>
-internal sealed class AreaService(IApplicationDbContext context, ICurrentUserService currentUser) : IAreaService
+internal sealed class AreaService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : IAreaService
 {
     public async Task<IReadOnlyList<AreaDto>> GetAllActiveAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        return await context.Areas.AsNoTracking()
-            .Where(a => a.UserId == userId && !a.IsArchived)
-            .OrderBy(a => a.Name)
-            .Select(a => ToDto(a))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "areas:active",
+            [ApplicationCacheKey.EntityTypeTag<Area>()],
+            async ct => await context.Areas.AsNoTracking()
+                .Where(a => a.UserId == userId && !a.IsArchived)
+                .OrderBy(a => a.Name)
+                .Select(a => ToDto(a))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<AreaDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        return await context.Areas.AsNoTracking()
-            .Where(a => a.UserId == userId && a.IsArchived)
-            .OrderByDescending(a => a.ArchivedAtUtc)
-            .Select(a => ToDto(a))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "areas:archived",
+            [ApplicationCacheKey.EntityTypeTag<Area>()],
+            async ct => await context.Areas.AsNoTracking()
+                .Where(a => a.UserId == userId && a.IsArchived)
+                .OrderByDescending(a => a.ArchivedAtUtc)
+                .Select(a => ToDto(a))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AreaDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        var area = await context.Areas.AsNoTracking()
-            .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId, cancellationToken).ConfigureAwait(false);
-        return area is null ? null : ToDto(area);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"areas:{id}:summary",
+            [
+                ApplicationCacheKey.EntityTypeTag<Area>(),
+                ApplicationCacheKey.EntityTag<Area>(id)
+            ],
+            async ct =>
+            {
+                var area = await context.Areas.AsNoTracking()
+                    .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId, ct).ConfigureAwait(false);
+                return area is null ? null : ToDto(area);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AreaDetailDto?> GetDetailAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var area = await context.Areas.AsNoTracking()
-            .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId, cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"areas:{id}:detail",
+            [
+                ApplicationCacheKey.EntityTypeTag<Area>(),
+                ApplicationCacheKey.EntityTag<Area>(id),
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<Note>()
+            ],
+            async ct =>
+            {
+                var area = await context.Areas.AsNoTracking()
+                    .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId, ct).ConfigureAwait(false);
 
-        if (area is null) return null;
+                if (area is null) return null;
 
-        // These tiles sit directly above the lists that render the same records, so every
-        // filter here must mirror the list queries. A count that includes rows the sections
-        // below exclude renders as a populated summary above empty sections.
-        var activeProjectCount = await context.Projects.AsNoTracking()
-            .CountAsync(p => p.AreaId == id && p.UserId == userId
-                          && !p.IsArchived && p.Status != ProjectStatus.Archived, cancellationToken)
-            .ConfigureAwait(false);
+                // These tiles sit directly above the lists that render the same records, so every
+                // filter here must mirror the list queries. A count that includes rows the sections
+                // below exclude renders as a populated summary above empty sections.
+                var activeProjectCount = await context.Projects.AsNoTracking()
+                    .CountAsync(p => p.AreaId == id && p.UserId == userId
+                                  && !p.IsArchived && p.Status != ProjectStatus.Archived, ct)
+                    .ConfigureAwait(false);
 
-        // Top-level tasks only: subtasks render nested under their parent rather than as
-        // standalone rows, so counting them here would overstate the outstanding work.
-        var openTaskCount = await context.Tasks.AsNoTracking()
-            .CountAsync(t => t.Project.AreaId == id && t.UserId == userId
-                          && t.ParentTaskId == null
-                          && !t.IsArchived
-                          && !t.Project.IsArchived && t.Project.Status != ProjectStatus.Archived
-                          && t.Status != TaskItemStatus.Done && t.Status != TaskItemStatus.Archived, cancellationToken)
-            .ConfigureAwait(false);
+                // Top-level tasks only: subtasks render nested under their parent rather than as
+                // standalone rows, so counting them here would overstate the outstanding work.
+                var openTaskCount = await context.Tasks.AsNoTracking()
+                    .CountAsync(t => t.Project.AreaId == id && t.UserId == userId
+                                  && t.ParentTaskId == null
+                                  && !t.IsArchived
+                                  && !t.Project.IsArchived && t.Project.Status != ProjectStatus.Archived
+                                  && t.Status != TaskItemStatus.Done && t.Status != TaskItemStatus.Archived, ct)
+                    .ConfigureAwait(false);
 
-        var recentNoteCount = await context.Notes.AsNoTracking()
-            .CountAsync(n => n.AreaId == id && n.UserId == userId
-                          && !n.IsArchived && n.Status != NoteStatus.Archived, cancellationToken)
-            .ConfigureAwait(false);
+                var recentNoteCount = await context.Notes.AsNoTracking()
+                    .CountAsync(n => n.AreaId == id && n.UserId == userId
+                                  && !n.IsArchived && n.Status != NoteStatus.Archived, ct)
+                    .ConfigureAwait(false);
 
-        return new AreaDetailDto(area.Id, area.Name, area.Description, area.Purpose,
-            area.IsArchived, area.ArchivedAtUtc, area.CreatedAtUtc, area.UpdatedAtUtc,
-            activeProjectCount, openTaskCount, recentNoteCount,
-            NormalizeEmoji(area.Emoji), area.ArchivedReason);
+                return new AreaDetailDto(area.Id, area.Name, area.Description, area.Purpose,
+                    area.IsArchived, area.ArchivedAtUtc, area.CreatedAtUtc, area.UpdatedAtUtc,
+                    activeProjectCount, openTaskCount, recentNoteCount,
+                    NormalizeEmoji(area.Emoji), area.ArchivedReason);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AreaDto> CreateAsync(CreateAreaDto dto, CancellationToken cancellationToken = default)
@@ -102,6 +142,7 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
 
         context.Areas.Add(area);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateAreaAsync(userId, area.Id).ConfigureAwait(false);
         return ToDto(area);
     }
 
@@ -123,6 +164,7 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
         area.Purpose = dto.Purpose?.Trim();
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateAreaAsync(userId, area.Id).ConfigureAwait(false);
         return ToDto(area);
     }
 
@@ -168,6 +210,7 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
         area.ArchivedReason = normalizedReason;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateAreaAsync(userId, area.Id).ConfigureAwait(false);
 
         return;
 
@@ -191,6 +234,7 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
         area.ArchivedReason = null;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateAreaAsync(userId, area.Id).ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -210,6 +254,19 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
 
         context.Areas.Remove(area);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Area>(),
+                ApplicationCacheKey.EntityTag<Area>(area.Id),
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<Resource>(),
+                ApplicationCacheKey.EntityTypeTag<Note>(),
+                ApplicationCacheKey.EntityTypeTag<Goal>(),
+                ApplicationCacheKey.EntityTypeTag<Idea>(),
+                ApplicationCacheKey.EntityTypeTag<Output>()
+            ],
+            CancellationToken.None).ConfigureAwait(false);
     }
 
     public async Task LinkProjectAsync(Guid areaId, Guid projectId, CancellationToken cancellationToken = default)
@@ -227,6 +284,13 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
 
         project.AreaId = areaId;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTag<Project>(project.Id)
+            ],
+            CancellationToken.None).ConfigureAwait(false);
     }
 
     public Task UnlinkProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
@@ -249,6 +313,13 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
 
         note.AreaId = areaId;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Note>(),
+                ApplicationCacheKey.EntityTag<Note>(note.Id)
+            ],
+            CancellationToken.None).ConfigureAwait(false);
     }
 
     public async Task UnlinkNoteAsync(Guid noteId, CancellationToken cancellationToken = default)
@@ -261,7 +332,23 @@ internal sealed class AreaService(IApplicationDbContext context, ICurrentUserSer
 
         note.AreaId = null;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Note>(),
+                ApplicationCacheKey.EntityTag<Note>(note.Id)
+            ],
+            CancellationToken.None).ConfigureAwait(false);
     }
+
+    private ValueTask InvalidateAreaAsync(string userId, Guid areaId) =>
+        cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Area>(),
+                ApplicationCacheKey.EntityTag<Area>(areaId)
+            ],
+            CancellationToken.None);
 
     private static AreaDto ToDto(Area a) => new(
         a.Id, a.Name, a.Description, a.Purpose,

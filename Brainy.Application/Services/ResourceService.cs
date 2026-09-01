@@ -1,5 +1,7 @@
 using Brainy.Application.Common;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Resources;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -13,34 +15,51 @@ namespace Brainy.Application.Services;
 /// Handles CRUD operations for <see cref="Resource"/> entities, scoped to the current user.
 /// Active resources exclude archived entries; reads use <c>AsNoTracking</c>.
 /// </summary>
-internal sealed class ResourceService(IApplicationDbContext context, ICurrentUserService currentUser) : IResourceService
+internal sealed class ResourceService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : IResourceService
 {
     public async Task<IReadOnlyList<ResourceDto>> GetAllActiveAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Resources
-            .AsNoTracking()
-            .Include(r => r.Tags)
-            .Where(r => r.UserId == userId && !r.IsArchived)
-            .OrderBy(r => r.Name)
-            .Select(r => ToDto(r))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "resources:active",
+            [
+                ApplicationCacheKey.EntityTypeTag<Resource>(),
+                ApplicationCacheKey.EntityTypeTag<Tag>()
+            ],
+            async ct => await context.Resources
+                .AsNoTracking()
+                .Include(r => r.Tags)
+                .Where(r => r.UserId == userId && !r.IsArchived)
+                .OrderBy(r => r.Name)
+                .Select(r => ToDto(r))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ResourceDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Resources
-            .AsNoTracking()
-            .Include(r => r.Tags)
-            .Where(r => r.UserId == userId && r.IsArchived)
-            .OrderByDescending(r => r.ArchivedAtUtc)
-            .Select(r => ToDto(r))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "resources:archived",
+            [
+                ApplicationCacheKey.EntityTypeTag<Resource>(),
+                ApplicationCacheKey.EntityTypeTag<Tag>()
+            ],
+            async ct => await context.Resources
+                .AsNoTracking()
+                .Include(r => r.Tags)
+                .Where(r => r.UserId == userId && r.IsArchived)
+                .OrderByDescending(r => r.ArchivedAtUtc)
+                .Select(r => ToDto(r))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ResourceDto>> SearchAsync(
@@ -50,6 +69,23 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            ApplicationCacheKey.Create("resources", "search", searchText, topic),
+            [
+                ApplicationCacheKey.EntityTypeTag<Resource>(),
+                ApplicationCacheKey.EntityTypeTag<Tag>()
+            ],
+            ct => SearchCoreAsync(userId, searchText, topic, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<ResourceDto>> SearchCoreAsync(
+        string userId,
+        string? searchText,
+        string? topic,
+        CancellationToken cancellationToken)
+    {
         var query = context.Resources
             .AsNoTracking()
             .Include(r => r.Tags)
@@ -79,19 +115,45 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var resource = await context.Resources
-            .AsNoTracking()
-            .Include(r => r.Tags)
-            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId, cancellationToken)
-            .ConfigureAwait(false);
-
-        return resource is null ? null : ToDto(resource);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"resources:{id}:summary",
+            [
+                ApplicationCacheKey.EntityTypeTag<Resource>(),
+                ApplicationCacheKey.EntityTag<Resource>(id),
+                ApplicationCacheKey.EntityTypeTag<Tag>()
+            ],
+            ct => context.Resources
+                .AsNoTracking()
+                .Include(r => r.Tags)
+                .Where(r => r.Id == id && r.UserId == userId)
+                .Select(r => ToDto(r))
+                .FirstOrDefaultAsync(ct),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ResourceDetailDto?> GetDetailAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"resources:{id}:detail",
+            [
+                ApplicationCacheKey.EntityTypeTag<Resource>(),
+                ApplicationCacheKey.EntityTag<Resource>(id),
+                ApplicationCacheKey.EntityTypeTag<Tag>(),
+                ApplicationCacheKey.EntityTypeTag<Note>()
+            ],
+            ct => GetDetailCoreAsync(id, userId, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<ResourceDetailDto?> GetDetailCoreAsync(
+        Guid id,
+        string userId,
+        CancellationToken cancellationToken)
+    {
         var resource = await context.Resources
             .AsNoTracking()
             .Include(r => r.Tags)
@@ -154,6 +216,7 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
 
         context.Resources.Add(resource);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateResourceAsync(userId, resource, includeTags: true).ConfigureAwait(false);
 
         return ToDto(resource);
     }
@@ -200,6 +263,7 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
             throw new ConcurrencyConflictException("resource", ex);
         }
 
+        await InvalidateResourceAsync(userId, resource, includeTags: true).ConfigureAwait(false);
         return ToDto(resource);
     }
 
@@ -218,6 +282,7 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
         resource.ArchivedReason = normalizedReason;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateResourceAsync(userId, resource).ConfigureAwait(false);
     }
 
     public async Task RestoreAsync(Guid id, CancellationToken cancellationToken = default)
@@ -237,6 +302,7 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
         resource.ArchivedReason = null;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateResourceAsync(userId, resource).ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(
@@ -263,6 +329,7 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
         {
             throw new ConcurrencyConflictException("resource", ex);
         }
+        await InvalidateResourceAsync(userId, resource, includeNotes: true).ConfigureAwait(false);
     }
 
     public async Task LinkNoteAsync(Guid resourceId, Guid noteId, CancellationToken cancellationToken = default)
@@ -283,6 +350,7 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
 
         note.ResourceId = resourceId;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateNoteAsync(userId, note.Id).ConfigureAwait(false);
     }
 
     public async Task UnlinkNoteAsync(Guid noteId, CancellationToken cancellationToken = default)
@@ -296,7 +364,41 @@ internal sealed class ResourceService(IApplicationDbContext context, ICurrentUse
 
         note.ResourceId = null;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateNoteAsync(userId, note.Id).ConfigureAwait(false);
     }
+
+    private ValueTask InvalidateResourceAsync(
+        string userId,
+        Resource resource,
+        bool includeTags = false,
+        bool includeNotes = false)
+    {
+        List<string> tags =
+        [
+            ApplicationCacheKey.EntityTypeTag<Resource>(),
+            ApplicationCacheKey.EntityTag<Resource>(resource.Id)
+        ];
+
+        if (includeTags)
+        {
+            tags.Add(ApplicationCacheKey.EntityTypeTag<Tag>());
+            tags.AddRange(resource.Tags.Select(tag => ApplicationCacheKey.EntityTag<Tag>(tag.Id)));
+        }
+
+        if (includeNotes)
+            tags.Add(ApplicationCacheKey.EntityTypeTag<Note>());
+
+        return cache.InvalidateTagsAsync(userId, tags, CancellationToken.None);
+    }
+
+    private ValueTask InvalidateNoteAsync(string userId, Guid noteId) =>
+        cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Note>(),
+                ApplicationCacheKey.EntityTag<Note>(noteId)
+            ],
+            CancellationToken.None);
 
     /// <summary>
     /// Resolves tag names to existing <see cref="Tag"/> rows for the given user,

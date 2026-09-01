@@ -1,7 +1,9 @@
 using System.Text.Json;
+using Brainy.Application.Caching;
 using Brainy.Application.Common;
 using Brainy.Application.DTOs.ActionItems;
 using Brainy.Application.Interfaces.AI;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -15,7 +17,8 @@ namespace Brainy.Application.Services;
 internal sealed class ActionItemService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    IAiAssistant aiAssistant) : IActionItemService
+    IAiAssistant aiAssistant,
+    IApplicationCache cache) : IActionItemService
 {
     private const int MaxTitleLength = 500;
     private const int MaxDescriptionLength = 2000;
@@ -33,28 +36,36 @@ internal sealed class ActionItemService(
         if (!noteExists)
             throw new KeyNotFoundException($"Note '{noteId}' was not found.");
 
-        return await context.ActionItems.AsNoTracking()
-            .Where(action => action.UserId == userId && action.NoteId == noteId)
-            .OrderBy(action => action.Status == ActionItemStatus.Done)
-            .ThenBy(action => action.Status == ActionItemStatus.Dismissed)
-            .ThenByDescending(action => action.CreatedAtUtc)
-            .Select(action => new ActionItemDto(
-                action.Id,
-                action.NoteId!.Value,
-                action.Title,
-                action.Description,
-                action.Status,
-                action.IsAiGenerated,
-                action.Model,
-                action.PromptVersion,
-                action.TaskItemId,
-                action.TaskItem != null ? action.TaskItem.ProjectId : null,
-                action.TaskItem != null ? action.TaskItem.Project.Name : null,
-                action.CreatedAtUtc,
-                action.UpdatedAtUtc,
-                action.RowVersion))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"action-items:note:{noteId}",
+            [
+                ApplicationCacheKey.EntityTypeTag<ActionItem>(),
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<Project>()
+            ],
+            async ct => await context.ActionItems.AsNoTracking()
+                .Where(action => action.UserId == userId && action.NoteId == noteId)
+                .OrderBy(action => action.Status == ActionItemStatus.Done)
+                .ThenBy(action => action.Status == ActionItemStatus.Dismissed)
+                .ThenByDescending(action => action.CreatedAtUtc)
+                .Select(action => new ActionItemDto(
+                    action.Id,
+                    action.NoteId!.Value,
+                    action.Title,
+                    action.Description,
+                    action.Status,
+                    action.IsAiGenerated,
+                    action.Model,
+                    action.PromptVersion,
+                    action.TaskItemId,
+                    action.TaskItem != null ? action.TaskItem.ProjectId : null,
+                    action.TaskItem != null ? action.TaskItem.Project.Name : null,
+                    action.CreatedAtUtc,
+                    action.UpdatedAtUtc,
+                    action.RowVersion))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ActionItemDto> CreateAsync(
@@ -80,6 +91,7 @@ internal sealed class ActionItemService(
 
         context.ActionItems.Add(action);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateActionItemsAsync(userId, [action.Id]).ConfigureAwait(false);
         return ToDto(action);
     }
 
@@ -113,6 +125,7 @@ internal sealed class ActionItemService(
             throw new ConcurrencyConflictException("action item", ex);
         }
 
+        await InvalidateActionItemsAsync(userId, [action.Id]).ConfigureAwait(false);
         return await GetDtoAsync(action.Id, userId, cancellationToken).ConfigureAwait(false);
     }
 
@@ -126,6 +139,7 @@ internal sealed class ActionItemService(
 
         context.ActionItems.Remove(action);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateActionItemsAsync(userId, [action.Id]).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ActionItemDto>> ExtractFromNoteAsync(
@@ -179,6 +193,7 @@ internal sealed class ActionItemService(
 
         context.ActionItems.AddRange(actions);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateActionItemsAsync(userId, actions.Select(action => action.Id)).ConfigureAwait(false);
         return actions.Select(action => ToDto(action)).ToList();
     }
 
@@ -236,7 +251,24 @@ internal sealed class ActionItemService(
             throw new ConcurrencyConflictException("action item promotion", ex);
         }
 
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<ActionItem>(),
+                ApplicationCacheKey.EntityTag<ActionItem>(action.Id),
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTag<TaskItem>(task.Id),
+                ApplicationCacheKey.EntityTypeTag<LifecycleActivity>()
+            ],
+            CancellationToken.None).ConfigureAwait(false);
         return ToDto(action, project.Id, project.Name);
+    }
+
+    private ValueTask InvalidateActionItemsAsync(string userId, IEnumerable<Guid> actionItemIds)
+    {
+        List<string> tags = [ApplicationCacheKey.EntityTypeTag<ActionItem>()];
+        tags.AddRange(actionItemIds.Select(ApplicationCacheKey.EntityTag<ActionItem>));
+        return cache.InvalidateTagsAsync(userId, tags, CancellationToken.None);
     }
 
     private IQueryable<ActionItemDto> QueryDtos(string userId, Guid? id = null) =>

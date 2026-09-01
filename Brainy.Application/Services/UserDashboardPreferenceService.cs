@@ -1,4 +1,6 @@
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Dashboard;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -13,7 +15,8 @@ namespace Brainy.Application.Services;
 /// </summary>
 internal sealed class UserDashboardPreferenceService(
     IApplicationDbContext context,
-    ICurrentUserService currentUser) : IUserDashboardPreferenceService
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : IUserDashboardPreferenceService
 {
     private const int DefaultInboxWarningThreshold = 10;
 
@@ -21,6 +24,18 @@ internal sealed class UserDashboardPreferenceService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            "dashboard:preference",
+            [ApplicationCacheKey.EntityTypeTag<UserDashboardPreference>()],
+            ct => GetOrCreateCoreAsync(userId, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<UserDashboardPreferenceDto> GetOrCreateCoreAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
         var existing = await context.DashboardPreferences
             .FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken)
             .ConfigureAwait(false);
@@ -36,6 +51,7 @@ internal sealed class UserDashboardPreferenceService(
 
         context.DashboardPreferences.Add(created);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidatePreferenceAsync(userId, created.Id).ConfigureAwait(false);
 
         return ToDto(created);
     }
@@ -63,10 +79,20 @@ internal sealed class UserDashboardPreferenceService(
         preference.InboxWarningThreshold = dto.InboxWarningThreshold;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidatePreferenceAsync(userId, preference.Id).ConfigureAwait(false);
 
         return ToDto(preference);
     }
 
     private static UserDashboardPreferenceDto ToDto(UserDashboardPreference p) =>
         new(p.Id, p.WidgetOrder, p.CollapsedWidgets, p.InboxWarningThreshold);
+
+    private ValueTask InvalidatePreferenceAsync(string userId, Guid preferenceId) =>
+        cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<UserDashboardPreference>(),
+                ApplicationCacheKey.EntityTag<UserDashboardPreference>(preferenceId)
+            ],
+            CancellationToken.None);
 }

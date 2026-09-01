@@ -1,5 +1,7 @@
 using Brainy.Application.Common;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Ideas;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -16,7 +18,10 @@ namespace Brainy.Application.Services;
 /// An idea may only move to <see cref="IdeaStatus.Committed"/> via <see cref="CommitToProjectAsync"/>,
 /// which validates the five commitment criteria before creating the linked project.
 /// </summary>
-internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserService currentUser) : IIdeaService
+internal sealed class IdeaService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : IIdeaService
 {
     // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -24,22 +29,38 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Ideas.AsNoTracking()
-            .Where(i => i.UserId == userId && !i.IsArchived)
-            .OrderByDescending(i => i.UpdatedAtUtc)
-            .Select(i => ToDto(i, i.Area != null && i.Area.UserId == userId ? i.Area.Name : null))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "ideas:active",
+            [
+                ApplicationCacheKey.EntityTypeTag<Idea>(),
+                ApplicationCacheKey.EntityTypeTag<Area>()
+            ],
+            async ct => await IdeaQuery(userId)
+                .Where(i => !i.IsArchived)
+                .OrderByDescending(i => i.UpdatedAtUtc)
+                .Select(i => ToDto(i, i.Area != null && i.Area.UserId == userId ? i.Area.Name : null))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<IdeaDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Ideas.AsNoTracking()
-            .Where(i => i.UserId == userId && i.IsArchived)
-            .OrderByDescending(i => i.ArchivedAtUtc)
-            .Select(i => ToDto(i, i.Area != null && i.Area.UserId == userId ? i.Area.Name : null))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "ideas:archived",
+            [
+                ApplicationCacheKey.EntityTypeTag<Idea>(),
+                ApplicationCacheKey.EntityTypeTag<Area>()
+            ],
+            async ct => await IdeaQuery(userId)
+                .Where(i => i.IsArchived)
+                .OrderByDescending(i => i.ArchivedAtUtc)
+                .Select(i => ToDto(i, i.Area != null && i.Area.UserId == userId ? i.Area.Name : null))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<IdeaDto>> GetByAreaAsync(Guid areaId, CancellationToken cancellationToken = default)
@@ -49,38 +70,81 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         await context.Areas.EnsureOwnedAsync(areaId, userId, "Area", cancellationToken)
             .ConfigureAwait(false);
 
-        return await context.Ideas.AsNoTracking()
-            .Where(i => i.UserId == userId && i.AreaId == areaId && !i.IsArchived)
-            .OrderByDescending(i => i.UpdatedAtUtc)
-            .Select(i => ToDto(i, i.Area != null && i.Area.UserId == userId ? i.Area.Name : null))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"ideas:area:{areaId}",
+            [
+                ApplicationCacheKey.EntityTypeTag<Idea>(),
+                ApplicationCacheKey.EntityTypeTag<Area>()
+            ],
+            async ct => await IdeaQuery(userId)
+                .Where(i => i.AreaId == areaId && !i.IsArchived)
+                .OrderByDescending(i => i.UpdatedAtUtc)
+                .Select(i => ToDto(i, i.Area != null && i.Area.UserId == userId ? i.Area.Name : null))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IdeaDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var idea = await context.Ideas.AsNoTracking()
-            .Include(i => i.Area)
-            .FirstOrDefaultAsync(i => i.Id == id && i.UserId == userId, cancellationToken).ConfigureAwait(false);
-
-        return idea is null ? null : ToDto(idea, idea.Area?.UserId == userId ? idea.Area.Name : null);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"ideas:{id}:summary",
+            [
+                ApplicationCacheKey.EntityTypeTag<Idea>(),
+                ApplicationCacheKey.EntityTag<Idea>(id),
+                ApplicationCacheKey.EntityTypeTag<Area>()
+            ],
+            async ct =>
+            {
+                var idea = await IdeaQuery(userId)
+                    .Include(i => i.Area)
+                    .FirstOrDefaultAsync(i => i.Id == id, ct).ConfigureAwait(false);
+                return idea is null ? null : ToDto(idea, idea.Area?.UserId == userId ? idea.Area.Name : null);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IdeaDetailDto?> GetDetailAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var idea = await context.Ideas.AsNoTracking()
-            .Include(i => i.Area)
-            .FirstOrDefaultAsync(i => i.Id == id && i.UserId == userId, cancellationToken).ConfigureAwait(false);
-
-        return idea is null ? null : ToDetailDto(idea, idea.Area?.UserId == userId ? idea.Area.Name : null);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"ideas:{id}:detail",
+            [
+                ApplicationCacheKey.EntityTypeTag<Idea>(),
+                ApplicationCacheKey.EntityTag<Idea>(id),
+                ApplicationCacheKey.EntityTypeTag<Area>()
+            ],
+            ct => context.Ideas.AsNoTracking()
+                .Where(i => i.Id == id && i.UserId == userId)
+                .Select(i => ToDetailDto(i, i.Area != null && i.Area.UserId == userId ? i.Area.Name : null))
+                .FirstOrDefaultAsync(ct),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IdeaReviewDto> GetReviewDataAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await cache.GetOrCreateAsync(
+            userId,
+            "ideas:review",
+            [
+                ApplicationCacheKey.EntityTypeTag<Idea>(),
+                ApplicationCacheKey.EntityTypeTag<Area>()
+            ],
+            ct => GetReviewDataCoreAsync(userId, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IdeaReviewDto> GetReviewDataCoreAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
         var now = DateTime.UtcNow;
 
         // Stale: not updated in 30+ days; still actionable (not rejected/committed/shipped).
@@ -126,23 +190,29 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var total     = await context.Ideas.CountAsync(i => i.UserId == userId, cancellationToken).ConfigureAwait(false);
-        var active    = await context.Ideas.CountAsync(i => i.UserId == userId && !i.IsArchived, cancellationToken).ConfigureAwait(false);
-        var archived  = await context.Ideas.CountAsync(i => i.UserId == userId && i.IsArchived, cancellationToken).ConfigureAwait(false);
-        var committed = await context.Ideas.CountAsync(i => i.UserId == userId && i.Status == IdeaStatus.Committed, cancellationToken).ConfigureAwait(false);
-        var rejected  = await context.Ideas.CountAsync(i => i.UserId == userId && i.Status == IdeaStatus.Rejected, cancellationToken).ConfigureAwait(false);
-        var shipped   = await context.Ideas.CountAsync(i => i.UserId == userId && i.Status == IdeaStatus.Shipped, cancellationToken).ConfigureAwait(false);
-
-        var byArea = await context.Ideas.AsNoTracking()
-            .Where(i => i.UserId == userId)
-            .GroupBy(i => new { i.AreaId, AreaName = i.Area != null && i.Area.UserId == userId ? i.Area.Name : null })
-            .Select(g => new IdeasByAreaDto(
-                g.Key.AreaId,
-                g.Key.AreaName ?? "No Area",
-                g.Count()))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
-
-        return new IdeaMetricsDto(total, active, archived, committed, rejected, shipped, byArea);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "ideas:metrics",
+            [
+                ApplicationCacheKey.EntityTypeTag<Idea>(),
+                ApplicationCacheKey.EntityTypeTag<Area>()
+            ],
+            async ct =>
+            {
+                var total = await context.Ideas.CountAsync(i => i.UserId == userId, ct).ConfigureAwait(false);
+                var active = await context.Ideas.CountAsync(i => i.UserId == userId && !i.IsArchived, ct).ConfigureAwait(false);
+                var archived = await context.Ideas.CountAsync(i => i.UserId == userId && i.IsArchived, ct).ConfigureAwait(false);
+                var committed = await context.Ideas.CountAsync(i => i.UserId == userId && i.Status == IdeaStatus.Committed, ct).ConfigureAwait(false);
+                var rejected = await context.Ideas.CountAsync(i => i.UserId == userId && i.Status == IdeaStatus.Rejected, ct).ConfigureAwait(false);
+                var shipped = await context.Ideas.CountAsync(i => i.UserId == userId && i.Status == IdeaStatus.Shipped, ct).ConfigureAwait(false);
+                var byArea = await context.Ideas.AsNoTracking()
+                    .Where(i => i.UserId == userId)
+                    .GroupBy(i => new { i.AreaId, AreaName = i.Area != null && i.Area.UserId == userId ? i.Area.Name : null })
+                    .Select(g => new IdeasByAreaDto(g.Key.AreaId, g.Key.AreaName ?? "No Area", g.Count()))
+                    .ToListAsync(ct).ConfigureAwait(false);
+                return new IdeaMetricsDto(total, active, archived, committed, rejected, shipped, byArea);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<IdeaDto>> SearchAsync(string query, CancellationToken cancellationToken = default)
@@ -153,17 +223,25 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Ideas.AsNoTracking()
-            .Where(i => i.UserId == userId && !i.IsArchived &&
-                        (i.Title.Contains(term) ||
-                         (i.Description != null && i.Description.Contains(term)) ||
-                         (i.Research != null && i.Research.Contains(term)) ||
-                         (i.Competitors != null && i.Competitors.Contains(term)) ||
-                         (i.Notes != null && i.Notes.Contains(term))))
-            .OrderByDescending(i => i.Title.Contains(term) ? 1 : 0)
-            .ThenByDescending(i => i.UpdatedAtUtc)
-            .Select(i => ToDto(i, i.Area != null && i.Area.UserId == userId ? i.Area.Name : null))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            ApplicationCacheKey.Create("ideas", "search", term),
+            [
+                ApplicationCacheKey.EntityTypeTag<Idea>(),
+                ApplicationCacheKey.EntityTypeTag<Area>()
+            ],
+            async ct => await context.Ideas.AsNoTracking()
+                .Where(i => i.UserId == userId && !i.IsArchived &&
+                            (i.Title.Contains(term) ||
+                             (i.Description != null && i.Description.Contains(term)) ||
+                             (i.Research != null && i.Research.Contains(term)) ||
+                             (i.Competitors != null && i.Competitors.Contains(term)) ||
+                             (i.Notes != null && i.Notes.Contains(term))))
+                .OrderByDescending(i => i.Title.Contains(term) ? 1 : 0)
+                .ThenByDescending(i => i.UpdatedAtUtc)
+                .Select(i => ToDto(i, i.Area != null && i.Area.UserId == userId ? i.Area.Name : null))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     // ── Mutations ─────────────────────────────────────────────────────────────
@@ -192,6 +270,7 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
 
         context.Ideas.Add(idea);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateIdeaAsync(userId, idea.Id).ConfigureAwait(false);
 
         // Load the area name for the returned DTO.
         string? areaName = null;
@@ -253,6 +332,7 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         {
             throw new ConcurrencyConflictException("idea", ex);
         }
+        await InvalidateIdeaAsync(userId, idea.Id).ConfigureAwait(false);
 
         string? areaName = null;
         if (idea.AreaId.HasValue)
@@ -281,6 +361,7 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         idea.ArchivedReason = normalizedReason;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateIdeaAsync(userId, idea.Id).ConfigureAwait(false);
     }
 
     /// <summary>Restores an archived idea. Clears IsArchived and ArchivedAtUtc. Status is left unchanged.</summary>
@@ -300,6 +381,7 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         idea.ArchivedReason = null;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateIdeaAsync(userId, idea.Id).ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(
@@ -325,6 +407,7 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         {
             throw new ConcurrencyConflictException("idea", ex);
         }
+        await InvalidateIdeaAsync(userId, idea.Id).ConfigureAwait(false);
     }
 
     public async Task<IdeaDto> CommitToProjectAsync(
@@ -404,6 +487,16 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
             context.Entry(idea).State = EntityState.Detached;
             throw new ConcurrencyConflictException("idea", ex);
         }
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Idea>(),
+                ApplicationCacheKey.EntityTag<Idea>(idea.Id),
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTag<Project>(project.Id),
+                ApplicationCacheKey.EntityTypeTag<LifecycleActivity>()
+            ],
+            CancellationToken.None).ConfigureAwait(false);
 
         string? areaName = null;
         if (idea.AreaId.HasValue)
@@ -419,6 +512,16 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    private ValueTask InvalidateIdeaAsync(string userId, Guid ideaId) =>
+        cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Idea>(),
+                ApplicationCacheKey.EntityTag<Idea>(ideaId),
+                ApplicationCacheKey.EntityTypeTag<LifecycleActivity>()
+            ],
+            CancellationToken.None);
+
     private static IdeaDto ToDto(Idea i, string? areaName) => new(
         i.Id, i.Title, i.Description, i.AreaId, areaName,
         i.Priority, i.Status, i.IsArchived, i.ArchivedAtUtc,
@@ -431,4 +534,9 @@ internal sealed class IdeaService(IApplicationDbContext context, ICurrentUserSer
         i.Research, i.Competitors, i.Notes,
         i.TargetUserAndProblem, i.SuitabilityReason, i.Evidence, i.ValidationExperiment, i.ReplacedCommitment,
         i.CommittedProjectId, i.CommittedAtUtc, i.RowVersion, i.ArchivedReason);
+
+    private IQueryable<Idea> IdeaQuery(string userId) =>
+        context.Ideas
+            .AsNoTracking()
+            .Where(i => i.UserId == userId);
 }

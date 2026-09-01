@@ -1,8 +1,12 @@
+using System.Globalization;
+using Brainy.Application.Caching;
 using Brainy.Application.Common;
 using Brainy.Application.DTOs.Calendar;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,7 +20,8 @@ namespace Brainy.Application.Services;
 internal sealed class CalendarService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    IUserTimeZoneService userTimeZone) : ICalendarService
+    IUserTimeZoneService userTimeZone,
+    IApplicationCache cache) : ICalendarService
 {
     // ── Public API ──────────────────────────────────────────────────────────────
 
@@ -27,6 +32,35 @@ internal sealed class CalendarService(
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today  = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
+        var cacheKey = ApplicationCacheKey.Create(
+            "calendar",
+            "tasks",
+            today.Date,
+            filter?.ProjectId,
+            filter?.AreaId,
+            filter?.Priority,
+            filter?.Status,
+            filter?.SearchTerm);
+        return await cache.GetOrCreateAsync(
+            userId,
+            cacheKey,
+            [
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<Area>(),
+                ApplicationCacheKey.EntityTypeTag<TaskDependency>(),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            ct => GetCalendarTasksCoreAsync(userId, today, filter, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<CalendarTaskDto>> GetCalendarTasksCoreAsync(
+        string userId,
+        DateTime today,
+        CalendarFilterDto? filter,
+        CancellationToken cancellationToken)
+    {
         var query = ActiveBase(userId).Where(t => t.DueDate != null);
 
         if (filter is not null)
@@ -76,6 +110,25 @@ internal sealed class CalendarService(
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today  = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"calendar:upcoming:{today:yyyy-MM-dd}",
+            [
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<Area>(),
+                ApplicationCacheKey.EntityTypeTag<TaskDependency>(),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            ct => GetUpcomingDeadlinesCoreAsync(userId, today, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<UpcomingDeadlinesDto> GetUpcomingDeadlinesCoreAsync(
+        string userId,
+        DateTime today,
+        CancellationToken cancellationToken)
+    {
         // Monday of current week
         var dayOfWeek    = (int)today.DayOfWeek;
         var mondayOffset = dayOfWeek == 0 ? -6 : 1 - dayOfWeek; // Sunday = 0 in DayOfWeek
@@ -126,6 +179,13 @@ internal sealed class CalendarService(
 
         task.DueDate = newDueDate.Date;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTag<TaskItem>(task.Id)
+            ],
+            CancellationToken.None).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyDictionary<DateOnly, int>> GetWorkloadAsync(
@@ -137,16 +197,29 @@ internal sealed class CalendarService(
         var fromDate  = from.ToDateTime(TimeOnly.MinValue);
         var toDateEnd = to.ToDateTime(TimeOnly.MaxValue);
 
-        var groups = await ActiveBase(userId)
-            .Where(t => t.DueDate != null && t.DueDate.Value >= fromDate && t.DueDate.Value <= toDateEnd)
-            .GroupBy(t => t.DueDate!.Value.Date)
-            .Select(g => new { Date = g.Key, Count = g.Count() })
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        return groups.ToDictionary(
-            g => DateOnly.FromDateTime(g.Date),
-            g => g.Count);
+        var key = string.Create(
+            CultureInfo.InvariantCulture,
+            $"calendar:workload:{from:O}:{to:O}");
+        return await cache.GetOrCreateAsync(
+            userId,
+            key,
+            [
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            async ct =>
+            {
+                var groups = await ActiveBase(userId)
+                    .Where(t => t.DueDate != null && t.DueDate.Value >= fromDate && t.DueDate.Value <= toDateEnd)
+                    .GroupBy(t => t.DueDate!.Value.Date)
+                    .Select(g => new { Date = g.Key, Count = g.Count() })
+                    .ToListAsync(ct).ConfigureAwait(false);
+                return (IReadOnlyDictionary<DateOnly, int>)groups.ToDictionary(
+                    g => DateOnly.FromDateTime(g.Date),
+                    g => g.Count);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────

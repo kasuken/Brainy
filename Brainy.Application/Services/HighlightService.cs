@@ -1,4 +1,6 @@
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Highlights;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -14,7 +16,8 @@ namespace Brainy.Application.Services;
 /// </summary>
 internal sealed class HighlightService(
     IApplicationDbContext context,
-    ICurrentUserService currentUser) : IHighlightService
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : IHighlightService
 {
     public async Task<IReadOnlyList<HighlightDto>> GetByNoteAsync(
         Guid noteId,
@@ -22,15 +25,23 @@ internal sealed class HighlightService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
 
-        return await context.Highlights
-            .AsNoTracking()
-            .Where(h => h.NoteId == noteId && h.Note.UserId == userId)
-            .OrderBy(h => h.Layer)
-            .ThenBy(h => h.CreatedAtUtc)
-            .Select(h => new HighlightDto(h.Id, h.NoteId, h.Text, h.Annotation, h.Layer,
-                h.CreatedAtUtc, h.StartOffset, h.EndOffset))
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"highlights:note:{noteId}",
+            [
+                ApplicationCacheKey.EntityTypeTag<Highlight>(),
+                ApplicationCacheKey.EntityTypeTag<Note>(),
+                ApplicationCacheKey.EntityTag<Note>(noteId)
+            ],
+            async token => await context.Highlights
+                .AsNoTracking()
+                .Where(h => h.NoteId == noteId && h.Note.UserId == userId)
+                .OrderBy(h => h.Layer)
+                .ThenBy(h => h.CreatedAtUtc)
+                .Select(h => new HighlightDto(h.Id, h.NoteId, h.Text, h.Annotation, h.Layer,
+                    h.CreatedAtUtc, h.StartOffset, h.EndOffset))
+                .ToListAsync(token).ConfigureAwait(false),
+            ct).ConfigureAwait(false);
     }
 
     public async Task<HighlightDto> CreateAsync(
@@ -67,8 +78,7 @@ internal sealed class HighlightService(
             EndOffset = endOffset
         };
 
-        context.Highlights.Add(highlight);
-        context.LifecycleActivities.Add(new LifecycleActivity
+        var activity = new LifecycleActivity
         {
             Id = Guid.NewGuid(),
             UserId = userId,
@@ -78,8 +88,19 @@ internal sealed class HighlightService(
             Title = note.Title,
             Context = "Highlight added",
             Link = $"/notes/{dto.NoteId}",
-        });
+        };
+        context.Highlights.Add(highlight);
+        context.LifecycleActivities.Add(activity);
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Highlight>(),
+                ApplicationCacheKey.EntityTag<Highlight>(highlight.Id),
+                ApplicationCacheKey.EntityTypeTag<LifecycleActivity>(),
+                ApplicationCacheKey.EntityTag<LifecycleActivity>(activity.Id)
+            ],
+            CancellationToken.None).ConfigureAwait(false);
 
         return new HighlightDto(
             highlight.Id,
@@ -110,6 +131,7 @@ internal sealed class HighlightService(
         highlight.Layer      = dto.Layer;
 
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
+        await InvalidateHighlightAsync(userId, highlight.Id).ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
@@ -123,7 +145,17 @@ internal sealed class HighlightService(
 
         context.Highlights.Remove(highlight);
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
+        await InvalidateHighlightAsync(userId, highlight.Id).ConfigureAwait(false);
     }
+
+    private ValueTask InvalidateHighlightAsync(string userId, Guid highlightId) =>
+        cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Highlight>(),
+                ApplicationCacheKey.EntityTag<Highlight>(highlightId)
+            ],
+            CancellationToken.None);
 
     private static (int? Start, int? End) ResolveOffsets(
         string noteContent,

@@ -1,9 +1,12 @@
 using System.Text.RegularExpressions;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs;
 using Brainy.Application.DTOs.Search;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,7 +20,8 @@ namespace Brainy.Application.Services;
 /// </summary>
 internal sealed class SearchService(
     IApplicationDbContext context,
-    ICurrentUserService currentUser) : ISearchService
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : ISearchService
 {
     private const int DefaultPageSize = 20;
     private const int MaxPageSize = 100;
@@ -43,6 +47,32 @@ internal sealed class SearchService(
             return new PagedResult<SearchResultDto>([], 0, page, pageSize);
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await cache.GetOrCreateAsync(
+            userId,
+            ApplicationCacheKey.Create("search", term, page, pageSize),
+            [
+                ApplicationCacheKey.EntityTypeTag<Note>(),
+                ApplicationCacheKey.EntityTypeTag<Tag>(),
+                ApplicationCacheKey.EntityTypeTag<Output>(),
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<Area>(),
+                ApplicationCacheKey.EntityTypeTag<Resource>(),
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<Goal>(),
+                ApplicationCacheKey.EntityTypeTag<Idea>()
+            ],
+            ct => SearchCoreAsync(userId, term, page, pageSize, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<PagedResult<SearchResultDto>> SearchCoreAsync(
+        string userId,
+        string term,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
         var fetchLimit = checked(page * pageSize);
 
         // One DB round-trip per entity type. EF Core translates String.Contains to LIKE '%term%'.

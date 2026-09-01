@@ -1,9 +1,12 @@
 using Brainy.Application.Common;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Tasks;
 using Brainy.Application.DTOs.Today;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,7 +20,8 @@ internal sealed class TodayService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
     IProjectPrioritizationService projectPrioritizationService,
-    IUserTimeZoneService userTimeZone) : ITodayService
+    IUserTimeZoneService userTimeZone,
+    IApplicationCache cache) : ITodayService
 {
     // Base active-task predicate: excludes archived tasks, tasks from non-active or archived projects,
     // done/archived statuses, and subtasks.
@@ -29,13 +33,18 @@ internal sealed class TodayService(
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId)
-            .Where(t => t.Status == TaskItemStatus.InProgress)
-            .OrderByDescending(t => t.Priority)
-            .ThenBy(t => t.DueDate)
-            .Select(BuildToDto(today))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"today:current:{today:yyyy-MM-dd}",
+            TodayTaskTags(),
+            async ct => await ActiveBase(userId)
+                .Where(t => t.Status == TaskItemStatus.InProgress)
+                .OrderByDescending(t => t.Priority)
+                .ThenBy(t => t.DueDate)
+                .Select(BuildToDto(today))
+                .ToListAsync(ct)
+                .ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<TodayTaskItemDto>> GetHighPriorityTasksAsync(CancellationToken cancellationToken = default)
@@ -43,14 +52,19 @@ internal sealed class TodayService(
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId)
-            .Where(t => t.Priority >= TaskPriority.High && !_inactiveStatuses.Contains(t.Status))
-            .OrderByDescending(t => t.Priority)
-            .ThenBy(t => t.DueDate)
-            .Take(5)
-            .Select(BuildToDto(today))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"today:high-priority:{today:yyyy-MM-dd}",
+            TodayTaskTags(),
+            async ct => await ActiveBase(userId)
+                .Where(t => t.Priority >= TaskPriority.High && !_inactiveStatuses.Contains(t.Status))
+                .OrderByDescending(t => t.Priority)
+                .ThenBy(t => t.DueDate)
+                .Take(5)
+                .Select(BuildToDto(today))
+                .ToListAsync(ct)
+                .ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<TodayTaskItemDto>> GetDueTodayAsync(CancellationToken cancellationToken = default)
@@ -58,18 +72,23 @@ internal sealed class TodayService(
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId)
-            .Where(t => !_inactiveStatuses.Contains(t.Status)
-                        && ((t.DueDate.HasValue && t.DueDate.Value.Date == today)
-                            || t.Subtasks.Any(s => !s.IsArchived
-                                                   && !_inactiveStatuses.Contains(s.Status)
-                                                   && s.DueDate.HasValue
-                                                   && s.DueDate.Value.Date == today)))
-            .OrderByDescending(t => t.Priority)
-            .ThenBy(t => t.Title)
-            .Select(BuildToDto(today))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"today:due-today:{today:yyyy-MM-dd}",
+            TodayTaskTags(),
+            async ct => await ActiveBase(userId)
+                .Where(t => !_inactiveStatuses.Contains(t.Status)
+                            && ((t.DueDate.HasValue && t.DueDate.Value.Date == today)
+                                || t.Subtasks.Any(s => !s.IsArchived
+                                                       && !_inactiveStatuses.Contains(s.Status)
+                                                       && s.DueDate.HasValue
+                                                       && s.DueDate.Value.Date == today)))
+                .OrderByDescending(t => t.Priority)
+                .ThenBy(t => t.Title)
+                .Select(BuildToDto(today))
+                .ToListAsync(ct)
+                .ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<TodayTaskItemDto>> GetOverdueAsync(CancellationToken cancellationToken = default)
@@ -77,18 +96,23 @@ internal sealed class TodayService(
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId)
-            .Where(t => !_inactiveStatuses.Contains(t.Status)
-                        && ((t.DueDate.HasValue && t.DueDate.Value.Date < today)
-                            || t.Subtasks.Any(s => !s.IsArchived
-                                                   && !_inactiveStatuses.Contains(s.Status)
-                                                   && s.DueDate.HasValue
-                                                   && s.DueDate.Value.Date < today)))
-            .OrderBy(t => t.DueDate)
-            .ThenByDescending(t => t.Priority)
-            .Select(BuildToDto(today))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"today:overdue:{today:yyyy-MM-dd}",
+            TodayTaskTags(),
+            async ct => await ActiveBase(userId)
+                .Where(t => !_inactiveStatuses.Contains(t.Status)
+                            && ((t.DueDate.HasValue && t.DueDate.Value.Date < today)
+                                || t.Subtasks.Any(s => !s.IsArchived
+                                                       && !_inactiveStatuses.Contains(s.Status)
+                                                       && s.DueDate.HasValue
+                                                       && s.DueDate.Value.Date < today)))
+                .OrderBy(t => t.DueDate)
+                .ThenByDescending(t => t.Priority)
+                .Select(BuildToDto(today))
+                .ToListAsync(ct)
+                .ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<TodayPlannedWeekDto> GetPlannedThisWeekAsync(CancellationToken cancellationToken = default)
@@ -97,6 +121,24 @@ internal sealed class TodayService(
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
         var week = WeekDateHelper.GetWeekContaining(today);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            ApplicationCacheKey.Create("today", "planned-week", week.WeekStartDate, today),
+            [
+                .. TodayTaskTags(),
+                ApplicationCacheKey.EntityTypeTag<WeeklyTaskSelection>(),
+                ApplicationCacheKey.EntityTypeTag<TaskDependency>()
+            ],
+            ct => GetPlannedThisWeekCoreAsync(userId, today, week, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<TodayPlannedWeekDto> GetPlannedThisWeekCoreAsync(
+        string userId,
+        DateTime today,
+        WeekWindow week,
+        CancellationToken cancellationToken)
+    {
         var selectionStates = await context.WeeklyTaskSelections
             .AsNoTracking()
             .Where(selection =>
@@ -167,16 +209,21 @@ internal sealed class TodayService(
         var daysUntilSunday = ((int)DayOfWeek.Sunday - (int)today.DayOfWeek + 7) % 7;
         var weekEnd  = today.AddDays(daysUntilSunday);
 
-        return await ActiveBase(userId)
-            .Where(t => t.DueDate.HasValue
-                        && t.DueDate.Value.Date >= tomorrow
-                        && t.DueDate.Value.Date <= weekEnd
-                        && !_inactiveStatuses.Contains(t.Status))
-            .OrderBy(t => t.DueDate)
-            .ThenByDescending(t => t.Priority)
-            .Select(BuildToDto(today))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"today:due-this-week:{today:yyyy-MM-dd}",
+            TodayTaskTags(),
+            async ct => await ActiveBase(userId)
+                .Where(t => t.DueDate.HasValue
+                            && t.DueDate.Value.Date >= tomorrow
+                            && t.DueDate.Value.Date <= weekEnd
+                            && !_inactiveStatuses.Contains(t.Status))
+                .OrderBy(t => t.DueDate)
+                .ThenByDescending(t => t.Priority)
+                .Select(BuildToDto(today))
+                .ToListAsync(ct)
+                .ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<TodayTaskItemDto>> GetNextTasksAsync(CancellationToken cancellationToken = default)
@@ -187,17 +234,22 @@ internal sealed class TodayService(
         var nextWeekStart = today.AddDays(daysUntilSunday + 1);
         var horizon       = today.AddDays(21);
 
-        return await ActiveBase(userId)
-            .Where(t => t.DueDate.HasValue
-                        && t.DueDate.Value.Date >= nextWeekStart
-                        && t.DueDate.Value.Date <= horizon
-                        && !_inactiveStatuses.Contains(t.Status))
-            .OrderBy(t => t.DueDate)
-            .ThenByDescending(t => t.Priority)
-            .Take(10)
-            .Select(BuildToDto(today))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"today:next:{today:yyyy-MM-dd}",
+            TodayTaskTags(),
+            async ct => await ActiveBase(userId)
+                .Where(t => t.DueDate.HasValue
+                            && t.DueDate.Value.Date >= nextWeekStart
+                            && t.DueDate.Value.Date <= horizon
+                            && !_inactiveStatuses.Contains(t.Status))
+                .OrderBy(t => t.DueDate)
+                .ThenByDescending(t => t.Priority)
+                .Take(10)
+                .Select(BuildToDto(today))
+                .ToListAsync(ct)
+                .ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     // ---------------------------------------------------------------------------
@@ -208,19 +260,44 @@ internal sealed class TodayService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Notes
-            .AsNoTracking()
-            .CountAsync(n => n.UserId == userId && n.Status == NoteStatus.Inbox, cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "today:inbox-count",
+            [ApplicationCacheKey.EntityTypeTag<Note>()],
+            ct => context.Notes
+                .AsNoTracking()
+                .CountAsync(n => n.UserId == userId && n.Status == NoteStatus.Inbox, ct),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<TodayAggregateDto> GetTodayAggregateAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"today:aggregate:{today:yyyy-MM-dd}",
+            [
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<WeeklyTaskSelection>(),
+                ApplicationCacheKey.EntityTypeTag<TaskDependency>(),
+                ApplicationCacheKey.EntityTypeTag<UserDashboardPreference>(),
+                ApplicationCacheKey.EntityTypeTag<Note>(),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            ct => GetTodayAggregateCoreAsync(userId, today, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<TodayAggregateDto> GetTodayAggregateCoreAsync(
+        string userId,
+        DateTime today,
+        CancellationToken cancellationToken)
+    {
         // DbContext is not thread-safe, so queries must run sequentially even though
         // the intent is to gather all data in a single pass.
-        var today               = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
         var currentTask         = await GetCurrentTaskByFlagAsync(userId, today, cancellationToken).ConfigureAwait(false);
         var inProgress          = await GetCurrentTasksAsync(cancellationToken).ConfigureAwait(false);
         var overdue              = await GetOverdueAsync(cancellationToken).ConfigureAwait(false);
@@ -284,7 +361,14 @@ internal sealed class TodayService(
     /// Base queryable that enforces the "active task" contract:
     /// non-archived, belongs to an active non-archived project, top-level only, owned by the user.
     /// </summary>
-    private IQueryable<Domain.Entities.TaskItem> ActiveBase(string userId) =>
+    private static IReadOnlyCollection<string> TodayTaskTags() =>
+    [
+        ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+        ApplicationCacheKey.EntityTypeTag<Project>(),
+        ApplicationCacheKey.TimeZoneTag
+    ];
+
+    private IQueryable<TaskItem> ActiveBase(string userId) =>
         context.Tasks
             .AsNoTracking()
             .Where(t => t.UserId == userId

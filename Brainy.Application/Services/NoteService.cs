@@ -1,5 +1,7 @@
 using Brainy.Application.Common;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Notes;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -13,7 +15,10 @@ namespace Brainy.Application.Services;
 /// Handles CRUD operations for <see cref="Note"/> entities, scoped to the current user.
 /// Reads use <c>AsNoTracking</c> for performance; writes load tracked entities.
 /// </summary>
-internal sealed class NoteService(IApplicationDbContext context, ICurrentUserService currentUser) : INoteService
+internal sealed class NoteService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : INoteService
 {
     private const int MaxTagsPerNote = 20;
     private const int MaxTagNameLength = 100;
@@ -22,39 +27,35 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Notes
-            .AsNoTracking()
-            .Where(n => n.UserId == userId)
-            .OrderByDescending(n => n.UpdatedAtUtc)
-            .Select(n => new NoteDto(
-                n.Id, n.Title, n.Content, n.AiSummary, n.Status, n.IsArchived,
-                n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId,
-                n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
-                n.IsFavorite, n.Images.Any(),
-                SourceUrl: n.Source != null ? n.Source.Url : null,
-                SourceTitle: n.Source != null ? n.Source.Title : null,
-                RowVersion: n.RowVersion,
-                Tags: n.Tags
-                    .Where(t => t.UserId == userId)
-                    .Select(t => t.Name)
-                    .OrderBy(name => name)
-                    .ToList()))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "notes:all",
+            NoteReadTags(),
+            async ct => await ProjectNotes(
+                    context.Notes
+                        .AsNoTracking()
+                        .Where(n => n.UserId == userId)
+                        .OrderByDescending(n => n.UpdatedAtUtc),
+                    userId)
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<NoteDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var note = await context.Notes
-            .AsNoTracking()
-            .Include(n => n.Source)
-            .Include(n => n.Tags)
-            .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId, cancellationToken)
-            .ConfigureAwait(false);
-
-        return note is null ? null : ToDto(note);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"notes:{id}",
+            NoteReadTags(id),
+            ct => ProjectNotes(
+                    context.Notes
+                        .AsNoTracking()
+                        .Where(n => n.Id == id && n.UserId == userId),
+                    userId)
+                .FirstOrDefaultAsync(ct),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<NoteDto> CreateAsync(CreateNoteDto dto, CancellationToken cancellationToken = default)
@@ -98,6 +99,11 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
 
         context.Notes.Add(note);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateNoteAsync(
+            userId,
+            note.Id,
+            note.Tags.Select(tag => tag.Id),
+            note.SourceId.HasValue ? [note.SourceId.Value] : []).ConfigureAwait(false);
 
         return ToDto(note);
     }
@@ -114,6 +120,9 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             .FirstOrDefaultAsync(n => n.Id == dto.Id && n.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Note '{dto.Id}' was not found.");
+        var sourceIds = note.SourceId.HasValue
+            ? new HashSet<Guid> { note.SourceId.Value }
+            : [];
 
         await context.EnsureNoteLinksOwnedAsync(
             userId, dto.ProjectId, dto.AreaId, dto.ResourceId, cancellationToken).ConfigureAwait(false);
@@ -193,6 +202,13 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             throw new ConcurrencyConflictException("note", ex);
         }
 
+        if (note.SourceId.HasValue)
+            sourceIds.Add(note.SourceId.Value);
+        await InvalidateNoteAsync(
+            userId,
+            note.Id,
+            note.Tags.Select(tag => tag.Id),
+            sourceIds).ConfigureAwait(false);
         return ToDto(note);
     }
 
@@ -200,25 +216,18 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Notes
-            .AsNoTracking()
-            .Where(n => n.UserId == userId && n.Status == NoteStatus.Inbox && !n.IsArchived)
-            .OrderBy(n => n.CreatedAtUtc)
-            .Select(n => new NoteDto(
-                n.Id, n.Title, n.Content, n.AiSummary, n.Status, n.IsArchived,
-                n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId,
-                n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
-                n.IsFavorite, n.Images.Any(),
-                SourceUrl: n.Source != null ? n.Source.Url : null,
-                SourceTitle: n.Source != null ? n.Source.Title : null,
-                RowVersion: n.RowVersion,
-                Tags: n.Tags
-                    .Where(t => t.UserId == userId)
-                    .Select(t => t.Name)
-                    .OrderBy(name => name)
-                    .ToList()))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "notes:inbox",
+            NoteReadTags(),
+            async ct => await ProjectNotes(
+                    context.Notes
+                        .AsNoTracking()
+                        .Where(n => n.UserId == userId && n.Status == NoteStatus.Inbox && !n.IsArchived)
+                        .OrderBy(n => n.CreatedAtUtc),
+                    userId)
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<NoteDto> ProcessNoteAsync(ProcessNoteDto dto, CancellationToken cancellationToken = default)
@@ -278,6 +287,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             throw new ConcurrencyConflictException("note", ex);
         }
 
+        await InvalidateNoteAsync(userId, note.Id).ConfigureAwait(false);
         return ToDto(note);
     }
 
@@ -320,6 +330,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateNotesAsync(userId, notes.Select(note => note.Id)).ConfigureAwait(false);
         return notes.Count;
     }
 
@@ -332,7 +343,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Notes
+        var updated = await context.Notes
             .Where(n => n.UserId == userId && idList.Contains(n.Id))
             .ExecuteUpdateAsync(
                 setters => setters
@@ -340,31 +351,27 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
                     .SetProperty(n => n.UpdatedAtUtc, DateTime.UtcNow),
                 cancellationToken)
             .ConfigureAwait(false);
+        if (updated > 0)
+            await InvalidateNotesAsync(userId, idList).ConfigureAwait(false);
+        return updated;
     }
 
     public async Task<IReadOnlyList<NoteDto>> GetNotLinkedToProjectAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Notes
-            .AsNoTracking()
-            .Where(n => n.UserId == userId && n.ProjectId == null && n.Status != NoteStatus.Archived)
-            .OrderByDescending(n => n.UpdatedAtUtc)
-            .Select(n => new NoteDto(
-                n.Id, n.Title, n.Content, n.AiSummary, n.Status, n.IsArchived,
-                n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId,
-                n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
-                n.IsFavorite, n.Images.Any(),
-                SourceUrl: n.Source != null ? n.Source.Url : null,
-                SourceTitle: n.Source != null ? n.Source.Title : null,
-                RowVersion: n.RowVersion,
-                Tags: n.Tags
-                    .Where(t => t.UserId == userId)
-                    .Select(t => t.Name)
-                    .OrderBy(name => name)
-                    .ToList()))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "notes:without-project",
+            NoteReadTags(),
+            async ct => await ProjectNotes(
+                    context.Notes
+                        .AsNoTracking()
+                        .Where(n => n.UserId == userId && n.ProjectId == null && n.Status != NoteStatus.Archived)
+                        .OrderByDescending(n => n.UpdatedAtUtc),
+                    userId)
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<NoteDto> LinkToProjectAsync(Guid noteId, Guid projectId, CancellationToken cancellationToken = default)
@@ -392,6 +399,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
             note.Status = NoteStatus.Active;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateNoteAsync(userId, note.Id).ConfigureAwait(false);
         return ToDto(note);
     }
 
@@ -409,6 +417,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         note.ProjectId = null;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateNoteAsync(userId, note.Id).ConfigureAwait(false);
         return ToDto(note);
     }
 
@@ -431,31 +440,37 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
 
         context.Notes.Remove(note);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        List<string> changedTags =
+        [
+            ApplicationCacheKey.EntityTypeTag<Note>(),
+            ApplicationCacheKey.EntityTag<Note>(note.Id),
+            ApplicationCacheKey.EntityTypeTag<NoteRelationship>(),
+            ApplicationCacheKey.EntityTypeTag<NoteImage>(),
+            ApplicationCacheKey.EntityTypeTag<Highlight>(),
+            ApplicationCacheKey.EntityTypeTag<Summary>(),
+            ApplicationCacheKey.EntityTypeTag<ActionItem>(),
+            ApplicationCacheKey.EntityTypeTag<Output>()
+        ];
+        changedTags.AddRange(relationshipLinks.Select(
+            relationship => ApplicationCacheKey.EntityTag<NoteRelationship>(relationship.Id)));
+        await cache.InvalidateTagsAsync(userId, changedTags, CancellationToken.None).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<NoteDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        return await context.Notes
-            .AsNoTracking()
-            .Where(n => n.UserId == userId && (n.IsArchived || n.Status == NoteStatus.Archived))
-            .OrderByDescending(n => n.ArchivedAtUtc ?? n.UpdatedAtUtc)
-            .Select(n => new NoteDto(
-                n.Id, n.Title, n.Content, n.AiSummary, n.Status, n.IsArchived,
-                n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId,
-                n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
-                n.IsFavorite, n.Images.Any(),
-                SourceUrl: n.Source != null ? n.Source.Url : null,
-                SourceTitle: n.Source != null ? n.Source.Title : null,
-                RowVersion: n.RowVersion,
-                Tags: n.Tags
-                    .Where(t => t.UserId == userId)
-                    .Select(t => t.Name)
-                    .OrderBy(name => name)
-                    .ToList(),
-                ArchivedReason: n.ArchivedReason))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "notes:archived",
+            NoteReadTags(),
+            async ct => await ProjectNotes(
+                    context.Notes
+                        .AsNoTracking()
+                        .Where(n => n.UserId == userId && (n.IsArchived || n.Status == NoteStatus.Archived))
+                        .OrderByDescending(n => n.ArchivedAtUtc ?? n.UpdatedAtUtc),
+                    userId)
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default, string? archivedReason = null)
@@ -472,6 +487,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         note.ArchivedAtUtc = DateTime.UtcNow;
         note.ArchivedReason = normalizedReason;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateNoteAsync(userId, note.Id).ConfigureAwait(false);
     }
 
     public async Task RestoreAsync(Guid id, CancellationToken cancellationToken = default)
@@ -492,6 +508,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         note.ArchivedAtUtc = null;
         note.ArchivedReason = null;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateNoteAsync(userId, note.Id).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -584,6 +601,76 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
         Tags: n.Tags.Select(t => t.Name).OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList(),
         ArchivedReason: n.ArchivedReason);
 
+    private static IQueryable<NoteDto> ProjectNotes(IQueryable<Note> notes, string userId) =>
+        notes
+            .Select(n => new NoteDto(
+                n.Id, n.Title, n.Content, n.AiSummary, n.Status, n.IsArchived,
+                n.ArchivedAtUtc, n.ProcessedAtUtc, n.ParaCategory, n.SourceId,
+                n.ProjectId, n.AreaId, n.ResourceId, n.CreatedAtUtc, n.UpdatedAtUtc,
+                n.IsFavorite, n.Images.Any(),
+                SourceUrl: n.Source != null ? n.Source.Url : null,
+                SourceTitle: n.Source != null ? n.Source.Title : null,
+                RowVersion: n.RowVersion,
+                Tags: n.Tags
+                    .Where(t => t.UserId == userId)
+                    .Select(t => t.Name)
+                    .OrderBy(name => name)
+                    .ToList(),
+                ArchivedReason: n.ArchivedReason));
+
+    private static IReadOnlyCollection<string> NoteReadTags(Guid? noteId = null)
+    {
+        List<string> tags =
+        [
+            ApplicationCacheKey.EntityTypeTag<Note>(),
+            ApplicationCacheKey.EntityTypeTag<NoteImage>(),
+            ApplicationCacheKey.EntityTypeTag<Source>(),
+            ApplicationCacheKey.EntityTypeTag<Tag>()
+        ];
+        if (noteId.HasValue)
+            tags.Add(ApplicationCacheKey.EntityTag<Note>(noteId.Value));
+        return tags;
+    }
+
+    private ValueTask InvalidateNoteAsync(
+        string userId,
+        Guid noteId,
+        IEnumerable<Guid>? tagIds = null,
+        IEnumerable<Guid>? sourceIds = null)
+    {
+        List<string> tags =
+        [
+            ApplicationCacheKey.EntityTypeTag<Note>(),
+            ApplicationCacheKey.EntityTag<Note>(noteId),
+            ApplicationCacheKey.EntityTypeTag<LifecycleActivity>()
+        ];
+
+        if (tagIds is not null)
+        {
+            tags.Add(ApplicationCacheKey.EntityTypeTag<Tag>());
+            tags.AddRange(tagIds.Select(ApplicationCacheKey.EntityTag<Tag>));
+        }
+
+        if (sourceIds is not null)
+        {
+            tags.Add(ApplicationCacheKey.EntityTypeTag<Source>());
+            tags.AddRange(sourceIds.Select(ApplicationCacheKey.EntityTag<Source>));
+        }
+
+        return cache.InvalidateTagsAsync(userId, tags, CancellationToken.None);
+    }
+
+    private ValueTask InvalidateNotesAsync(string userId, IEnumerable<Guid> noteIds)
+    {
+        List<string> tags =
+        [
+            ApplicationCacheKey.EntityTypeTag<Note>(),
+            ApplicationCacheKey.EntityTypeTag<LifecycleActivity>()
+        ];
+        tags.AddRange(noteIds.Select(ApplicationCacheKey.EntityTag<Note>));
+        return cache.InvalidateTagsAsync(userId, tags, CancellationToken.None);
+    }
+
     public async Task<NoteDto> ToggleFavoriteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
@@ -597,6 +684,7 @@ internal sealed class NoteService(IApplicationDbContext context, ICurrentUserSer
 
         note.IsFavorite = !note.IsFavorite;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateNoteAsync(userId, note.Id).ConfigureAwait(false);
 
         return ToDto(note);
     }

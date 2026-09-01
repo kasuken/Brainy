@@ -1,4 +1,5 @@
 using System.Data;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Data;
 using Brainy.Data.Identity;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -50,7 +51,8 @@ public interface IAccountDeletionService
 public sealed class AccountDeletionService(
     AuthenticationStateProvider authenticationStateProvider,
     UserManager<ApplicationUser> userManager,
-    BrainyDbContext context) : IAccountDeletionService
+    BrainyDbContext context,
+    IApplicationCache cache) : IAccountDeletionService
 {
     /// <summary>The exact phrase required before an account can be deleted.</summary>
     public const string ConfirmationPhrase = "DELETE MY ACCOUNT";
@@ -95,6 +97,8 @@ public sealed class AccountDeletionService(
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }).ConfigureAwait(false);
+
+        await cache.InvalidateUserAsync(user.Id, CancellationToken.None).ConfigureAwait(false);
 
         // UserManager loaded the account into this scoped Identity context. ExecuteDelete
         // intentionally bypasses tracking, so detach stale state before the final sign-out request.

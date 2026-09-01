@@ -1,7 +1,10 @@
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Inbox;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,11 +12,25 @@ namespace Brainy.Application.Services;
 
 internal sealed class InboxMetricsService(
     IApplicationDbContext context,
-    ICurrentUserService currentUser) : IInboxMetricsService
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : IInboxMetricsService
 {
     public async Task<InboxMetricsDto> GetMetricsAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        return await cache.GetOrCreateAsync(
+            userId,
+            "inbox:metrics",
+            [ApplicationCacheKey.EntityTypeTag<Note>()],
+            ct => GetMetricsCoreAsync(userId, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<InboxMetricsDto> GetMetricsCoreAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
         var now = DateTime.UtcNow;
         var todayStart = now.Date;
 

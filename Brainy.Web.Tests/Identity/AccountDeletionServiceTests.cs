@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using AwesomeAssertions;
+using Brainy.Application;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Data;
 using Brainy.Data.Identity;
 using Brainy.Domain.Entities;
@@ -16,6 +18,29 @@ namespace Brainy.Web.Tests.Identity;
 
 public sealed class AccountDeletionServiceTests
 {
+    [Fact]
+    public async Task DeleteCurrentUserAsync_WithValidProof_InvalidatesUserCache()
+    {
+        await using var fixture = await AccountDeletionFixture.CreateAsync();
+        _ = await fixture.Cache.GetOrCreateAsync(
+            fixture.CurrentUserId,
+            "account-deletion-test",
+            ["account"],
+            _ => Task.FromResult("before"));
+
+        _ = await fixture.Service.DeleteCurrentUserAsync(
+            AccountDeletionFixture.Password,
+            AccountDeletionService.ConfirmationPhrase);
+
+        var cachedValue = await fixture.Cache.GetOrCreateAsync(
+            fixture.CurrentUserId,
+            "account-deletion-test",
+            ["account"],
+            _ => Task.FromResult("after"));
+
+        cachedValue.Should().Be("after");
+    }
+
     [Fact]
     public async Task DeleteCurrentUserAsync_WithValidProof_DeletesAccountGraphAndPreservesOtherUser()
     {
@@ -123,6 +148,7 @@ public sealed class AccountDeletionServiceTests
         public string CurrentUserId { get; }
         public string OtherUserId { get; }
         public BrainyDbContext Context => _scope.ServiceProvider.GetRequiredService<BrainyDbContext>();
+        public IApplicationCache Cache => _scope.ServiceProvider.GetRequiredService<IApplicationCache>();
         public IAccountDeletionService Service => _scope.ServiceProvider.GetRequiredService<IAccountDeletionService>();
 
         public static async Task<AccountDeletionFixture> CreateAsync()
@@ -166,6 +192,7 @@ public sealed class AccountDeletionServiceTests
             services.AddDbContext<BrainyDbContext>(options => options.UseSqlServer(application.ConnectionString));
             services.AddIdentityCore<ApplicationUser>()
                 .AddEntityFrameworkStores<BrainyDbContext>();
+            services.AddBrainyApplication();
             services.AddScoped<IAccountDeletionService, AccountDeletionService>();
 
             var provider = services.BuildServiceProvider();

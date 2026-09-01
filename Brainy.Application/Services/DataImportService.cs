@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.DataImport;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -11,7 +13,8 @@ namespace Brainy.Application.Services;
 
 internal sealed class DataImportService(
     IApplicationDbContext context,
-    ICurrentUserService currentUser) : IDataImportService
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : IDataImportService
 {
     private static readonly HashSet<string> SupportedSections = ["tags", "notes", "noteTagLinks"];
 
@@ -219,6 +222,17 @@ internal sealed class DataImportService(
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        List<string> changedTags =
+        [
+            ApplicationCacheKey.EntityTypeTag<Tag>(),
+            ApplicationCacheKey.EntityTypeTag<Note>(),
+            ApplicationCacheKey.EntityTypeTag<LifecycleActivity>()
+        ];
+        changedTags.AddRange(
+            tagLookup.Values.Select(tag => ApplicationCacheKey.EntityTag<Tag>(tag.Id)));
+        changedTags.AddRange(
+            context.Notes.Local.Select(note => ApplicationCacheKey.EntityTag<Note>(note.Id)));
+        await cache.InvalidateTagsAsync(userId, changedTags, CancellationToken.None).ConfigureAwait(false);
 
         skippedNoteTagLinks += pendingNoteTagLinks
             .Where(entry => !importedNoteIds.Contains(entry.Key))

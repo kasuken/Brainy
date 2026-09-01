@@ -1,5 +1,7 @@
 using Brainy.Application.Common;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Outputs;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -14,7 +16,10 @@ namespace Brainy.Application.Services;
 /// <see cref="Output"/> entities, scoped to the current user.
 /// Active outputs exclude archived entries; reads use <c>AsNoTracking</c>.
 /// </summary>
-internal sealed class OutputService(IApplicationDbContext context, ICurrentUserService currentUser) : IOutputService
+internal sealed class OutputService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : IOutputService
 {
     // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -22,84 +27,132 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Outputs.AsNoTracking()
-            .Where(o => o.UserId == userId && !o.IsArchived)
-            .OrderByDescending(o => o.UpdatedAtUtc)
-            .Select(o => ToDto(o))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "outputs:active",
+            OutputReadTags(),
+            async ct => await context.Outputs.AsNoTracking()
+                .Where(o => o.UserId == userId && !o.IsArchived)
+                .OrderByDescending(o => o.UpdatedAtUtc)
+                .Select(o => ToDto(o))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<OutputDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Outputs.AsNoTracking()
-            .Where(o => o.UserId == userId && o.IsArchived)
-            .OrderByDescending(o => o.ArchivedDate)
-            .Select(o => ToDto(o))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "outputs:archived",
+            OutputReadTags(),
+            async ct => await context.Outputs.AsNoTracking()
+                .Where(o => o.UserId == userId && o.IsArchived)
+                .OrderByDescending(o => o.ArchivedDate)
+                .Select(o => ToDto(o))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<OutputDto>> GetByProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Outputs.AsNoTracking()
-            .Where(o => o.UserId == userId && !o.IsArchived && o.ProjectId == projectId)
-            .OrderByDescending(o => o.UpdatedAtUtc)
-            .Select(o => ToDto(o))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"outputs:project:{projectId}",
+            OutputReadTags(),
+            async ct => await context.Outputs.AsNoTracking()
+                .Where(o => o.UserId == userId && !o.IsArchived && o.ProjectId == projectId)
+                .OrderByDescending(o => o.UpdatedAtUtc)
+                .Select(o => ToDto(o))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<OutputDto>> GetByGoalAsync(Guid goalId, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Outputs.AsNoTracking()
-            .Where(o => o.UserId == userId && !o.IsArchived && o.GoalId == goalId)
-            .OrderByDescending(o => o.UpdatedAtUtc)
-            .Select(o => ToDto(o))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"outputs:goal:{goalId}",
+            OutputReadTags(),
+            async ct => await context.Outputs.AsNoTracking()
+                .Where(o => o.UserId == userId && !o.IsArchived && o.GoalId == goalId)
+                .OrderByDescending(o => o.UpdatedAtUtc)
+                .Select(o => ToDto(o))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<OutputDto>> GetByAreaAsync(Guid areaId, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Outputs.AsNoTracking()
-            .Where(o => o.UserId == userId && !o.IsArchived && o.AreaId == areaId)
-            .OrderByDescending(o => o.UpdatedAtUtc)
-            .Select(o => ToDto(o))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"outputs:area:{areaId}",
+            OutputReadTags(),
+            async ct => await context.Outputs.AsNoTracking()
+                .Where(o => o.UserId == userId && !o.IsArchived && o.AreaId == areaId)
+                .OrderByDescending(o => o.UpdatedAtUtc)
+                .Select(o => ToDto(o))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<OutputDto>> GetBySourceNoteAsync(Guid noteId, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Outputs.AsNoTracking()
-            .Where(o => o.UserId == userId &&
-                        o.SourceNotes.Any(n => n.Id == noteId && n.UserId == userId))
-            .OrderBy(o => o.IsArchived)
-            .ThenByDescending(o => o.UpdatedAtUtc)
-            .Select(o => ToDto(o))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"outputs:source-note:{noteId}",
+            [.. OutputReadTags(), ApplicationCacheKey.EntityTypeTag<Note>()],
+            async ct => await context.Outputs.AsNoTracking()
+                .Where(o => o.UserId == userId &&
+                            o.SourceNotes.Any(n => n.Id == noteId && n.UserId == userId))
+                .OrderBy(o => o.IsArchived)
+                .ThenByDescending(o => o.UpdatedAtUtc)
+                .Select(o => ToDto(o))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<OutputDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Outputs.AsNoTracking()
-            .Where(o => o.Id == id && o.UserId == userId)
-            .Select(o => ToDto(o))
-            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"outputs:{id}:summary",
+            OutputReadTags(id),
+            ct => context.Outputs.AsNoTracking()
+                .Where(o => o.Id == id && o.UserId == userId)
+                .Select(o => ToDto(o))
+                .FirstOrDefaultAsync(ct),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<OutputDetailDto?> GetDetailAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"outputs:{id}:detail",
+            [.. OutputReadTags(id), ApplicationCacheKey.EntityTypeTag<Note>()],
+            ct => GetDetailCoreAsync(id, userId, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<OutputDetailDto?> GetDetailCoreAsync(
+        Guid id,
+        string userId,
+        CancellationToken cancellationToken)
+    {
         var output = await context.Outputs.AsNoTracking()
             .Include(o => o.Project)
             .Include(o => o.Area)
@@ -148,44 +201,54 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Outputs.AsNoTracking()
-            .Where(o => o.UserId == userId && !o.IsArchived &&
-                        (o.Title.Contains(term) ||
-                         (o.Description != null && o.Description.Contains(term)) ||
-                         o.Content.Contains(term)))
-            .OrderByDescending(o => o.Title.Contains(term) ? 1 : 0)
-            .ThenByDescending(o => o.UpdatedAtUtc)
-            .Select(o => ToDto(o))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            ApplicationCacheKey.Create("outputs", "search", term),
+            OutputReadTags(),
+            async ct => await context.Outputs.AsNoTracking()
+                .Where(o => o.UserId == userId && !o.IsArchived &&
+                            (o.Title.Contains(term) ||
+                             (o.Description != null && o.Description.Contains(term)) ||
+                             o.Content.Contains(term)))
+                .OrderByDescending(o => o.Title.Contains(term) ? 1 : 0)
+                .ThenByDescending(o => o.UpdatedAtUtc)
+                .Select(o => ToDto(o))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<OutputMetricsDto> GetMetricsAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var total     = await context.Outputs.CountAsync(o => o.UserId == userId, cancellationToken).ConfigureAwait(false);
-        var draft     = await context.Outputs.CountAsync(o => o.UserId == userId && o.Status == OutputStatus.Draft, cancellationToken).ConfigureAwait(false);
-        var inReview  = await context.Outputs.CountAsync(o => o.UserId == userId && o.Status == OutputStatus.InReview, cancellationToken).ConfigureAwait(false);
-        var ready     = await context.Outputs.CountAsync(o => o.UserId == userId && o.Status == OutputStatus.Ready, cancellationToken).ConfigureAwait(false);
-        var published = await context.Outputs.CountAsync(o => o.UserId == userId && o.Status == OutputStatus.Published, cancellationToken).ConfigureAwait(false);
-        var archived  = await context.Outputs.CountAsync(o => o.UserId == userId && o.Status == OutputStatus.Archived, cancellationToken).ConfigureAwait(false);
-
-        var byType = await context.Outputs.AsNoTracking()
-            .Where(o => o.UserId == userId)
-            .GroupBy(o => o.Type)
-            .Select(g => new OutputsByTypeDto(g.Key, g.Count()))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
-
-        var byArea = await context.Outputs.AsNoTracking()
-            .Where(o => o.UserId == userId)
-            .GroupBy(o => new { o.AreaId, AreaName = o.Area != null ? o.Area.Name : null })
-            .Select(g => new OutputsByAreaDto(
-                g.Key.AreaId,
-                g.Key.AreaName ?? "No Area",
-                g.Count()))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
-
-        return new OutputMetricsDto(total, draft, inReview, ready, published, archived, byType, byArea);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "outputs:metrics",
+            [
+                ApplicationCacheKey.EntityTypeTag<Output>(),
+                ApplicationCacheKey.EntityTypeTag<Area>()
+            ],
+            async ct =>
+            {
+                var total = await context.Outputs.CountAsync(o => o.UserId == userId, ct).ConfigureAwait(false);
+                var draft = await context.Outputs.CountAsync(o => o.UserId == userId && o.Status == OutputStatus.Draft, ct).ConfigureAwait(false);
+                var inReview = await context.Outputs.CountAsync(o => o.UserId == userId && o.Status == OutputStatus.InReview, ct).ConfigureAwait(false);
+                var ready = await context.Outputs.CountAsync(o => o.UserId == userId && o.Status == OutputStatus.Ready, ct).ConfigureAwait(false);
+                var published = await context.Outputs.CountAsync(o => o.UserId == userId && o.Status == OutputStatus.Published, ct).ConfigureAwait(false);
+                var archived = await context.Outputs.CountAsync(o => o.UserId == userId && o.Status == OutputStatus.Archived, ct).ConfigureAwait(false);
+                var byType = await context.Outputs.AsNoTracking()
+                    .Where(o => o.UserId == userId)
+                    .GroupBy(o => o.Type)
+                    .Select(g => new OutputsByTypeDto(g.Key, g.Count()))
+                    .ToListAsync(ct).ConfigureAwait(false);
+                var byArea = await context.Outputs.AsNoTracking()
+                    .Where(o => o.UserId == userId)
+                    .GroupBy(o => new { o.AreaId, AreaName = o.Area != null ? o.Area.Name : null })
+                    .Select(g => new OutputsByAreaDto(g.Key.AreaId, g.Key.AreaName ?? "No Area", g.Count()))
+                    .ToListAsync(ct).ConfigureAwait(false);
+                return new OutputMetricsDto(total, draft, inReview, ready, published, archived, byType, byArea);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     // ── Mutations ─────────────────────────────────────────────────────────────
@@ -227,6 +290,7 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
 
         context.Outputs.Add(output);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateOutputAsync(userId, output.Id).ConfigureAwait(false);
 
         var (projectTitle, areaName, goalTitle) =
             await ResolveLinkedNamesAsync(output, cancellationToken).ConfigureAwait(false);
@@ -299,6 +363,7 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         {
             throw new ConcurrencyConflictException("output", ex);
         }
+        await InvalidateOutputAsync(userId, output.Id).ConfigureAwait(false);
 
         var (projectTitle, areaName, goalTitle) =
             await ResolveLinkedNamesAsync(output, cancellationToken).ConfigureAwait(false);
@@ -321,6 +386,7 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         output.Status       = OutputStatus.Archived;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateOutputAsync(userId, output.Id).ConfigureAwait(false);
     }
 
     public async Task RestoreAsync(Guid id, CancellationToken cancellationToken = default)
@@ -340,6 +406,7 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         output.Status       = OutputStatus.Draft;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateOutputAsync(userId, output.Id).ConfigureAwait(false);
     }
 
     public async Task PublishAsync(Guid id, CancellationToken cancellationToken = default)
@@ -354,6 +421,7 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         output.PublishedDate = DateTime.UtcNow;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateOutputAsync(userId, output.Id).ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(
@@ -379,6 +447,7 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
         {
             throw new ConcurrencyConflictException("output", ex);
         }
+        await InvalidateOutputAsync(userId, output.Id).ConfigureAwait(false);
     }
 
     public async Task AddSourceNoteAsync(Guid outputId, Guid noteId, CancellationToken cancellationToken = default)
@@ -403,6 +472,7 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
 
         output.SourceNotes.Add(note);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateOutputAsync(userId, output.Id).ConfigureAwait(false);
     }
 
     public async Task RemoveSourceNoteAsync(Guid outputId, Guid noteId, CancellationToken cancellationToken = default)
@@ -420,9 +490,34 @@ internal sealed class OutputService(IApplicationDbContext context, ICurrentUserS
 
         output.SourceNotes.Remove(note);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateOutputAsync(userId, output.Id).ConfigureAwait(false);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static IReadOnlyCollection<string> OutputReadTags(Guid? outputId = null)
+    {
+        List<string> tags =
+        [
+            ApplicationCacheKey.EntityTypeTag<Output>(),
+            ApplicationCacheKey.EntityTypeTag<Project>(),
+            ApplicationCacheKey.EntityTypeTag<Area>(),
+            ApplicationCacheKey.EntityTypeTag<Goal>()
+        ];
+        if (outputId.HasValue)
+            tags.Add(ApplicationCacheKey.EntityTag<Output>(outputId.Value));
+        return tags;
+    }
+
+    private ValueTask InvalidateOutputAsync(string userId, Guid outputId) =>
+        cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Output>(),
+                ApplicationCacheKey.EntityTag<Output>(outputId),
+                ApplicationCacheKey.EntityTypeTag<LifecycleActivity>()
+            ],
+            CancellationToken.None);
 
     private async Task<List<Note>> ResolveSourceNotesAsync(
         string userId,

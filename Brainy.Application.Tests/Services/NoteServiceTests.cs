@@ -71,6 +71,18 @@ public class NoteServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_AfterCachedRead_InvalidatesNotesCache()
+    {
+        var sut = BuildService(nameof(CreateAsync_AfterCachedRead_InvalidatesNotesCache));
+        _ = await sut.GetAllAsync();
+
+        await sut.CreateAsync(new CreateNoteDto("Newly cached note"));
+
+        var notes = await sut.GetAllAsync();
+        notes.Should().ContainSingle(note => note.Title == "Newly cached note");
+    }
+
+    [Fact]
     public async Task CreateAsync_WithNullDto_ThrowsArgumentNullException()
     {
         var sut = BuildService(nameof(CreateAsync_WithNullDto_ThrowsArgumentNullException));

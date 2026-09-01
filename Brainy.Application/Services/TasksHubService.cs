@@ -1,7 +1,9 @@
 using System.Linq.Expressions;
+using Brainy.Application.Caching;
 using Brainy.Application.Common;
 using Brainy.Application.DTOs;
 using Brainy.Application.DTOs.Tasks;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -21,7 +23,8 @@ internal sealed class TasksHubService(
     ICurrentUserService currentUser,
     IUserTimeZoneService userTimeZone,
     ITaskService taskService,
-    TimeProvider timeProvider) : ITasksHubService
+    TimeProvider timeProvider,
+    IApplicationCache cache) : ITasksHubService
 {
     private static readonly TaskItemStatus[] _inactiveStatuses = [TaskItemStatus.Done, TaskItemStatus.Archived];
 
@@ -63,13 +66,17 @@ internal sealed class TasksHubService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId, projectScope)
-            .Where(t => !_inactiveStatuses.Contains(t.Status))
-            .OrderByDescending(t => t.Priority)
-            .ThenBy(t => t.DueDate)
-            .Select(ToDto)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"tasks-hub:active:{projectScope}",
+            TaskHubReadTags(),
+            async ct => await ActiveBase(userId, projectScope)
+                .Where(t => !_inactiveStatuses.Contains(t.Status))
+                .OrderByDescending(t => t.Priority)
+                .ThenBy(t => t.DueDate)
+                .Select(ToDto)
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<TasksHubTaskDto>> GetHighPriorityTasksAsync(
@@ -78,13 +85,17 @@ internal sealed class TasksHubService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId, projectScope)
-            .Where(t => t.Priority >= TaskPriority.High && !_inactiveStatuses.Contains(t.Status))
-            .OrderByDescending(t => t.Priority)
-            .ThenBy(t => t.DueDate)
-            .Select(ToDto)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"tasks-hub:high-priority:{projectScope}",
+            TaskHubReadTags(),
+            async ct => await ActiveBase(userId, projectScope)
+                .Where(t => t.Priority >= TaskPriority.High && !_inactiveStatuses.Contains(t.Status))
+                .OrderByDescending(t => t.Priority)
+                .ThenBy(t => t.DueDate)
+                .Select(ToDto)
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<TasksHubTaskDto>> GetOnHoldTasksAsync(
@@ -93,13 +104,17 @@ internal sealed class TasksHubService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId, projectScope)
-            .Where(t => t.Status == TaskItemStatus.Waiting)
-            .OrderByDescending(t => t.Priority)
-            .ThenBy(t => t.UpdatedAtUtc)
-            .Select(ToDto)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"tasks-hub:on-hold:{projectScope}",
+            TaskHubReadTags(),
+            async ct => await ActiveBase(userId, projectScope)
+                .Where(t => t.Status == TaskItemStatus.Waiting)
+                .OrderByDescending(t => t.Priority)
+                .ThenBy(t => t.UpdatedAtUtc)
+                .Select(ToDto)
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<TasksHubTaskDto>> GetOverdueTasksAsync(
@@ -109,13 +124,18 @@ internal sealed class TasksHubService(
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId, projectScope)
-            .Where(t => t.DueDate.HasValue && t.DueDate.Value.Date < today
-                        && !_inactiveStatuses.Contains(t.Status))
-            .OrderBy(t => t.DueDate)
-            .Select(ToDto)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"tasks-hub:overdue:{projectScope}:{today:yyyy-MM-dd}",
+            [.. TaskHubReadTags(), ApplicationCacheKey.TimeZoneTag],
+            async ct => await ActiveBase(userId, projectScope)
+                .Where(t => t.DueDate.HasValue && t.DueDate.Value.Date < today
+                            && !_inactiveStatuses.Contains(t.Status))
+                .OrderBy(t => t.DueDate)
+                .Select(ToDto)
+                .ToListAsync(ct)
+                .ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<TasksHubTaskDto>> GetTasksNeedingAttentionAsync(
@@ -125,6 +145,20 @@ internal sealed class TasksHubService(
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"tasks-hub:attention:{projectScope}:{today:yyyy-MM-dd}",
+            [.. TaskHubReadTags(), ApplicationCacheKey.TimeZoneTag],
+            ct => GetTasksNeedingAttentionCoreAsync(userId, today, projectScope, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<TasksHubTaskDto>> GetTasksNeedingAttentionCoreAsync(
+        string userId,
+        DateTime today,
+        TaskHubProjectScope projectScope,
+        CancellationToken cancellationToken)
+    {
         // Fetch overdue, due-today, and critical tasks separately then union by Id.
         var overdue = await ActiveBase(userId, projectScope)
             .Where(t => t.DueDate.HasValue && t.DueDate.Value.Date < today
@@ -163,13 +197,17 @@ internal sealed class TasksHubService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await ActiveBase(userId, projectScope)
-            .Where(t => !t.DueDate.HasValue && !_inactiveStatuses.Contains(t.Status))
-            .OrderByDescending(t => t.Priority)
-            .ThenBy(t => t.CreatedAtUtc)
-            .Select(ToDto)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"tasks-hub:without-due-date:{projectScope}",
+            TaskHubReadTags(),
+            async ct => await ActiveBase(userId, projectScope)
+                .Where(t => !t.DueDate.HasValue && !_inactiveStatuses.Contains(t.Status))
+                .OrderByDescending(t => t.Priority)
+                .ThenBy(t => t.CreatedAtUtc)
+                .Select(ToDto)
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<TasksHubTaskDto>> GetStaleTasksAsync(
@@ -179,12 +217,17 @@ internal sealed class TasksHubService(
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var staleThreshold = timeProvider.GetUtcNow().UtcDateTime.AddDays(-30);
 
-        return await ActiveBase(userId, projectScope)
-            .Where(t => t.UpdatedAtUtc < staleThreshold && !_inactiveStatuses.Contains(t.Status))
-            .OrderBy(t => t.UpdatedAtUtc)
-            .Select(ToDto)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"tasks-hub:stale:{projectScope}",
+            TaskHubReadTags(),
+            async ct => await ActiveBase(userId, projectScope)
+                .Where(t => t.UpdatedAtUtc < staleThreshold && !_inactiveStatuses.Contains(t.Status))
+                .OrderBy(t => t.UpdatedAtUtc)
+                .Select(ToDto)
+                .ToListAsync(ct)
+                .ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<TaskStatusSummaryDto> GetStatusSummaryAsync(
@@ -193,18 +236,27 @@ internal sealed class TasksHubService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var counts = await ScopedBase(userId, projectScope)
-            .AsNoTracking()
-            .GroupBy(t => t.Status)
-            .Select(g => new { Status = g.Key, Count = g.Count() })
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        return new TaskStatusSummaryDto(
-            counts.FirstOrDefault(c => c.Status == TaskItemStatus.Todo)?.Count ?? 0,
-            counts.FirstOrDefault(c => c.Status == TaskItemStatus.InProgress)?.Count ?? 0,
-            counts.FirstOrDefault(c => c.Status == TaskItemStatus.Waiting)?.Count ?? 0,
-            counts.FirstOrDefault(c => c.Status == TaskItemStatus.Done)?.Count ?? 0);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"tasks-hub:status-summary:{projectScope}",
+            [
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<Project>()
+            ],
+            async ct =>
+            {
+                var counts = await ScopedBase(userId, projectScope)
+                    .AsNoTracking()
+                    .GroupBy(t => t.Status)
+                    .Select(g => new { Status = g.Key, Count = g.Count() })
+                    .ToListAsync(ct).ConfigureAwait(false);
+                return new TaskStatusSummaryDto(
+                    counts.FirstOrDefault(c => c.Status == TaskItemStatus.Todo)?.Count ?? 0,
+                    counts.FirstOrDefault(c => c.Status == TaskItemStatus.InProgress)?.Count ?? 0,
+                    counts.FirstOrDefault(c => c.Status == TaskItemStatus.Waiting)?.Count ?? 0,
+                    counts.FirstOrDefault(c => c.Status == TaskItemStatus.Done)?.Count ?? 0);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     // ---------------------------------------------------------------------------
@@ -270,6 +322,22 @@ internal sealed class TasksHubService(
         // database collation (and on the InMemory provider used in tests).
         var term = searchTerm.Trim().ToLower();
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            ApplicationCacheKey.Create("tasks-hub", "search", projectScope, term, page, pageSize),
+            TaskHubReadTags(),
+            ct => SearchTasksCoreAsync(userId, term, page, pageSize, projectScope, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<PagedResult<TasksHubTaskDto>> SearchTasksCoreAsync(
+        string userId,
+        string term,
+        int page,
+        int pageSize,
+        TaskHubProjectScope projectScope,
+        CancellationToken cancellationToken)
+    {
         var query = ActiveBase(userId, projectScope)
             .Where(t => !_inactiveStatuses.Contains(t.Status)
                         && (t.Title.ToLower().Contains(term)
@@ -296,6 +364,35 @@ internal sealed class TasksHubService(
         ArgumentNullException.ThrowIfNull(filter);
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var cacheKey = ApplicationCacheKey.Create(
+            "tasks-hub",
+            "filtered",
+            projectScope,
+            filter.ProjectId,
+            filter.Status,
+            filter.MinPriority,
+            filter.DueBefore,
+            filter.DueAfter,
+            filter.SearchTerm,
+            filter.Page,
+            filter.PageSize,
+            filter.Complexity);
+
+        return await cache.GetOrCreateAsync(
+            userId,
+            cacheKey,
+            TaskHubReadTags(),
+            ct => GetFilteredTasksCoreAsync(userId, filter, projectScope, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<PagedResult<TasksHubTaskDto>> GetFilteredTasksCoreAsync(
+        string userId,
+        TasksHubFilterDto filter,
+        TaskHubProjectScope projectScope,
+        CancellationToken cancellationToken)
+    {
         var query = ActiveBase(userId, projectScope).AsQueryable();
 
         if (filter.ProjectId.HasValue)
@@ -408,6 +505,16 @@ internal sealed class TasksHubService(
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (tasks.Count > 0)
+        {
+            List<string> tags =
+            [
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<LifecycleActivity>()
+            ];
+            tags.AddRange(tasks.Select(task => ApplicationCacheKey.EntityTag<TaskItem>(task.Id)));
+            await cache.InvalidateTagsAsync(userId, tags, CancellationToken.None).ConfigureAwait(false);
+        }
 
         return tasks.Count;
     }
@@ -415,6 +522,13 @@ internal sealed class TasksHubService(
     // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
+
+    private static IReadOnlyCollection<string> TaskHubReadTags() =>
+    [
+        ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+        ApplicationCacheKey.EntityTypeTag<Project>(),
+        ApplicationCacheKey.EntityTypeTag<TaskDependency>()
+    ];
 
     private IQueryable<TaskItem> ActiveBase(string userId, TaskHubProjectScope projectScope) =>
         ScopedBase(userId, projectScope)

@@ -1,4 +1,6 @@
 using Brainy.Application.Common;
+using Brainy.Application.Caching;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -11,7 +13,8 @@ namespace Brainy.Application.Services;
 internal sealed class UserTimeZoneService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    TimeProvider timeProvider) : IUserTimeZoneService
+    TimeProvider timeProvider,
+    IApplicationCache cache) : IUserTimeZoneService
 {
     public const string DefaultTimeZoneId = "UTC";
     private const string ManualOverridePrefix = "manual:";
@@ -69,12 +72,19 @@ internal sealed class UserTimeZoneService(
     private async Task<string?> GetStoredTimeZoneValueAsync(CancellationToken cancellationToken)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-        return await context.DashboardPreferences
-            .AsNoTracking()
-            .Where(p => p.UserId == userId)
-            .Select(p => p.TimeZoneId)
-            .FirstOrDefaultAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "dashboard:time-zone",
+            [
+                ApplicationCacheKey.EntityTypeTag<UserDashboardPreference>(),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            ct => context.DashboardPreferences
+                .AsNoTracking()
+                .Where(p => p.UserId == userId)
+                .Select(p => p.TimeZoneId)
+                .FirstOrDefaultAsync(ct),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task SetStoredTimeZoneValueAsync(string storedTimeZoneValue, CancellationToken cancellationToken)
@@ -110,6 +120,7 @@ internal sealed class UserTimeZoneService(
         try
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await InvalidateTimeZoneAsync(userId, preference.Id).ConfigureAwait(false);
         }
         catch (DbUpdateException) when (isNewPreference)
         {
@@ -125,8 +136,19 @@ internal sealed class UserTimeZoneService(
 
             concurrentPreference.TimeZoneId = normalizedStoredValue;
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await InvalidateTimeZoneAsync(userId, concurrentPreference.Id).ConfigureAwait(false);
         }
     }
+
+    private ValueTask InvalidateTimeZoneAsync(string userId, Guid preferenceId) =>
+        cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<UserDashboardPreference>(),
+                ApplicationCacheKey.EntityTag<UserDashboardPreference>(preferenceId),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            CancellationToken.None);
 
     private static TimeZoneInfo Resolve(string? timeZoneId)
     {

@@ -1,9 +1,12 @@
+using Brainy.Application.Caching;
 using Brainy.Application.Common;
 using Brainy.Application.DTOs.Projects;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Domain.Common;
+using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,7 +19,8 @@ namespace Brainy.Application.Services;
 internal sealed class ProjectPrioritizationService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    IUserTimeZoneService userTimeZone) : IProjectPrioritizationService
+    IUserTimeZoneService userTimeZone,
+    IApplicationCache cache) : IProjectPrioritizationService
 {
     private static readonly TaskItemStatus[] _inactiveStatuses =
         [TaskItemStatus.Done, TaskItemStatus.Archived];
@@ -27,6 +31,25 @@ internal sealed class ProjectPrioritizationService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
+
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"projects:prioritized:{today:yyyy-MM-dd}:{maxCount}",
+            [
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            ct => GetPrioritizedProjectsCoreAsync(userId, today, maxCount, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<ProjectSummaryDto>> GetPrioritizedProjectsCoreAsync(
+        string userId,
+        DateTime today,
+        int maxCount,
+        CancellationToken cancellationToken)
+    {
         var weekEnd = today.AddDays(7);
 
         // Fetch active projects with their task statistics in one query.

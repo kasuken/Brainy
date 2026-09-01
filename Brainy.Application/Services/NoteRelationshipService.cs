@@ -1,4 +1,6 @@
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.NoteRelationships;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -13,7 +15,8 @@ namespace Brainy.Application.Services;
 /// </summary>
 internal sealed class NoteRelationshipService(
     IApplicationDbContext context,
-    ICurrentUserService currentUser) : INoteRelationshipService
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : INoteRelationshipService
 {
     public async Task<IReadOnlyList<NoteRelationshipDto>> GetForNoteAsync(
         Guid noteId,
@@ -21,6 +24,23 @@ internal sealed class NoteRelationshipService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"note-relationships:note:{noteId}",
+            [
+                ApplicationCacheKey.EntityTypeTag<NoteRelationship>(),
+                ApplicationCacheKey.EntityTypeTag<Note>(),
+                ApplicationCacheKey.EntityTag<Note>(noteId)
+            ],
+            ct => GetForNoteCoreAsync(noteId, userId, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<NoteRelationshipDto>> GetForNoteCoreAsync(
+        Guid noteId,
+        string userId,
+        CancellationToken cancellationToken)
+    {
         // Outgoing: this note is the source
         var outgoing = await context.NoteRelationships
             .AsNoTracking()
@@ -100,6 +120,7 @@ internal sealed class NoteRelationshipService(
 
         context.NoteRelationships.Add(relationship);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateRelationshipAsync(userId, relationship.Id).ConfigureAwait(false);
 
         return new NoteRelationshipDto(
             relationship.Id,
@@ -125,5 +146,15 @@ internal sealed class NoteRelationshipService(
 
         context.NoteRelationships.Remove(rel);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateRelationshipAsync(userId, rel.Id).ConfigureAwait(false);
     }
+
+    private ValueTask InvalidateRelationshipAsync(string userId, Guid relationshipId) =>
+        cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<NoteRelationship>(),
+                ApplicationCacheKey.EntityTag<NoteRelationship>(relationshipId)
+            ],
+            CancellationToken.None);
 }

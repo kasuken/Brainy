@@ -1,7 +1,10 @@
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Pulse;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,7 +16,8 @@ namespace Brainy.Application.Services;
 internal sealed class PulseService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    IUserTimeZoneService userTimeZone) : IPulseService
+    IUserTimeZoneService userTimeZone,
+    IApplicationCache cache) : IPulseService
 {
     private static readonly DayOfWeek[] Weekdays =
     [
@@ -47,6 +51,25 @@ internal sealed class PulseService(
             period, customStartUtc, customEndUtc, cancellationToken).ConfigureAwait(false);
         var timeZone = await userTimeZone.GetTimeZoneAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            ApplicationCacheKey.Create("pulse", period, start, end, timeZone.Id),
+            [
+                ApplicationCacheKey.EntityTypeTag<LifecycleActivity>(),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            ct => GetReportCoreAsync(userId, period, start, end, timeZone, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<PulseReportDto> GetReportCoreAsync(
+        string userId,
+        PulsePeriod period,
+        DateTime start,
+        DateTime end,
+        TimeZoneInfo timeZone,
+        CancellationToken cancellationToken)
+    {
         var lifecycle = await context.LifecycleActivities
             .AsNoTracking()
             .Where(a => a.UserId == userId && a.OccurredAtUtc >= start && a.OccurredAtUtc < end)

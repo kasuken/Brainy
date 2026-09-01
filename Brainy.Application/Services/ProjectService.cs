@@ -1,7 +1,9 @@
 using Brainy.Application.Common;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Notes;
 using Brainy.Application.DTOs.Projects;
 using Brainy.Application.DTOs.Tasks;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -18,63 +20,92 @@ namespace Brainy.Application.Services;
 internal sealed class ProjectService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    IUserTimeZoneService userTimeZone) : IProjectService
+    IUserTimeZoneService userTimeZone,
+    IApplicationCache cache) : IProjectService
 {
     public async Task<IReadOnlyList<ProjectDto>> GetAllActiveAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var projects = await context.Projects
-            .AsNoTracking()
-            .Include(p => p.Goal)
-            .Where(p => p.UserId == userId && p.Status == ProjectStatus.Active)
-            .OrderByDescending(p => p.Priority)
-            .ThenBy(p => p.Name)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        return projects.Select(ToDto).ToList();
+        return await cache.GetOrCreateAsync(
+            userId,
+            "projects:active",
+            ProjectReadTags(),
+            async ct =>
+            {
+                var projects = await ProjectQuery(userId)
+                    .Where(p => p.Status == ProjectStatus.Active)
+                    .OrderByDescending(p => p.Priority)
+                    .ThenBy(p => p.Name)
+                    .ToListAsync(ct).ConfigureAwait(false);
+                return projects.Select(ToDto).ToList();
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ProjectDto>> GetAllNonArchivedAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var projects = await context.Projects
-            .AsNoTracking()
-            .Include(p => p.Goal)
-            .Where(p => p.UserId == userId && p.Status != ProjectStatus.Archived && !p.IsArchived)
-            .OrderByDescending(p => p.Priority)
-            .ThenBy(p => p.Status)
-            .ThenBy(p => p.Name)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        return projects.Select(ToDto).ToList();
+        return await cache.GetOrCreateAsync(
+            userId,
+            "projects:non-archived",
+            ProjectReadTags(),
+            async ct =>
+            {
+                var projects = await ProjectQuery(userId)
+                    .Where(p => p.Status != ProjectStatus.Archived && !p.IsArchived)
+                    .OrderByDescending(p => p.Priority)
+                    .ThenBy(p => p.Status)
+                    .ThenBy(p => p.Name)
+                    .ToListAsync(ct).ConfigureAwait(false);
+                return projects.Select(ToDto).ToList();
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ProjectDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var projects = await context.Projects
-            .AsNoTracking()
-            .Include(p => p.Goal)
-            .Where(p => p.UserId == userId && (p.IsArchived || p.Status == ProjectStatus.Archived))
-            .OrderByDescending(p => p.ArchivedAtUtc)
-            .ThenBy(p => p.Name)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        return projects.Select(ToDto).ToList();
+        return await cache.GetOrCreateAsync(
+            userId,
+            "projects:archived",
+            ProjectReadTags(),
+            async ct =>
+            {
+                var projects = await ProjectQuery(userId)
+                    .Where(p => p.IsArchived || p.Status == ProjectStatus.Archived)
+                    .OrderByDescending(p => p.ArchivedAtUtc)
+                    .ThenBy(p => p.Name)
+                    .ToListAsync(ct).ConfigureAwait(false);
+                return projects.Select(ToDto).ToList();
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ProjectSummaryDto>> GetProjectSummariesAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
-
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"projects:summaries:{today:yyyy-MM-dd}",
+            [
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            ct => GetProjectSummariesCoreAsync(userId, today, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<ProjectSummaryDto>> GetProjectSummariesCoreAsync(
+        string userId,
+        DateTime today,
+        CancellationToken cancellationToken)
+    {
         var data = await context.Projects
             .AsNoTracking()
             .Where(p => p.UserId == userId && !p.IsArchived && p.Status != ProjectStatus.Archived)
@@ -113,6 +144,25 @@ internal sealed class ProjectService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"projects:{id}:detail",
+            [
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTag<Project>(id),
+                ApplicationCacheKey.EntityTypeTag<Goal>(),
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<Note>()
+            ],
+            ct => GetProjectDetailCoreAsync(id, userId, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<ProjectDetailDto?> GetProjectDetailCoreAsync(
+        Guid id,
+        string userId,
+        CancellationToken cancellationToken)
+    {
         var project = await context.Projects
             .AsNoTracking()
             .Include(p => p.Goal)
@@ -222,6 +272,23 @@ internal sealed class ProjectService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"projects:{id}:progress",
+            [
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTag<Project>(id),
+                ApplicationCacheKey.EntityTypeTag<TaskItem>()
+            ],
+            ct => GetProjectProgressCoreAsync(id, userId, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<ProjectProgressDto?> GetProjectProgressCoreAsync(
+        Guid id,
+        string userId,
+        CancellationToken cancellationToken)
+    {
         // Verify ownership without loading the full project
         var exists = await context.Projects
             .AsNoTracking()
@@ -251,13 +318,17 @@ internal sealed class ProjectService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var project = await context.Projects
-            .AsNoTracking()
-            .Include(p => p.Goal)
-            .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId, cancellationToken)
-            .ConfigureAwait(false);
-
-        return project is null ? null : ToDto(project);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"projects:{id}:summary",
+            ProjectReadTags(id),
+            async ct =>
+            {
+                var project = await ProjectQuery(userId)
+                    .FirstOrDefaultAsync(p => p.Id == id, ct).ConfigureAwait(false);
+                return project is null ? null : ToDto(project);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ProjectDto> CreateAsync(CreateProjectDto dto, CancellationToken cancellationToken = default)
@@ -297,6 +368,7 @@ internal sealed class ProjectService(
 
         context.Projects.Add(project);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateProjectAsync(userId, project.Id).ConfigureAwait(false);
 
         return ToDto(project);
     }
@@ -354,6 +426,7 @@ internal sealed class ProjectService(
         {
             throw new ConcurrencyConflictException("project", ex);
         }
+        await InvalidateProjectAsync(userId, project.Id).ConfigureAwait(false);
 
         return ToDto(project);
     }
@@ -405,6 +478,12 @@ internal sealed class ProjectService(
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateProjectAsync(
+            userId,
+            project.Id,
+            taskAction == TaskCompletionAction.LeaveAsIs
+                ? []
+                : openTasks.Select(task => task.Id)).ConfigureAwait(false);
 
         return ToDto(project);
     }
@@ -433,7 +512,8 @@ internal sealed class ProjectService(
         project.Status        = ProjectStatus.Archived;
 
         // Cascade: archive all non-archived tasks belonging to the project
-        foreach (var task in project.Tasks.Where(t => !t.IsArchived))
+        var changedTasks = project.Tasks.Where(t => !t.IsArchived).ToList();
+        foreach (var task in changedTasks)
         {
             task.IsArchived    = true;
             task.ArchivedAtUtc = now;
@@ -443,6 +523,10 @@ internal sealed class ProjectService(
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateProjectAsync(
+            userId,
+            project.Id,
+            changedTasks.Select(task => task.Id)).ConfigureAwait(false);
     }
 
     public async Task<ProjectDto> RestoreAsync(Guid id, CancellationToken cancellationToken = default)
@@ -471,8 +555,9 @@ internal sealed class ProjectService(
 
         // Restore only tasks archived by this project operation. Tasks archived
         // manually before the project entered Archives remain archived.
-        foreach (var task in project.Tasks.Where(t =>
-                     t.IsArchived && archiveOperationId.HasValue && t.ArchiveOperationId == archiveOperationId))
+        var changedTasks = project.Tasks.Where(t =>
+            t.IsArchived && archiveOperationId.HasValue && t.ArchiveOperationId == archiveOperationId).ToList();
+        foreach (var task in changedTasks)
         {
             task.IsArchived    = false;
             task.ArchivedAtUtc = null;
@@ -481,6 +566,10 @@ internal sealed class ProjectService(
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateProjectAsync(
+            userId,
+            project.Id,
+            changedTasks.Select(task => task.Id)).ConfigureAwait(false);
 
         return ToDto(project);
     }
@@ -505,6 +594,14 @@ internal sealed class ProjectService(
 
         context.Projects.Remove(project);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTag<Project>(project.Id),
+                ApplicationCacheKey.EntityTypeTag<Idea>()
+            ],
+            CancellationToken.None).ConfigureAwait(false);
     }
 
     private static ProjectDto ToDto(Project p) => new(
@@ -528,6 +625,48 @@ internal sealed class ProjectService(
         RowVersion: p.RowVersion,
         ArchivedReason: p.ArchivedReason);
 
+    private IQueryable<Project> ProjectQuery(string userId) =>
+        context.Projects
+            .AsNoTracking()
+            .Include(p => p.Goal)
+            .Where(p => p.UserId == userId);
+
+    private static IReadOnlyCollection<string> ProjectReadTags(Guid? projectId = null)
+    {
+        List<string> tags =
+        [
+            ApplicationCacheKey.EntityTypeTag<Project>(),
+            ApplicationCacheKey.EntityTypeTag<Goal>()
+        ];
+        if (projectId.HasValue)
+            tags.Add(ApplicationCacheKey.EntityTag<Project>(projectId.Value));
+        return tags;
+    }
+
+    private ValueTask InvalidateProjectAsync(
+        string userId,
+        Guid projectId,
+        IEnumerable<Guid>? taskIds = null)
+    {
+        List<string> tags =
+        [
+            ApplicationCacheKey.EntityTypeTag<Project>(),
+            ApplicationCacheKey.EntityTag<Project>(projectId),
+            ApplicationCacheKey.EntityTypeTag<LifecycleActivity>()
+        ];
+        if (taskIds is not null)
+        {
+            var ids = taskIds.ToList();
+            if (ids.Count > 0)
+            {
+                tags.Add(ApplicationCacheKey.EntityTypeTag<TaskItem>());
+                tags.AddRange(ids.Select(ApplicationCacheKey.EntityTag<TaskItem>));
+            }
+        }
+
+        return cache.InvalidateTagsAsync(userId, tags, CancellationToken.None);
+    }
+
     private static string NormalizeEmoji(string? emoji)
     {
         var normalized = string.IsNullOrWhiteSpace(emoji)
@@ -547,14 +686,25 @@ internal sealed class ProjectService(
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today  = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
-        var data = await BuildDeadlineSummaryQuery(userId, today)
-            .Where(p => p.DueDate.HasValue && p.DueDate.Value.Date == today)
-            .OrderByDescending(x => x.Priority)
-            .ThenBy(x => x.Name)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        return data.Select(x => MapToSummary(x, today)).ToList();
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"projects:due-today:{today:yyyy-MM-dd}",
+            [
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            async ct =>
+            {
+                var data = await BuildDeadlineSummaryQuery(userId, today)
+                    .Where(p => p.DueDate.HasValue && p.DueDate.Value.Date == today)
+                    .OrderByDescending(x => x.Priority)
+                    .ThenBy(x => x.Name)
+                    .ToListAsync(ct)
+                    .ConfigureAwait(false);
+                return (IReadOnlyList<ProjectSummaryDto>)data.Select(x => MapToSummary(x, today)).ToList();
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ProjectSummaryDto>> GetDueThisWeekProjectsAsync(CancellationToken cancellationToken = default)
@@ -565,16 +715,27 @@ internal sealed class ProjectService(
         var daysUntilSunday = ((int)DayOfWeek.Sunday - (int)today.DayOfWeek + 7) % 7;
         var weekEnd  = today.AddDays(daysUntilSunday);
 
-        var data = await BuildDeadlineSummaryQuery(userId, today)
-            .Where(p => p.DueDate.HasValue
-                        && p.DueDate.Value.Date >= tomorrow
-                        && p.DueDate.Value.Date <= weekEnd)
-            .OrderBy(x => x.DueDate)
-            .ThenByDescending(x => x.Priority)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        return data.Select(x => MapToSummary(x, today)).ToList();
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"projects:due-this-week:{today:yyyy-MM-dd}",
+            [
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            async ct =>
+            {
+                var data = await BuildDeadlineSummaryQuery(userId, today)
+                    .Where(p => p.DueDate.HasValue
+                                && p.DueDate.Value.Date >= tomorrow
+                                && p.DueDate.Value.Date <= weekEnd)
+                    .OrderBy(x => x.DueDate)
+                    .ThenByDescending(x => x.Priority)
+                    .ToListAsync(ct)
+                    .ConfigureAwait(false);
+                return (IReadOnlyList<ProjectSummaryDto>)data.Select(x => MapToSummary(x, today)).ToList();
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ProjectSummaryDto>> GetOverdueProjectsAsync(CancellationToken cancellationToken = default)
@@ -582,14 +743,25 @@ internal sealed class ProjectService(
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
         var today  = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
 
-        var data = await BuildDeadlineSummaryQuery(userId, today)
-            .Where(p => p.DueDate.HasValue && p.DueDate.Value.Date < today)
-            .OrderBy(x => x.DueDate)
-            .ThenByDescending(x => x.Priority)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        return data.Select(x => MapToSummary(x, today)).ToList();
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"projects:overdue:{today:yyyy-MM-dd}",
+            [
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.TimeZoneTag
+            ],
+            async ct =>
+            {
+                var data = await BuildDeadlineSummaryQuery(userId, today)
+                    .Where(p => p.DueDate.HasValue && p.DueDate.Value.Date < today)
+                    .OrderBy(x => x.DueDate)
+                    .ThenByDescending(x => x.Priority)
+                    .ToListAsync(ct)
+                    .ConfigureAwait(false);
+                return (IReadOnlyList<ProjectSummaryDto>)data.Select(x => MapToSummary(x, today)).ToList();
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

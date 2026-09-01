@@ -1,5 +1,7 @@
 using Brainy.Application.Common;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Tasks;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -13,12 +15,32 @@ namespace Brainy.Application.Services;
 /// Handles CRUD operations for <see cref="TaskItem"/> entities, scoped to the current user.
 /// Archived tasks are excluded from active queries; all reads use <c>AsNoTracking</c>.
 /// </summary>
-internal sealed class TaskService(IApplicationDbContext context, ICurrentUserService currentUser) : ITaskService
+internal sealed class TaskService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : ITaskService
 {
     public async Task<TaskItemDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"tasks:{id}",
+            [
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTag<TaskItem>(id),
+                ApplicationCacheKey.EntityTypeTag<TaskDependency>()
+            ],
+            ct => GetByIdCoreAsync(id, userId, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<TaskItemDto?> GetByIdCoreAsync(
+        Guid id,
+        string userId,
+        CancellationToken cancellationToken)
+    {
         var task = await context.Tasks
             .AsNoTracking()
             .Include(t => t.Subtasks)
@@ -58,6 +80,22 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"tasks:project:{projectId}",
+            [
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<TaskDependency>()
+            ],
+            ct => GetByProjectCoreAsync(projectId, userId, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<TaskItemDto>> GetByProjectCoreAsync(
+        Guid projectId,
+        string userId,
+        CancellationToken cancellationToken)
+    {
         var tasks = await context.Tasks
             .AsNoTracking()
             .Where(t => t.ProjectId == projectId && t.UserId == userId && !t.IsArchived && t.ParentTaskId == null)
@@ -103,22 +141,29 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.Tasks
-            .AsNoTracking()
-            .Where(t => t.UserId == userId && t.IsArchived)
-            .OrderByDescending(t => t.ArchivedAtUtc)
-            .Select(t => new ArchivedTaskDto(
-                t.Id,
-                t.Title,
-                t.Description,
-                t.ProjectId,
-                t.Project.Name,
-                t.ArchivedAtUtc ?? t.UpdatedAtUtc,
-                t.UpdatedAtUtc,
-                !t.Project.IsArchived && (t.ParentTaskId == null || !t.ParentTask!.IsArchived),
-                t.ArchivedReason))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "tasks:archived",
+            [
+                ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+                ApplicationCacheKey.EntityTypeTag<Project>()
+            ],
+            async ct => await context.Tasks
+                .AsNoTracking()
+                .Where(t => t.UserId == userId && t.IsArchived)
+                .OrderByDescending(t => t.ArchivedAtUtc)
+                .Select(t => new ArchivedTaskDto(
+                    t.Id,
+                    t.Title,
+                    t.Description,
+                    t.ProjectId,
+                    t.Project.Name,
+                    t.ArchivedAtUtc ?? t.UpdatedAtUtc,
+                    t.UpdatedAtUtc,
+                    !t.Project.IsArchived && (t.ParentTaskId == null || !t.ParentTask!.IsArchived),
+                    t.ArchivedReason))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static IReadOnlyList<TaskItemDto>? OrderTasks(IReadOnlyList<TaskItemDto>? tasks) =>
@@ -198,6 +243,10 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             await SyncParentProgressAsync(task.ParentTaskId.Value, userId, cancellationToken).ConfigureAwait(false);
         }
 
+        await InvalidateTasksAsync(
+            userId,
+            [task.Id],
+            task.Dependencies.Select(dependency => dependency.Id)).ConfigureAwait(false);
         return ToDto(task);
     }
 
@@ -212,18 +261,14 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var requiresSerializedDependencyState = dto.DependsOnTaskIds is not null ||
-                                                dto.Status is TaskItemStatus.InProgress or TaskItemStatus.Done;
-        if (!requiresSerializedDependencyState)
-        {
-            return await UpdateCoreAsync(dto, userId, cancellationToken).ConfigureAwait(false);
-        }
-
-        return await context.ExecuteSerializedTaskDependencyMutationAsync(
+        var result = await context.ExecuteSerializedTaskDependencyMutationAsync(
                 userId,
                 transactionCancellationToken => UpdateCoreAsync(dto, userId, transactionCancellationToken),
                 cancellationToken)
             .ConfigureAwait(false);
+
+        await InvalidateTasksAsync(userId, [dto.Id], dependenciesChanged: true).ConfigureAwait(false);
+        return result;
     }
 
     public async Task<int> BulkUpdateStatusAsync(
@@ -286,6 +331,10 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
                 cancellationToken)
             .ConfigureAwait(false);
 
+        await InvalidateTasksAsync(
+            userId,
+            normalizedTaskIds,
+            dependenciesChanged: true).ConfigureAwait(false);
         return normalizedTaskIds.Count;
     }
 
@@ -308,6 +357,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             task.Priority = newPriority;
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateTasksAsync(userId, normalizedTaskIds).ConfigureAwait(false);
         return normalizedTaskIds.Count;
     }
 
@@ -436,11 +486,13 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.ExecuteSerializedTaskDependencyMutationAsync(
+        var result = await context.ExecuteSerializedTaskDependencyMutationAsync(
                 userId,
                 transactionCancellationToken => CompleteCoreAsync(id, userId, transactionCancellationToken),
                 cancellationToken)
             .ConfigureAwait(false);
+        await InvalidateTasksAsync(userId, [id]).ConfigureAwait(false);
+        return result;
     }
 
     private async Task<TaskItemDto> CompleteCoreAsync(
@@ -503,11 +555,13 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.ExecuteSerializedTaskDependencyMutationAsync(
+        var result = await context.ExecuteSerializedTaskDependencyMutationAsync(
                 userId,
                 transactionCancellationToken => SetInProgressCoreAsync(id, userId, transactionCancellationToken),
                 cancellationToken)
             .ConfigureAwait(false);
+        await InvalidateTasksAsync(userId, [id]).ConfigureAwait(false);
+        return result;
     }
 
     private async Task<TaskItemDto> SetInProgressCoreAsync(
@@ -557,6 +611,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
             }
         }
 
+        await InvalidateTasksAsync(userId, [id]).ConfigureAwait(false);
         return ToDto(task);
     }
 
@@ -583,6 +638,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         task.IsCurrentTask = false;
 
         // Cascade archive to subtasks
+        var changedTaskIds = task.Subtasks.Where(s => !s.IsArchived).Select(s => s.Id).Append(task.Id).ToList();
         foreach (var sub in task.Subtasks.Where(s => !s.IsArchived))
         {
             sub.IsArchived    = true;
@@ -599,6 +655,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         {
             await SyncParentProgressAsync(task.ParentTaskId.Value, userId, cancellationToken).ConfigureAwait(false);
         }
+        await InvalidateTasksAsync(userId, changedTaskIds).ConfigureAwait(false);
     }
 
     public async Task<TaskItemDto> RestoreAsync(Guid id, CancellationToken cancellationToken = default)
@@ -623,10 +680,14 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         var operationId = task.ArchiveOperationId;
         RestoreTask(task);
 
+        var changedTaskIds = new List<Guid> { task.Id };
         if (operationId.HasValue)
         {
             foreach (var subtask in task.Subtasks.Where(s => s.IsArchived && s.ArchiveOperationId == operationId))
+            {
                 RestoreTask(subtask);
+                changedTaskIds.Add(subtask.Id);
+            }
         }
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -634,6 +695,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         if (task.ParentTaskId.HasValue)
             await SyncParentProgressAsync(task.ParentTaskId.Value, userId, cancellationToken).ConfigureAwait(false);
 
+        await InvalidateTasksAsync(userId, changedTaskIds).ConfigureAwait(false);
         return ToDto(task);
     }
 
@@ -660,29 +722,43 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         context.Tasks.RemoveRange(task.Subtasks);
         context.Tasks.Remove(task);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateTasksAsync(
+            userId,
+            taskIds,
+            dependencyLinks.Select(dependency => dependency.Id),
+            includeDeleteDependents: true).ConfigureAwait(false);
     }
 
     public async Task<TaskItemDto?> GetCurrentTaskAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        var task = await context.Tasks
-            .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.UserId == userId && t.IsCurrentTask, cancellationToken)
-            .ConfigureAwait(false);
-
-        return task is null ? null : ToDto(task);
+        return await cache.GetOrCreateAsync(
+            userId,
+            "tasks:current",
+            [ApplicationCacheKey.EntityTypeTag<TaskItem>()],
+            async ct =>
+            {
+                var task = await context.Tasks
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(t => t.UserId == userId && t.IsCurrentTask, ct)
+                    .ConfigureAwait(false);
+                return task is null ? null : ToDto(task);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<TaskItemDto> SetCurrentTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await context.ExecuteSerializedTaskDependencyMutationAsync(
+        var result = await context.ExecuteSerializedTaskDependencyMutationAsync(
                 userId,
                 transactionCancellationToken => SetCurrentTaskCoreAsync(taskId, userId, transactionCancellationToken),
                 cancellationToken)
             .ConfigureAwait(false);
+        await InvalidateTasksAsync(userId, [taskId]).ConfigureAwait(false);
+        return result;
     }
 
     private async Task<TaskItemDto> SetCurrentTaskCoreAsync(
@@ -739,10 +815,12 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        await context.Tasks
+        var updated = await context.Tasks
             .Where(t => t.UserId == userId && t.IsCurrentTask)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsCurrentTask, false), cancellationToken)
             .ConfigureAwait(false);
+        if (updated > 0)
+            await InvalidateTasksAsync(userId).ConfigureAwait(false);
     }
 
     public async Task ReorderAsync(Guid projectId, TaskItemStatus status, IReadOnlyList<Guid> orderedTaskIds, CancellationToken ct = default)
@@ -765,6 +843,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         }
 
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
+        await InvalidateTasksAsync(userId, tasks.Select(task => task.Id)).ConfigureAwait(false);
     }
 
     public async Task<TaskItemDto?> CreateRecurringOccurrenceAsync(Guid taskId, CancellationToken ct = default)
@@ -785,6 +864,8 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
         var occurrence = await PrepareRecurringOccurrenceAsync(template, userId, ct).ConfigureAwait(false);
 
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
+        if (occurrence is not null)
+            await InvalidateTasksAsync(userId, [template.Id, occurrence.Id]).ConfigureAwait(false);
         return occurrence is null ? null : ToDto(occurrence);
     }
 
@@ -848,7 +929,7 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
     {
         var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
 
-        _ = await context.ExecuteSerializedTaskDependencyMutationAsync(
+        var dependencyId = await context.ExecuteSerializedTaskDependencyMutationAsync(
                 userId,
                 transactionCancellationToken => AddDependencyCoreAsync(
                     taskId,
@@ -857,9 +938,11 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
                     transactionCancellationToken),
                 ct)
             .ConfigureAwait(false);
+        if (dependencyId.HasValue)
+            await InvalidateTasksAsync(userId, [taskId], [dependencyId.Value]).ConfigureAwait(false);
     }
 
-    private async Task<bool> AddDependencyCoreAsync(
+    private async Task<Guid?> AddDependencyCoreAsync(
         Guid taskId,
         Guid dependsOnTaskId,
         string userId,
@@ -882,20 +965,21 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
                 d => d.TaskId == taskId && d.DependsOnTaskId == dependsOnTaskId,
                 cancellationToken)
             .ConfigureAwait(false);
-        if (alreadyExists) return false;
+        if (alreadyExists) return null;
 
         if (taskState.Status is TaskItemStatus.InProgress or TaskItemStatus.Done)
             await EnsurePrerequisitesCompletedAsync(dependencyIds, userId, cancellationToken).ConfigureAwait(false);
 
-        context.TaskDependencies.Add(new TaskDependency
+        var dependency = new TaskDependency
         {
             Id              = Guid.NewGuid(),
             TaskId          = taskId,
             DependsOnTaskId = dependsOnTaskId,
-        });
+        };
+        context.TaskDependencies.Add(dependency);
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        return true;
+        return dependency.Id;
     }
 
     public async Task RemoveDependencyAsync(Guid taskId, Guid dependsOnTaskId, CancellationToken ct = default)
@@ -911,6 +995,38 @@ internal sealed class TaskService(IApplicationDbContext context, ICurrentUserSer
 
         context.TaskDependencies.Remove(dep);
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
+        await InvalidateTasksAsync(userId, [taskId], [dep.Id]).ConfigureAwait(false);
+    }
+
+    private ValueTask InvalidateTasksAsync(
+        string userId,
+        IEnumerable<Guid>? taskIds = null,
+        IEnumerable<Guid>? dependencyIds = null,
+        bool dependenciesChanged = false,
+        bool includeDeleteDependents = false)
+    {
+        List<string> tags =
+        [
+            ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+            ApplicationCacheKey.EntityTypeTag<LifecycleActivity>()
+        ];
+        if (taskIds is not null)
+            tags.AddRange(taskIds.Select(ApplicationCacheKey.EntityTag<TaskItem>));
+
+        if (dependenciesChanged || dependencyIds is not null)
+        {
+            tags.Add(ApplicationCacheKey.EntityTypeTag<TaskDependency>());
+            if (dependencyIds is not null)
+                tags.AddRange(dependencyIds.Select(ApplicationCacheKey.EntityTag<TaskDependency>));
+        }
+
+        if (includeDeleteDependents)
+        {
+            tags.Add(ApplicationCacheKey.EntityTypeTag<WeeklyTaskSelection>());
+            tags.Add(ApplicationCacheKey.EntityTypeTag<ActionItem>());
+        }
+
+        return cache.InvalidateTagsAsync(userId, tags, CancellationToken.None);
     }
 
     /// <summary>

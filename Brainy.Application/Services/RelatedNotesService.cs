@@ -1,8 +1,11 @@
 using System.Text.RegularExpressions;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.RelatedNotes;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Brainy.Application.Services;
@@ -14,7 +17,8 @@ namespace Brainy.Application.Services;
 /// </summary>
 internal sealed class RelatedNotesService(
     IApplicationDbContext context,
-    ICurrentUserService currentUser) : IRelatedNotesService
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : IRelatedNotesService
 {
     private const int MinScore = 0; // keep notes with any overlap
 
@@ -32,6 +36,20 @@ internal sealed class RelatedNotesService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"related-notes:{noteId}:top:{topN}",
+            [ApplicationCacheKey.EntityTypeTag<Note>()],
+            ct => GetRelatedCoreAsync(noteId, userId, topN, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<RelatedNoteDto>> GetRelatedCoreAsync(
+        Guid noteId,
+        string userId,
+        int topN,
+        CancellationToken cancellationToken)
+    {
         var pivot = await context.Notes
             .AsNoTracking()
             .Where(n => n.Id == noteId && n.UserId == userId)

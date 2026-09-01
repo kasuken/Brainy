@@ -1,7 +1,9 @@
 using Azure;
 using Azure.AI.OpenAI;
 using Brainy.Application.AI;
+using Brainy.Application.Caching;
 using Brainy.Application.Interfaces.AI;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Options;
 using Brainy.Application.Services;
@@ -26,6 +28,7 @@ public static class DependencyInjection
         // Single source of "now"/"today" for due-date logic; tests and hosts may
         // register their own TimeProvider before calling this to override it.
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IApplicationCache, MemoryApplicationCache>();
 
         services.AddScoped<INoteService, NoteService>();
         services.AddScoped<INoteImageService, NoteImageService>();

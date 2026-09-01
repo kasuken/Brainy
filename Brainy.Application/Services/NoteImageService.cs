@@ -1,5 +1,7 @@
 using Brainy.Application.Common;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Notes;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -16,7 +18,8 @@ namespace Brainy.Application.Services;
 internal sealed class NoteImageService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    TimeProvider timeProvider) : INoteImageService
+    TimeProvider timeProvider,
+    IApplicationCache cache) : INoteImageService
 {
     private const int UploadLockStripeCount = 64;
 
@@ -99,6 +102,7 @@ internal sealed class NoteImageService(
 
             context.NoteImages.Add(image);
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await InvalidateImagesAsync(userId, [image.Id]).ConfigureAwait(false);
 
             return new NoteImageDto(image.Id, image.NoteId, image.FileName, image.ContentType, image.SizeBytes);
         }
@@ -153,6 +157,8 @@ internal sealed class NoteImageService(
                 context.Entry(tracked).State = EntityState.Detached;
             }
 
+            if (updated > 0)
+                await InvalidateImagesAsync(userId, ids).ConfigureAwait(false);
             return updated;
         }
         finally
@@ -168,19 +174,23 @@ internal sealed class NoteImageService(
         await context.Notes.EnsureOwnedAsync(noteId, userId, "Note", cancellationToken)
             .ConfigureAwait(false);
 
-        return await context.NoteImages
-            .AsNoTracking()
-            .Where(image => image.UserId == userId && image.NoteId == noteId)
-            .OrderByDescending(image => image.CreatedAtUtc)
-            .ThenByDescending(image => image.Id)
-            .Select(image => new NoteImageDto(
-                image.Id,
-                image.NoteId,
-                image.FileName,
-                image.ContentType,
-                image.SizeBytes))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"note-images:note:{noteId}",
+            [ApplicationCacheKey.EntityTypeTag<NoteImage>()],
+            async ct => await context.NoteImages
+                .AsNoTracking()
+                .Where(image => image.UserId == userId && image.NoteId == noteId)
+                .OrderByDescending(image => image.CreatedAtUtc)
+                .ThenByDescending(image => image.Id)
+                .Select(image => new NoteImageDto(
+                    image.Id,
+                    image.NoteId,
+                    image.FileName,
+                    image.ContentType,
+                    image.SizeBytes))
+                .ToListAsync(ct).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<int> DeleteAsync(
@@ -208,6 +218,7 @@ internal sealed class NoteImageService(
 
             context.NoteImages.RemoveRange(ownedImages);
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await InvalidateImagesAsync(userId, ownedImages.Select(image => image.Id)).ConfigureAwait(false);
             return ownedImages.Count;
         }
         finally
@@ -240,6 +251,7 @@ internal sealed class NoteImageService(
 
             context.NoteImages.RemoveRange(pending);
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await InvalidateImagesAsync(userId, pending.Select(image => image.Id)).ConfigureAwait(false);
             return pending.Count;
         }
         finally
@@ -260,6 +272,14 @@ internal sealed class NoteImageService(
 
         context.NoteImages.RemoveRange(expired);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateImagesAsync(userId, expired.Select(image => image.Id)).ConfigureAwait(false);
+    }
+
+    private ValueTask InvalidateImagesAsync(string userId, IEnumerable<Guid> imageIds)
+    {
+        List<string> tags = [ApplicationCacheKey.EntityTypeTag<NoteImage>()];
+        tags.AddRange(imageIds.Select(ApplicationCacheKey.EntityTag<NoteImage>));
+        return cache.InvalidateTagsAsync(userId, tags, CancellationToken.None);
     }
 
     private async Task<List<NoteImage>> GetDeletablePendingAsync(

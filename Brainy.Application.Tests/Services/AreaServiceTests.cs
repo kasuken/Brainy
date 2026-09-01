@@ -87,6 +87,18 @@ public class AreaServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_AfterCollectionWasCached_RefreshesCollection()
+    {
+        var (sut, _) = BuildService(nameof(CreateAsync_AfterCollectionWasCached_RefreshesCollection));
+        _ = await sut.GetAllActiveAsync();
+
+        _ = await sut.CreateAsync(new CreateAreaDto("Health"));
+        var result = await sut.GetAllActiveAsync();
+
+        result.Should().ContainSingle(area => area.Name == "Health");
+    }
+
+    [Fact]
     public async Task CreateAsync_WithBlankName_ThrowsArgumentException()
     {
         var (sut, _) = BuildService(nameof(CreateAsync_WithBlankName_ThrowsArgumentException));

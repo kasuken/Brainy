@@ -1,5 +1,7 @@
 using Brainy.Application.Common;
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Week;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -16,7 +18,8 @@ namespace Brainy.Application.Services;
 internal sealed class WeekService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    IUserTimeZoneService userTimeZone) : IWeekService
+    IUserTimeZoneService userTimeZone,
+    IApplicationCache cache) : IWeekService
 {
     private static readonly ProjectStatus[] OverviewStatuses =
         [ProjectStatus.NotStarted, ProjectStatus.Active, ProjectStatus.Blocked, ProjectStatus.Parked];
@@ -28,6 +31,20 @@ internal sealed class WeekService(
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
         var week = WeekDateHelper.GetWeekContaining(today);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            ApplicationCacheKey.Create("week", "overview", week.WeekStartDate, today),
+            WeekReadTags(),
+            ct => GetCurrentWeekOverviewCoreAsync(userId, today, week, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<WeekOverviewDto> GetCurrentWeekOverviewCoreAsync(
+        string userId,
+        DateTime today,
+        WeekWindow week,
+        CancellationToken cancellationToken)
+    {
         var projects = (await BuildProjectOverviewQuery(userId, today, week.WeekStartDate, planningStatusesOnly: true)
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false))
@@ -192,6 +209,24 @@ internal sealed class WeekService(
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
         var week = WeekDateHelper.GetWeekContaining(today);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            ApplicationCacheKey.Create(
+                "week", "picker", week.WeekStartDate, today, projectId, searchTerm, maxResults),
+            WeekReadTags(),
+            ct => GetSelectableTasksCoreAsync(userId, today, week, projectId, searchTerm, maxResults, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<WeekTaskPickerDto> GetSelectableTasksCoreAsync(
+        string userId,
+        DateTime today,
+        WeekWindow week,
+        Guid projectId,
+        string? searchTerm,
+        int maxResults,
+        CancellationToken cancellationToken)
+    {
         var project = await context.Projects
             .AsNoTracking()
             .Where(candidate => candidate.Id == projectId && candidate.UserId == userId)
@@ -316,6 +351,9 @@ internal sealed class WeekService(
 
         context.WeeklyTaskSelections.RemoveRange(selections);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidateWeeklySelectionsAsync(
+            userId,
+            selections.Select(selection => selection.Id)).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -326,6 +364,20 @@ internal sealed class WeekService(
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
         var week = WeekDateHelper.GetWeekContaining(today);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            ApplicationCacheKey.Create("week", "carry-forward", week.WeekStartDate, today),
+            WeekReadTags(),
+            ct => GetCarryForwardCandidatesCachedCoreAsync(userId, today, week, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<WeekCarryForwardCandidateDto>> GetCarryForwardCandidatesCachedCoreAsync(
+        string userId,
+        DateTime today,
+        WeekWindow week,
+        CancellationToken cancellationToken)
+    {
         var selectedTaskIds = await context.WeeklyTaskSelections
             .AsNoTracking()
             .Where(selection => selection.UserId == userId && selection.WeekStartDate == week.WeekStartDate)
@@ -437,6 +489,13 @@ internal sealed class WeekService(
         {
             throw new ConcurrencyConflictException("project", ex);
         }
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTag<Project>(project.Id)
+            ],
+            CancellationToken.None).ConfigureAwait(false);
 
         return await BuildProjectOverviewQuery(userId, today, week.WeekStartDate)
             .Where(candidate => candidate.Id == dto.ProjectId)
@@ -498,6 +557,7 @@ internal sealed class WeekService(
         try
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await InvalidateWeeklySelectionsAsync(userId, [selection.Id]).ConfigureAwait(false);
         }
         catch (DbUpdateException)
         {
@@ -514,6 +574,24 @@ internal sealed class WeekService(
 
             context.Entry(selection).State = EntityState.Detached;
         }
+    }
+
+    private static IReadOnlyCollection<string> WeekReadTags() =>
+    [
+        ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+        ApplicationCacheKey.EntityTypeTag<Project>(),
+        ApplicationCacheKey.EntityTypeTag<WeeklyTaskSelection>(),
+        ApplicationCacheKey.EntityTypeTag<TaskDependency>(),
+        ApplicationCacheKey.TimeZoneTag
+    ];
+
+    private ValueTask InvalidateWeeklySelectionsAsync(
+        string userId,
+        IEnumerable<Guid> selectionIds)
+    {
+        List<string> tags = [ApplicationCacheKey.EntityTypeTag<WeeklyTaskSelection>()];
+        tags.AddRange(selectionIds.Select(ApplicationCacheKey.EntityTag<WeeklyTaskSelection>));
+        return cache.InvalidateTagsAsync(userId, tags, CancellationToken.None);
     }
 
     private IQueryable<TaskItem> ActiveTopLevelTasks(string userId) =>

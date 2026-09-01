@@ -1,7 +1,10 @@
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Para;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Brainy.Application.Services;
@@ -10,13 +13,30 @@ namespace Brainy.Application.Services;
 /// Fetches PARA category counts for the dashboard: one grouped query per entity type.
 /// All queries use <c>AsNoTracking</c> and are scoped to the current user.
 /// </summary>
-internal sealed class ParaSummaryService(IApplicationDbContext context, ICurrentUserService currentUser)
+internal sealed class ParaSummaryService(
+    IApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IApplicationCache cache)
     : IParaSummaryService
 {
     public async Task<ParaSummaryDto> GetSummaryAsync(CancellationToken cancellationToken = default)
     {
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        return await cache.GetOrCreateAsync(
+            userId,
+            "para:summary",
+            [
+                ApplicationCacheKey.EntityTypeTag<Project>(),
+                ApplicationCacheKey.EntityTypeTag<Area>(),
+                ApplicationCacheKey.EntityTypeTag<Resource>()
+            ],
+            ct => GetSummaryCoreAsync(userId, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<ParaSummaryDto> GetSummaryCoreAsync(string userId, CancellationToken cancellationToken)
+    {
         // One GROUP BY query per entity type (3 round-trips instead of 6 counts).
         // EF Core DbContext is not thread-safe; queries must run sequentially.
         var projectCounts = await context.Projects.AsNoTracking()

@@ -1,4 +1,6 @@
+using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Summaries;
+using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -14,7 +16,8 @@ namespace Brainy.Application.Services;
 /// </summary>
 internal sealed class SummaryService(
     IApplicationDbContext context,
-    ICurrentUserService currentUser) : ISummaryService
+    ICurrentUserService currentUser,
+    IApplicationCache cache) : ISummaryService
 {
     public async Task<IReadOnlyList<SummaryDto>> GetByNoteAsync(
         Guid noteId,
@@ -22,16 +25,24 @@ internal sealed class SummaryService(
     {
         var userId = await currentUser.GetRequiredUserIdAsync(ct).ConfigureAwait(false);
 
-        return await context.Summaries
-            .AsNoTracking()
-            .Where(s => s.NoteId == noteId && s.Note.UserId == userId)
-            .OrderByDescending(s => s.CreatedAtUtc)
-            .Select(s => new SummaryDto(
-                s.Id, s.NoteId, s.Content,
-                s.IsAiGenerated, s.Model, s.PromptVersion,
-                s.CreatedAtUtc))
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"summaries:note:{noteId}",
+            [
+                ApplicationCacheKey.EntityTypeTag<Summary>(),
+                ApplicationCacheKey.EntityTypeTag<Note>(),
+                ApplicationCacheKey.EntityTag<Note>(noteId)
+            ],
+            async token => await context.Summaries
+                .AsNoTracking()
+                .Where(s => s.NoteId == noteId && s.Note.UserId == userId)
+                .OrderByDescending(s => s.CreatedAtUtc)
+                .Select(s => new SummaryDto(
+                    s.Id, s.NoteId, s.Content,
+                    s.IsAiGenerated, s.Model, s.PromptVersion,
+                    s.CreatedAtUtc))
+                .ToListAsync(token).ConfigureAwait(false),
+            ct).ConfigureAwait(false);
     }
 
     public async Task<SummaryDto> CreateAsync(
@@ -64,8 +75,7 @@ internal sealed class SummaryService(
             PromptVersion = dto.PromptVersion
         };
 
-        context.Summaries.Add(summary);
-        context.LifecycleActivities.Add(new LifecycleActivity
+        var activity = new LifecycleActivity
         {
             Id = Guid.NewGuid(),
             UserId = userId,
@@ -75,8 +85,19 @@ internal sealed class SummaryService(
             Title = note.Title,
             Context = summary.IsAiGenerated ? "AI summary" : "Summary added",
             Link = $"/notes/{dto.NoteId}",
-        });
+        };
+        context.Summaries.Add(summary);
+        context.LifecycleActivities.Add(activity);
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Summary>(),
+                ApplicationCacheKey.EntityTag<Summary>(summary.Id),
+                ApplicationCacheKey.EntityTypeTag<LifecycleActivity>(),
+                ApplicationCacheKey.EntityTag<LifecycleActivity>(activity.Id)
+            ],
+            CancellationToken.None).ConfigureAwait(false);
 
         return new SummaryDto(
             summary.Id,
@@ -99,5 +120,12 @@ internal sealed class SummaryService(
 
         context.Summaries.Remove(summary);
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
+        await cache.InvalidateTagsAsync(
+            userId,
+            [
+                ApplicationCacheKey.EntityTypeTag<Summary>(),
+                ApplicationCacheKey.EntityTag<Summary>(summary.Id)
+            ],
+            CancellationToken.None).ConfigureAwait(false);
     }
 }
