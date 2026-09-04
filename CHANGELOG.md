@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.13.3] - 2026-09-04
+
+### Improved
+
+- **Idea editing workflow** — idea creation and editing now use dedicated pages instead of a dialog, providing a clearer workspace for managing ideas.
+
+---
+
 ## [5.13.2] - 2026-09-01
 
 ### Added
