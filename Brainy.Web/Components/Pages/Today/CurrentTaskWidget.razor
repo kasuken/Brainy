@@ -27,9 +27,12 @@
             <div style="border: 1px solid var(--line); border-left: 4px solid var(--clay); border-radius: 8px; background: var(--paper-raised); padding: 1.1rem 1.25rem; box-shadow: var(--shadow-sm);">
 
                 <div style="display:flex; align-items:flex-start; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.6rem;">
-                    <h2 style="font-family:var(--font-display); font-style:italic; font-size:1.3rem; font-weight:600; color:var(--ink); margin:0; flex:1; min-width:0; line-height:1.25;">
+                    <button type="button"
+                            class="td-focus-card-title td-focus-card-title--interactive"
+                            aria-label="Open task details for @Task.Title"
+                            @onclick="OpenTaskDetailsAsync">
                         @Task.Title
-                    </h2>
+                    </button>
                     <MudChip T="string" Size="Size.Small" Color="@PriorityColor(Task.Priority)" Variant="Variant.Outlined">
                         @Task.Priority.ToString()
                     </MudChip>
@@ -70,7 +73,7 @@
                     {
                         <MudButton Variant="Variant.Text" Size="Size.Small"
                                    StartIcon="@Icons.Material.Outlined.PlaylistAdd"
-                                   OnClick="@(() => OpenEditForFirstStepAsync())">
+                                   OnClick="@OpenTaskDetailsAsync">
                             Add a first step
                         </MudButton>
                     }
@@ -198,6 +201,11 @@
     }
 
     .td-focus-card-title {
+        display: block;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
         font-family: var(--font-display);
         font-style: italic;
         font-size: 1.3rem;
@@ -206,6 +214,18 @@
         margin: 0 0 0.5rem;
         line-height: 1.25;
         word-break: break-word;
+        text-align: left;
+    }
+
+    .td-focus-card-title--interactive {
+        cursor: pointer;
+    }
+
+    .td-focus-card-title--interactive:hover,
+    .td-focus-card-title--interactive:focus-visible {
+        color: var(--clay);
+        text-decoration: underline;
+        text-underline-offset: 0.18em;
     }
 
     .td-focus-card-meta {
@@ -419,7 +439,7 @@
         }
     }
 
-    private async Task OpenEditForFirstStepAsync()
+    private async Task OpenTaskDetailsAsync()
     {
         if (Task is null) return;
 
