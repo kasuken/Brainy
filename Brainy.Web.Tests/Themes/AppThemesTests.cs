@@ -11,6 +11,7 @@ public class AppThemesTests
     [InlineData(AppTheme.Minimal)]
     [InlineData(AppTheme.Dracula)]
     [InlineData(AppTheme.MidnightBlush)]
+    [InlineData(AppTheme.OneDarkPro)]
     public void GetTheme_ReturnsNonNullThemeForEveryAppTheme(AppTheme theme)
     {
         var result = AppThemes.GetTheme(theme);
@@ -66,5 +67,22 @@ public class AppThemesTests
 
         // #db2777 (Midnight Blush rose) as rgba.
         theme.PaletteDark.Primary.ToString().Should().Be("rgba(219,39,119,1)");
+    }
+
+    [Fact]
+    public void GetTheme_ForOneDarkPro_UsesOneDarkProDarkPalette()
+    {
+        var theme = AppThemes.GetTheme(AppTheme.OneDarkPro);
+
+        theme.PaletteDark.Primary.ToString().Should().Be(AppThemes.OneDarkProTheme.PaletteDark.Primary.ToString());
+    }
+
+    [Fact]
+    public void OneDarkProTheme_UsesOneDarkProPrimaryAccentColor()
+    {
+        var theme = AppThemes.OneDarkProTheme;
+
+        // #61afef (One Dark Pro Malibu blue) as rgba.
+        theme.PaletteDark.Primary.ToString().Should().Be("rgba(97,175,239,1)");
     }
 }

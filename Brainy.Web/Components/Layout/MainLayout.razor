@@ -65,6 +65,12 @@
                             <span>Midnight Blush</span>
                         </div>
                     </MudMenuItem>
+                    <MudMenuItem OnClick="() => SetThemeAsync(AppTheme.OneDarkPro)">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Code" Size="Size.Small" />
+                            <span>One Dark Pro</span>
+                        </div>
+                    </MudMenuItem>
                 </MudMenu>
                 <a class="brainy-user brainy-user-link" href="/Account/Manage" aria-label="Manage account and export data">
                     <span class="brainy-user__avatar">@GetInitials(context.User.Identity?.Name)</span>
@@ -210,7 +216,7 @@
     private void UpdateTheme()
     {
         _currentTheme = AppThemes.GetTheme(ThemeService.Theme);
-        _isDarkMode = ThemeService.Theme is AppTheme.Dracula or AppTheme.MidnightBlush;
+        _isDarkMode = ThemeService.Theme is AppTheme.Dracula or AppTheme.MidnightBlush or AppTheme.OneDarkPro;
     }
 
     private async Task SetThemeAsync(AppTheme theme)

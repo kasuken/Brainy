@@ -214,6 +214,61 @@
     color: var(--ink);
 }
 
+/* ============================================================================
+   "One Dark Pro" theme — based on the iconic Atom One Dark theme for Visual
+   Studio Code by Binaryify (https://github.com/Binaryify/OneDark-Pro).
+   Dark slate-gray editor background (#282c34), contrasting sidebar (#21252b),
+   crisp light foreground (#abb2bf), and the signature Malibu blue (#61afef)
+   accent. Paired with MudThemeProvider's IsDarkMode and Theme.PaletteDark
+   (see AppThemes.cs).
+   ========================================================================== */
+:root[data-theme="onedarkpro"] {
+    --paper: #282c34;
+    --paper-raised: #2c313c;
+    --paper-sunk: #21252b;
+    --ink: #abb2bf;
+    --ink-soft: #7f848e;
+    --ink-faint: rgba(127, 132, 142, 0.75);
+    --line: #353b45;
+    --line-strong: rgba(171, 178, 191, 0.18);
+
+    /* Accent: One Dark Malibu blue. Purple/cyan/green/yellow/coral are also
+       available via the MudBlazor palette (Secondary/Tertiary/Success/Warning/Error). */
+    --clay: #61afef;
+    --clay-deep: #4fa1e2;
+    --clay-soft: rgba(97, 175, 239, 0.14);
+    --clay-ring: rgba(97, 175, 239, 0.38);
+
+    --espresso: #1e2227;
+    --espresso-2: #21252b;
+    --gold: #e5c07b;
+    --sage: #98c379;
+
+    --font-display: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, 'Apple Color Emoji', Arial, sans-serif;
+    --font-body: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, 'Apple Color Emoji', Arial, sans-serif;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.40), 0 12px 32px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.55);
+    --grain: none;
+
+    /* App bar is dark in One Dark Pro, so text stays the One Dark foreground */
+    --appbar-text: #abb2bf;
+    --appbar-text-soft: rgba(171, 178, 191, 0.75);
+    --appbar-text-faint: rgba(171, 178, 191, 0.45);
+    --appbar-line: rgba(171, 178, 191, 0.14);
+    --appbar-chip-bg: rgba(171, 178, 191, 0.06);
+    --appbar-chip-bg-hover: rgba(171, 178, 191, 0.11);
+    --appbar-overlay-bg: #21252b;
+    --appbar-overlay-line: rgba(171, 178, 191, 0.08);
+}
+
+/* One Dark Pro: nav-link hover needs a light overlay since the drawer is dark */
+:root[data-theme="onedarkpro"] .brainy-drawer .mud-navmenu .mud-nav-link:hover:not(.active) {
+    background: rgba(171, 178, 191, 0.06);
+    color: var(--ink);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Auth experience: split-screen shell
    ───────────────────────────────────────────────────────────────────────── */
@@ -850,6 +905,12 @@ body {
     color: var(--clay);
 }
 
+:root[data-theme="onedarkpro"] .brainy-user__avatar {
+    background: var(--clay-soft);
+    border-color: var(--clay-ring);
+    color: var(--clay);
+}
+
 .brainy-user__email {
     font-size: 0.88rem;
     color: var(--appbar-text-soft);
@@ -1337,6 +1398,11 @@ body {
 /* Midnight Blush: soft lavender-gray foreground for code text on the dark panel */
 :root[data-theme="midnightblush"] .markdown-body pre code {
     color: #d4d7e3;
+}
+
+/* One Dark Pro: classic Atom/VS Code foreground for code text on the dark panel */
+:root[data-theme="onedarkpro"] .markdown-body pre code {
+    color: #abb2bf;
 }
 
 .markdown-body a {

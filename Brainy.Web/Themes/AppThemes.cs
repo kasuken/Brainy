@@ -215,6 +215,66 @@ public static class AppThemes
         }
     };
 
+    /// <summary>
+    /// One Dark Pro theme: the iconic Atom One Dark color scheme for Visual
+    /// Studio Code by Binaryify (https://github.com/Binaryify/OneDark-Pro).
+    /// Rendered via MudTheme.PaletteDark together with MudThemeProvider.IsDarkMode.
+    /// </summary>
+    public static MudTheme OneDarkProTheme => new MudTheme
+    {
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#61afef",
+            PrimaryContrastText = "#1e2227",
+            Secondary = "#c678dd",
+            SecondaryContrastText = "#1e2227",
+            Tertiary = "#56b6c2",
+            TertiaryContrastText = "#1e2227",
+            Success = "#98c379",
+            SuccessContrastText = "#1e2227",
+            Info = "#61afef",
+            InfoContrastText = "#1e2227",
+            Warning = "#e5c07b",
+            WarningContrastText = "#1e2227",
+            Error = "#e06c75",
+            ErrorContrastText = "#1e2227",
+            Background = "#282c34",
+            BackgroundGray = "#21252b",
+            Surface = "#2c313c",
+            AppbarBackground = "#21252b",
+            AppbarText = "#abb2bf",
+            DrawerBackground = "#21252b",
+            DrawerText = "#abb2bf",
+            DrawerIcon = "#7f848e",
+            TextPrimary = "#abb2bf",
+            TextSecondary = "#7f848e",
+            TextDisabled = "#4b5263",
+            ActionDefault = "#7f848e",
+            Divider = "#353b45",
+            LinesDefault = "#353b45",
+            LinesInputs = "#3e4452",
+            TableLines = "#353b45",
+            HoverOpacity = 0.06,
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography { FontFamily = MinimalFontStack },
+            H1 = new H1Typography { FontFamily = MinimalFontStack, FontWeight = "700" },
+            H2 = new H2Typography { FontFamily = MinimalFontStack, FontWeight = "700" },
+            H3 = new H3Typography { FontFamily = MinimalFontStack, FontWeight = "600" },
+            H4 = new H4Typography { FontFamily = MinimalFontStack, FontWeight = "600" },
+            H5 = new H5Typography { FontFamily = MinimalFontStack, FontWeight = "600" },
+            H6 = new H6Typography { FontFamily = MinimalFontStack, FontWeight = "600" },
+            Subtitle1 = new Subtitle1Typography { FontFamily = MinimalFontStack },
+            Subtitle2 = new Subtitle2Typography { FontFamily = MinimalFontStack },
+            Button = new ButtonTypography { FontFamily = MinimalFontStack, FontWeight = "600", TextTransform = "none" },
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DefaultBorderRadius = "8px",
+        }
+    };
+
     // Notion's actual UI stack: system fonts, no webfont.
     private static readonly string[] MinimalFontStack =
     {
@@ -230,6 +290,7 @@ public static class AppThemes
         AppTheme.Minimal => MinimalTheme,
         AppTheme.Dracula => DraculaTheme,
         AppTheme.MidnightBlush => MidnightBlushTheme,
+        AppTheme.OneDarkPro => OneDarkProTheme,
         _ => BrainyTheme,
     };
 }

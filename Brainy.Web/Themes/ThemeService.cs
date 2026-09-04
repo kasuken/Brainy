@@ -18,6 +18,9 @@ public enum AppTheme
 
     /// <summary>A dark theme based on the Midnight Blush color scheme (deep navy with rose/purple accents).</summary>
     MidnightBlush,
+
+    /// <summary>A dark theme based on the One Dark Pro color scheme (Atom One Dark for VS Code by Binaryify).</summary>
+    OneDarkPro,
 }
 
 /// <summary>
