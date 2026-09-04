@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.14.0] - 2026-09-04
+
+### Added
+
+- **One Dark Pro theme** — added a built-in One Dark Pro option to the theme selector, with a complete MudBlazor palette and matching application styling for a cohesive dark workspace.
+
+---
+
 ## [5.13.3] - 2026-09-04
 
 ### Improved
