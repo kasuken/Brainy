@@ -195,6 +195,17 @@
         margin: 0 0 0.5rem;
         line-height: 1.2;
     }
+
+    .ip-row-title-link {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .ip-row-title-link:hover {
+        color: var(--clay, #c0561d);
+        text-decoration: underline;
+        text-underline-offset: 0.2em;
+    }
     
     .ip-row-desc {
         color: var(--mud-palette-text-secondary);
@@ -307,7 +318,7 @@
                        Class="mb-6"
                        Style="font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; border-radius: 8px;"
                        FullWidth="true"
-                       OnClick="OpenCreateDialog">
+                       Href="/ideas/new">
                 New Idea
             </MudButton>
 
@@ -395,7 +406,7 @@
                     {
                         <MudButton Variant="Variant.Filled" Color="Color.Primary"
                                    StartIcon="@Icons.Material.Filled.Add"
-                                   OnClick="OpenCreateDialog">
+                                   Href="/ideas/new">
                             Capture your first idea
                         </MudButton>
                     }
@@ -419,7 +430,9 @@
                             {
                                 <tr class="ip-row">
                                     <td>
-                                        <div class="ip-row-title">@idea.Title</div>
+                                        <div class="ip-row-title">
+                                            <a href="@($"/ideas/{idea.Id}")" class="ip-row-title-link">@idea.Title</a>
+                                        </div>
                                         @if (!string.IsNullOrWhiteSpace(idea.Description))
                                         {
                                             <p class="ip-row-desc">
@@ -455,9 +468,9 @@
                                     <td>
                                         <div class="ip-actions" style="justify-content:flex-end;">
                                             <!-- Edit -->
-                                            <button class="ip-btn-action" title="Edit" @onclick="() => OpenEditDialog(idea)">
+                                            <a href="@($"/ideas/{idea.Id}")" class="ip-btn-action" title="Open details" aria-label="@($"Open details for {idea.Title}")">
                                                 <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
-                                            </button>
+                                            </a>
 
                                             <!-- Commit to Project -->
                                             @if (!idea.IsArchived && idea.Status != IdeaStatus.Committed)
@@ -644,28 +657,6 @@
             q = q.Where(i => i.Status == _statusFilter.Value);
 
         _filtered = q.ToList();
-    }
-
-    private async Task OpenCreateDialog()
-    {
-        var parameters = new DialogParameters<IdeaEditorDialog>();
-        parameters.Add(x => x.IdeaId, null);
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
-        var dialog = await DialogService.ShowAsync<IdeaEditorDialog>("New Idea", parameters, options);
-        var result = await dialog.Result;
-        if (result is not null && !result.Canceled)
-            await LoadAsync();
-    }
-
-    private async Task OpenEditDialog(IdeaDto idea)
-    {
-        var parameters = new DialogParameters<IdeaEditorDialog>();
-        parameters.Add(x => x.IdeaId, idea.Id);
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
-        var dialog = await DialogService.ShowAsync<IdeaEditorDialog>("Edit Idea", parameters, options);
-        var result = await dialog.Result;
-        if (result is not null && !result.Canceled)
-            await LoadAsync();
     }
 
     private async Task ConfirmArchive(IdeaDto idea)

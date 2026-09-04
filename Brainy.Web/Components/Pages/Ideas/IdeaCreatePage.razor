@@ -1,0 +1,109 @@
+@page "/ideas/new"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.DTOs.Ideas
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IIdeaService IdeaService
+@inject IAreaService AreaService
+@inject NavigationManager Nav
+
+<PageTitle>New Idea — Brainy</PageTitle>
+
+<div class="icp-page">
+    <div class="icp-header">
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack"
+                   Href="/ideas">
+            Ideas
+        </MudButton>
+        <h1>Capture an idea</h1>
+        <p>Give the spark enough context to make it useful when you revisit it.</p>
+    </div>
+
+    <MudPaper Class="icp-form" Elevation="0">
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <MudTextField @bind-Value="_title" Label="Title" Required="true"
+                          RequiredError="Title is required" Variant="Variant.Outlined" />
+
+            <MudTextField @bind-Value="_description" Label="Description"
+                          Lines="5" Variant="Variant.Outlined"
+                          HelperText="What is the opportunity, observation, or direction?" />
+
+            <div class="icp-field-row">
+                <MudSelect @bind-Value="_areaId" Label="Area" Variant="Variant.Outlined"
+                           Clearable="true">
+                    @foreach (var area in _areas)
+                    {
+                        <MudSelectItem Value="@((Guid?)area.Id)">@area.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudSelect @bind-Value="_priority" Label="Priority" Variant="Variant.Outlined">
+                    @foreach (IdeaPriority priority in Enum.GetValues<IdeaPriority>())
+                    {
+                        <MudSelectItem Value="@priority">@priority</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+        </MudForm>
+
+        <div class="icp-actions">
+            <MudButton Variant="Variant.Text" Href="/ideas">Cancel</MudButton>
+            <MudButton OnClick="CreateAsync" Color="Color.Primary" Variant="Variant.Filled"
+                       Disabled="!_valid || _saving">
+                @if (_saving)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Create idea
+            </MudButton>
+        </div>
+    </MudPaper>
+</div>
+
+<style>
+    .icp-page { max-width: 800px; margin: 0 auto; padding: 1.5rem 0 3rem; }
+    .icp-header { margin-bottom: 2rem; }
+    .icp-header h1 { margin: .75rem 0 .35rem; font-family: var(--font-display); font-size: clamp(2rem, 5vw, 3rem); font-weight: 500; }
+    .icp-header p { color: var(--mud-palette-text-secondary); margin: 0; }
+    .icp-form { display: flex; flex-direction: column; gap: 1.25rem; padding: 1.5rem; border: 1px solid var(--mud-palette-lines-default); border-radius: 14px; }
+    .icp-field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .icp-actions { display: flex; justify-content: flex-end; gap: .75rem; }
+    @@media (max-width: 600px) { .icp-field-row { grid-template-columns: 1fr; } }
+</style>
+
+@code {
+    private MudForm _form = null!;
+    private bool _valid;
+    private bool _saving;
+    private string _title = string.Empty;
+    private string? _description;
+    private Guid? _areaId;
+    private IdeaPriority _priority = IdeaPriority.Medium;
+    private IReadOnlyList<AreaDto> _areas = [];
+
+    protected override async Task OnInitializedAsync() =>
+        _areas = await AreaService.GetAllActiveAsync();
+
+    private async Task CreateAsync()
+    {
+        await _form.Validate();
+        if (!_valid)
+            return;
+
+        _saving = true;
+        try
+        {
+            var idea = await IdeaService.CreateAsync(
+                new CreateIdeaDto(_title, _description, _areaId, _priority));
+
+            Nav.NavigateTo($"/ideas/{idea.Id}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}
