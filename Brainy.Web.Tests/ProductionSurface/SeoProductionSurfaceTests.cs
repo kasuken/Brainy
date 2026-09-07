@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Encodings.Web;
 using System.Xml.Linq;
 using AwesomeAssertions;
 using Xunit;
@@ -28,7 +29,7 @@ public sealed class SeoProductionSurfaceTests(BrainyWebApplicationFactory factor
         var content = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        content.Should().Contain($"<title>{title}</title>");
+        content.Should().Contain($"<title>{HtmlEncoder.Default.Encode(title)}</title>");
         content.Should().Contain(descriptionFragment);
         content.Should().Contain($"<link rel=\"canonical\" href=\"https://localhost{path}\" />");
         content.Should().Contain("<meta property=\"og:title\"");
