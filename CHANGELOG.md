@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.15.0] - 2026-09-07
+
+### Added
+
+- **Search engine optimization infrastructure** — public pages now publish consistent titles, descriptions, canonical URLs, Open Graph and social-card metadata, plus structured data for Brainy, its plans, and release notes.
+- **Crawler discovery endpoints** — added `robots.txt` and XML sitemap endpoints so search engines can reliably discover Brainy's public pages.
+
+### Improved
+
+- **Production domain configuration** — release deployment, production verification, and operational documentation now use `https://www.brainy-me.com` as Brainy's public origin.
+- **SEO regression coverage** — added production-surface tests for metadata, structured data, and discovery responses.
+
+---
+
 ## [5.14.0] - 2026-09-04
 
 ### Added
