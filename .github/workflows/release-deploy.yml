@@ -76,7 +76,7 @@ jobs:
     needs: build
     environment:
       name: production
-      url: https://brainy-prod-002.azurewebsites.net
+      url: https://www.brainy-me.com
 
     steps:
       - name: Download artifact

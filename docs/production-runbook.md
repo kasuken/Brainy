@@ -2,6 +2,10 @@
 
 ## Release gate
 
+The production site is served at `https://www.brainy-me.com`. The release workflow
+writes the public origin and related SEO settings to App Service application settings
+using the double-underscore environment-variable form consumed by .NET configuration.
+
 Before publishing a GitHub release:
 
 1. Merge through protected `main` with the `build-and-test` check passing.

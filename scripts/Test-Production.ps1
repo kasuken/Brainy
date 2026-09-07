@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string] $BaseUrl = 'https://brainy-prod-002.azurewebsites.net',
+    [string] $BaseUrl = 'https://www.brainy-me.com',
     [string] $ResourceGroup = 'Brainy.Prod',
     [string] $WebAppName = 'brainy-prod-002',
     [string] $SqlServerName = 'brainy-prod-001-server'
