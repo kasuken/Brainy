@@ -15,6 +15,26 @@ public sealed class BrainyWebApplicationFactory : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Database:ApplyMigrationsOnStartup"] = "false",
+                ["Seo:SiteOrigin"] = "https://localhost",
+                ["ConnectionStrings:DefaultConnection"] =
+                    "Server=127.0.0.1,1;Database=BrainyTests;User Id=test;Password=test;TrustServerCertificate=true;Connect Timeout=1"
+            });
+        });
+    }
+}
+
+public sealed class DevelopmentBrainyWebApplicationFactory : WebApplicationFactory<Program>
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Development");
+        builder.UseSetting("https_port", "443");
+        builder.ConfigureAppConfiguration((_, configuration) =>
+        {
+            configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:ApplyMigrationsOnStartup"] = "false",
+                ["Seo:SiteOrigin"] = "http://localhost:5255",
                 ["ConnectionStrings:DefaultConnection"] =
                     "Server=127.0.0.1,1;Database=BrainyTests;User Id=test;Password=test;TrustServerCertificate=true;Connect Timeout=1"
             });

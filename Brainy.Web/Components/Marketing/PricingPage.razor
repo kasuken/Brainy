@@ -1,10 +1,12 @@
 @page "/pricing"
 @layout MarketingLayout
+@inject NavigationManager Navigation
 
 <PageTitle>Pricing — Brainy</PageTitle>
-<HeadContent>
-    <meta name="description" content="Simple pricing for a practical second brain. Start free, upgrade when your knowledge starts working for you." />
-</HeadContent>
+<SeoHeadContent Path="/pricing"
+                Title="Pricing — Brainy"
+                Description="Simple pricing for a practical second brain. Start free, upgrade when your knowledge starts working for you."
+                JsonLd="@JsonLd" />
 
 <section class="mkt-hero">
     <div class="mkt-wrap">
@@ -18,6 +20,35 @@
         </p>
     </div>
 </section>
+
+@code {
+    private string JsonLd => System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "Product",
+        ["name"] = "Brainy",
+        ["description"] = "A practical second brain for capture, organization, and focused work.",
+        ["offers"] = new object[]
+        {
+            new Dictionary<string, object?>
+            {
+                ["@type"] = "Offer",
+                ["name"] = "Starter",
+                ["price"] = "0",
+                ["priceCurrency"] = "USD",
+                ["url"] = Navigation.BaseUri
+            },
+            new Dictionary<string, object?>
+            {
+                ["@type"] = "Offer",
+                ["name"] = "Pro",
+                ["price"] = "2",
+                ["priceCurrency"] = "USD",
+                ["url"] = Navigation.BaseUri
+            }
+        }
+    });
+}
 
 <section class="mkt-section">
     <div class="mkt-wrap">

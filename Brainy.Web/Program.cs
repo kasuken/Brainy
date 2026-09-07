@@ -4,6 +4,7 @@ using Brainy.Data;
 using Brainy.Data.Identity;
 using Brainy.Web.Components;
 using Brainy.Web.Components.Account;
+using Brainy.Web.Configuration;
 using Brainy.Web.Endpoints;
 using Brainy.Web.Health;
 using Brainy.Web.Identity;
@@ -15,6 +16,22 @@ using MudBlazor.Services;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddOptions<SeoOptions>()
+    .Bind(builder.Configuration.GetSection("Seo"))
+    .ValidateDataAnnotations()
+    .Validate(options =>
+    {
+        if (!Uri.TryCreate(options.SiteOrigin, UriKind.Absolute, out var origin))
+            return false;
+
+        return !builder.Environment.IsProduction() ||
+               string.Equals(origin.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+    }, "Seo:SiteOrigin must be an absolute HTTPS URL in production.")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton(serviceProvider =>
+    serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<SeoOptions>>().Value);
 
 
 // Add services to the container.
@@ -177,6 +194,7 @@ app.UseRateLimiter();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+app.MapSeoEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

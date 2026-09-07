@@ -57,6 +57,10 @@
         };
     </script>
     <HeadOutlet @rendermode="@PageRenderMode" />
+    @if (IsPrivatePage)
+    {
+        <meta name="robots" content="noindex, nofollow" />
+    }
 </head>
 
 <body>
@@ -96,4 +100,6 @@
         HttpContext.GetEndpoint()?.Metadata
             .GetMetadata<Microsoft.AspNetCore.Components.Endpoints.ComponentTypeMetadata>()?
             .Type.Namespace?.StartsWith("Brainy.Web.Components.Marketing", StringComparison.Ordinal) == true;
+
+    private bool IsPrivatePage => !IsMarketingPage;
 }

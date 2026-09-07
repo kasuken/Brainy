@@ -1,0 +1,49 @@
+@using System.Text.Encodings.Web
+@using System.Text.Json
+@using Brainy.Web.Configuration
+@inject SeoOptions SeoOptions
+
+<HeadContent>
+    <link rel="canonical" href="@CanonicalUrl" />
+    <meta name="description" content="@Description" />
+    <meta property="og:title" content="@Title" />
+    <meta property="og:description" content="@Description" />
+    <meta property="og:url" content="@CanonicalUrl" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="@SeoOptions.SiteName" />
+    <meta property="og:image" content="@SocialPreviewImageUrl" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="@Title" />
+    <meta name="twitter:description" content="@Description" />
+    <meta name="twitter:image" content="@SocialPreviewImageUrl" />
+    @if (!string.IsNullOrWhiteSpace(JsonLd))
+    {
+        @((MarkupString)$"<script type=\"application/ld+json\">{JsonLd}</script>")
+    }
+</HeadContent>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Description { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Path { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? JsonLd { get; set; }
+
+    private string CanonicalUrl => BuildAbsoluteUrl(Path);
+
+    private string SocialPreviewImageUrl => BuildAbsoluteUrl(SeoOptions.SocialPreviewImagePath);
+
+    private string BuildAbsoluteUrl(string path)
+    {
+        var origin = SeoOptions.SiteOrigin.TrimEnd('/');
+        return Uri.TryCreate(path, UriKind.Absolute, out var absolute)
+            ? absolute.ToString()
+            : $"{origin}/{path.TrimStart('/')}";
+    }
+}

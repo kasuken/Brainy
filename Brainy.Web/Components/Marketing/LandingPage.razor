@@ -3,9 +3,10 @@
 @inject NavigationManager Navigation
 
 <PageTitle>Brainy — A practical second brain for professionals</PageTitle>
-<HeadContent>
-    <meta name="description" content="Brainy turns scattered information into organized, reusable knowledge. Built for focus — including ADHD and AuDHD brains. Capture fast, organize with PARA, distill what matters, and turn what you know into real output." />
-</HeadContent>
+<SeoHeadContent Path="/"
+                Title="Brainy — A practical second brain for professionals"
+                Description="Brainy turns scattered information into organized, reusable knowledge. Built for focus — including ADHD and AuDHD brains. Capture fast, organize with PARA, distill what matters, and turn what you know into real output."
+                JsonLd="@JsonLd" />
 
 <section class="mkt-hero">
     <div class="mkt-wrap mkt-hero__grid">
@@ -256,6 +257,34 @@
 </section>
 
 @code {
+    private string JsonLd => System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+    {
+        ["@context"] = "https://schema.org",
+        ["@graph"] = new object[]
+        {
+            new Dictionary<string, object?>
+            {
+                ["@type"] = "Organization",
+                ["name"] = "Brainy",
+                ["url"] = Navigation.BaseUri.TrimEnd('/')
+            },
+            new Dictionary<string, object?>
+            {
+                ["@type"] = "WebSite",
+                ["name"] = "Brainy",
+                ["url"] = Navigation.BaseUri
+            },
+            new Dictionary<string, object?>
+            {
+                ["@type"] = "SoftwareApplication",
+                ["name"] = "Brainy",
+                ["applicationCategory"] = "ProductivityApplication",
+                ["operatingSystem"] = "Web",
+                ["description"] = "A practical second brain for capture, organization, and focused work."
+            }
+        }
+    });
+
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
 
