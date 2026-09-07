@@ -39,7 +39,10 @@
     private string BuildAbsoluteUrl(string path)
     {
         var origin = SeoOptions.SiteOrigin.TrimEnd('/');
+        // On Linux a rooted path like "/pricing" parses as an absolute file:// URI,
+        // so only pass through genuine http(s) URLs.
         return Uri.TryCreate(path, UriKind.Absolute, out var absolute)
+            && (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps)
             ? absolute.ToString()
             : $"{origin}/{path.TrimStart('/')}";
     }
