@@ -101,7 +101,7 @@ jobs:
       - name: Smoke test
         run: |
           for i in $(seq 1 10); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" https://brainy-prod-002.azurewebsites.net/health/ready) && \
+            status=$(curl -s -o /dev/null -w "%{http_code}" https://www.brainy-me.com/health/ready) && \
             [ "$status" = "200" ] && echo "Healthy" && exit 0
             echo "Attempt $i: status $status — retrying in 15s"
             sleep 15
@@ -110,9 +110,9 @@ jobs:
 
       - name: Security smoke tests
         run: |
-          redirect=$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" http://brainy-prod-002.azurewebsites.net/Account/Login)
+          redirect=$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" http://www.brainy-me.com/Account/Login)
           case "$redirect" in
             "301 https://"*|"308 https://"*) ;;
             *) echo "HTTP login did not redirect to HTTPS: $redirect"; exit 1 ;;
           esac
-          test "$(curl -s -o /dev/null -w "%{http_code}" https://brainy-prod-002.azurewebsites.net/Account/Login)" = "200"
+          test "$(curl -s -o /dev/null -w "%{http_code}" https://www.brainy-me.com/Account/Login)" = "200"
