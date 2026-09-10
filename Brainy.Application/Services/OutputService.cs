@@ -1,3 +1,4 @@
+using Brainy.Application.Analytics;
 using Brainy.Application.Common;
 using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Outputs;
@@ -19,7 +20,8 @@ namespace Brainy.Application.Services;
 internal sealed class OutputService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    IApplicationCache cache) : IOutputService
+    IApplicationCache cache,
+    IAnalyticsService analytics) : IOutputService
 {
     // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -473,6 +475,9 @@ internal sealed class OutputService(
         output.SourceNotes.Add(note);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await InvalidateOutputAsync(userId, output.Id).ConfigureAwait(false);
+
+        await analytics.TrackAsync(userId, AnalyticsEvents.CaptureReusedAsOutput, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task RemoveSourceNoteAsync(Guid outputId, Guid noteId, CancellationToken cancellationToken = default)

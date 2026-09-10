@@ -1,0 +1,108 @@
+@page "/ai-transparency"
+@layout MarketingLayout
+
+<HeadContent>
+    <SeoHeadContent Path="/ai-transparency"
+                    Title="AI & Your Data — Brainy"
+                    Description="Exactly what leaves Brainy when an AI feature runs: which provider, what content, and why AI output must be reviewed." />
+</HeadContent>
+
+<section class="mkt-hero">
+    <div class="mkt-wrap">
+        <span class="mkt-eyebrow mkt-rise">Trust</span>
+        <h1 class="mkt-title mkt-rise mkt-d1" style="max-width: 16em; font-size: clamp(2.2rem, 4.5vw, 3.4rem);">
+            AI &amp; your data
+        </h1>
+        <p class="mkt-lead mkt-rise mkt-d2" style="margin-top: 1.1rem;">
+            What leaves Brainy when you trigger an AI feature, in concrete terms &mdash; not marketing language.
+        </p>
+        <div class="mkt-draft-notice mkt-rise mkt-d3" role="note">
+            <span class="mkt-draft-notice__icon" aria-hidden="true">&#9888;&#65039;</span>
+            <p>
+                <strong>Draft &mdash; pending qualified legal review.</strong> This page describes Brainy's actual
+                AI implementation as of today. It is product documentation, not a finalized legal disclosure, and
+                is subject to review before paid acquisition begins.
+            </p>
+        </div>
+    </div>
+</section>
+
+<section class="mkt-section">
+    <div class="mkt-wrap">
+        <article class="mkt-changelog">
+
+            <h2>AI is off by default</h2>
+            <p>
+                A Brainy deployment ships with its AI provider set to <strong>None</strong>. In that mode, every
+                AI feature returns a plain "no AI provider is configured" message and <strong>nothing you write is
+                ever sent anywhere</strong>. AI only activates when an operator explicitly configures a provider
+                (OpenAI or Azure OpenAI) and only runs when you personally click an AI action &mdash; it never
+                runs in the background on your content.
+            </p>
+
+            <h2>Which providers can be configured</h2>
+            <ul>
+                <li><strong>OpenAI</strong> &mdash; the public OpenAI API (api.openai.com).</li>
+                <li><strong>Azure OpenAI Service</strong> &mdash; a private Azure OpenAI resource and deployment.</li>
+            </ul>
+            <p>
+                There is no other AI subprocessor. If a deployment is configured with a provider, every AI call
+                goes to that one provider using one model, set by the deployment's configuration.
+            </p>
+
+            <h2>What is sent, action by action</h2>
+            <p>Brainy currently offers five AI actions. Each one sends only the text relevant to that action &mdash; never your whole workspace:</p>
+            <ul>
+                <li><strong>Summarize a note</strong> &mdash; sends that note's content.</li>
+                <li><strong>Suggest PARA placement &amp; tags</strong> &mdash; sends that note's title and content.</li>
+                <li><strong>Extract action items</strong> &mdash; sends that note's content.</li>
+                <li><strong>Detect duplicate notes</strong> &mdash; sends the note you're checking (title and content) plus the titles and existing summaries of your other candidate notes.</li>
+                <li><strong>Generate an output draft</strong> (post, report, brief) &mdash; sends the output's title, type, and the full content of every source note you selected for that draft.</li>
+            </ul>
+            <p>
+                Each action is initiated by you, on demand, for a specific note, task, or output you are looking
+                at &mdash; you always choose the scope by choosing which item(s) to run it on.
+            </p>
+
+            <h2>What comes back, and how it's labeled</h2>
+            <p>
+                Every AI result is returned with the model that produced it and a prompt version identifier, and
+                Brainy keeps these attached to the generated content separately from your own edits. AI-generated
+                suggestions, summaries, and drafts are shown labeled as AI-generated in the interface, alongside
+                the sources that produced them, so you can see what came from you and what came from the model.
+            </p>
+
+            <h2>AI can be wrong &mdash; review before you rely on it</h2>
+            <p>
+                Language models can misread context, omit important details, or state something confidently that
+                is not true. Brainy does not treat AI output as fact: it is a draft. Review AI-generated summaries,
+                suggestions, and outputs against their sources before you act on them, share them, or let them
+                replace your own judgment.
+            </p>
+
+            <h2>Training</h2>
+            <p>
+                Brainy does not use your content to train its own models, and does not fine-tune any model on
+                your data. Whether a configured third-party provider (OpenAI or Azure OpenAI) itself retains or
+                trains on API request content is governed by that provider's own API terms, which apply
+                independently of this page &mdash; Azure OpenAI's data handling terms differ from the public
+                OpenAI API's, which is one reason the choice of provider is an explicit deployment setting rather
+                than fixed.
+            </p>
+
+            <h2>Limiting or avoiding AI</h2>
+            <p>
+                Every AI feature is optional and explicit &mdash; there is no AI action that runs without you
+                choosing to trigger it. If you would rather nothing you write is ever sent to an AI provider,
+                simply do not use the AI actions described above; the rest of Brainy (capture, PARA organization,
+                tasks, Today, search) works fully without them.
+            </p>
+
+            <p>
+                See also the <a href="/privacy">Privacy Policy</a> for how the rest of your data is stored, and
+                <a href="/Account/Manage">Account and data</a> to export or delete your data at any time.
+            </p>
+
+        </article>
+    </div>
+</section>

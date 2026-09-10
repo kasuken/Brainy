@@ -1,0 +1,54 @@
+@* ─────────────────────────────────────────────────────────────────────────────
+   TodayWeekTasksHubExplainer — clarifies that Today, Week and Tasks Hub are not
+   competing task lists but three views of the same underlying work (issue #294).
+───────────────────────────────────────────────────────────────────────────── *@
+<div class="ob-explainer" role="note" aria-label="How Today, Week and Tasks Hub work together">
+    <p class="ob-explainer__lead">
+        <strong>Today</strong>, <strong>Week</strong> and <strong>Tasks Hub</strong> are not three separate
+        to-do lists — they are three views onto the same tasks.
+    </p>
+    <ul class="ob-explainer__points">
+        <li><strong>Today</strong> is where you execute: your current focus and what's due right now.</li>
+        <li><strong>Week</strong> is where you plan ahead: commitments you deliberately pull into the coming days.</li>
+        <li><strong>Tasks Hub</strong> is where you organize everything by project, priority, and status.</li>
+    </ul>
+    <p class="ob-explainer__foot">
+        A task created anywhere shows up everywhere it belongs — there is nothing to keep in sync by hand.
+    </p>
+</div>
+
+<style>
+    .ob-explainer {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+    }
+
+    .ob-explainer__lead {
+        margin: 0;
+        font-size: 0.92rem;
+        line-height: 1.55;
+        color: var(--ink, var(--mud-palette-text-primary));
+    }
+
+    .ob-explainer__points {
+        margin: 0;
+        padding-left: 1.2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .ob-explainer__points li {
+        font-size: 0.87rem;
+        line-height: 1.5;
+        color: var(--ink-soft, var(--mud-palette-text-secondary));
+    }
+
+    .ob-explainer__foot {
+        margin: 0;
+        font-size: 0.8rem;
+        font-style: italic;
+        color: var(--ink-faint, var(--mud-palette-text-disabled));
+    }
+</style>

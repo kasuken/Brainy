@@ -1,5 +1,6 @@
 @using Brainy.Application.DTOs.Notes
 @using Brainy.Application.Interfaces.Services
+@using Brainy.Web.Components.Onboarding
 @using Brainy.Web.Components.Pages.Inbox
 @using Brainy.Web.Themes
 @inherits LayoutComponentBase
@@ -121,6 +122,7 @@
                             Size="Size.Medium"
                             OnClick="OpenQuickCaptureAsync" />
                 </div>
+                <OnboardingJourney />
             </Authorized>
         </AuthorizeView>
     </MudMainContent>

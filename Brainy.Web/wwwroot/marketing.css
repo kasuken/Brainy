@@ -927,6 +927,53 @@
     max-width: 40em;
 }
 
+/* ── Legal / trust pages ────────────────────────────────────────────────── */
+
+.mkt-draft-notice {
+    display: flex;
+    gap: 0.9rem;
+    align-items: flex-start;
+    max-width: 48rem;
+    margin: 1.75rem 0 0;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--mkt-line-strong);
+    border-left: 4px solid var(--mkt-clay);
+    border-radius: 12px;
+    background: var(--mkt-clay-soft);
+}
+
+.mkt-draft-notice__icon {
+    flex: none;
+    font-size: 1.1rem;
+    line-height: 1.4;
+}
+
+.mkt-draft-notice p {
+    margin: 0;
+    color: var(--mkt-ink);
+    font-size: 0.94rem;
+    line-height: 1.6;
+}
+
+.mkt-draft-notice strong {
+    color: var(--mkt-clay-deep);
+}
+
+.mkt-legal-links {
+    max-width: 46rem;
+    margin: 0.75rem 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.25rem;
+}
+
+.mkt-legal-links a {
+    color: var(--mkt-clay);
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.15em;
+    text-decoration-line: underline;
+}
+
 /* ── CTA band ───────────────────────────────────────────────────────────── */
 
 .mkt-cta {

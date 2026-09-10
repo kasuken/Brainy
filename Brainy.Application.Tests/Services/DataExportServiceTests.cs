@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Brainy.Application.Analytics;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -58,7 +59,7 @@ public class DataExportServiceTests
 
         export.SchemaVersion.Should().Be(IDataExportService.SchemaVersion);
         export.ContentType.Should().Be("application/json;charset=utf-8");
-        export.FileName.Should().Be("brainy-data-export-20260813-101112Z-v1.1.json");
+        export.FileName.Should().Be("brainy-data-export-20260813-101112Z-v1.2.json");
 
         var json = Encoding.UTF8.GetString(export.Content);
         json.Should().Contain("MINE");
@@ -89,6 +90,12 @@ public class DataExportServiceTests
         data.GetProperty("noteTagLinks").GetArrayLength().Should().Be(1);
         data.GetProperty("resourceTagLinks").GetArrayLength().Should().Be(1);
         data.GetProperty("outputSourceNoteLinks").GetArrayLength().Should().Be(1);
+
+        var productEvents = data.GetProperty("productEvents").EnumerateArray().ToList();
+        var productEvent = productEvents.Should().ContainSingle().Which;
+        productEvent.EnumerateObject().Select(property => property.Name).Should().Equal(
+            "id", "eventName", "occurredAtUtc");
+        productEvent.GetProperty("eventName").GetString().Should().Be(AnalyticsEvents.CaptureCreated);
     }
 
     [Fact]
@@ -108,7 +115,7 @@ public class DataExportServiceTests
             "security",
             "images",
             "data");
-        root.GetProperty("schemaVersion").GetString().Should().Be("1.1");
+        root.GetProperty("schemaVersion").GetString().Should().Be("1.2");
         var security = root.GetProperty("security");
         security.EnumerateObject().Select(property => property.Name).Should().Equal(
             "accountCredentialsIncluded",
@@ -145,7 +152,8 @@ public class DataExportServiceTests
             "archiveRetentionRules",
             "dashboardPreferences",
             "lifecycleActivities",
-            "weeklyTaskSelections");
+            "weeklyTaskSelections",
+            "productEvents");
 
         data.GetProperty("notes")[0].EnumerateObject().Select(property => property.Name).Should().Equal(
             "id",
@@ -286,6 +294,11 @@ public class DataExportServiceTests
                 Id = Guid.NewGuid(), UserId = userId, EntityId = note.Id,
                 ActivityType = PulseActivityType.NoteCaptured, OccurredAtUtc = FixedNow.UtcDateTime,
                 Title = $"{marker} lifecycle"
+            },
+            new ProductEvent
+            {
+                Id = Guid.NewGuid(), UserId = userId, EventName = AnalyticsEvents.CaptureCreated,
+                OccurredAtUtc = FixedNow.UtcDateTime, PropertiesJson = $"{{\"marker\":\"{marker}\"}}"
             });
 
         await db.SaveChangesAsync();

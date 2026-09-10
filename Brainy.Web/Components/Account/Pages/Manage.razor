@@ -2,9 +2,11 @@
 @rendermode InteractiveServer
 @attribute [Authorize]
 
+@using Brainy.Application.DTOs.Billing
 @using Brainy.Application.DTOs.DataImport
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Data.Identity
+@using Brainy.Domain.Enums
 @using Brainy.Web.Identity
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
@@ -14,6 +16,9 @@
 @inject IDataImportService DataImportService
 @inject IArchiveRetentionService ArchiveRetentionService
 @inject IUserTimeZoneService UserTimeZoneService
+@inject IAnalyticsService AnalyticsService
+@inject IUserDashboardPreferenceService DashboardPreferenceService
+@inject IEntitlementService EntitlementService
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
@@ -28,6 +33,109 @@
         <h1 id="account-manage-title">Account and data</h1>
         <p>Protect your sign-in, choose how Brainy interprets your calendar day, tune archive cleanup rules, and move your data safely.</p>
     </header>
+
+    <MudPaper Class="account-manage__card" Elevation="0">
+        <div class="account-manage__card-heading">
+            <MudIcon Icon="@Icons.Material.Outlined.WorkspacePremium" aria-hidden="true" />
+            <div>
+                <h2>Plan and usage</h2>
+                <p>Your current plan, what you're using against each limit, and what happens when you hit one.</p>
+            </div>
+        </div>
+
+        @if (_planUsageError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                @_planUsageError
+            </MudAlert>
+        }
+        else if (_planUsage is not null)
+        {
+            <div class="account-manage__meta-grid">
+                <div>
+                    <span class="account-manage__meta-label">Current plan</span>
+                    <strong>@_planUsage.PlanDisplayName — @_planUsage.PlanPriceDescription</strong>
+                </div>
+                <div>
+                    <span class="account-manage__meta-label">Active projects</span>
+                    <strong>
+                        @(_planUsage.MaxActiveProjects.HasValue
+                            ? $"{_planUsage.ActiveProjectCount} / {_planUsage.MaxActiveProjects} used"
+                            : $"{_planUsage.ActiveProjectCount} (unlimited)")
+                    </strong>
+                </div>
+                <div>
+                    <span class="account-manage__meta-label">AI features</span>
+                    <strong>@(_planUsage.AiAllowance.AiAvailableOnPlan ? "Included" : "Not included on this plan")</strong>
+                </div>
+                <div>
+                    <span class="account-manage__meta-label">AI allowance this period</span>
+                    <strong>
+                        @(!_planUsage.AiAllowance.AiAvailableOnPlan
+                            ? "—"
+                            : _planUsage.AiAllowance.Limit.HasValue
+                                ? $"{_planUsage.AiAllowance.Used} / {_planUsage.AiAllowance.Limit} requests"
+                                : $"{_planUsage.AiAllowance.Used} requests used (unlimited for now)")
+                    </strong>
+                </div>
+            </div>
+
+            @if (_planUsage.ProjectLimitReached)
+            {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="account-manage__notice">
+                    You've reached your @_planUsage.PlanDisplayName plan's limit of @_planUsage.MaxActiveProjects active project(s).
+                    Creating another project is blocked until you archive one or upgrade.
+                    @if (_planUsage.ReadOnlyProjectCount > 0)
+                    {
+                        <text> @_planUsage.ReadOnlyProjectCount of your oldest project(s) are currently read-only for this reason — you can still view and export them.</text>
+                    }
+                </MudAlert>
+            }
+            else if (_planUsage.ReadOnlyProjectCount > 0)
+            {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="account-manage__notice">
+                    @_planUsage.ReadOnlyProjectCount project(s) are read-only because they exceed your plan's active-project limit.
+                    Archive them or upgrade to edit them again.
+                </MudAlert>
+            }
+
+            @if (_planUsage.AiAllowance.AiAvailableOnPlan && _planUsage.AiAllowance.PeriodResetsAtUtc.HasValue)
+            {
+                <p class="account-manage__status">AI allowance resets @_planUsage.AiAllowance.PeriodResetsAtUtc.Value.ToString("MMM d, yyyy") (UTC).</p>
+            }
+
+            <p class="account-manage__status">
+                @(_planUsage.AiAllowance.BringYourOwnKeyAllowed
+                    ? "Bringing your own AI provider key is supported as a configuration option and bypasses hosted usage entirely — contact us to set it up."
+                    : "Bringing your own AI provider key is not available on this plan.")
+            </p>
+
+            @if (_planUsage.TrialEndsAtUtc.HasValue)
+            {
+                <p class="account-manage__status">Trial ends @_planUsage.TrialEndsAtUtc.Value.ToString("MMM d, yyyy") (UTC).</p>
+            }
+            @if (_planUsage.GracePeriodEndsAtUtc.HasValue)
+            {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="account-manage__notice">
+                    A recent payment did not go through. Your Pro access continues until @_planUsage.GracePeriodEndsAtUtc.Value.ToString("MMM d, yyyy") (UTC); after that your plan reverts to Starter and any projects over the Starter limit become read-only.
+                </MudAlert>
+            }
+            @if (_planUsage.PlanRenewsAtUtc.HasValue)
+            {
+                <p class="account-manage__status">Renews @_planUsage.PlanRenewsAtUtc.Value.ToString("MMM d, yyyy") (UTC).</p>
+            }
+
+            @if (_planUsage.Tier == PlanTier.Starter)
+            {
+                <div class="account-manage__actions">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/pricing">
+                        See Pro plan details
+                    </MudButton>
+                    <span class="account-manage__status">There's no live checkout yet — this links to the pricing page. Contact us to upgrade.</span>
+                </div>
+            }
+        }
+    </MudPaper>
 
     <section class="account-manage__cluster" aria-label="Preferences and retention">
         <MudPaper Class="account-manage__card" Elevation="0">
@@ -80,6 +188,69 @@
                     @(_savingTimeZone ? "Saving time zone…" : "Save time zone")
                 </MudButton>
                 <span class="account-manage__status" role="status" aria-live="polite">@_timeZoneStatus</span>
+            </div>
+        </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.Insights" aria-hidden="true" />
+                <div>
+                    <h2>Privacy and analytics</h2>
+                    <p>
+                        Brainy records privacy-safe usage signals (like "a note was captured" or "a search
+                        returned no results") to improve the product. It never records your note, task, or
+                        output content, search text, or AI prompts and responses. See the
+                        <MudLink Href="/data-dictionary" Target="_blank">full data dictionary</MudLink>
+                        for exactly what is tracked, why, and for how long.
+                    </p>
+                </div>
+            </div>
+
+            <div class="account-manage__settings-stack">
+                <MudSwitch T="bool"
+                           Value="_analyticsEnabled"
+                           ValueChanged="OnAnalyticsEnabledChangedAsync"
+                           Color="Color.Primary"
+                           Disabled="_savingAnalyticsConsent"
+                           Label="@(_analyticsEnabled ? "Analytics on" : "Analytics off")" />
+            </div>
+
+            <div class="account-manage__actions">
+                <span class="account-manage__status" role="status" aria-live="polite">@_analyticsConsentStatus</span>
+            </div>
+        </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.FilterAlt" aria-hidden="true" />
+                <div>
+                    <h2>Starter Mode</h2>
+                    <p>
+                        Trims the navigation to Today, Inbox, Projects and Search so a new account can find its
+                        footing. Advanced planning, analytics and AI surfaces stay one click away behind
+                        "Show full navigation" — nothing is removed, only decluttered. Turn it off any time for
+                        full access.
+                    </p>
+                </div>
+            </div>
+
+            <div class="account-manage__settings-stack">
+                <MudSwitch T="bool"
+                           Value="_starterModeEnabled"
+                           ValueChanged="OnStarterModeChangedAsync"
+                           Color="Color.Primary"
+                           Disabled="_savingStarterMode"
+                           Label="@(_starterModeEnabled ? "Starter Mode on" : "Starter Mode off")" />
+            </div>
+
+            <div class="account-manage__actions">
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Primary"
+                           Disabled="_restartingOnboarding"
+                           OnClick="RestartOnboardingAsync">
+                    @(_restartingOnboarding ? "Restarting…" : "Replay the guided tour")
+                </MudButton>
+                <span class="account-manage__status" role="status" aria-live="polite">@_starterModeStatus</span>
             </div>
         </MudPaper>
 
@@ -444,6 +615,15 @@
     private Dictionary<string, bool> _savingRetention = RetentionEntityTypes.ToDictionary(type => type, _ => false);
     private string? _retentionError;
     private string? _retentionStatus;
+    private bool _analyticsEnabled = true;
+    private bool _savingAnalyticsConsent;
+    private string? _analyticsConsentStatus;
+    private PlanUsageSummaryDto? _planUsage;
+    private string? _planUsageError;
+    private bool _starterModeEnabled = true;
+    private bool _savingStarterMode;
+    private string? _starterModeStatus;
+    private bool _restartingOnboarding;
     private bool _deletingAccount;
     private string _deletionPassword = string.Empty;
     private string _deletionConfirmation = string.Empty;
@@ -453,6 +633,94 @@
     {
         await LoadRetentionAsync();
         await LoadTimeZoneAsync();
+        _analyticsEnabled = await AnalyticsService.IsCurrentUserOptedInAsync();
+
+        var preferences = await DashboardPreferenceService.GetOrCreateAsync();
+        _starterModeEnabled = preferences.StarterModeEnabled;
+
+        try
+        {
+            _planUsage = await EntitlementService.GetUsageSummaryAsync();
+        }
+        catch
+        {
+            _planUsageError = "Brainy could not load your plan and usage details. Try reloading this page.";
+        }
+    }
+
+    private async Task OnStarterModeChangedAsync(bool value)
+    {
+        if (_savingStarterMode)
+            return;
+
+        _savingStarterMode = true;
+        _starterModeStatus = null;
+
+        try
+        {
+            await DashboardPreferenceService.SetStarterModeAsync(value);
+            _starterModeEnabled = value;
+            _starterModeStatus = value
+                ? "Starter Mode is on. Navigation is trimmed to Today, Inbox, Projects and Search."
+                : "Starter Mode is off. The full navigation is shown.";
+        }
+        catch
+        {
+            _starterModeStatus = "Could not save Starter Mode. Try again.";
+        }
+        finally
+        {
+            _savingStarterMode = false;
+        }
+    }
+
+    private async Task RestartOnboardingAsync()
+    {
+        if (_restartingOnboarding)
+            return;
+
+        _restartingOnboarding = true;
+        _starterModeStatus = null;
+
+        try
+        {
+            await DashboardPreferenceService.ResetOnboardingAsync();
+            _starterModeStatus = "The guided tour will show again next time you visit Today.";
+        }
+        catch
+        {
+            _starterModeStatus = "Could not restart the guided tour. Try again.";
+        }
+        finally
+        {
+            _restartingOnboarding = false;
+        }
+    }
+
+    private async Task OnAnalyticsEnabledChangedAsync(bool value)
+    {
+        if (_savingAnalyticsConsent)
+            return;
+
+        _savingAnalyticsConsent = true;
+        _analyticsConsentStatus = null;
+
+        try
+        {
+            await AnalyticsService.SetCurrentUserOptedInAsync(value);
+            _analyticsEnabled = value;
+            _analyticsConsentStatus = value
+                ? "Analytics tracking is on."
+                : "Analytics tracking is off. Brainy will stop recording new usage events for your account.";
+        }
+        catch
+        {
+            _analyticsConsentStatus = "Brainy could not save your analytics preference. Try again.";
+        }
+        finally
+        {
+            _savingAnalyticsConsent = false;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

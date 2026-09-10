@@ -77,6 +77,10 @@ internal static class DevelopmentDataSeeder
             WidgetOrder = "[\"daily-snapshot\",\"current-focus\",\"in-progress\",\"overdue\",\"goal-deadlines\",\"due-today\",\"high-priority-project-work\",\"due-this-week\",\"next-tasks\",\"planned-this-week\",\"priority-projects\"]",
             CollapsedWidgets = "[]",
             InboxWarningThreshold = 8,
+            // This seeded account already has a full realistic dataset, so treat it as
+            // already onboarded: skip the first-run journey and the trimmed Starter Mode nav.
+            StarterModeEnabled = false,
+            OnboardingCompleted = true,
             CreatedAtUtc = now.AddDays(-14),
             UpdatedAtUtc = now.AddDays(-2)
         });

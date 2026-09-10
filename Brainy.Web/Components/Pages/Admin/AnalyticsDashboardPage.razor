@@ -1,0 +1,168 @@
+@page "/admin/analytics"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout MainLayout
+
+@using System.Security.Claims
+@using Brainy.Application.DTOs.Analytics
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Web.Configuration
+@using Microsoft.AspNetCore.Components.Authorization
+
+@inject IAnalyticsService AnalyticsService
+@inject AnalyticsAccessOptions AccessOptions
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Nav
+
+<PageTitle>Analytics — Brainy</PageTitle>
+
+@if (_authorized)
+{
+    <div class="analytics-dashboard">
+        <header class="analytics-dashboard__header">
+            <h1>Internal product analytics</h1>
+            <p class="mud-text-secondary">
+                Aggregate, cross-user metrics answering activation, retrieval, retention, and AI-usage
+                questions. This view is intentionally not scoped to a single user &mdash; see
+                <code>AnalyticsService</code> query methods for the aggregation. Data comes from the
+                <a href="/data-dictionary">analytics data dictionary</a> event catalogue.
+            </p>
+        </header>
+
+        @if (_snapshot is not { } snapshot)
+        {
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            var activation = snapshot.Activation;
+            var search = snapshot.Search;
+            var weeklyReview = snapshot.WeeklyReview;
+            var ai = snapshot.Ai;
+            var retention = snapshot.Retention;
+
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                        <MudText Typo="Typo.h6">Activation funnel</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Of @activation.UsersWithAnyEvent tracked user(s):
+                        </MudText>
+                        <MudSimpleTable Dense="true">
+                            <tbody>
+                                <tr><td>First capture</td><td>@activation.UsersWithFirstCapture</td><td>@FormatRate(activation.FirstCaptureRate)</td></tr>
+                                <tr><td>First Inbox item processed</td><td>@activation.UsersWithFirstProcessedItem</td><td>@FormatRate(activation.FirstProcessedRate)</td></tr>
+                                <tr><td>First task created</td><td>@activation.UsersWithFirstTask</td><td>@FormatRate(activation.FirstTaskRate)</td></tr>
+                                <tr><td>First current-focus selection</td><td>@activation.UsersWithFirstFocusSelection</td><td>@FormatRate(activation.FirstFocusRate)</td></tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                        <MudText Typo="Typo.h6">Search retrieval quality</MudText>
+                        <MudSimpleTable Dense="true">
+                            <tbody>
+                                <tr><td>Searches submitted</td><td>@search.SearchesSubmitted</td></tr>
+                                <tr><td>Zero-result searches</td><td>@search.ZeroResultSearches (@FormatRate(search.ZeroResultRate))</td></tr>
+                                <tr><td>Results opened</td><td>@search.ResultsOpened (@FormatRate(search.ResultOpenRate) of searches)</td></tr>
+                                <tr><td>Follow-on actions after opening a result</td><td>@search.FollowOnActions (@FormatRate(search.FollowOnRate) of opens)</td></tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                        <MudText Typo="Typo.h6">Weekly review</MudText>
+                        <MudSimpleTable Dense="true">
+                            <tbody>
+                                <tr><td>Weekly review views</td><td>@weeklyReview.WeeklyReviewViews</td></tr>
+                                <tr><td>Resurfaced items actioned (carried forward)</td><td>@weeklyReview.ResurfacedItemActions</td></tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                        <MudText Typo="Typo.h6">AI usage</MudText>
+                        <MudSimpleTable Dense="true">
+                            <tbody>
+                                <tr><td>Requests submitted</td><td>@ai.RequestsSubmitted</td></tr>
+                                <tr><td>Requests failed</td><td>@ai.RequestsFailed (@FormatRate(ai.FailureRate))</td></tr>
+                                <tr><td>Suggestions reviewed</td><td>@ai.SuggestionsReviewed</td></tr>
+                                <tr><td>Suggestions edited before use</td><td>@ai.SuggestionsEdited (@FormatRate(ai.EditRate))</td></tr>
+                            </tbody>
+                        </MudSimpleTable>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+                            Plan-conversion and cost-per-paid-user metrics are not shown: Brainy has no
+                            billing/subscription system today, so those events are reserved but unused.
+                        </MudText>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                        <MudText Typo="Typo.h6">Retention (approximate)</MudText>
+                        <MudSimpleTable Dense="true">
+                            <tbody>
+                                <tr>
+                                    <td>D7 retention</td>
+                                    <td>@retention.Day7Retained / @retention.Day7CohortSize eligible users</td>
+                                    <td>@FormatRate(retention.Day7RetentionRate)</td>
+                                </tr>
+                                <tr>
+                                    <td>D30 retention</td>
+                                    <td>@retention.Day30Retained / @retention.Day30CohortSize eligible users</td>
+                                    <td>@FormatRate(retention.Day30RetentionRate)</td>
+                                </tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
+    </div>
+}
+
+@code {
+    private bool _authorized;
+    private DashboardSnapshot? _snapshot;
+
+    private sealed record DashboardSnapshot(
+        ActivationFunnelDto Activation,
+        SearchQualityDto Search,
+        WeeklyReviewSummaryDto WeeklyReview,
+        AiUsageSummaryDto Ai,
+        RetentionSummaryDto Retention);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var email = state.User.FindFirstValue(ClaimTypes.Email);
+
+        _authorized = !string.IsNullOrWhiteSpace(email) &&
+            AccessOptions.AdminEmails.Contains(email, StringComparer.OrdinalIgnoreCase);
+
+        if (!_authorized)
+        {
+            // Redirect rather than show a "forbidden" message: an unauthorized user should
+            // not learn this page even exists.
+            Nav.NavigateTo("/not-found");
+            return;
+        }
+
+        // Aggregate, cross-user reads by design: this dashboard answers product-wide
+        // activation/retention questions, not a per-user report. See AnalyticsService remarks.
+        _snapshot = new DashboardSnapshot(
+            await AnalyticsService.GetActivationFunnelAsync(),
+            await AnalyticsService.GetSearchQualityAsync(),
+            await AnalyticsService.GetWeeklyReviewSummaryAsync(),
+            await AnalyticsService.GetAiUsageSummaryAsync(),
+            await AnalyticsService.GetRetentionSummaryAsync());
+    }
+
+    private static string FormatRate(double rate) => rate.ToString("P0");
+}

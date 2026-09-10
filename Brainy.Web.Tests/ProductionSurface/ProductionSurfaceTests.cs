@@ -141,6 +141,81 @@ public sealed class ProductionSurfaceTests(BrainyWebApplicationFactory factory)
         content.Should().Contain("5.12.4");
     }
 
+    [Theory]
+    [InlineData("/privacy", "Privacy Policy")]
+    [InlineData("/terms", "Terms of Service")]
+    [InlineData("/acceptable-use", "Acceptable Use Policy")]
+    [InlineData("/ai-transparency", "AI &amp; your data")]
+    public async Task AnonymousTrustPagesRenderStaticallyWithDraftNotice(string path, string headingFragment)
+    {
+        using var client = factory.CreateClient(new()
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        using var response = await client.GetAsync(path);
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain(headingFragment);
+        content.Should().Contain("Draft");
+        content.Should().Contain("pending qualified legal review");
+    }
+
+    [Fact]
+    public async Task PrivacyPage_LinksToTheRealExportAndDeletionFlows()
+    {
+        using var client = factory.CreateClient(new()
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        using var response = await client.GetAsync("/privacy");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("href=\"/Account/Manage\"");
+        content.Should().Contain("href=\"/ai-transparency\"");
+    }
+
+    [Fact]
+    public async Task MarketingFooter_LinksToAllLegalAndTrustPages()
+    {
+        using var client = factory.CreateClient(new()
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        using var response = await client.GetAsync("/");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("href=\"/privacy\"");
+        content.Should().Contain("href=\"/terms\"");
+        content.Should().Contain("href=\"/acceptable-use\"");
+        content.Should().Contain("href=\"/ai-transparency\"");
+    }
+
+    [Fact]
+    public async Task RegisterPage_LinksToTermsAndPrivacyPolicy()
+    {
+        using var client = factory.CreateClient(new()
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        using var response = await client.GetAsync("/Account/Register");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("href=\"/terms\"");
+        content.Should().Contain("href=\"/privacy\"");
+    }
+
     [Fact]
     public async Task TodayPageRequiresAuthentication()
     {

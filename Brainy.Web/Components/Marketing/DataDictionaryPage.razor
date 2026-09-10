@@ -1,0 +1,98 @@
+@page "/data-dictionary"
+@layout MarketingLayout
+@using Brainy.Application.Analytics
+
+<HeadContent>
+    <SeoHeadContent Path="/data-dictionary"
+                    Title="Analytics Data Dictionary — Brainy"
+                    Description="Every internal product-analytics event Brainy records, its purpose, retention period, and whether it is optional." />
+</HeadContent>
+
+<section class="mkt-hero">
+    <div class="mkt-wrap">
+        <span class="mkt-eyebrow mkt-rise">Trust</span>
+        <h1 class="mkt-title mkt-rise mkt-d1" style="max-width: 20em; font-size: clamp(2.2rem, 4.5vw, 3.4rem);">
+            Analytics data dictionary
+        </h1>
+        <p class="mkt-lead mkt-rise mkt-d2" style="margin-top: 1.1rem;">
+            Every internal product-analytics event Brainy records, why, for how long, and whether you can opt out.
+        </p>
+    </div>
+</section>
+
+<section class="mkt-section">
+    <div class="mkt-wrap">
+        <article class="mkt-changelog">
+            <h2>What this page is</h2>
+            <p>
+                Brainy measures whether its core workflow helps people capture, organize, and retrieve
+                knowledge &mdash; not how long they stay on the page. This page lists every event the product
+                can record for that purpose. Content-level telemetry would conflict with Brainy's trust
+                proposition, so it is explicitly out of bounds:
+            </p>
+            <ul>
+                <li>Note, task, output, and other item <strong>content is never recorded</strong>.</li>
+                <li>Search query text is never recorded, only that a search happened and whether it matched.</li>
+                <li>AI prompts and AI-generated text are never recorded, only request/outcome counts.</li>
+                <li>Every event is tied to your account so it can be exported or deleted with your data, but it
+                    is never shared with an external analytics vendor.</li>
+            </ul>
+
+            <h2>Your control</h2>
+            <p>
+                Analytics tracking defaults to on, with this page linked from the toggle. You can turn it off at
+                any time from <a href="/Account/Manage">Account and data</a>; turning it off stops
+                all future event recording for your account immediately. Your recorded events are included in
+                your data export and deleted with your account, the same as everything else you own.
+            </p>
+
+            <h2>Events</h2>
+            <div class="mkt-table-wrap" style="overflow-x: auto;">
+                <table class="mkt-table">
+                    <thead>
+                        <tr>
+                            <th>Event name</th>
+                            <th>Purpose</th>
+                            <th>Retention</th>
+                            <th>Optional</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var descriptor in AnalyticsEvents.All)
+                        {
+                            <tr>
+                                <td><code>@descriptor.EventName</code></td>
+                                <td>@descriptor.Purpose</td>
+                                <td>@descriptor.RetentionPeriod</td>
+                                <td>@(descriptor.IsOptional ? "Yes" : "No")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </div>
+</section>
+
+<style>
+    .mkt-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+    }
+
+    .mkt-table th,
+    .mkt-table td {
+        text-align: left;
+        padding: 0.6rem 0.9rem;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        vertical-align: top;
+    }
+
+    .mkt-table th {
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+    }
+</style>

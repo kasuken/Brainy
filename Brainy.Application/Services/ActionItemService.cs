@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Brainy.Application.Analytics;
 using Brainy.Application.Caching;
 using Brainy.Application.Common;
 using Brainy.Application.DTOs.ActionItems;
@@ -18,7 +19,9 @@ internal sealed class ActionItemService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
     IAiAssistant aiAssistant,
-    IApplicationCache cache) : IActionItemService
+    IApplicationCache cache,
+    IAnalyticsService analytics,
+    IEntitlementService entitlements) : IActionItemService
 {
     private const int MaxTitleLength = 500;
     private const int MaxDescriptionLength = 2000;
@@ -109,6 +112,9 @@ internal sealed class ActionItemService(
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Action item '{dto.Id}' was not found.");
 
+        var wasAiGenerated = action.IsAiGenerated;
+        var wasEdited = action.Title != title || action.Description != description;
+
         if (dto.RowVersion is not null)
             context.Entry(action).Property(item => item.RowVersion).OriginalValue = dto.RowVersion;
 
@@ -126,6 +132,17 @@ internal sealed class ActionItemService(
         }
 
         await InvalidateActionItemsAsync(userId, [action.Id]).ConfigureAwait(false);
+
+        if (wasAiGenerated)
+        {
+            // Property payload records only a boolean — never the suggested or edited text.
+            await analytics.TrackAsync(
+                userId,
+                AnalyticsEvents.AiSuggestionReviewed,
+                new Dictionary<string, object?> { ["edited"] = wasEdited },
+                cancellationToken).ConfigureAwait(false);
+        }
+
         return await GetDtoAsync(action.Id, userId, cancellationToken).ConfigureAwait(false);
     }
 
@@ -157,10 +174,21 @@ internal sealed class ActionItemService(
         if (string.IsNullOrWhiteSpace(note.Content))
             throw new InvalidOperationException("Add note content before extracting actions.");
 
+        var entitlement = await entitlements.TryConsumeAiAllowanceAsync(cancellationToken).ConfigureAwait(false);
+        if (!entitlement.IsAllowed)
+            throw new PlanEntitlementDeniedException(entitlement.Reason!);
+
+        await analytics.TrackAsync(userId, AnalyticsEvents.AiRequestSubmitted, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
         var result = await aiAssistant.ExtractActionItemsAsync(note.Content, cancellationToken)
             .ConfigureAwait(false);
         if (!result.Success)
+        {
+            await analytics.TrackAsync(userId, AnalyticsEvents.AiRequestFailed, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
             throw new InvalidOperationException(result.ErrorMessage ?? "AI action extraction failed.");
+        }
 
         var extractedTitles = ParseExtractedTitles(result.Content);
         if (extractedTitles.Count == 0)
@@ -261,6 +289,10 @@ internal sealed class ActionItemService(
                 ApplicationCacheKey.EntityTypeTag<LifecycleActivity>()
             ],
             CancellationToken.None).ConfigureAwait(false);
+
+        await analytics.TrackAsync(userId, AnalyticsEvents.CaptureReusedAsTask, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
         return ToDto(action, project.Id, project.Name);
     }
 

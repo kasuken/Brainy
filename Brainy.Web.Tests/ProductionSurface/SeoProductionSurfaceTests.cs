@@ -14,7 +14,11 @@ public sealed class SeoProductionSurfaceTests(BrainyWebApplicationFactory factor
         { "/", "Brainy — A practical second brain for professionals", "Brainy turns scattered information into organized, reusable knowledge." },
         { "/features", "Features — Brainy", "Everything a second brain needs" },
         { "/pricing", "Pricing — Brainy", "Simple pricing for a practical second brain" },
-        { "/changelog", "Changelog — Brainy", "See what is new in Brainy" }
+        { "/changelog", "Changelog — Brainy", "See what is new in Brainy" },
+        { "/privacy", "Privacy Policy — Brainy", "What Brainy stores" },
+        { "/terms", "Terms of Service — Brainy", "The terms that govern using Brainy" },
+        { "/acceptable-use", "Acceptable Use Policy — Brainy", "What Brainy must not be used for" },
+        { "/ai-transparency", "AI & Your Data — Brainy", "Exactly what leaves Brainy when an AI feature runs" }
     };
 
     [Theory]
@@ -102,7 +106,11 @@ public sealed class SeoProductionSurfaceTests(BrainyWebApplicationFactory factor
             "https://localhost/",
             "https://localhost/features",
             "https://localhost/pricing",
-            "https://localhost/changelog");
+            "https://localhost/changelog",
+            "https://localhost/privacy",
+            "https://localhost/terms",
+            "https://localhost/acceptable-use",
+            "https://localhost/ai-transparency");
         content.Should().NotContain("/Account");
         content.Should().NotContain("/today");
     }

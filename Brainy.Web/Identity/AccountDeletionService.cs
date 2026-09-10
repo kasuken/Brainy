@@ -131,7 +131,13 @@ public sealed class AccountDeletionService(
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await context.LifecycleActivities.Where(activity => activity.UserId == userId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await context.ProductEvents.Where(productEvent => productEvent.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await context.WeeklyTaskSelections.Where(selection => selection.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await context.UserPlans.Where(plan => plan.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await context.ProcessedWebhookEvents.Where(webhookEvent => webhookEvent.TargetUserId == userId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
         await context.Outputs.Where(output => output.UserId == userId)

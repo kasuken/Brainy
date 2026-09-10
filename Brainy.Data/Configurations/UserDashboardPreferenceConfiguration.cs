@@ -25,5 +25,20 @@ public class UserDashboardPreferenceConfiguration : IEntityTypeConfiguration<Use
             .IsRequired()
             .HasMaxLength(100)
             .HasDefaultValue("UTC");
+
+        builder.Property(p => p.AnalyticsEnabled)
+            .HasDefaultValue(true);
+
+        builder.Property(p => p.StarterModeEnabled)
+            .HasDefaultValue(true);
+
+        builder.Property(p => p.OnboardingCompleted)
+            .HasDefaultValue(false);
+
+        builder.Property(p => p.OnboardingDismissed)
+            .HasDefaultValue(false);
+
+        builder.Property(p => p.OnboardingStep)
+            .HasDefaultValue(0);
     }
 }

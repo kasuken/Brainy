@@ -33,6 +33,11 @@ public sealed class ActionItemServiceTests
         services.AddBrainyApplication();
 
         var provider = services.BuildServiceProvider();
+
+        // AI extraction is a Pro-only capability (issue #296); these tests exercise the
+        // extraction workflow itself, not plan enforcement, so run as Pro.
+        provider.GetRequiredService<IEntitlementService>().SetPlanTierAsync(userId, PlanTier.Pro).GetAwaiter().GetResult();
+
         return (
             provider.GetRequiredService<IActionItemService>(),
             provider.GetRequiredService<BrainyDbContext>(),

@@ -2,6 +2,7 @@
    EmptyTodayExperience — shown when the user has no active tasks at all.
    Encourages processing the inbox or creating a project.
 ───────────────────────────────────────────────────────────────────────────── *@
+@using Brainy.Web.Components.Onboarding
 @inject NavigationManager Nav
 
 <div class="td-section" style="text-align:center; padding:3rem 1rem;">
@@ -38,6 +39,10 @@
             All clear
         </div>
 
+    </div>
+
+    <div style="max-width:460px; margin:2rem auto 0; text-align:left;">
+        <TodayWeekTasksHubExplainer />
     </div>
 
 </div>

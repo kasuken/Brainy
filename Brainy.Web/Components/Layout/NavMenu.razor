@@ -1,26 +1,71 @@
+@using Brainy.Application.Interfaces.Services
+@inject IUserDashboardPreferenceService PreferenceService
+
 <MudNavMenu>
     <MudText Typo="Typo.subtitle2" Class="px-4 py-2 mud-text-secondary">Main</MudText>
     <MudNavLink Href="/today" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.WbSunny">Today</MudNavLink>
     <MudNavLink Href="/inbox" Icon="@Icons.Material.Filled.Inbox">Inbox</MudNavLink>
-    <MudNavLink Href="/tasks-hub" Icon="@Icons.Material.Filled.TaskAlt">Tasks Hub</MudNavLink>
-    <MudNavLink Href="/tasks-calendar" Icon="@Icons.Material.Filled.CalendarMonth">Tasks Calendar</MudNavLink>
-    <MudNavLink Href="/notes" Icon="@Icons.Material.Filled.Notes">Notes</MudNavLink>
-
-    <MudDivider Class="my-2" />
-
-    <MudText Typo="Typo.subtitle2" Class="px-4 py-2 mud-text-secondary">PARA</MudText>
-    <MudNavLink Href="/para" Icon="@Icons.Material.Filled.Dashboard">Overview</MudNavLink>
     <MudNavLink Href="/projects" Icon="@Icons.Material.Filled.FolderSpecial">Projects</MudNavLink>
-    <MudNavLink Href="/areas" Icon="@Icons.Material.Filled.Category">Areas</MudNavLink>
-    <MudNavLink Href="/resources" Icon="@Icons.Material.Filled.LibraryBooks">Resources</MudNavLink>
-    <MudNavLink Href="/goals" Icon="@Icons.Material.Filled.TrackChanges">Goals</MudNavLink>
-    <MudNavLink Href="/ideas" Icon="@Icons.Material.Filled.EmojiObjects">Ideas</MudNavLink>
-    <MudNavLink Href="/archives" Icon="@Icons.Material.Filled.Archive">Archives</MudNavLink>
-
-    <MudDivider Class="my-2" />
-
-    <MudNavLink Href="/pulse" Icon="@Icons.Material.Filled.Insights">Pulse</MudNavLink>
-    <MudNavLink Href="/llm" Icon="@Icons.Material.Filled.Psychology">LLM</MudNavLink>
     <MudNavLink Href="/search" Icon="@Icons.Material.Filled.Search">Search</MudNavLink>
-    <MudNavLink Href="/outputs" Icon="@Icons.Material.Filled.Output">Outputs</MudNavLink>
+
+    @if (!_starterModeEnabled || _showFullNav)
+    {
+        <MudNavLink Href="/tasks-hub" Icon="@Icons.Material.Filled.TaskAlt">Tasks Hub</MudNavLink>
+        <MudNavLink Href="/tasks-calendar" Icon="@Icons.Material.Filled.CalendarMonth">Tasks Calendar</MudNavLink>
+        <MudNavLink Href="/notes" Icon="@Icons.Material.Filled.Notes">Notes</MudNavLink>
+
+        <MudDivider Class="my-2" />
+
+        <MudText Typo="Typo.subtitle2" Class="px-4 py-2 mud-text-secondary">PARA</MudText>
+        <MudNavLink Href="/para" Icon="@Icons.Material.Filled.Dashboard">Overview</MudNavLink>
+        <MudNavLink Href="/areas" Icon="@Icons.Material.Filled.Category">Areas</MudNavLink>
+        <MudNavLink Href="/resources" Icon="@Icons.Material.Filled.LibraryBooks">Resources</MudNavLink>
+        <MudNavLink Href="/goals" Icon="@Icons.Material.Filled.TrackChanges">Goals</MudNavLink>
+        <MudNavLink Href="/ideas" Icon="@Icons.Material.Filled.EmojiObjects">Ideas</MudNavLink>
+        <MudNavLink Href="/archives" Icon="@Icons.Material.Filled.Archive">Archives</MudNavLink>
+
+        <MudDivider Class="my-2" />
+
+        <MudNavLink Href="/pulse" Icon="@Icons.Material.Filled.Insights">Pulse</MudNavLink>
+        <MudNavLink Href="/llm" Icon="@Icons.Material.Filled.Psychology">LLM</MudNavLink>
+        <MudNavLink Href="/outputs" Icon="@Icons.Material.Filled.Output">Outputs</MudNavLink>
+    }
+
+    @if (_starterModeEnabled)
+    {
+        <MudDivider Class="my-2" />
+        <div class="px-4">
+            <MudButton Variant="Variant.Text"
+                       Size="Size.Small"
+                       FullWidth="true"
+                       StartIcon="@(_showFullNav ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                       aria-expanded="@_showFullNav.ToString().ToLowerInvariant()"
+                       aria-label="@(_showFullNav ? "Hide full navigation" : "Show full navigation")"
+                       OnClick="ToggleFullNav">
+                @(_showFullNav ? "Show less" : "Show full navigation")
+            </MudButton>
+        </div>
+    }
 </MudNavMenu>
+
+@code {
+    private bool _starterModeEnabled = true;
+    private bool _showFullNav;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var preferences = await PreferenceService.GetOrCreateAsync();
+            _starterModeEnabled = preferences.StarterModeEnabled;
+        }
+        catch
+        {
+            // Fall back to Starter Mode's default nav when preferences cannot be loaded
+            // (e.g. during prerendering); every route below remains reachable by direct link.
+            _starterModeEnabled = true;
+        }
+    }
+
+    private void ToggleFullNav() => _showFullNav = !_showFullNav;
+}

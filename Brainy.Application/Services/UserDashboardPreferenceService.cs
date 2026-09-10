@@ -84,8 +84,66 @@ internal sealed class UserDashboardPreferenceService(
         return ToDto(preference);
     }
 
+    public Task<UserDashboardPreferenceDto> SetStarterModeAsync(
+        bool enabled,
+        CancellationToken cancellationToken = default) =>
+        MutateAsync(p => p.StarterModeEnabled = enabled, cancellationToken);
+
+    public Task<UserDashboardPreferenceDto> SetOnboardingStepAsync(
+        int step,
+        CancellationToken cancellationToken = default) =>
+        MutateAsync(p => p.OnboardingStep = Math.Max(0, step), cancellationToken);
+
+    public Task<UserDashboardPreferenceDto> CompleteOnboardingAsync(CancellationToken cancellationToken = default) =>
+        MutateAsync(p => p.OnboardingCompleted = true, cancellationToken);
+
+    public Task<UserDashboardPreferenceDto> DismissOnboardingAsync(CancellationToken cancellationToken = default) =>
+        MutateAsync(p => p.OnboardingDismissed = true, cancellationToken);
+
+    public Task<UserDashboardPreferenceDto> ResetOnboardingAsync(CancellationToken cancellationToken = default) =>
+        MutateAsync(
+            p =>
+            {
+                p.OnboardingCompleted = false;
+                p.OnboardingDismissed = false;
+                p.OnboardingStep = 0;
+            },
+            cancellationToken);
+
+    private async Task<UserDashboardPreferenceDto> MutateAsync(
+        Action<UserDashboardPreference> mutate,
+        CancellationToken cancellationToken)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var preference = await context.DashboardPreferences
+            .FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (preference is null)
+        {
+            preference = new UserDashboardPreference { UserId = userId };
+            context.DashboardPreferences.Add(preference);
+        }
+
+        mutate(preference);
+
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await InvalidatePreferenceAsync(userId, preference.Id).ConfigureAwait(false);
+
+        return ToDto(preference);
+    }
+
     private static UserDashboardPreferenceDto ToDto(UserDashboardPreference p) =>
-        new(p.Id, p.WidgetOrder, p.CollapsedWidgets, p.InboxWarningThreshold);
+        new(
+            p.Id,
+            p.WidgetOrder,
+            p.CollapsedWidgets,
+            p.InboxWarningThreshold,
+            p.StarterModeEnabled,
+            p.OnboardingCompleted,
+            p.OnboardingDismissed,
+            p.OnboardingStep);
 
     private ValueTask InvalidatePreferenceAsync(string userId, Guid preferenceId) =>
         cache.InvalidateTagsAsync(

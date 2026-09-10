@@ -302,6 +302,12 @@ public sealed class AccountDeletionServiceTests
                     Id = Guid.NewGuid(), UserId = CurrentUserId, EntityId = sourceNote.Id,
                     Title = "Captured"
                 },
+                new ProductEvent
+                {
+                    Id = Guid.NewGuid(), UserId = CurrentUserId,
+                    EventName = Brainy.Application.Analytics.AnalyticsEvents.CaptureCreated,
+                    OccurredAtUtc = DateTime.UtcNow
+                },
                 new Area { Id = Guid.NewGuid(), UserId = OtherUserId, Name = "Other area" });
 
             await Context.SaveChangesAsync();
@@ -327,6 +333,7 @@ public sealed class AccountDeletionServiceTests
             (await Context.ArchiveRetentionRules.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.DashboardPreferences.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.LifecycleActivities.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
+            (await Context.ProductEvents.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.GoalMilestones.AnyAsync()).Should().BeFalse();
             (await Context.GoalActivities.AnyAsync()).Should().BeFalse();
             (await Context.TaskDependencies.AnyAsync()).Should().BeFalse();

@@ -3,7 +3,9 @@
 @attribute [Authorize]
 @namespace Brainy.Web.Components.Pages
 
+@using Brainy.Application.Analytics
 @using Brainy.Application.DTOs.Search
+@using Brainy.Application.Interfaces.Identity
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @using Brainy.Web.Components.Pages.Notes
@@ -12,6 +14,8 @@
 @inject ISearchService SearchService
 @inject NavigationManager Nav
 @inject IDialogService DialogService
+@inject IAnalyticsService Analytics
+@inject ICurrentUserService CurrentUser
 
 <PageTitle>Search – Brainy</PageTitle>
 
@@ -239,7 +243,7 @@
                             }
                             else
                             {
-                                <a class="search-card search-card--link" href="@BuildResultUrl(result)">
+                                <a class="search-card search-card--link" href="@BuildResultUrl(result)" @onclick="TrackResultOpenedAsync">
                                     <div class="search-card__header">
                                         <MudChip T="string" Size="Size.Small" Color="@ResultTypeColor(result)"
                                                  Variant="Variant.Outlined" Class="search-card__badge">
@@ -822,6 +826,8 @@
 
     private async Task OpenNote(Guid id)
     {
+        await TrackResultOpenedAsync();
+
         var parameters = new DialogParameters<NoteEditorDialog>
         {
             { x => x.NoteId, id }
@@ -835,6 +841,19 @@
             CloseButton      = false,
         };
         await DialogService.ShowAsync<NoteEditorDialog>("", parameters, options);
+    }
+
+    /// <summary>
+    /// Fires on every result click, including plain navigation links: the anchor's own
+    /// @onclick runs alongside its href navigation rather than blocking it.
+    /// </summary>
+    private async Task TrackResultOpenedAsync()
+    {
+        var userId = await CurrentUser.GetUserIdAsync();
+        if (userId is null)
+            return;
+
+        await Analytics.TrackAsync(userId, AnalyticsEvents.SearchResultOpened);
     }
 
     private void SetTypeFilter(string type)

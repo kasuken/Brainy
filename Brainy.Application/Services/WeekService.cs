@@ -1,3 +1,4 @@
+using Brainy.Application.Analytics;
 using Brainy.Application.Common;
 using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Week;
@@ -19,7 +20,8 @@ internal sealed class WeekService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
     IUserTimeZoneService userTimeZone,
-    IApplicationCache cache) : IWeekService
+    IApplicationCache cache,
+    IAnalyticsService analytics) : IWeekService
 {
     private static readonly ProjectStatus[] OverviewStatuses =
         [ProjectStatus.NotStarted, ProjectStatus.Active, ProjectStatus.Blocked, ProjectStatus.Parked];
@@ -31,12 +33,19 @@ internal sealed class WeekService(
         var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
         var week = WeekDateHelper.GetWeekContaining(today);
 
-        return await cache.GetOrCreateAsync(
+        var overview = await cache.GetOrCreateAsync(
             userId,
             ApplicationCacheKey.Create("week", "overview", week.WeekStartDate, today),
             WeekReadTags(),
             ct => GetCurrentWeekOverviewCoreAsync(userId, today, week, ct),
             cancellationToken).ConfigureAwait(false);
+
+        // Tracked on every view (not just cache misses): this approximates weekly-review
+        // engagement, since Brainy has no separate "mark review complete" action today.
+        await analytics.TrackAsync(userId, AnalyticsEvents.WeeklyReviewViewed, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        return overview;
     }
 
     private async Task<WeekOverviewDto> GetCurrentWeekOverviewCoreAsync(
@@ -451,6 +460,9 @@ internal sealed class WeekService(
 
             await SaveWeeklySelectionChangesAsync(selection, userId, task.Id, week.WeekStartDate, cancellationToken).ConfigureAwait(false);
             currentWeekTaskIds.Add(task.Id);
+
+            await analytics.TrackAsync(userId, AnalyticsEvents.ResurfacedItemActioned, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 

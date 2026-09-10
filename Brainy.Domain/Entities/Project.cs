@@ -36,6 +36,17 @@ public class Project : BaseEntity, IUserOwnedEntity
     /// <summary>When true, the project and its tasks are treated as archived context.</summary>
     public bool IsArchived { get; set; }
 
+    /// <summary>
+    /// When true, this project exceeds the owner's current plan's active-project limit
+    /// (typically after a downgrade) and cannot be edited. It remains fully visible and
+    /// exportable; the user resolves this by archiving enough projects to fit the new
+    /// limit, or by upgrading. Set and cleared by <c>IEntitlementService.ReconcileProjectAccessAsync</c>,
+    /// never by the user directly. Distinct from <see cref="IsArchived"/>: archiving is a
+    /// user choice reversible by restoring, read-only is a plan consequence reversible by
+    /// archiving or upgrading.
+    /// </summary>
+    public bool IsReadOnly { get; set; }
+
     public DateTime? ArchivedAtUtc { get; set; }
 
     public string? ArchivedReason { get; set; }

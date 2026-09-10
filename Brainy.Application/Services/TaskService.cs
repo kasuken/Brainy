@@ -1,3 +1,4 @@
+using Brainy.Application.Analytics;
 using Brainy.Application.Common;
 using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Tasks;
@@ -18,7 +19,8 @@ namespace Brainy.Application.Services;
 internal sealed class TaskService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    IApplicationCache cache) : ITaskService
+    IApplicationCache cache,
+    IAnalyticsService analytics) : ITaskService
 {
     public async Task<TaskItemDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -247,6 +249,12 @@ internal sealed class TaskService(
             userId,
             [task.Id],
             task.Dependencies.Select(dependency => dependency.Id)).ConfigureAwait(false);
+
+        await analytics.TrackAsync(userId, AnalyticsEvents.TaskCreated, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        await analytics.TrackOnceAsync(userId, AnalyticsEvents.FirstTaskCreated, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
         return ToDto(task);
     }
 
@@ -758,6 +766,12 @@ internal sealed class TaskService(
                 cancellationToken)
             .ConfigureAwait(false);
         await InvalidateTasksAsync(userId, [taskId]).ConfigureAwait(false);
+
+        await analytics.TrackAsync(userId, AnalyticsEvents.CurrentFocusSelected, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        await analytics.TrackOnceAsync(userId, AnalyticsEvents.FirstCurrentFocusSelected, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
         return result;
     }
 

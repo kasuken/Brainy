@@ -24,4 +24,6 @@ public record ProjectDto(
     string Emoji = ProjectEmojiDefaults.DefaultEmoji,
     /// <summary>Concurrency token captured at load time; pass back on update to detect conflicts.</summary>
     byte[]? RowVersion = null,
-    string? ArchivedReason = null);
+    string? ArchivedReason = null,
+    /// <summary>True when this project exceeds the owner's plan's active-project limit and cannot be edited.</summary>
+    bool IsReadOnly = false);

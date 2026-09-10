@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Brainy.Application.Analytics;
 using Brainy.Application.Caching;
 using Brainy.Application.DTOs;
 using Brainy.Application.DTOs.Search;
@@ -21,7 +22,8 @@ namespace Brainy.Application.Services;
 internal sealed class SearchService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    IApplicationCache cache) : ISearchService
+    IApplicationCache cache,
+    IAnalyticsService analytics) : ISearchService
 {
     private const int DefaultPageSize = 20;
     private const int MaxPageSize = 100;
@@ -48,7 +50,7 @@ internal sealed class SearchService(
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
-        return await cache.GetOrCreateAsync(
+        var result = await cache.GetOrCreateAsync(
             userId,
             ApplicationCacheKey.Create("search", term, page, pageSize),
             [
@@ -64,6 +66,18 @@ internal sealed class SearchService(
             ],
             ct => SearchCoreAsync(userId, term, page, pageSize, ct),
             cancellationToken).ConfigureAwait(false);
+
+        // Tracked on every submission (not just cache misses) and never carries the
+        // search term itself — only the fact a search happened and whether it hit.
+        await analytics.TrackAsync(userId, AnalyticsEvents.SearchSubmitted, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (result.TotalCount == 0)
+        {
+            await analytics.TrackAsync(userId, AnalyticsEvents.SearchZeroResult, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return result;
     }
 
     private async Task<PagedResult<SearchResultDto>> SearchCoreAsync(

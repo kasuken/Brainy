@@ -19,6 +19,10 @@
                 Select up to @MaxNotes notes as source material for your <strong>@OutputTitle</strong> draft.
             </MudText>
 
+            <a href="/ai-transparency" target="_blank" rel="noopener" class="oagd__ai-note">
+                How Brainy uses AI &mdash; what gets sent, and why you should review the result
+            </a>
+
             <MudTextField @bind-Value="_search"
                           Placeholder="Search notes…"
                           aria-label="Search source notes"
@@ -90,6 +94,15 @@
 
 <style>
     .oagd__body { padding: 0.25rem 0 0.5rem; }
+
+    .oagd__ai-note {
+        display: inline-block;
+        margin-bottom: 0.85rem;
+        font-size: 0.78rem;
+        color: var(--ink-soft);
+        text-decoration: underline;
+        text-underline-offset: 0.15em;
+    }
 
     .oagd__state {
         display: flex;

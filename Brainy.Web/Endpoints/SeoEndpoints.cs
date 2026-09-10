@@ -12,7 +12,11 @@ public static class SeoEndpoints
         new("/", "weekly", "1.0"),
         new("/features", "monthly", "0.8"),
         new("/pricing", "monthly", "0.8"),
-        new("/changelog", "weekly", "0.6")
+        new("/changelog", "weekly", "0.6"),
+        new("/privacy", "yearly", "0.3"),
+        new("/terms", "yearly", "0.3"),
+        new("/acceptable-use", "yearly", "0.3"),
+        new("/ai-transparency", "monthly", "0.5")
     ];
 
     /// <summary>Maps the robots and sitemap endpoints.</summary>

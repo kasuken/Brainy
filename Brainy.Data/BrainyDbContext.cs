@@ -66,6 +66,12 @@ public class BrainyDbContext(
 
     public DbSet<LifecycleActivity> LifecycleActivities => Set<LifecycleActivity>();
 
+    public DbSet<ProductEvent> ProductEvents => Set<ProductEvent>();
+
+    public DbSet<UserPlan> UserPlans => Set<UserPlan>();
+
+    public DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents => Set<ProcessedWebhookEvent>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Configure Identity schema first, then apply Brainy entity configurations.
@@ -165,6 +171,14 @@ public class BrainyDbContext(
             .Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
         {
             throw new InvalidOperationException("Lifecycle activity is append-only and cannot be modified or deleted.");
+        }
+
+        // Analytics events are a similar append-only ledger; account deletion uses
+        // ExecuteDeleteAsync, which bypasses the change tracker and this guard entirely.
+        if (ChangeTracker.Entries<ProductEvent>()
+            .Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
+        {
+            throw new InvalidOperationException("Product analytics events are append-only and cannot be modified or deleted.");
         }
     }
 

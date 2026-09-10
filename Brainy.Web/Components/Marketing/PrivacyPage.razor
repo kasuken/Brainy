@@ -1,0 +1,131 @@
+@page "/privacy"
+@layout MarketingLayout
+
+<HeadContent>
+    <SeoHeadContent Path="/privacy"
+                    Title="Privacy Policy — Brainy"
+                    Description="What Brainy stores, how it is backed up and protected, which subprocessors are involved, and how to export or delete your data." />
+</HeadContent>
+
+<section class="mkt-hero">
+    <div class="mkt-wrap">
+        <span class="mkt-eyebrow mkt-rise">Trust</span>
+        <h1 class="mkt-title mkt-rise mkt-d1" style="max-width: 16em; font-size: clamp(2.2rem, 4.5vw, 3.4rem);">
+            Privacy Policy
+        </h1>
+        <p class="mkt-lead mkt-rise mkt-d2" style="margin-top: 1.1rem;">
+            What Brainy stores about you, how it is protected, and how you stay in control of it.
+        </p>
+        <div class="mkt-draft-notice mkt-rise mkt-d3" role="note">
+            <span class="mkt-draft-notice__icon" aria-hidden="true">&#9888;&#65039;</span>
+            <p>
+                <strong>Draft &mdash; pending qualified legal review.</strong> This page describes how Brainy
+                is built today, in plain language. It is product documentation, not a finalized legal policy,
+                and has not yet been reviewed by qualified legal counsel for your jurisdiction.
+            </p>
+        </div>
+    </div>
+</section>
+
+<section class="mkt-section">
+    <div class="mkt-wrap">
+        <article class="mkt-changelog">
+
+            <h2>What Brainy stores</h2>
+            <p>
+                Brainy stores the content you author while using it: notes, highlights, summaries and action
+                items, tasks and projects, areas, resources, sources, goals and milestones, ideas, outputs, tags,
+                and the relationships between them. It also stores your account identity (email address and
+                password hash), your workspace preferences (time zone, dashboard layout, archive retention rules),
+                and lifecycle/activity records used to power screens like Today and Pulse.
+            </p>
+            <p>
+                Every one of these records is scoped to your account. Brainy's data access layer requires a user
+                identifier on every read and write, and self-service export and deletion (below) only ever touch
+                the data belonging to the signed-in account.
+            </p>
+
+            <h2>Backups</h2>
+            <p>
+                Brainy runs on a standard SQL Server database with routine backups appropriate to the hosting
+                environment it is deployed in. <strong>Placeholder:</strong> the specific backup schedule, backup
+                retention window, and backup storage location for your deployment are operational details that
+                depend on where Brainy is hosted and are not yet published here. If you operate or commission a
+                Brainy deployment, confirm these details against your actual hosting configuration before relying
+                on this page.
+            </p>
+
+            <h2>Encryption</h2>
+            <p>
+                Traffic between your browser and Brainy is served over HTTPS; the production configuration
+                redirects plain HTTP requests to HTTPS and sends standard hardening headers (see the site's
+                security headers). <strong>Placeholder:</strong> whether data at rest in the database and in
+                backups is encrypted, and with which mechanism, depends on the underlying database/hosting
+                provider's configuration and is not yet independently verified or documented for every
+                deployment. Do not treat this page as a substitute for your own infrastructure review.
+            </p>
+
+            <h2>Subprocessors</h2>
+            <p>
+                Brainy's core note-taking, organizing and task features do not send your content to any
+                third party. The only subprocessor Brainy can be configured to use is an <strong>AI provider</strong>,
+                and only for the specific AI actions you trigger:
+            </p>
+            <ul>
+                <li><strong>OpenAI</strong> (api.openai.com) &mdash; when the deployment is configured with the OpenAI provider.</li>
+                <li><strong>Azure OpenAI Service</strong> &mdash; when the deployment is configured with the Azure OpenAI provider.</li>
+            </ul>
+            <p>
+                By default, AI is <strong>off</strong> (provider "None") and no note or task content ever leaves
+                Brainy for AI processing. See <a href="/ai-transparency">AI &amp; Your Data</a> for exactly what
+                is sent when AI is enabled and used.
+            </p>
+
+            <h2>Retention</h2>
+            <p>
+                Your content is retained for as long as your account exists. Archiving a project, area, resource
+                or note does not delete it &mdash; archived items are excluded from active views but remain
+                recoverable, and you can configure per-type archive retention rules (or keep items forever) from
+                <a href="/Account/Manage">Account and data</a>. Deleting your account removes this data as
+                described below.
+            </p>
+
+            <h2>Account deletion</h2>
+            <p>
+                You can permanently delete your account and all Brainy data tied to it at any time from
+                <a href="/Account/Manage">Account and data &rsaquo; Delete account</a>. Deletion requires your
+                current password and typing the exact confirmation phrase, and it is irreversible: your notes,
+                projects, tasks, outputs, images and every other record scoped to your account are removed in one
+                database transaction, and you are signed out immediately afterward. Download your export first if
+                you might need the data later &mdash; deletion does not produce a copy for you.
+            </p>
+
+            <h2>Your rights: export and delete</h2>
+            <p>
+                Brainy gives you two self-service controls over your own data, both under
+                <a href="/Account/Manage">Account and data</a>:
+            </p>
+            <ul>
+                <li>
+                    <strong>Export your data</strong> &mdash; downloads a versioned JSON archive of your notes,
+                    projects, tasks, areas, resources, goals, outputs, relationships, preferences and stored
+                    images. Account credentials, password hashes, session tokens, and any configured AI provider
+                    keys are excluded.
+                </li>
+                <li>
+                    <strong>Delete your account</strong> &mdash; permanently erases your account and the data
+                    listed above, scoped strictly to your own account.
+                </li>
+            </ul>
+
+            <h2>Questions</h2>
+            <p>
+                Marketing and in-product claims about privacy and AI behavior are maintained alongside this page
+                and reviewed against the actual implementation before publication. If something on this page looks
+                inconsistent with how Brainy actually behaves, treat the implementation as needing a fix and report
+                it.
+            </p>
+
+        </article>
+    </div>
+</section>

@@ -33,6 +33,13 @@ builder.Services.AddOptions<SeoOptions>()
 builder.Services.AddSingleton(serviceProvider =>
     serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<SeoOptions>>().Value);
 
+// Defaults-closed email allowlist for the internal analytics dashboard; empty means
+// nobody can see it until explicitly configured.
+builder.Services.AddOptions<AnalyticsAccessOptions>()
+    .Bind(builder.Configuration.GetSection(AnalyticsAccessOptions.SectionName));
+builder.Services.AddSingleton(serviceProvider =>
+    serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<AnalyticsAccessOptions>>().Value);
+
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -156,6 +163,11 @@ builder.Services.AddScoped<Brainy.Web.Themes.ThemeService>();
 // without changing the application binary.
 builder.Services.AddAiAssistant(builder.Configuration);
 
+// Provider=None (the default) registers NullBillingProvider: entitlements are fully
+// enforced, but plan changes only happen via the internal/admin path until a real
+// payment provider is configured.
+builder.Services.AddBilling(builder.Configuration);
+
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseReadinessHealthCheck>("database", tags: ["ready"]);
 
@@ -203,6 +215,9 @@ app.MapAdditionalIdentityEndpoints();
 
 // Serve note images stored in the database.
 app.MapNoteImageEndpoints();
+
+// Inbound billing-provider webhooks (plan/subscription state changes).
+app.MapBillingWebhookEndpoints();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {

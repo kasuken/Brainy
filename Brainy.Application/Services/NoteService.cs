@@ -1,3 +1,4 @@
+using Brainy.Application.Analytics;
 using Brainy.Application.Common;
 using Brainy.Application.Caching;
 using Brainy.Application.DTOs.Notes;
@@ -18,7 +19,8 @@ namespace Brainy.Application.Services;
 internal sealed class NoteService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
-    IApplicationCache cache) : INoteService
+    IApplicationCache cache,
+    IAnalyticsService analytics) : INoteService
 {
     private const int MaxTagsPerNote = 20;
     private const int MaxTagNameLength = 100;
@@ -104,6 +106,11 @@ internal sealed class NoteService(
             note.Id,
             note.Tags.Select(tag => tag.Id),
             note.SourceId.HasValue ? [note.SourceId.Value] : []).ConfigureAwait(false);
+
+        await analytics.TrackAsync(userId, AnalyticsEvents.CaptureCreated, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        await analytics.TrackOnceAsync(userId, AnalyticsEvents.FirstCaptureCreated, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
 
         return ToDto(note);
     }
@@ -288,6 +295,12 @@ internal sealed class NoteService(
         }
 
         await InvalidateNoteAsync(userId, note.Id).ConfigureAwait(false);
+
+        await analytics.TrackAsync(userId, AnalyticsEvents.InboxItemProcessed, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        await analytics.TrackOnceAsync(userId, AnalyticsEvents.FirstInboxItemProcessed, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
         return ToDto(note);
     }
 
@@ -400,6 +413,10 @@ internal sealed class NoteService(
 
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await InvalidateNoteAsync(userId, note.Id).ConfigureAwait(false);
+
+        await analytics.TrackAsync(userId, AnalyticsEvents.CaptureReusedAsProject, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
         return ToDto(note);
     }
 

@@ -34,6 +34,9 @@ public interface IApplicationDbContext
     DbSet<GoalMilestone> GoalMilestones { get; }
     DbSet<GoalActivity> GoalActivities { get; }
     DbSet<LifecycleActivity> LifecycleActivities { get; }
+    DbSet<ProductEvent> ProductEvents { get; }
+    DbSet<UserPlan> UserPlans { get; }
+    DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents { get; }
 
     /// <summary>
     /// Change-tracker entry for <paramref name="entity"/>; used to set the original

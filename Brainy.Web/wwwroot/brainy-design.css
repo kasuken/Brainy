@@ -662,6 +662,20 @@
     border-bottom-color: var(--clay);
 }
 
+.auth-legal-note {
+    margin-top: 1rem;
+    text-align: center;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--ink-faint);
+}
+
+.auth-legal-note a {
+    color: var(--ink-soft);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
 /* Status alert ------------------------------------------------------------ */
 .auth-alert {
     display: flex;

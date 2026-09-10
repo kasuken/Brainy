@@ -1,8 +1,10 @@
 using Azure;
 using Azure.AI.OpenAI;
 using Brainy.Application.AI;
+using Brainy.Application.Billing;
 using Brainy.Application.Caching;
 using Brainy.Application.Interfaces.AI;
+using Brainy.Application.Interfaces.Billing;
 using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Options;
@@ -62,10 +64,38 @@ public static class DependencyInjection
         services.AddScoped<ISummaryService, SummaryService>();
         services.AddScoped<IActionItemService, ActionItemService>();
         services.AddScoped<IPulseService, PulseService>();
+        services.AddScoped<IAnalyticsService, AnalyticsService>();
         services.AddScoped<IDataExportService, DataExportService>();
         services.AddScoped<IDataImportService, DataImportService>();
         services.AddScoped<ILlmFocusExportService, LlmFocusExportService>();
+        services.AddScoped<IEntitlementService, EntitlementService>();
+        services.AddScoped<IBillingWebhookProcessor, BillingWebhookProcessor>();
         return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="IBillingProvider"/> based on the <c>Billing</c> configuration
+    /// section. When <see cref="BillingProviderType.None"/> is configured (the default),
+    /// <see cref="NullBillingProvider"/> is registered so the entitlement system works fully
+    /// without a live payment-provider account.
+    /// </summary>
+    public static IServiceCollection AddBilling(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
+
+        var options = configuration
+            .GetSection(BillingOptions.SectionName)
+            .Get<BillingOptions>() ?? new BillingOptions();
+
+        if (options.Provider == BillingProviderType.None)
+        {
+            services.AddSingleton<IBillingProvider, NullBillingProvider>();
+            return services;
+        }
+
+        throw new NotSupportedException(
+            $"Billing provider '{options.Provider}' is not implemented yet. Implement IBillingProvider " +
+            "and register it in DependencyInjection.AddBilling.");
     }
 
     /// <summary>

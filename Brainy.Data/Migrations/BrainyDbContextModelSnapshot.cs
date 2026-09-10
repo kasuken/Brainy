@@ -872,6 +872,81 @@ namespace Brainy.Data.Migrations
                     b.ToTable("Output", (string)null);
                 });
 
+            modelBuilder.Entity("Brainy.Domain.Entities.ProcessedWebhookEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EventType")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("ProcessedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ProviderEventId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("TargetUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderEventId")
+                        .IsUnique();
+
+                    b.ToTable("ProcessedWebhookEvent", (string)null);
+                });
+
+            modelBuilder.Entity("Brainy.Domain.Entities.ProductEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EventName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAtUtc");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "EventName", "OccurredAtUtc");
+
+                    b.ToTable("ProductEvent", (string)null);
+                });
+
             modelBuilder.Entity("Brainy.Domain.Entities.Project", b =>
                 {
                     b.Property<Guid>("Id")
@@ -917,6 +992,9 @@ namespace Brainy.Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsReadOnly")
                         .HasColumnType("bit");
 
                     b.Property<string>("Name")
@@ -1324,6 +1402,11 @@ namespace Brainy.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("AnalyticsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("CollapsedWidgets")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
@@ -1334,10 +1417,30 @@ namespace Brainy.Data.Migrations
                     b.Property<int>("InboxWarningThreshold")
                         .HasColumnType("int");
 
+                    b.Property<bool>("OnboardingCompleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("OnboardingDismissed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("OnboardingStep")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<bool>("StarterModeEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("TimeZoneId")
                         .IsRequired()
@@ -1364,6 +1467,68 @@ namespace Brainy.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("UserDashboardPreference", (string)null);
+                });
+
+            modelBuilder.Entity("Brainy.Domain.Entities.UserPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("AiAllowancePeriodStartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("AiAllowanceUsedInPeriod")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("BillingProviderCustomerId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("BillingProviderSubscriptionId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("GracePeriodEndsAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PlanRenewsAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Tier")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Starter");
+
+                    b.Property<DateTime?>("TrialEndsAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("UserPlan", (string)null);
                 });
 
             modelBuilder.Entity("Brainy.Domain.Entities.WeeklyTaskSelection", b =>
@@ -1809,6 +1974,15 @@ namespace Brainy.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("Brainy.Domain.Entities.ProductEvent", b =>
+                {
+                    b.HasOne("Brainy.Data.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Brainy.Domain.Entities.Project", b =>
                 {
                     b.HasOne("Brainy.Domain.Entities.Area", "Area")
@@ -1921,6 +2095,15 @@ namespace Brainy.Data.Migrations
                 });
 
             modelBuilder.Entity("Brainy.Domain.Entities.UserDashboardPreference", b =>
+                {
+                    b.HasOne("Brainy.Data.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Brainy.Domain.Entities.UserPlan", b =>
                 {
                     b.HasOne("Brainy.Data.Identity.ApplicationUser", null)
                         .WithMany()

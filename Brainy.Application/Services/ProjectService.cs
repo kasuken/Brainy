@@ -21,7 +21,8 @@ internal sealed class ProjectService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
     IUserTimeZoneService userTimeZone,
-    IApplicationCache cache) : IProjectService
+    IApplicationCache cache,
+    IEntitlementService entitlements) : IProjectService
 {
     public async Task<IReadOnlyList<ProjectDto>> GetAllActiveAsync(CancellationToken cancellationToken = default)
     {
@@ -114,7 +115,7 @@ internal sealed class ProjectService(
                 p.Id, p.Name, p.Description, p.DesiredOutcome, p.Status, p.Priority,
                 p.StartDate, p.DueDate, p.CompletedDate, p.IsArchived, p.AreaId,
                 p.CreatedAtUtc, p.UpdatedAtUtc, p.ArchivedAtUtc, p.ArchivedReason,
-                p.Emoji,
+                p.Emoji, p.IsReadOnly,
                 TotalTasks   = p.Tasks.Count(t => !t.IsArchived),
                 OpenTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status != TaskItemStatus.Done),
                 DoneTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status == TaskItemStatus.Done),
@@ -136,7 +137,8 @@ internal sealed class ProjectService(
             x.TotalTasks > 0 ? Math.Round((double)x.DoneTasks / x.TotalTasks * 100, 1) : 0,
             x.OverdueTasks,
             NormalizeEmoji(x.Emoji),
-            x.ArchivedReason))
+            x.ArchivedReason,
+            x.IsReadOnly))
             .ToList();
     }
 
@@ -265,7 +267,7 @@ internal sealed class ProjectService(
             totalTasks, openTasks, doneTasks,
             totalTasks > 0 ? Math.Round((double)doneTasks / totalTasks * 100, 1) : 0,
             taskDtos, notes, resourceNotes,
-            NormalizeEmoji(project.Emoji), project.ArchivedReason);
+            NormalizeEmoji(project.Emoji), project.ArchivedReason, project.IsReadOnly);
     }
 
     public async Task<ProjectProgressDto?> GetProjectProgressAsync(Guid id, CancellationToken cancellationToken = default)
@@ -337,6 +339,10 @@ internal sealed class ProjectService(
 
         var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
 
+        var entitlement = await entitlements.CanCreateProjectAsync(cancellationToken).ConfigureAwait(false);
+        if (!entitlement.IsAllowed)
+            throw new PlanEntitlementDeniedException(entitlement.Reason!);
+
         await context.Areas.EnsureActiveOwnedAreaAsync(dto.AreaId, userId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -397,6 +403,9 @@ internal sealed class ProjectService(
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Project '{dto.Id}' was not found.");
 
+        if (project.IsReadOnly)
+            throw new ProjectReadOnlyException(project.Name);
+
         // Optimistic concurrency: compare against the token captured when the caller
         // loaded the project so edits made elsewhere since then are detected.
         if (dto.RowVersion is not null)
@@ -440,6 +449,9 @@ internal sealed class ProjectService(
             .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Project '{id}' was not found.");
+
+        if (project.IsReadOnly)
+            throw new ProjectReadOnlyException(project.Name);
 
         var now = DateTime.UtcNow;
 
@@ -527,6 +539,10 @@ internal sealed class ProjectService(
             userId,
             project.Id,
             changedTasks.Select(task => task.Id)).ConfigureAwait(false);
+
+        // Archiving may free capacity under the active-project cap; un-freeze whichever
+        // remaining projects now fit.
+        await entitlements.ReconcileProjectAccessAsync(userId, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ProjectDto> RestoreAsync(Guid id, CancellationToken cancellationToken = default)
@@ -571,6 +587,10 @@ internal sealed class ProjectService(
             project.Id,
             changedTasks.Select(task => task.Id)).ConfigureAwait(false);
 
+        // Restoring may push the user back over the active-project cap; re-evaluate
+        // which projects (oldest first) should be read-only.
+        await entitlements.ReconcileProjectAccessAsync(userId, cancellationToken).ConfigureAwait(false);
+
         return ToDto(project);
     }
 
@@ -602,6 +622,10 @@ internal sealed class ProjectService(
                 ApplicationCacheKey.EntityTypeTag<Idea>()
             ],
             CancellationToken.None).ConfigureAwait(false);
+
+        // Deleting may free capacity under the active-project cap; un-freeze whichever
+        // remaining projects now fit.
+        await entitlements.ReconcileProjectAccessAsync(userId, cancellationToken).ConfigureAwait(false);
     }
 
     private static ProjectDto ToDto(Project p) => new(
@@ -623,7 +647,8 @@ internal sealed class ProjectService(
         p.Goal?.Title,
         NormalizeEmoji(p.Emoji),
         RowVersion: p.RowVersion,
-        ArchivedReason: p.ArchivedReason);
+        ArchivedReason: p.ArchivedReason,
+        IsReadOnly: p.IsReadOnly);
 
     private IQueryable<Project> ProjectQuery(string userId) =>
         context.Projects
@@ -794,6 +819,7 @@ internal sealed class ProjectService(
                 UpdatedAtUtc = p.UpdatedAtUtc,
                 ArchivedAtUtc = p.ArchivedAtUtc,
                 ArchivedReason = p.ArchivedReason,
+                IsReadOnly   = p.IsReadOnly,
                 TotalTasks   = p.Tasks.Count(t => !t.IsArchived),
                 OpenTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status != TaskItemStatus.Done),
                 DoneTasks    = p.Tasks.Count(t => !t.IsArchived && t.Status == TaskItemStatus.Done),
@@ -811,7 +837,8 @@ internal sealed class ProjectService(
         x.TotalTasks > 0 ? Math.Round((double)x.DoneTasks / x.TotalTasks * 100, 1) : 0,
         x.OverdueTasks,
         NormalizeEmoji(x.Emoji),
-        x.ArchivedReason);
+        x.ArchivedReason,
+        x.IsReadOnly);
 
     /// <summary>Anonymous-type-equivalent for EF projection in deadline queries.</summary>
     private sealed class DeadlineProjection
@@ -832,6 +859,7 @@ internal sealed class ProjectService(
         public DateTime UpdatedAtUtc { get; init; }
         public DateTime? ArchivedAtUtc { get; init; }
         public string? ArchivedReason { get; init; }
+        public bool IsReadOnly { get; init; }
         public int TotalTasks { get; init; }
         public int OpenTasks { get; init; }
         public int DoneTasks { get; init; }

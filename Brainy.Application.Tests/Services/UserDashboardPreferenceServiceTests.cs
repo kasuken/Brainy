@@ -114,4 +114,83 @@ public class UserDashboardPreferenceServiceTests
 
         await act.Should().ThrowAsync<ArgumentNullException>();
     }
+
+    [Fact]
+    public async Task GetOrCreateAsync_WhenNoneExists_DefaultsToStarterModeOnAndOnboardingNotStarted()
+    {
+        var (sut, _) = BuildService(nameof(GetOrCreateAsync_WhenNoneExists_DefaultsToStarterModeOnAndOnboardingNotStarted));
+
+        var result = await sut.GetOrCreateAsync();
+
+        result.StarterModeEnabled.Should().BeTrue();
+        result.OnboardingCompleted.Should().BeFalse();
+        result.OnboardingDismissed.Should().BeFalse();
+        result.OnboardingStep.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task SetStarterModeAsync_PersistsValueAndCreatesRecordIfMissing()
+    {
+        var (sut, db) = BuildService(nameof(SetStarterModeAsync_PersistsValueAndCreatesRecordIfMissing));
+
+        var result = await sut.SetStarterModeAsync(false);
+
+        result.StarterModeEnabled.Should().BeFalse();
+        var stored = await db.DashboardPreferences.AsNoTracking().SingleAsync();
+        stored.StarterModeEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SetOnboardingStepAsync_PersistsStepAndClampsNegativeValues()
+    {
+        var (sut, db) = BuildService(nameof(SetOnboardingStepAsync_PersistsStepAndClampsNegativeValues));
+
+        var result = await sut.SetOnboardingStepAsync(3);
+        result.OnboardingStep.Should().Be(3);
+
+        var clamped = await sut.SetOnboardingStepAsync(-5);
+        clamped.OnboardingStep.Should().Be(0);
+
+        var stored = await db.DashboardPreferences.AsNoTracking().SingleAsync();
+        stored.OnboardingStep.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CompleteOnboardingAsync_SetsOnboardingCompletedTrue()
+    {
+        var (sut, db) = BuildService(nameof(CompleteOnboardingAsync_SetsOnboardingCompletedTrue));
+
+        var result = await sut.CompleteOnboardingAsync();
+
+        result.OnboardingCompleted.Should().BeTrue();
+        (await db.DashboardPreferences.AsNoTracking().SingleAsync()).OnboardingCompleted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DismissOnboardingAsync_SetsOnboardingDismissedTrue()
+    {
+        var (sut, db) = BuildService(nameof(DismissOnboardingAsync_SetsOnboardingDismissedTrue));
+
+        var result = await sut.DismissOnboardingAsync();
+
+        result.OnboardingDismissed.Should().BeTrue();
+        (await db.DashboardPreferences.AsNoTracking().SingleAsync()).OnboardingDismissed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ResetOnboardingAsync_ClearsCompletedDismissedAndStep()
+    {
+        var (sut, db) = BuildService(nameof(ResetOnboardingAsync_ClearsCompletedDismissedAndStep));
+        await sut.SetOnboardingStepAsync(4);
+        await sut.CompleteOnboardingAsync();
+
+        var result = await sut.ResetOnboardingAsync();
+
+        result.OnboardingCompleted.Should().BeFalse();
+        result.OnboardingDismissed.Should().BeFalse();
+        result.OnboardingStep.Should().Be(0);
+        var stored = await db.DashboardPreferences.AsNoTracking().SingleAsync();
+        stored.OnboardingCompleted.Should().BeFalse();
+        stored.OnboardingStep.Should().Be(0);
+    }
 }

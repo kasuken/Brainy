@@ -482,6 +482,22 @@ internal sealed class DataExportService(
             })
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
+        var productEvents = await context.ProductEvents.AsNoTracking()
+            .Where(productEvent => productEvent.UserId == userId)
+            .OrderBy(productEvent => productEvent.OccurredAtUtc)
+            .ThenBy(productEvent => productEvent.Id)
+            // Event name and timestamp only. PropertiesJson is deliberately excluded from
+            // the export: it is non-content metadata by invariant, but this keeps the
+            // export's content guarantee simple to audit rather than relying on that
+            // invariant always holding for every event added in the future.
+            .Select(productEvent => new
+            {
+                productEvent.Id,
+                productEvent.EventName,
+                productEvent.OccurredAtUtc
+            })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
         var weeklyTaskSelections = await context.WeeklyTaskSelections.AsNoTracking()
             .Where(selection => selection.UserId == userId)
             .OrderBy(selection => selection.WeekStartDate)
@@ -539,7 +555,8 @@ internal sealed class DataExportService(
                 ArchiveRetentionRules = archiveRetentionRules,
                 DashboardPreferences = dashboardPreferences,
                 LifecycleActivities = lifecycleActivities,
-                WeeklyTaskSelections = weeklyTaskSelections
+                WeeklyTaskSelections = weeklyTaskSelections,
+                ProductEvents = productEvents
             }
         };
 

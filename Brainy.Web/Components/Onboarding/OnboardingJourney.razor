@@ -1,0 +1,593 @@
+@* ─────────────────────────────────────────────────────────────────────────────
+   OnboardingJourney — guided, dismissible first-run journey (issue #294).
+   A non-modal floating panel (not a blocking dialog) that walks a new user
+   through one real capture -> process -> next action -> current focus loop,
+   using their own real data (never synthetic sample rows). Every step is
+   skippable and the current step is persisted so the journey resumes where
+   the user left off.
+───────────────────────────────────────────────────────────────────────────── *@
+@using Brainy.Application.Analytics
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.DTOs.Projects
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.Interfaces.Identity
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+
+@inject IUserDashboardPreferenceService PreferenceService
+@inject IAnalyticsService AnalyticsService
+@inject ICurrentUserService CurrentUser
+@inject INoteService NoteService
+@inject IProjectService ProjectService
+@inject IAreaService AreaService
+@inject ITaskService TaskService
+@inject NavigationManager Nav
+
+@if (_visible)
+{
+    <div class="ob-journey" role="region" aria-label="Getting started guide">
+        @if (_minimized)
+        {
+            <button type="button" class="ob-journey__chip" @onclick="() => _minimized = false"
+                    aria-label="Resume the getting-started guide">
+                <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" />
+                <span>Continue setup · Step @(_step + 1) of @TotalSteps</span>
+            </button>
+        }
+        else
+        {
+            <div class="ob-journey__card">
+                <div class="ob-journey__head">
+                    <span class="ob-journey__head-icon" aria-hidden="true">
+                        <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" />
+                    </span>
+                    <div class="ob-journey__head-text">
+                        <span class="ob-journey__eyebrow">Getting started</span>
+                        <span class="ob-journey__step-count">Step @(_step + 1) of @TotalSteps</span>
+                    </div>
+                    <MudSpacer />
+                    <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
+                                   aria-label="Minimize getting-started guide"
+                                   OnClick="() => _minimized = true" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                   aria-label="Skip the getting-started guide"
+                                   OnClick="DismissAsync" />
+                </div>
+
+                <div class="ob-journey__dots" role="tablist" aria-label="Onboarding progress">
+                    @for (var i = 0; i < TotalSteps; i++)
+                    {
+                        var idx = i;
+                        var state = idx == _step ? "ob-journey__dot--active" : idx < _step ? "ob-journey__dot--done" : "";
+                        <span class="ob-journey__dot @state" role="tab" aria-selected="@(idx == _step)" aria-label="@($"Step {idx + 1}")"></span>
+                    }
+                </div>
+
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="my-2">@_error</MudAlert>
+                }
+
+                <div class="ob-journey__body" @key="_step">
+                    @switch (_step)
+                    {
+                        case 0:
+                            <h3 class="ob-journey__title">Let's get you one real win</h3>
+                            <p class="ob-journey__copy">
+                                In a couple of minutes you'll capture something real, give it a home, turn it
+                                into a next action, and set it as your current focus — the whole loop Brainy is
+                                built around. Skip any step at any time; you can always resume later.
+                            </p>
+                            break;
+                        case 1:
+                            <h3 class="ob-journey__title">Capture something real</h3>
+                            <p class="ob-journey__copy">Jot down your next meeting, an idea, or a note about this very journey. This becomes a real Inbox item — nothing synthetic.</p>
+                            <MudTextField T="string" @bind-Value="_captureText" Label="What's on your mind?"
+                                          Variant="Variant.Outlined" Lines="3" Immediate="true"
+                                          aria-label="Capture text" />
+                            break;
+                        case 2:
+                            <h3 class="ob-journey__title">Give it a home</h3>
+                            <p class="ob-journey__copy">Place your capture into a project so it has context.</p>
+                            @if (_projects.Count > 0)
+                            {
+                                <MudSelect T="Guid?" @bind-Value="_selectedProjectId" Label="Project" Variant="Variant.Outlined">
+                                    @foreach (var project in _projects)
+                                    {
+                                        <MudSelectItem T="Guid?" Value="@project.Id">@project.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                <p class="ob-journey__hint">You don't have a project yet — name your first one.</p>
+                                <MudTextField T="string" @bind-Value="_newAreaName" Label="Area (e.g. Work, Personal)" Variant="Variant.Outlined" Class="mb-2" />
+                                <MudTextField T="string" @bind-Value="_newProjectName" Label="Project name" Variant="Variant.Outlined" />
+                            }
+                            break;
+                        case 3:
+                            <h3 class="ob-journey__title">Define the next action</h3>
+                            <p class="ob-journey__copy">What is the very next physical step? Keep it small and concrete.</p>
+                            <MudTextField T="string" @bind-Value="_taskTitle" Label="Next action" Variant="Variant.Outlined"
+                                          aria-label="Next action title" />
+                            break;
+                        case 4:
+                            <h3 class="ob-journey__title">Choose your current focus</h3>
+                            <p class="ob-journey__copy">
+                                Current focus is the one thing Today keeps front and center. Make your new task
+                                your current focus now.
+                            </p>
+                            break;
+                        case 5:
+                            <h3 class="ob-journey__title">Here's how to get back to this</h3>
+                            <p class="ob-journey__copy">
+                                Everything you just did lives on <MudLink Href="/today">Today</MudLink> — your
+                                current focus is always there waiting for you.
+                            </p>
+                            <TodayWeekTasksHubExplainer />
+                            break;
+                    }
+                </div>
+
+                <div class="ob-journey__actions">
+                    @if (_step > 0 && _step < TotalSteps - 1)
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="SkipStepAsync">Skip this step</MudButton>
+                    }
+                    @if (_step == 0)
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="DismissAsync">Skip the tour</MudButton>
+                    }
+                    <MudSpacer />
+                    @if (_step > 0)
+                    {
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="() => GoToStepAsync(_step - 1)">Back</MudButton>
+                    }
+                    @switch (_step)
+                    {
+                        case 0:
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="() => AdvanceAsync(1)">Start</MudButton>
+                            break;
+                        case 1:
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="SubmitCaptureAsync">Capture</MudButton>
+                            break;
+                        case 2:
+                            @if (_projects.Count > 0)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="ProcessIntoExistingProjectAsync">Process</MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="CreateProjectAndProcessAsync">Create &amp; process</MudButton>
+                            }
+                            break;
+                        case 3:
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="CreateTaskAsync">Create task</MudButton>
+                            break;
+                        case 4:
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="SetFocusAsync">Make this my focus</MudButton>
+                            break;
+                        case 5:
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Check" OnClick="FinishAsync">Done</MudButton>
+                            break;
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <style>
+        .ob-journey {
+            position: fixed;
+            left: 2rem;
+            bottom: 2rem;
+            z-index: 999;
+            max-width: 380px;
+        }
+
+        .ob-journey__chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            border: 1px solid var(--line, var(--mud-palette-lines-default));
+            border-radius: 999px;
+            background: var(--paper-raised, var(--mud-palette-surface));
+            color: var(--clay, #c0561d);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.12));
+        }
+
+        .ob-journey__card {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding: 1.1rem 1.2rem;
+            border-radius: 16px;
+            border: 1px solid var(--line, var(--mud-palette-lines-default));
+            background: var(--paper-raised, var(--mud-palette-surface));
+            box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,0.16));
+        }
+
+        .ob-journey__head {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .ob-journey__head-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 10px;
+            background: var(--clay-soft, rgba(192, 86, 29, 0.12));
+            color: var(--clay, #c0561d);
+            flex-shrink: 0;
+        }
+
+        .ob-journey__head-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.2;
+        }
+
+        .ob-journey__eyebrow {
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--ink-faint, var(--mud-palette-text-disabled));
+        }
+
+        .ob-journey__step-count {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--ink-soft, var(--mud-palette-text-secondary));
+        }
+
+        .ob-journey__dots {
+            display: flex;
+            gap: 0.35rem;
+        }
+
+        .ob-journey__dot {
+            height: 5px;
+            flex: 1;
+            border-radius: 999px;
+            background: var(--line, var(--mud-palette-lines-default));
+        }
+
+        .ob-journey__dot--done { background: var(--clay-ring, #d98a4f); }
+        .ob-journey__dot--active { background: var(--clay, #c0561d); }
+
+        .ob-journey__title {
+            margin: 0 0 0.3rem;
+            font-family: var(--font-display, inherit);
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--ink, var(--mud-palette-text-primary));
+        }
+
+        .ob-journey__copy {
+            margin: 0 0 0.6rem;
+            font-size: 0.86rem;
+            line-height: 1.5;
+            color: var(--ink-soft, var(--mud-palette-text-secondary));
+        }
+
+        .ob-journey__hint {
+            margin: 0 0 0.5rem;
+            font-size: 0.82rem;
+            color: var(--ink-faint, var(--mud-palette-text-disabled));
+        }
+
+        .ob-journey__actions {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+
+        @@media (max-width: 600px) {
+            .ob-journey {
+                left: 1rem;
+                right: 1rem;
+                bottom: 1rem;
+                max-width: none;
+            }
+        }
+    </style>
+}
+
+@code {
+    private const int TotalSteps = 6;
+
+    private bool _visible;
+    private bool _minimized;
+    private bool _busy;
+    private int _step;
+    private string? _error;
+
+    private string _captureText = string.Empty;
+    private Guid? _noteId;
+
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private Guid? _selectedProjectId;
+    private string _newAreaName = string.Empty;
+    private string _newProjectName = string.Empty;
+    private Guid? _projectId;
+
+    private string _taskTitle = string.Empty;
+    private Guid? _taskId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var preferences = await PreferenceService.GetOrCreateAsync();
+            if (preferences.OnboardingCompleted || preferences.OnboardingDismissed)
+            {
+                _visible = false;
+                return;
+            }
+
+            _visible = true;
+            _step = Math.Clamp(preferences.OnboardingStep, 0, TotalSteps - 1);
+            await LoadProjectsAsync();
+        }
+        catch
+        {
+            _visible = false;
+        }
+    }
+
+    private async Task LoadProjectsAsync()
+    {
+        try
+        {
+            _projects = await ProjectService.GetAllNonArchivedAsync();
+            if (_selectedProjectId is null && _projects.Count > 0)
+                _selectedProjectId = _projects[0].Id;
+        }
+        catch
+        {
+            _projects = [];
+        }
+    }
+
+    private async Task GoToStepAsync(int step)
+    {
+        step = Math.Clamp(step, 0, TotalSteps - 1);
+        _step = step;
+        _error = null;
+        try
+        {
+            await PreferenceService.SetOnboardingStepAsync(step);
+        }
+        catch
+        {
+            // Resumability is a convenience, not a correctness requirement — a failed
+            // persist here should not block the user from moving through the journey.
+        }
+    }
+
+    private Task AdvanceAsync(int step) => GoToStepAsync(step);
+
+    private Task SkipStepAsync() => GoToStepAsync(_step + 1);
+
+    private async Task TrackStepCompletedAsync(int completedStep)
+    {
+        var userId = await CurrentUser.GetUserIdAsync();
+        if (userId is null)
+            return;
+
+        await AnalyticsService.TrackAsync(
+            userId,
+            AnalyticsEvents.OnboardingStepCompleted,
+            new Dictionary<string, object?> { ["step"] = completedStep });
+    }
+
+    private async Task SubmitCaptureAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_captureText))
+        {
+            _error = "Write a few words to capture.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var title = _captureText.Length > 120 ? _captureText[..120] : _captureText;
+            var note = await NoteService.CreateAsync(new CreateNoteDto(Title: title, Content: _captureText));
+            _noteId = note.Id;
+            await TrackStepCompletedAsync(1);
+            await GoToStepAsync(2);
+        }
+        catch
+        {
+            _error = "Could not save your capture. Try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ProcessIntoExistingProjectAsync()
+    {
+        if (_noteId is null || _selectedProjectId is null)
+        {
+            _error = "Choose a project first.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            await NoteService.ProcessNoteAsync(new ProcessNoteDto(
+                _noteId.Value, ParaCategory.Project, NoteStatus.Active, ProjectId: _selectedProjectId));
+            _projectId = _selectedProjectId;
+            await TrackStepCompletedAsync(2);
+            await GoToStepAsync(3);
+        }
+        catch
+        {
+            _error = "Could not process this item. Try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CreateProjectAndProcessAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newProjectName))
+        {
+            _error = "Name your first project.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var areaName = string.IsNullOrWhiteSpace(_newAreaName) ? "General" : _newAreaName.Trim();
+            var area = await AreaService.CreateAsync(new CreateAreaDto(areaName));
+            var project = await ProjectService.CreateAsync(new CreateProjectDto(_newProjectName.Trim(), area.Id));
+            _projectId = project.Id;
+
+            if (_noteId is not null)
+            {
+                await NoteService.ProcessNoteAsync(new ProcessNoteDto(
+                    _noteId.Value, ParaCategory.Project, NoteStatus.Active, ProjectId: project.Id));
+            }
+
+            await TrackStepCompletedAsync(2);
+            await GoToStepAsync(3);
+        }
+        catch
+        {
+            _error = "Could not create your project. Try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CreateTaskAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_taskTitle))
+        {
+            _error = "Name the next action.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            if (_projectId is null)
+                await LoadProjectsAsync();
+
+            _projectId ??= _projects.Count > 0 ? _projects[0].Id : null;
+
+            if (_projectId is null)
+            {
+                _error = "Create a project in the previous step first.";
+                return;
+            }
+
+            var task = await TaskService.CreateAsync(new CreateTaskDto(_projectId.Value, _taskTitle.Trim()));
+            _taskId = task.Id;
+            await TrackStepCompletedAsync(3);
+            await GoToStepAsync(4);
+        }
+        catch
+        {
+            _error = "Could not create the task. Try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SetFocusAsync()
+    {
+        if (_taskId is null)
+        {
+            _error = "Create a next action first.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            await TaskService.SetCurrentTaskAsync(_taskId.Value);
+            await TrackStepCompletedAsync(4);
+            await GoToStepAsync(5);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task FinishAsync()
+    {
+        try
+        {
+            await PreferenceService.CompleteOnboardingAsync();
+        }
+        catch
+        {
+            // Best-effort: the user still gets to close the journey even if the
+            // completion flag fails to persist; it will simply resume on next load.
+        }
+
+        var userId = await CurrentUser.GetUserIdAsync();
+        if (userId is not null)
+            await AnalyticsService.TrackAsync(userId, AnalyticsEvents.OnboardingCompleted);
+
+        _visible = false;
+    }
+
+    private async Task DismissAsync()
+    {
+        try
+        {
+            await PreferenceService.DismissOnboardingAsync();
+        }
+        catch
+        {
+            // Best-effort: dismissing locally still hides the journey for this session
+            // even if the flag fails to persist.
+        }
+
+        var userId = await CurrentUser.GetUserIdAsync();
+        if (userId is not null)
+        {
+            await AnalyticsService.TrackAsync(
+                userId,
+                AnalyticsEvents.OnboardingSkipped,
+                new Dictionary<string, object?> { ["step"] = _step });
+        }
+
+        _visible = false;
+    }
+}

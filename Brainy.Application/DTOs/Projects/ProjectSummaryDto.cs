@@ -27,4 +27,6 @@ public record ProjectSummaryDto(
     double ProgressPercent,
     int OverdueTaskCount = 0,
     string Emoji = ProjectEmojiDefaults.DefaultEmoji,
-    string? ArchivedReason = null);
+    string? ArchivedReason = null,
+    /// <summary>True when this project exceeds the owner's plan's active-project limit and cannot be edited.</summary>
+    bool IsReadOnly = false);

@@ -7,4 +7,8 @@ public record UserDashboardPreferenceDto(
     Guid Id,
     string? WidgetOrder,
     string? CollapsedWidgets,
-    int InboxWarningThreshold);
+    int InboxWarningThreshold,
+    bool StarterModeEnabled,
+    bool OnboardingCompleted,
+    bool OnboardingDismissed,
+    int OnboardingStep);
