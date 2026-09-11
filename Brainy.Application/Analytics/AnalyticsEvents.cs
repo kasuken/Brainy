@@ -57,6 +57,13 @@ public static class AnalyticsEvents
     /// <summary>A task was set as the current-focus task.</summary>
     public const string CurrentFocusSelected = "focus.selected";
 
+    /// <summary>
+    /// A user added or edited a restart/handoff note from the Resume Context panel
+    /// (issue #305). <c>PropertiesJson</c> carries no properties: only that a save happened,
+    /// never the note's text or the task's title/description.
+    /// </summary>
+    public const string ResumeContextRestartNoteSaved = "focus.resume_context_restart_note_saved";
+
     // ── Search / retrieval ──────────────────────────────────────────────────
 
     /// <summary>A search query was submitted.</summary>
@@ -81,6 +88,13 @@ public static class AnalyticsEvents
 
     /// <summary>The user carried an unfinished task forward from last week (resurfaced item).</summary>
     public const string ResurfacedItemActioned = "review.resurfaced_item_actioned";
+
+    /// <summary>
+    /// The user made a decision (keep, link, archive, turn into task, or dismiss) on a
+    /// previously-useful note resurfaced by the guided weekly review (issue #299).
+    /// <c>PropertiesJson</c> carries only the decision category, never note content.
+    /// </summary>
+    public const string ResurfacedNoteDecisionMade = "review.resurfaced_note_decision";
 
     // ── Onboarding journey (issue #294) ──────────────────────────────────────
 
@@ -146,12 +160,14 @@ public static class AnalyticsEvents
         new(CaptureReusedAsOutput, "Measure capture-to-output reuse (retrieval value).", DefaultRetentionPeriod, true),
         new(TaskCreated, "Measure task-creation volume.", DefaultRetentionPeriod, true),
         new(CurrentFocusSelected, "Measure current-focus usage.", DefaultRetentionPeriod, true),
+        new(ResumeContextRestartNoteSaved, "Measure use of restart notes on the Resume Context panel, without collecting task content.", DefaultRetentionPeriod, true),
         new(SearchSubmitted, "Measure search usage volume.", DefaultRetentionPeriod, true),
         new(SearchZeroResult, "Measure search-result coverage gaps.", DefaultRetentionPeriod, true),
         new(SearchResultOpened, "Measure search result click-through (retrieval success).", DefaultRetentionPeriod, true),
         new(SearchFollowOnAction, "Measure whether an opened result led to further action (retrieval quality).", DefaultRetentionPeriod, true),
         new(WeeklyReviewViewed, "Measure weekly-review engagement.", DefaultRetentionPeriod, true),
         new(ResurfacedItemActioned, "Measure whether resurfaced/carried-forward items get acted on.", DefaultRetentionPeriod, true),
+        new(ResurfacedNoteDecisionMade, "Measure which decision users take on resurfaced notes in the guided weekly review.", DefaultRetentionPeriod, true),
         new(OnboardingStepCompleted, "Measure onboarding funnel step-by-step completion.", DefaultRetentionPeriod, true),
         new(OnboardingCompleted, "Measure full onboarding-journey completion rate.", DefaultRetentionPeriod, true),
         new(OnboardingSkipped, "Measure where users skip out of the onboarding journey.", DefaultRetentionPeriod, true),

@@ -6,6 +6,7 @@ using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Domain.Entities;
+using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Brainy.Application.Services;
@@ -101,6 +102,7 @@ internal sealed class NoteImageService(
             };
 
             context.NoteImages.Add(image);
+
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             await InvalidateImagesAsync(userId, [image.Id]).ConfigureAwait(false);
 

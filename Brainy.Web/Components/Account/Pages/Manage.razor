@@ -1,9 +1,19 @@
 @page "/Account/Manage"
-@rendermode InteractiveServer
+@* This page forces interactivity on an otherwise statically-rendered route (App.razor
+   keeps /Account/* static by default so server-side form posts and HttpContext access
+   keep working elsewhere under /Account), which makes it its own interactive island
+   separate from MainLayout's — MainLayout's <MudPopoverProvider /> renders as inert
+   static markup here and never registers, so MudSelect below has nothing to call and
+   crashes the circuit. Prerendering is also disabled: with it on, this page's own
+   provider (below) gets instantiated once during the static prerender pass and again on
+   the interactive reconnect, and the second instance collides with the first's
+   still-registered popover section subscription. Both parts together are needed. *@
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize]
 
 @using Brainy.Application.DTOs.Billing
 @using Brainy.Application.DTOs.DataImport
+@using Brainy.Application.DTOs.Search
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Data.Identity
 @using Brainy.Domain.Enums
@@ -26,6 +36,8 @@
 @inject NavigationManager Navigation
 
 <PageTitle>Account and data — Brainy</PageTitle>
+
+<MudPopoverProvider />
 
 <main class="account-manage" aria-labelledby="account-manage-title">
     <header class="account-manage__header">
@@ -426,10 +438,12 @@
                 </div>
             </div>
 
-            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="account-manage__notice">
-                This first pass imports tags and standalone notes only. Projects, tasks, goals, outputs, images,
-                archive settings, dashboard preferences, and notes linked to projects, areas, resources, or sources
-                are detected and reported but not imported yet.
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
+                Every entity in a Brainy export is restored — areas, projects, resources, sources, notes and
+                their tags/highlights/summaries/action items/relationships/images, tasks and their dependencies,
+                outputs, ideas, goals and their milestones/activities, and archive retention rules. Re-importing
+                the same export is safe: matching existing rows are reused rather than duplicated. Preview first
+                to see exactly what will change before anything is written.
             </MudAlert>
 
             @if (_importError is not null)
@@ -439,46 +453,47 @@
                 </MudAlert>
             }
 
+            @if (_previewResult is not null)
+            {
+                <MudAlert Severity="@GetPreviewSeverity()" Variant="Variant.Outlined" Class="account-manage__notice">
+                    <div class="account-manage__import-summary">
+                        <strong>Preview — nothing has been written yet</strong>
+                        @RenderOutcomes(_previewResult.EntityOutcomes, _previewResult.UnsupportedEntities, _previewResult.Conflicts, _previewResult.IntegrityIssues)
+                    </div>
+                </MudAlert>
+            }
+
             @if (_importResult is not null)
             {
-                <MudAlert Severity="@GetImportSeverity()" Variant="Variant.Outlined" Class="account-manage__notice">
+                <MudAlert Severity="@GetResultSeverity()" Variant="Variant.Outlined" Class="account-manage__notice">
                     <div class="account-manage__import-summary">
-                        <strong>Import summary</strong>
-                        <ul>
-                            <li>@_importResult.ImportedTags tag(s) imported; @_importResult.ReusedTags existing tag(s) reused.</li>
-                            <li>@_importResult.ImportedNotes standalone note(s) imported; @_importResult.SkippedNotes note(s) skipped.</li>
-                            <li>@_importResult.LinkedNoteTags note-tag link(s) restored; @_importResult.SkippedNoteTagLinks link(s) skipped.</li>
-                        </ul>
-
-                        @if (_importResult.UnsupportedEntities.Count > 0)
-                        {
-                            <div>
-                                <span class="account-manage__meta-label">Not imported in this release</span>
-                                <ul>
-                                    @foreach (var item in _importResult.UnsupportedEntities)
-                                    {
-                                        <li>@item.EntityType: @item.Count</li>
-                                    }
-                                </ul>
-                            </div>
-                        }
+                        <strong>Import complete</strong>
+                        @RenderOutcomes(_importResult.EntityOutcomes, _importResult.UnsupportedEntities, _importResult.Conflicts, _importResult.IntegrityIssues)
                     </div>
                 </MudAlert>
             }
 
             <div class="account-manage__import-picker">
-                <InputFile OnChange="HandleImportFileSelected" accept=".json,application/json" disabled="@_importing" />
+                <InputFile OnChange="HandleImportFileSelected" accept=".json,application/json" disabled="@(_importing || _previewing)" />
                 <span class="account-manage__status">@(_importFileName ?? "Choose a Brainy JSON export")</span>
             </div>
 
             <div class="account-manage__actions">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Outlined.Preview"
+                           Disabled="@(_previewing || _importing || _selectedImportFile is null)"
+                           aria-busy="@_previewing.ToString().ToLowerInvariant()"
+                           OnClick="PreviewImportAsync">
+                    @(_previewing ? "Checking…" : "Preview import")
+                </MudButton>
                 <MudButton Variant="Variant.Filled"
                            Color="Color.Primary"
                            StartIcon="@Icons.Material.Outlined.Publish"
-                           Disabled="@(_importing || _selectedImportFile is null)"
+                           Disabled="@(_importing || _previewing || _previewResult is null)"
                            aria-busy="@_importing.ToString().ToLowerInvariant()"
                            OnClick="ImportAsync">
-                    @(_importing ? "Importing…" : "Import JSON export")
+                    @(_importing ? "Importing…" : "Confirm import")
                 </MudButton>
                 <span class="account-manage__status" role="status" aria-live="polite">@_importStatus</span>
             </div>
@@ -594,8 +609,10 @@
     private string? _exportError;
     private string? _exportStatus;
     private bool _importing;
+    private bool _previewing;
     private string? _importError;
     private string? _importStatus;
+    private DataImportPreviewDto? _previewResult;
     private DataImportResultDto? _importResult;
     private IBrowserFile? _selectedImportFile;
     private string? _importFileName;
@@ -866,24 +883,26 @@
         _importFileName = _selectedImportFile?.Name;
         _importError = null;
         _importStatus = null;
+        _previewResult = null;
         _importResult = null;
     }
 
-    private async Task ImportAsync()
+    private async Task PreviewImportAsync()
     {
-        if (_importing || _selectedImportFile is null)
+        if (_previewing || _importing || _selectedImportFile is null)
             return;
 
-        _importing = true;
+        _previewing = true;
         _importError = null;
-        _importStatus = "Validating your export and restoring supported records.";
+        _importStatus = "Checking the export against your account without changing anything.";
+        _previewResult = null;
         _importResult = null;
 
         try
         {
             await using var stream = _selectedImportFile.OpenReadStream(MaxImportFileBytes);
-            _importResult = await DataImportService.ImportCurrentUserAsync(stream);
-            _importStatus = $"Import checked schema {_importResult.SchemaVersion}.";
+            _previewResult = await DataImportService.PreviewImportAsync(stream);
+            _importStatus = $"Preview checked schema {_previewResult.SchemaVersion}. Review the plan, then confirm to write it.";
         }
         catch (InvalidOperationException ex)
         {
@@ -897,7 +916,45 @@
         }
         catch
         {
-            _importError = "Brainy could not import that file. No partial relationships were created for unsupported records.";
+            _importError = "Brainy could not preview that file.";
+            _importStatus = null;
+        }
+        finally
+        {
+            _previewing = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_importing || _previewing || _selectedImportFile is null || _previewResult is null)
+            return;
+
+        _importing = true;
+        _importError = null;
+        _importStatus = "Restoring your data inside a single transaction.";
+        _importResult = null;
+
+        try
+        {
+            await using var stream = _selectedImportFile.OpenReadStream(MaxImportFileBytes);
+            _importResult = await DataImportService.ImportCurrentUserAsync(stream);
+            _previewResult = null;
+            _importStatus = $"Import committed schema {_importResult.SchemaVersion}.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            _importError = ex.Message;
+            _importStatus = null;
+        }
+        catch (IOException)
+        {
+            _importError = "The selected file could not be read. Choose the export again and retry.";
+            _importStatus = null;
+        }
+        catch
+        {
+            _importError = "Brainy could not import that file. The transaction was rolled back, so no partial data was written.";
             _importStatus = null;
         }
         finally
@@ -906,14 +963,96 @@
         }
     }
 
-    private Severity GetImportSeverity() =>
-        _importResult is not null &&
-        (_importResult.SkippedNotes > 0 ||
-         _importResult.SkippedTags > 0 ||
-         _importResult.UnsupportedEntities.Count > 0 ||
-         _importResult.SkippedNoteTagLinks > 0)
+    private static bool HasWarnings(
+        IReadOnlyList<DataImportEntityOutcomeDto> outcomes,
+        IReadOnlyList<DataImportEntityCountDto> unsupported,
+        IReadOnlyList<string> conflicts,
+        IReadOnlyList<string> integrityIssues) =>
+        outcomes.Any(o => o.Skipped > 0) || unsupported.Count > 0 || conflicts.Count > 0 || integrityIssues.Count > 0;
+
+    private Severity GetPreviewSeverity() =>
+        _previewResult is not null &&
+        HasWarnings(_previewResult.EntityOutcomes, _previewResult.UnsupportedEntities, _previewResult.Conflicts, _previewResult.IntegrityIssues)
             ? Severity.Warning
             : Severity.Success;
+
+    private Severity GetResultSeverity() =>
+        _importResult is not null &&
+        HasWarnings(_importResult.EntityOutcomes, _importResult.UnsupportedEntities, _importResult.Conflicts, _importResult.IntegrityIssues)
+            ? Severity.Warning
+            : Severity.Success;
+
+    private static RenderFragment RenderOutcomes(
+        IReadOnlyList<DataImportEntityOutcomeDto> outcomes,
+        IReadOnlyList<DataImportEntityCountDto> unsupported,
+        IReadOnlyList<string> conflicts,
+        IReadOnlyList<string> integrityIssues) => builder =>
+    {
+        var sequence = 0;
+        builder.OpenElement(sequence++, "ul");
+        foreach (var outcome in outcomes.Where(o => o.Created > 0 || o.Reused > 0 || o.Skipped > 0))
+        {
+            builder.OpenElement(sequence++, "li");
+            builder.AddContent(sequence++,
+                $"{outcome.EntityType}: {outcome.Created} to create, {outcome.Reused} reused/unchanged, {outcome.Skipped} skipped.");
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        if (unsupported.Count > 0)
+        {
+            builder.OpenElement(sequence++, "div");
+            builder.OpenElement(sequence++, "span");
+            builder.AddAttribute(sequence++, "class", "account-manage__meta-label");
+            builder.AddContent(sequence++, "Not imported (unsupported by design)");
+            builder.CloseElement();
+            builder.OpenElement(sequence++, "ul");
+            foreach (var item in unsupported)
+            {
+                builder.OpenElement(sequence++, "li");
+                builder.AddContent(sequence++, $"{item.EntityType}: {item.Count}");
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+
+        if (conflicts.Count > 0)
+        {
+            builder.OpenElement(sequence++, "div");
+            builder.OpenElement(sequence++, "span");
+            builder.AddAttribute(sequence++, "class", "account-manage__meta-label");
+            builder.AddContent(sequence++, "Conflicts");
+            builder.CloseElement();
+            builder.OpenElement(sequence++, "ul");
+            foreach (var conflict in conflicts)
+            {
+                builder.OpenElement(sequence++, "li");
+                builder.AddContent(sequence++, conflict);
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+
+        if (integrityIssues.Count > 0)
+        {
+            builder.OpenElement(sequence++, "div");
+            builder.OpenElement(sequence++, "span");
+            builder.AddAttribute(sequence++, "class", "account-manage__meta-label");
+            builder.AddContent(sequence++, "Attachment integrity");
+            builder.CloseElement();
+            builder.OpenElement(sequence++, "ul");
+            foreach (var issue in integrityIssues)
+            {
+                builder.OpenElement(sequence++, "li");
+                builder.AddContent(sequence++, issue);
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+    };
 
     private string GetBrowserTimeZoneOptionLabel() =>
         string.IsNullOrWhiteSpace(_browserTimeZoneId)

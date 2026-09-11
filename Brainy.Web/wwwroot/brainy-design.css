@@ -1957,6 +1957,44 @@ body {
     flex-shrink: 0;
 }
 
+.ned-images__extraction {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.ned-images__extraction-chip {
+    font-size: 0.68rem !important;
+    height: 1.35rem !important;
+}
+
+.ned-images__retry {
+    border: none;
+    background: none;
+    padding: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--clay-deep);
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.ned-images__retry:disabled {
+    opacity: 0.5;
+    cursor: default;
+    text-decoration: none;
+}
+
+.ned-images__extraction-error {
+    margin: 0;
+    font-size: 0.68rem;
+    color: var(--mud-palette-error, #b00020);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* ── Summary Layers --------------------------------------------------------- */
 .ned-summaries__form {
     display: flex;

@@ -1,0 +1,666 @@
+@page "/today/week/review"
+@attribute [Authorize]
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.DTOs.Week
+@using Brainy.Application.DTOs.WeeklyReview
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@using Brainy.Web.Components.Pages.Inbox
+@inject IWeeklyReviewService WeeklyReviewService
+@inject IWeekService WeekService
+@inject INoteService NoteService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Weekly review · Brainy</PageTitle>
+
+<style>
+    .wr-page {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 1rem 0 2rem;
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
+
+    .wr-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 1.4rem;
+    }
+
+    .wr-hero {
+        display: flex;
+        flex-direction: column;
+        gap: .6rem;
+    }
+
+    .wr-eyebrow {
+        margin: 0;
+        font-size: .76rem;
+        font-weight: 800;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+    }
+
+    .wr-title {
+        margin: 0;
+        font-size: clamp(1.9rem, 4vw, 2.6rem);
+        color: var(--mud-palette-text-primary);
+    }
+
+    .wr-caption {
+        margin: 0;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .wr-panel {
+        border-radius: 20px;
+        padding: 1.2rem;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .wr-panel__head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: .8rem;
+        margin-bottom: 1rem;
+    }
+
+    .wr-panel__title {
+        margin: 0;
+        font-size: 1.2rem;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .wr-panel__caption {
+        margin: .2rem 0 0;
+        font-size: .88rem;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .wr-empty {
+        padding: 1rem;
+        border-radius: 14px;
+        border: 1px dashed var(--mud-palette-lines-default);
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .wr-band {
+        margin-top: 1rem;
+    }
+
+    .wr-band:first-child {
+        margin-top: 0;
+    }
+
+    .wr-band__title {
+        margin: 0 0 .5rem;
+        font-size: .8rem;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 800;
+    }
+
+    .wr-item-list {
+        display: flex;
+        flex-direction: column;
+        gap: .6rem;
+    }
+
+    .wr-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: .8rem;
+        flex-wrap: wrap;
+        border-radius: 14px;
+        padding: .8rem .9rem;
+        background: var(--mud-palette-background);
+        border: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .wr-item__title {
+        margin: 0;
+        font-weight: 700;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .wr-item__meta {
+        margin: .3rem 0 0;
+        font-size: .82rem;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .wr-item__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+        align-items: center;
+    }
+
+    .wr-summary-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .6rem;
+        margin-bottom: 1rem;
+    }
+
+    .wr-summary-pill {
+        padding: .4rem .75rem;
+        border-radius: 999px;
+        font-size: .8rem;
+        font-weight: 700;
+        background: rgba(100, 84, 61, .07);
+        color: var(--mud-palette-text-secondary);
+    }
+</style>
+
+<div class="wr-page">
+    <div class="wr-stack">
+        <section class="wr-hero" aria-labelledby="wr-heading">
+            <p class="wr-eyebrow">Guided weekly review</p>
+            <h1 id="wr-heading" class="wr-title">Process, decide, resume</h1>
+            <p class="wr-caption">
+                A single pass over what's waiting, what's stalled, and what's worth a second look —
+                without turning into another backlog to manage.
+                <MudLink Href="/today/week" Class="ml-1">Back to this week's plan</MudLink>
+            </p>
+        </section>
+
+        @if (_loading)
+        {
+            <MudProgressCircular Indeterminate="true" Size="Size.Large" Color="Color.Warning" />
+        }
+        else if (_loadError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled">
+                <div class="d-flex flex-column gap-2">
+                    <span>@_loadError</span>
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ReloadAsync">Retry</MudButton>
+                </div>
+            </MudAlert>
+        }
+        else if (_review is not null)
+        {
+            <div class="wr-summary-row">
+                <span class="wr-summary-pill">@_review.InboxTotalCount waiting in Inbox</span>
+                <span class="wr-summary-pill">@StalledProjectCount stalled project@(StalledProjectCount == 1 ? "" : "s")</span>
+                <span class="wr-summary-pill">@_review.Week.OverdueAttention.Count overdue and not scheduled</span>
+                <span class="wr-summary-pill">@_review.ResurfacedNotes.Count worth a second look</span>
+            </div>
+
+            <section class="wr-panel" aria-labelledby="wr-inbox-heading">
+                <div class="wr-panel__head">
+                    <div>
+                        <h2 id="wr-inbox-heading" class="wr-panel__title">Inbox, by age</h2>
+                        <p class="wr-panel__caption">Older items surface here so nothing quietly rots in the Inbox.</p>
+                    </div>
+                </div>
+
+                @if (_review.InboxAgeBands.Count == 0)
+                {
+                    <div class="wr-empty">Inbox is clear.</div>
+                }
+                else
+                {
+                    @foreach (var band in _review.InboxAgeBands)
+                    {
+                        <div class="wr-band" @key="band.Key">
+                            <h3 class="wr-band__title">@band.Label · @band.Items.Count</h3>
+                            <div class="wr-item-list">
+                                @foreach (var item in band.Items)
+                                {
+                                    <article class="wr-item" @key="item.NoteId">
+                                        <div>
+                                            <p class="wr-item__title">@item.Title</p>
+                                            <p class="wr-item__meta">Captured <UserLocalTime Utc="item.CreatedAtUtc" /></p>
+                                        </div>
+                                        <div class="wr-item__actions">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Primary"
+                                                       Size="Size.Small"
+                                                       Disabled="@_busy"
+                                                       OnClick="() => ProcessInboxNoteAsync(item.NoteId)">
+                                                Process
+                                            </MudButton>
+                                            <MudIconButton Icon="@Icons.Material.Outlined.Archive"
+                                                           Size="Size.Small"
+                                                           aria-label="@($"Archive {item.Title} without processing")"
+                                                           Disabled="@_busy"
+                                                           OnClick="() => QuickArchiveInboxNoteAsync(item.NoteId, item.Title)" />
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </section>
+
+            <section class="wr-panel" aria-labelledby="wr-stalled-heading">
+                <div class="wr-panel__head">
+                    <div>
+                        <h2 id="wr-stalled-heading" class="wr-panel__title">Stalled projects &amp; overdue commitments</h2>
+                        <p class="wr-panel__caption">
+                            Read from this week's plan. Use <MudLink Href="/today/week">the Week page</MudLink> for full task selection.
+                        </p>
+                    </div>
+                </div>
+
+                @if (StalledProjectCount == 0 && _review.Week.OverdueAttention.Count == 0 && _review.Week.CarryForwardCandidates.Count == 0)
+                {
+                    <div class="wr-empty">Nothing stalled or overdue right now.</div>
+                }
+                else
+                {
+                    @if (StalledProjectCount > 0)
+                    {
+                        <div class="wr-band">
+                            <h3 class="wr-band__title">Stalled projects</h3>
+                            <div class="wr-item-list">
+                                @foreach (var project in StalledProjects)
+                                {
+                                    <article class="wr-item" @key="project.Id">
+                                        <div>
+                                            <p class="wr-item__title">@project.Emoji @project.Name</p>
+                                            <p class="wr-item__meta">@GetProjectStatusLabel(project.Status) · @project.OpenTaskCount open</p>
+                                        </div>
+                                        <div class="wr-item__actions">
+                                            <MudButton Variant="Variant.Text" Color="Color.Warning" Href="@($"/projects/{project.Id}")">
+                                                Open project
+                                            </MudButton>
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (_review.Week.OverdueAttention.Count > 0)
+                    {
+                        <div class="wr-band">
+                            <h3 class="wr-band__title">Overdue and not scheduled</h3>
+                            <div class="wr-item-list">
+                                @foreach (var task in _review.Week.OverdueAttention)
+                                {
+                                    <article class="wr-item" @key="task.Id">
+                                        <div>
+                                            <p class="wr-item__title">@task.ProjectEmoji @task.Title</p>
+                                            <p class="wr-item__meta">@task.ProjectName · @task.AttentionReason</p>
+                                        </div>
+                                        <div class="wr-item__actions">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Warning"
+                                                       Size="Size.Small"
+                                                       Disabled="@(!task.CanAddToWeek || _busy)"
+                                                       OnClick="() => ScheduleTaskForThisWeekAsync(task.Id)">
+                                                Schedule this week
+                                            </MudButton>
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (_review.Week.CarryForwardCandidates.Count(candidate => candidate.CanCarryForward) > 0)
+                    {
+                        <div class="wr-band">
+                            <h3 class="wr-band__title">Unfinished from last week</h3>
+                            <div class="wr-item-list">
+                                @foreach (var candidate in _review.Week.CarryForwardCandidates.Where(c => c.CanCarryForward))
+                                {
+                                    <article class="wr-item" @key="candidate.Task.Id">
+                                        <div>
+                                            <p class="wr-item__title">@candidate.Task.ProjectEmoji @candidate.Task.Title</p>
+                                            <p class="wr-item__meta">From @candidate.PreviousWeekStartDate.ToString("MMM d")</p>
+                                        </div>
+                                        <div class="wr-item__actions">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Warning"
+                                                       Size="Size.Small"
+                                                       Disabled="@_busy"
+                                                       OnClick="() => CarryForwardAsync(candidate.Task.Id)">
+                                                Carry into this week
+                                            </MudButton>
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </section>
+
+            <section class="wr-panel" aria-labelledby="wr-resurfaced-heading">
+                <div class="wr-panel__head">
+                    <div>
+                        <h2 id="wr-resurfaced-heading" class="wr-panel__title">Worth a second look</h2>
+                        <p class="wr-panel__caption">
+                            Previously useful notes you haven't revisited lately. Every item says why it's here.
+                        </p>
+                    </div>
+                </div>
+
+                @if (_review.ResurfacedNotes.Count == 0)
+                {
+                    <div class="wr-empty">Nothing to resurface this week.</div>
+                }
+                else
+                {
+                    <div class="wr-item-list">
+                        @foreach (var note in _review.ResurfacedNotes)
+                        {
+                            <article class="wr-item" @key="note.NoteId">
+                                <div>
+                                    <p class="wr-item__title">@note.Title</p>
+                                    <p class="wr-item__meta">@note.Rationale</p>
+                                </div>
+                                <div class="wr-item__actions">
+                                    <MudButton Variant="Variant.Text"
+                                               Size="Size.Small"
+                                               Disabled="@_busy"
+                                               OnClick="() => KeepNoteAsync(note.NoteId)">
+                                        Keep
+                                    </MudButton>
+
+                                    <MudMenu Label="Link" Variant="Variant.Text" Size="Size.Small" Disabled="@(_busy || ActiveProjects.Count == 0)">
+                                        @foreach (var project in ActiveProjects)
+                                        {
+                                            <MudMenuItem OnClick="() => LinkNoteAsync(note.NoteId, project.Id)">@project.Emoji @project.Name</MudMenuItem>
+                                        }
+                                    </MudMenu>
+
+                                    <MudMenu Label="Turn into task" Variant="Variant.Text" Size="Size.Small" Disabled="@(_busy || ActiveProjects.Count == 0)">
+                                        @foreach (var project in ActiveProjects)
+                                        {
+                                            <MudMenuItem OnClick="() => TurnIntoTaskAsync(note.NoteId, project.Id)">@project.Emoji @project.Name</MudMenuItem>
+                                        }
+                                    </MudMenu>
+
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Archive"
+                                                   Size="Size.Small"
+                                                   aria-label="@($"Archive {note.Title}")"
+                                                   Disabled="@_busy"
+                                                   OnClick="() => ArchiveNoteAsync(note.NoteId)" />
+
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Close"
+                                                   Size="Size.Small"
+                                                   aria-label="@($"Dismiss {note.Title} from future resurfacing")"
+                                                   Disabled="@_busy"
+                                                   OnClick="() => DismissNoteAsync(note.NoteId)" />
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+        }
+    </div>
+</div>
+
+@code {
+    private WeeklyReviewDto? _review;
+    private string? _loadError;
+    private bool _loading = true;
+    private bool _busy;
+
+    private static readonly DialogOptions ProcessDialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+        BackdropClick = true,
+        CloseButton = false,
+    };
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private int StalledProjectCount => StalledProjects.Count;
+
+    private IReadOnlyList<WeekProjectOverviewDto> StalledProjects =>
+        (_review?.Week.Projects ?? [])
+            .Where(project => project.Status is ProjectStatus.Blocked or ProjectStatus.Parked or ProjectStatus.NotStarted)
+            .ToList();
+
+    private IReadOnlyList<WeekProjectOverviewDto> ActiveProjects =>
+        (_review?.Week.Projects ?? [])
+            .Where(project => project.Status == ProjectStatus.Active)
+            .OrderBy(project => project.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _loadError = null;
+        try
+        {
+            _review = await WeeklyReviewService.GetCurrentReviewAsync();
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ProcessInboxNoteAsync(Guid noteId)
+    {
+        var note = await NoteService.GetByIdAsync(noteId);
+        if (note is null)
+        {
+            Snackbar.Add("This note is no longer in the Inbox.", Severity.Info);
+            await ReloadAsync();
+            return;
+        }
+
+        var parameters = new DialogParameters<ProcessNoteDialog> { { x => x.Note, note } };
+        var dialog = await DialogService.ShowAsync<ProcessNoteDialog>("", parameters, ProcessDialogOptions);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: ProcessNoteDto dto })
+        {
+            _busy = true;
+            try
+            {
+                await NoteService.ProcessNoteAsync(dto);
+                Snackbar.Add($"\"{dto.Title ?? note.Title}\" moved to {dto.ParaCategory}.", Severity.Success);
+                await ReloadAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Could not process note: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _busy = false;
+            }
+        }
+    }
+
+    private async Task QuickArchiveInboxNoteAsync(Guid noteId, string title)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Archive Note",
+            $"Archive \"{title}\" without processing?",
+            yesText: "Archive", cancelText: "Cancel");
+        if (confirmed != true)
+            return;
+
+        _busy = true;
+        try
+        {
+            await NoteService.ProcessNoteAsync(new ProcessNoteDto(
+                noteId, ParaCategory.Archive, NoteStatus.Archived));
+            Snackbar.Add($"\"{title}\" archived.", Severity.Info);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not archive note: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ScheduleTaskForThisWeekAsync(Guid taskId)
+    {
+        _busy = true;
+        try
+        {
+            await WeekService.AddTaskToCurrentWeekAsync(taskId);
+            Snackbar.Add("Scheduled into this week.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CarryForwardAsync(Guid taskId)
+    {
+        _busy = true;
+        try
+        {
+            await WeekService.CarryForwardTasksAsync([taskId]);
+            Snackbar.Add("Carried into this week.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task KeepNoteAsync(Guid noteId)
+    {
+        _busy = true;
+        try
+        {
+            await WeeklyReviewService.KeepResurfacedNoteAsync(noteId);
+            _review = _review! with
+            {
+                ResurfacedNotes = _review.ResurfacedNotes.Where(note => note.NoteId != noteId).ToList()
+            };
+            Snackbar.Add("Kept for another day.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DismissNoteAsync(Guid noteId)
+    {
+        _busy = true;
+        try
+        {
+            await WeeklyReviewService.DismissResurfacedNoteAsync(noteId);
+            _review = _review! with
+            {
+                ResurfacedNotes = _review.ResurfacedNotes.Where(note => note.NoteId != noteId).ToList()
+            };
+            Snackbar.Add("Won't be resurfaced again.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task LinkNoteAsync(Guid noteId, Guid projectId)
+    {
+        _busy = true;
+        try
+        {
+            await WeeklyReviewService.LinkResurfacedNoteAsync(noteId, projectId);
+            Snackbar.Add("Note linked to project.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ArchiveNoteAsync(Guid noteId)
+    {
+        _busy = true;
+        try
+        {
+            await WeeklyReviewService.ArchiveResurfacedNoteAsync(noteId);
+            _review = _review! with
+            {
+                ResurfacedNotes = _review.ResurfacedNotes.Where(note => note.NoteId != noteId).ToList()
+            };
+            Snackbar.Add("Note archived.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task TurnIntoTaskAsync(Guid noteId, Guid projectId)
+    {
+        _busy = true;
+        try
+        {
+            await WeeklyReviewService.TurnResurfacedNoteIntoTaskAsync(noteId, projectId);
+            Snackbar.Add("Turned into a task.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string GetProjectStatusLabel(ProjectStatus status) => status switch
+    {
+        ProjectStatus.NotStarted => "Not started",
+        ProjectStatus.Active => "Active",
+        ProjectStatus.Blocked => "Blocked",
+        ProjectStatus.Parked => "Parked",
+        ProjectStatus.Completed => "Completed",
+        ProjectStatus.Archived => "Archived",
+        _ => status.ToString()
+    };
+}

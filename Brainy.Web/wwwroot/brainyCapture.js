@@ -124,6 +124,15 @@ window.brainyCapture = {
     },
 
     /**
+     * True when the browser currently reports network connectivity. Used by the minimal
+     * /capture/share route to show an honest offline status before attempting to save,
+     * rather than letting a save silently fail.
+     */
+    isOnline() {
+        return typeof navigator !== 'undefined' ? navigator.onLine : true;
+    },
+
+    /**
      * Starts voice dictation. Final transcript segments are pushed back to the
      * component via OnSpeechResultAsync. Returns false when unsupported/already running.
      * @param {string|null} lang BCP-47 language tag, or null to use the browser default

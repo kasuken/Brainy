@@ -26,6 +26,7 @@ public interface IApplicationDbContext
     DbSet<TaskItem> Tasks { get; }
     DbSet<TaskDependency> TaskDependencies { get; }
     DbSet<WeeklyTaskSelection> WeeklyTaskSelections { get; }
+    DbSet<ResurfacingDismissal> ResurfacingDismissals { get; }
     DbSet<Output> Outputs { get; }
     DbSet<ArchiveRetentionRule> ArchiveRetentionRules { get; }
     DbSet<UserDashboardPreference> DashboardPreferences { get; }
@@ -37,6 +38,7 @@ public interface IApplicationDbContext
     DbSet<ProductEvent> ProductEvents { get; }
     DbSet<UserPlan> UserPlans { get; }
     DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents { get; }
+    DbSet<OfflineCaptureSyncRecord> OfflineCaptureSyncRecords { get; }
 
     /// <summary>
     /// Change-tracker entry for <paramref name="entity"/>; used to set the original
@@ -56,6 +58,17 @@ public interface IApplicationDbContext
     /// <returns>The result produced by <paramref name="operation"/>.</returns>
     Task<TResult> ExecuteSerializedTaskDependencyMutationAsync<TResult>(
         string userId,
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Executes <paramref name="operation"/> as a single unit of work: on a relational
+    /// provider it runs inside one transaction (retried as a whole on transient
+    /// failures), so a mid-import failure leaves the database exactly as it was before.
+    /// Non-relational test providers execute directly, since EF InMemory has no
+    /// transaction support.
+    /// </summary>
+    Task<TResult> ExecuteInTransactionAsync<TResult>(
         Func<CancellationToken, Task<TResult>> operation,
         CancellationToken cancellationToken = default);
 

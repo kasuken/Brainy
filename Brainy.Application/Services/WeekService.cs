@@ -81,8 +81,7 @@ internal sealed class WeekService(
         var missingProjectIds = selectedProjectIds.Where(projectId => !projectCardsById.ContainsKey(projectId)).ToList();
         if (missingProjectIds.Count > 0)
         {
-            var missingProjects = await BuildProjectOverviewQuery(userId, today, week.WeekStartDate)
-                .Where(project => missingProjectIds.Contains(project.Id))
+            var missingProjects = await BuildProjectOverviewQuery(userId, today, week.WeekStartDate, projectIds: missingProjectIds)
                 .Select(project => project.ToDto())
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
@@ -509,8 +508,7 @@ internal sealed class WeekService(
             ],
             CancellationToken.None).ConfigureAwait(false);
 
-        return await BuildProjectOverviewQuery(userId, today, week.WeekStartDate)
-            .Where(candidate => candidate.Id == dto.ProjectId)
+        return await BuildProjectOverviewQuery(userId, today, week.WeekStartDate, projectId: dto.ProjectId)
             .Select(candidate => candidate.ToDto())
             .SingleAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -621,7 +619,9 @@ internal sealed class WeekService(
         string userId,
         DateTime today,
         DateTime weekStartDate,
-        bool planningStatusesOnly = false)
+        bool planningStatusesOnly = false,
+        Guid? projectId = null,
+        IReadOnlyCollection<Guid>? projectIds = null)
     {
         var projects = context.Projects
             .AsNoTracking()
@@ -629,6 +629,15 @@ internal sealed class WeekService(
 
         if (planningStatusesOnly)
             projects = projects.Where(project => !project.IsArchived && OverviewStatuses.Contains(project.Status));
+
+        // Any Id-based filtering must happen on the raw Project queryable, before the
+        // projection below: filtering *after* projecting into ProjectOverviewProjection
+        // (which embeds correlated Count() subqueries) is not translatable by EF Core.
+        if (projectId is { } id)
+            projects = projects.Where(project => project.Id == id);
+
+        if (projectIds is not null)
+            projects = projects.Where(project => projectIds.Contains(project.Id));
 
         return projects.Select(project => new ProjectOverviewProjection(
                 project.Id,

@@ -19,4 +19,9 @@ public record CreateNoteDto(
     /// <summary>Human-readable title for the source (e.g. page title, article name).</summary>
     string? SourceTitle = null,
     /// <summary>Optional tag names. Names are trimmed, de-duplicated case-insensitively, and resolved per user.</summary>
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    /// <summary>
+    /// Overrides the <see cref="Domain.Entities.Source"/> type created for <see cref="SourceUrl"/>.
+    /// Defaults to <see cref="SourceType.Url"/> when not supplied (e.g. a pasted link).
+    /// </summary>
+    SourceType? SourceType = null);

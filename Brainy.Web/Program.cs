@@ -41,6 +41,10 @@ builder.Services.AddSingleton(serviceProvider =>
     serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<AnalyticsAccessOptions>>().Value);
 
 
+// Backs CurrentUserService's fallback path for the Offline Lite (issue #302) minimal API
+// endpoints, which run outside any Razor component/circuit DI scope.
+builder.Services.AddHttpContextAccessor();
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
@@ -52,7 +56,13 @@ builder.Services.AddRazorComponents()
         options.MaximumReceiveMessageSize = 512 * 1024;
     });
 
-builder.Services.AddMudServices();
+builder.Services.AddMudServices(config =>
+{
+    // /Account/Manage forces its own interactive island (see the comment on that page)
+    // with a local MudPopoverProvider as a fast, always-ready fallback alongside
+    // MainLayout's; tolerate both being present instead of crashing the circuit.
+    config.PopoverOptions.ThrowOnDuplicateProvider = false;
+});
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -218,6 +228,10 @@ app.MapNoteImageEndpoints();
 
 // Inbound billing-provider webhooks (plan/subscription state changes).
 app.MapBillingWebhookEndpoints();
+
+// Offline Lite (issue #302): Today snapshot + queued-capture sync, for the service worker's
+// offline fallback page and the client-side capture queue.
+app.MapOfflineEndpoints();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {

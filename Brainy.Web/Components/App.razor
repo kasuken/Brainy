@@ -73,12 +73,31 @@
     <script src="@Assets["brainyHelp.js"]"></script>
     <script src="@Assets["brainySearch.js"]"></script>
     <script src="@Assets["brainyCapture.js"]"></script>
+    <script src="@Assets["offlineSnapshot.js"]"></script>
+    <script src="@Assets["offlineCapture.js"]"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('service-worker.js').catch(() => { });
             });
         }
+
+        // Offline Lite (issue #302) sign-out cleanup: clear the cached read-only Today/
+        // current-focus/favorites snapshot and any already-synced offline-capture records
+        // before the logout form's real POST navigates away, so a shared/public device does
+        // not retain another user's cached personal data after logout. Deliberately does NOT
+        // touch still-queued/failed captures — see offlineCapture.js's header comment for why
+        // that unsynced work must survive sign-out instead. MainLayout.razor's logout form
+        // carries data-enhance="false" so this plain listener is the only thing handling it.
+        document.addEventListener('submit', (event) => {
+            const form = event.target;
+            if (!(form instanceof HTMLFormElement) || !form.classList.contains('brainy-logout-form')) return;
+
+            event.preventDefault();
+            const clearSnapshot = window.offlineSnapshot ? Promise.resolve(window.offlineSnapshot.clearSnapshot()) : Promise.resolve();
+            const clearSynced = window.offlineCapture ? window.offlineCapture.clearSyncedRecords() : Promise.resolve();
+            Promise.allSettled([clearSnapshot, clearSynced]).finally(() => form.submit());
+        });
     </script>
 </body>
 

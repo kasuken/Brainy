@@ -50,6 +50,8 @@ public class BrainyDbContext(
 
     public DbSet<WeeklyTaskSelection> WeeklyTaskSelections => Set<WeeklyTaskSelection>();
 
+    public DbSet<ResurfacingDismissal> ResurfacingDismissals => Set<ResurfacingDismissal>();
+
     public DbSet<Output> Outputs => Set<Output>();
 
     public DbSet<ArchiveRetentionRule> ArchiveRetentionRules => Set<ArchiveRetentionRule>();
@@ -71,6 +73,8 @@ public class BrainyDbContext(
     public DbSet<UserPlan> UserPlans => Set<UserPlan>();
 
     public DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents => Set<ProcessedWebhookEvent>();
+
+    public DbSet<OfflineCaptureSyncRecord> OfflineCaptureSyncRecords => Set<OfflineCaptureSyncRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -139,6 +143,33 @@ public class BrainyDbContext(
                 await AcquireTaskDependencyGraphLockAsync(userId, strategyCancellationToken)
                     .ConfigureAwait(false);
             }
+
+            var result = await operation(strategyCancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(strategyCancellationToken).ConfigureAwait(false);
+            return result;
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<TResult> ExecuteInTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        // EF InMemory does not support transactions; its tests are single-process and
+        // exercise business validation rather than commit/rollback semantics.
+        if (!Database.IsRelational())
+            return await operation(cancellationToken).ConfigureAwait(false);
+
+        var strategy = Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async strategyCancellationToken =>
+        {
+            ChangeTracker.Clear();
+
+            await using var transaction = await Database
+                .BeginTransactionAsync(strategyCancellationToken)
+                .ConfigureAwait(false);
 
             var result = await operation(strategyCancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(strategyCancellationToken).ConfigureAwait(false);

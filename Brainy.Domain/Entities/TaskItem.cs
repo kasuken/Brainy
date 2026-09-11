@@ -54,6 +54,13 @@ public class TaskItem : BaseEntity, IUserOwnedEntity
     public Project Project { get; set; } = null!;
 
     /// <summary>
+    /// User-authored handoff/restart note captured from the Resume Context panel to
+    /// reduce restart friction when this task is re-opened later. Plain text, never
+    /// AI-generated and never reused as a real <see cref="Note"/>.
+    /// </summary>
+    public string? RestartNote { get; set; }
+
+    /// <summary>
     /// Optional t-shirt size estimate of the effort or complexity of this task.
     /// Null means the user has not estimated yet.
     /// </summary>

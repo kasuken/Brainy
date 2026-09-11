@@ -88,7 +88,7 @@ internal sealed class NoteService(
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
-                Type = SourceType.Url,
+                Type = dto.SourceType ?? SourceType.Url,
                 Url = dto.SourceUrl.Trim(),
                 Title = string.IsNullOrWhiteSpace(dto.SourceTitle) ? null : dto.SourceTitle.Trim(),
                 CapturedAtUtc = DateTime.UtcNow

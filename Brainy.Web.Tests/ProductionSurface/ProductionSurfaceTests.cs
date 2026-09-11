@@ -265,6 +265,22 @@ public sealed class ProductionSurfaceTests(BrainyWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task CaptureSharePageRequiresAuthentication()
+    {
+        using var client = factory.CreateClient(new()
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        using var response = await client.GetAsync("/capture/share");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        response.Headers.Location?.AbsolutePath.Should().Be("/Account/Login");
+        response.Headers.Location?.Query.Should().Contain("ReturnUrl=%2Fcapture%2Fshare");
+    }
+
+    [Fact]
     public async Task LivenessDoesNotRequireDatabase()
     {
         using var client = factory.CreateClient(new()

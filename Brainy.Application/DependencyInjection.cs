@@ -33,6 +33,15 @@ public static class DependencyInjection
         services.TryAddSingleton<IApplicationCache, MemoryApplicationCache>();
 
         services.AddScoped<INoteService, NoteService>();
+        services.AddScoped<IShareCaptureService, ShareCaptureService>();
+        // Kept as a deliberate no-op: issue #302 ("Offline Lite") ended up implementing real
+        // offline persistence entirely client-side (IndexedDB + a plain sync endpoint, see
+        // offlineCapture.js and IOfflineCaptureSyncService) because a fully offline browser
+        // has no live circuit to call this seam from at all. See NullOfflineCaptureQueue for
+        // the "circuit-alive-but-flaky" case this was reserved for and why it is unneeded.
+        services.TryAddScoped<IOfflineCaptureQueue, NullOfflineCaptureQueue>();
+        services.AddScoped<IOfflineSnapshotService, OfflineSnapshotService>();
+        services.AddScoped<IOfflineCaptureSyncService, OfflineCaptureSyncService>();
         services.AddScoped<INoteImageService, NoteImageService>();
         services.AddScoped<IProjectService, ProjectService>();
         services.AddScoped<ITaskService, TaskService>();
@@ -44,8 +53,10 @@ public static class DependencyInjection
         services.AddScoped<IRelatedNotesService, RelatedNotesService>();
         services.AddScoped<ITodayService, TodayService>();
         services.AddScoped<IWeekService, WeekService>();
+        services.AddScoped<IWeeklyReviewService, WeeklyReviewService>();
         services.AddScoped<IProjectPrioritizationService, ProjectPrioritizationService>();
         services.AddScoped<ICurrentTaskRecommendationService, CurrentTaskRecommendationService>();
+        services.AddScoped<IResumeContextService, ResumeContextService>();
         services.AddScoped<ITodayNotificationService, TodayNotificationService>();
         services.AddScoped<IUserDashboardPreferenceService, UserDashboardPreferenceService>();
         // Layouts and pages resolve this service concurrently during Blazor SSR.

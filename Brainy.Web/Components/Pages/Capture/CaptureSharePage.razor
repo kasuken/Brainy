@@ -1,0 +1,305 @@
+@page "/capture/share"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout CaptureLayout
+@namespace Brainy.Web.Components.Pages.Capture
+
+@using Brainy.Application.DTOs.Capture
+@using Brainy.Application.Interfaces.Services
+
+@inject IShareCaptureService ShareCaptureService
+@inject IJSRuntime JS
+
+<PageTitle>Capture – Brainy</PageTitle>
+
+<div class="capture-card">
+    @if (_pendingQueueCount > 0 || _failedQueueCount > 0)
+    {
+        <div class="capture-card__queue-banner">
+            @if (_pendingQueueCount > 0)
+            {
+                <span>@_pendingQueueCount capture@(_pendingQueueCount == 1 ? "" : "s") waiting to sync on this device.</span>
+            }
+            @if (_failedQueueCount > 0)
+            {
+                <span>@_failedQueueCount capture@(_failedQueueCount == 1 ? "" : "s") could not be saved — see the device queue.</span>
+            }
+        </div>
+    }
+    @if (_result is not null)
+    {
+        <span class="capture-card__eyebrow">Saved</span>
+        <h1 class="capture-card__title">Saved to Inbox</h1>
+        <p class="capture-card__body">
+            @(_result.Outcome == ShareCaptureOutcome.DuplicateIgnored
+                ? "This was already captured a moment ago — nothing new was added."
+                : "It's waiting in your Inbox for you to process later.")
+        </p>
+        <div class="capture-card__preview">
+            <strong>@_result.Note.Title</strong>
+            @if (!string.IsNullOrWhiteSpace(_result.Note.SourceUrl))
+            {
+                <span class="capture-card__source">@_result.Note.SourceUrl</span>
+            }
+        </div>
+        <MudButton Href="/inbox" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">Go to Inbox</MudButton>
+    }
+    else if (_offline)
+    {
+        <span class="capture-card__eyebrow capture-card__eyebrow--warn">Queued — not yet on the server</span>
+        <h1 class="capture-card__title">Saved on this device</h1>
+        <p class="capture-card__body">
+            Brainy couldn't reach the server, so this capture is <strong>not yet saved</strong> —
+            it's queued on this device and will sync automatically as soon as you're back
+            online, even if you close this tab.
+        </p>
+        <MudButton OnClick="() => _offline = false" Variant="Variant.Outlined" Class="mt-2">Capture something else</MudButton>
+    }
+    else if (_error is not null)
+    {
+        <span class="capture-card__eyebrow capture-card__eyebrow--warn">Couldn't save</span>
+        <h1 class="capture-card__title">That didn't go through</h1>
+        <p class="capture-card__body capture-card__body--error">@_error</p>
+        <MudButton OnClick="RetryAsync" Variant="Variant.Outlined" Class="mt-2">Try again</MudButton>
+    }
+    else if (_capturing)
+    {
+        <h1 class="capture-card__title">Saving…</h1>
+        <MudProgressCircular Indeterminate="true" Size="Size.Small" aria-label="Saving your capture" />
+    }
+    else
+    {
+        <span class="capture-card__eyebrow">Quick capture</span>
+        <h1 class="capture-card__title">Capture a thought</h1>
+        <p class="capture-card__body">Type something — it lands straight in your Inbox.</p>
+
+        <MudTextField T="string" @bind-Value="_manualText" Lines="5" Variant="Variant.Outlined"
+                      Placeholder="What do you want to remember?" aria-label="Capture text"
+                      Immediate="true" Class="mt-3" AutoFocus="true" />
+        <MudTextField T="string" @bind-Value="_manualTitle" Variant="Variant.Outlined"
+                      Placeholder="Optional title" aria-label="Optional capture title"
+                      Immediate="true" Class="mt-2" MaxLength="@IShareCaptureService.MaxTitleLength" />
+
+        <MudButton OnClick="SaveManualAsync" Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(_saving || string.IsNullOrWhiteSpace(_manualText))" Class="mt-3">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Save to Inbox
+        </MudButton>
+    }
+</div>
+
+<style>
+    .capture-card {
+        background: var(--paper-raised);
+        border: 1.5px solid var(--line);
+        border-radius: 16px;
+        box-shadow: var(--shadow-md);
+        padding: 1.75rem 1.5rem;
+    }
+
+    .capture-card__eyebrow {
+        display: inline-block;
+        font-family: var(--font-body);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--clay-deep);
+        margin-bottom: 0.4rem;
+    }
+
+    .capture-card__eyebrow--warn {
+        color: var(--ink-soft);
+    }
+
+    .capture-card__title {
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--ink);
+        margin: 0 0 0.5rem;
+    }
+
+    .capture-card__body {
+        font-family: var(--font-body);
+        font-size: 0.95rem;
+        line-height: 1.55;
+        color: var(--ink-soft);
+        margin: 0;
+    }
+
+    .capture-card__body--error {
+        color: var(--clay-deep);
+    }
+
+    .capture-card__preview {
+        margin-top: 1rem;
+        padding: 0.75rem 0.9rem;
+        border: 1.5px solid var(--line);
+        border-radius: 10px;
+        background: var(--paper);
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        font-family: var(--font-body);
+        color: var(--ink);
+        overflow-wrap: anywhere;
+    }
+
+    .capture-card__source {
+        font-size: 0.8rem;
+        color: var(--ink-faint);
+    }
+
+    .capture-card__queue-banner {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+        font-family: var(--font-body);
+        font-size: 0.82rem;
+        color: var(--clay-deep);
+        background: var(--clay-soft);
+        border: 1.5px solid var(--clay-ring);
+        border-radius: 10px;
+        padding: 0.5rem 0.7rem;
+        margin-bottom: 1rem;
+    }
+</style>
+
+@code {
+    [SupplyParameterFromQuery(Name = "title")]
+    private string? SharedTitle { get; set; }
+
+    [SupplyParameterFromQuery(Name = "text")]
+    private string? SharedText { get; set; }
+
+    [SupplyParameterFromQuery(Name = "url")]
+    private string? SharedUrl { get; set; }
+
+    private ShareCaptureResultDto? _result;
+    private string? _error;
+    private bool _offline;
+    private bool _capturing;
+    private bool _saving;
+    private string _manualText = "";
+    private string? _manualTitle;
+    private int _pendingQueueCount;
+    private int _failedQueueCount;
+
+    /// <summary>
+    /// True when the request arrived with share-target query parameters (the PWA share sheet),
+    /// as opposed to a plain visit to the manual "type something" capture form.
+    /// </summary>
+    private bool HasShareInput =>
+        !string.IsNullOrWhiteSpace(SharedTitle) ||
+        !string.IsNullOrWhiteSpace(SharedText) ||
+        !string.IsNullOrWhiteSpace(SharedUrl);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HasShareInput)
+            await CaptureFromShareAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Best-effort status read of the on-device queue (see offlineCapture.js) so this
+        // page can honestly show "N waiting to sync" even for captures queued earlier in a
+        // different tab/visit — not just the one just submitted in this render.
+        try
+        {
+            var queue = await JS.InvokeAsync<QueueItem[]>("offlineCapture.getQueueSnapshot");
+            _pendingQueueCount = queue.Count(i => i.Status is "queued" or "syncing");
+            _failedQueueCount = queue.Count(i => i.Status == "failed");
+            StateHasChanged();
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit gone before this could run; nothing to show.
+        }
+    }
+
+    private async Task CaptureFromShareAsync()
+    {
+        // Runs once during the static prerender of this GET request (often before any
+        // client JS has loaded) and again when the interactive circuit connects; the
+        // service's own recent-duplicate check makes the second run a safe no-op instead
+        // of a second Note.
+        _capturing = true;
+        await CaptureAsync(new ShareCaptureDto(SharedTitle, SharedText, SharedUrl));
+        _capturing = false;
+    }
+
+    private async Task CaptureAsync(ShareCaptureDto dto)
+    {
+        _error = null;
+        _offline = false;
+        try
+        {
+            _result = await ShareCaptureService.CaptureAsync(dto);
+        }
+        catch (ArgumentException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (Exception)
+        {
+            _error = "Brainy couldn't save this capture. Please try again.";
+        }
+    }
+
+    private async Task SaveManualAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_manualText)) return;
+
+        _saving = true;
+        try
+        {
+            bool online;
+            try
+            {
+                online = await JS.InvokeAsync<bool>("brainyCapture.isOnline");
+            }
+            catch (JSDisconnectedException)
+            {
+                online = false;
+            }
+
+            if (!online)
+            {
+                // #302: durably queue client-side (IndexedDB) via offlineCapture.js instead
+                // of the pre-#302 no-op IOfflineCaptureQueue seam — this covers the "circuit
+                // still alive but the browser itself reports no connectivity" case. The
+                // queue module syncs it automatically (foreground 'online' event and/or
+                // Background Sync) once connectivity returns, even after this tab closes.
+                await JS.InvokeVoidAsync("offlineCapture.enqueue",
+                    new { title = _manualTitle, text = _manualText, url = (string?)null });
+                _error = null;
+                _offline = true;
+                _manualText = "";
+                _manualTitle = null;
+                _pendingQueueCount++;
+                return;
+            }
+
+            await CaptureAsync(new ShareCaptureDto(_manualTitle, _manualText, null));
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Task RetryAsync() =>
+        HasShareInput
+            ? CaptureFromShareAsync()
+            : SaveManualAsync();
+
+    /// <summary>Shape of one offlineCapture.js queue record, for JS-interop deserialization.</summary>
+    private sealed record QueueItem(string Id, string Status);
+}

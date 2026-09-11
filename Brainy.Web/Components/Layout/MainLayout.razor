@@ -77,7 +77,12 @@
                     <span class="brainy-user__avatar">@GetInitials(context.User.Identity?.Name)</span>
                     <span class="brainy-user__email d-none d-sm-flex">@context.User.Identity?.Name</span>
                 </a>
-                <form action="Account/Logout" method="post" class="brainy-logout-form">
+                @* data-enhance="false": opts this form out of Blazor's enhanced-navigation
+                   interception so the plain submit listener registered in App.razor (Offline
+                   Lite / issue #302 sign-out cleanup — see that file) is the only thing
+                   handling this submit, with no race against a second, competing handler. A
+                   full-page reload on logout is expected UX anyway. *@
+                <form action="Account/Logout" method="post" class="brainy-logout-form" data-enhance="false">
                     <AntiforgeryToken />
                     <input type="hidden" name="ReturnUrl" value="Account/Login" />
                     <button type="submit" class="brainy-logout-btn" title="Log out">

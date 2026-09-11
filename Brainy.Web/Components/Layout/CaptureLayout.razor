@@ -1,0 +1,41 @@
+@using Brainy.Web.Themes
+@inherits LayoutComponentBase
+
+@* Deliberately bare-bones shell for /capture/share: no app bar, no drawer, no FAB — just the
+   MudBlazor providers a page needs (theme/popover/dialog/snackbar) so the capture route stays
+   fast to reach and free of the full application chrome. *@
+
+<MudThemeProvider Theme="AppThemes.BrainyTheme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<div class="capture-shell">
+    <main class="capture-shell__panel">
+        @Body
+    </main>
+</div>
+
+<style>
+    .capture-shell {
+        min-height: 100dvh;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        background: var(--paper);
+        padding: 1.5rem 1rem;
+        box-sizing: border-box;
+    }
+
+    .capture-shell__panel {
+        width: 100%;
+        max-width: 32rem;
+        margin-top: 2rem;
+    }
+
+    @@media (max-width: 600px) {
+        .capture-shell__panel {
+            margin-top: 0.5rem;
+        }
+    }
+</style>

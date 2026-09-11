@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Offline — Brainy</title>
+<!--
+  Offline Lite (issue #302) fallback page. Deliberately plain HTML/CSS/JS — no Blazor, no
+  MudBlazor, no SignalR circuit — because it exists specifically for the moment none of
+  that is reachable. service-worker.js serves this in place of any failed navigation, so it
+  also doubles as the offline landing page for the PWA share target (/capture/share?title=
+  ...&text=...&url=...): the browser keeps the originally requested URL/query string even
+  though this document's markup is what actually renders, so the script below reads
+  location.search to detect that case and auto-queues the share instead of showing the
+  Today snapshot.
+
+  Every piece of data shown here is either a read-only, explicitly-timestamped snapshot
+  (see offlineSnapshot.js) or an honestly-labelled "queued, not yet saved" item (see
+  offlineCapture.js) — nothing on this page is ever presented as live or as safely stored
+  on the server.
+-->
+<style>
+  :root {
+    --paper: #f3ede1;
+    --paper-raised: #fcfaf4;
+    --paper-sunk: #ece3d3;
+    --ink: #211d17;
+    --ink-soft: #6b6253;
+    --ink-faint: #71695d;
+    --line: #ded5c4;
+    --line-strong: #cabea8;
+    --clay: #c0561d;
+    --clay-deep: #9c4416;
+    --clay-soft: rgba(192, 86, 29, 0.10);
+    --clay-ring: rgba(192, 86, 29, 0.28);
+    --font-display: Georgia, 'Times New Roman', serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --shadow-md: 0 4px 12px rgba(33, 29, 23, 0.08), 0 12px 32px rgba(33, 29, 23, 0.10);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    min-height: 100dvh;
+    display: flex;
+    justify-content: center;
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  main { width: 100%; max-width: 34rem; }
+
+  h1 {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0.75rem 0 0.25rem;
+  }
+
+  h2 {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0 0 0.6rem;
+  }
+
+  p { line-height: 1.55; color: var(--ink-soft); margin: 0 0 1rem; }
+
+  .banner {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    background: var(--clay-soft);
+    border: 1.5px solid var(--clay-ring);
+    color: var(--clay-deep);
+    border-radius: 12px;
+    padding: 0.75rem 0.9rem;
+    font-size: 0.9rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .card {
+    background: var(--paper-raised);
+    border: 1.5px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow-md);
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--clay-deep);
+    margin-bottom: 0.3rem;
+  }
+
+  .snapshot-timestamp { font-size: 0.8rem; color: var(--ink-faint); margin: -0.5rem 0 1rem; }
+
+  .focus-item, .note-item {
+    padding: 0.65rem 0.8rem;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    background: var(--paper);
+    margin-bottom: 0.5rem;
+  }
+
+  .note-item__meta { font-size: 0.78rem; color: var(--ink-faint); }
+
+  .empty-hint { color: var(--ink-faint); font-size: 0.9rem; }
+
+  textarea, input[type="text"] {
+    width: 100%;
+    font-family: inherit;
+    font-size: 0.95rem;
+    padding: 0.6rem 0.7rem;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    background: var(--paper);
+    color: var(--ink);
+    margin-bottom: 0.6rem;
+    resize: vertical;
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: var(--clay);
+    color: #fff8ef;
+    border: none;
+    border-radius: 10px;
+    padding: 0.55rem 1.1rem;
+    cursor: pointer;
+  }
+
+  button:disabled { opacity: 0.6; cursor: default; }
+
+  .queue-list { list-style: none; margin: 0; padding: 0; }
+
+  .queue-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.6rem;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.85rem;
+  }
+
+  .queue-item:last-child { border-bottom: none; }
+
+  .queue-item__text { overflow-wrap: anywhere; }
+
+  .status-badge {
+    flex: none;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+  }
+
+  .status-badge--queued, .status-badge--syncing { background: var(--clay-soft); color: var(--clay-deep); }
+  .status-badge--synced { background: rgba(60, 130, 80, 0.14); color: #2f6b45; }
+  .status-badge--failed { background: rgba(180, 40, 40, 0.12); color: #a02a2a; }
+</style>
+</head>
+<body>
+<main>
+  <span class="eyebrow">Offline</span>
+  <h1>You're offline</h1>
+  <div id="root"></div>
+</main>
+
+<script src="offlineSnapshot.js"></script>
+<script src="offlineCapture.js"></script>
+<script>
+(function () {
+  const root = document.getElementById('root');
+  const params = new URLSearchParams(location.search);
+  const sharedTitle = params.get('title');
+  const sharedText = params.get('text');
+  const sharedUrl = params.get('url');
+  const hasShareInput = !!(sharedTitle || sharedText || sharedUrl);
+
+  function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+  }
+
+  function formatTimestamp(iso) {
+    if (!iso) return 'unknown time';
+    try {
+      return new Date(iso).toLocaleString();
+    } catch {
+      return iso;
+    }
+  }
+
+  function statusLabel(status) {
+    switch (status) {
+      case 'queued': return 'Queued';
+      case 'syncing': return 'Syncing…';
+      case 'synced': return 'Synced';
+      case 'failed': return 'Failed';
+      default: return status;
+    }
+  }
+
+  async function renderQueueList() {
+    const container = document.getElementById('queue-list-container');
+    if (!container) return;
+    const items = await window.offlineCapture.getQueueSnapshot();
+    if (items.length === 0) {
+      container.innerHTML = '<p class="empty-hint">Nothing queued on this device.</p>';
+      return;
+    }
+    container.innerHTML = '<ul class="queue-list">' + items.map((item) => {
+      const label = escapeHtml(item.title || (item.text || '').slice(0, 60) || item.url || 'Untitled capture');
+      return '<li class="queue-item">' +
+        '<span class="queue-item__text">' + label + '</span>' +
+        '<span class="status-badge status-badge--' + item.status + '">' + statusLabel(item.status) + '</span>' +
+        '</li>';
+    }).join('') + '</ul>';
+  }
+
+  function renderShareCaptureView() {
+    root.innerHTML =
+      '<div class="banner">Brainy could not reach the server, so this could not be saved yet. ' +
+      'It has been queued on this device and will sync automatically once you\'re back online.</div>' +
+      '<div class="card">' +
+      '<span class="eyebrow">Queued capture</span>' +
+      '<h2>' + escapeHtml(sharedTitle || 'Saved on this device') + '</h2>' +
+      (sharedText ? '<p>' + escapeHtml(sharedText) + '</p>' : '') +
+      (sharedUrl ? '<p class="note-item__meta">' + escapeHtml(sharedUrl) + '</p>' : '') +
+      '</div>' +
+      '<div class="card"><h2>On this device</h2><div id="queue-list-container"><p class="empty-hint">Loading…</p></div></div>';
+
+    window.offlineCapture.enqueue({ title: sharedTitle, text: sharedText, url: sharedUrl })
+      .then(renderQueueList)
+      .catch(renderQueueList);
+  }
+
+  function renderSnapshotSection(snapshot) {
+    if (!snapshot || window.offlineSnapshot.isStale(snapshot)) {
+      return '<div class="card"><span class="eyebrow">Today snapshot</span>' +
+        '<p class="empty-hint">No recent snapshot is available on this device yet. Open Brainy while online to cache one.</p></div>';
+    }
+
+    const data = snapshot.data || {};
+    const focus = data.currentFocus;
+    const notes = data.notes || [];
+
+    let html = '<div class="card">' +
+      '<span class="eyebrow">Today snapshot</span>' +
+      '<h2>Current focus &amp; favorites</h2>' +
+      '<p class="snapshot-timestamp">Showing a snapshot from ' + formatTimestamp(snapshot.fetchedAtUtc) +
+      ' — you\'re offline, this may be out of date.</p>';
+
+    html += focus
+      ? '<div class="focus-item"><strong>' + escapeHtml(focus.title) + '</strong>' +
+        '<div class="note-item__meta">' + escapeHtml(focus.status) + '</div></div>'
+      : '<p class="empty-hint">No current focus task was set at the time of this snapshot.</p>';
+
+    if (notes.length > 0) {
+      html += notes.map((note) =>
+        '<div class="note-item">' + escapeHtml(note.title) +
+        (note.isFavorite ? ' <span class="note-item__meta">★ favorite</span>' : '') +
+        '</div>').join('');
+    } else {
+      html += '<p class="empty-hint">No favorite or recent notes were captured in this snapshot.</p>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function renderTodayView() {
+    const snapshot = window.offlineSnapshot.read();
+    root.innerHTML =
+      '<div class="banner">This is a read-only, offline snapshot. Nothing on this page is live, and nothing you add here is safely stored until it syncs.</div>' +
+      renderSnapshotSection(snapshot) +
+      '<div class="card">' +
+      '<span class="eyebrow">Quick capture</span>' +
+      '<h2>Capture a thought</h2>' +
+      '<form id="capture-form">' +
+      '<textarea id="capture-text" rows="4" placeholder="What do you want to remember?" required></textarea>' +
+      '<input type="text" id="capture-title" placeholder="Optional title" maxlength="500" />' +
+      '<button type="submit">Save on this device</button>' +
+      '</form>' +
+      '<p id="capture-status" class="empty-hint" style="margin-top:0.6rem;"></p>' +
+      '</div>' +
+      '<div class="card"><h2>Waiting to sync</h2><div id="queue-list-container"><p class="empty-hint">Loading…</p></div></div>';
+
+    const form = document.getElementById('capture-form');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const text = document.getElementById('capture-text').value.trim();
+      if (!text) return;
+      const title = document.getElementById('capture-title').value.trim();
+      await window.offlineCapture.enqueue({ title: title || null, text, url: null });
+      form.reset();
+      document.getElementById('capture-status').textContent =
+        'Queued on this device — will sync automatically once you\'re back online.';
+      renderQueueList();
+    });
+
+    renderQueueList();
+  }
+
+  if (hasShareInput) {
+    renderShareCaptureView();
+  } else {
+    renderTodayView();
+  }
+})();
+</script>
+</body>
+</html>

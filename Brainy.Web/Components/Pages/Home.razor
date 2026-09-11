@@ -22,6 +22,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Today · Brainy</PageTitle>
 
@@ -726,6 +727,23 @@
 
         await LoadPreferencesAsync();
         await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Offline Lite (#302): opportunistically refresh the cached current-focus/favorites
+        // snapshot used by the static offline fallback page. Best-effort only — Today's own
+        // live rendering never depends on this succeeding.
+        try
+        {
+            await JS.InvokeVoidAsync("offlineSnapshot.refresh");
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit gone before this could run; the next successful Today visit will retry.
+        }
     }
 
     private async Task LoadPreferencesAsync()

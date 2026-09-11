@@ -341,4 +341,5 @@ public class SearchServiceTests
         snippet.Should().NotContain("<script>");
         snippet.Should().NotContain("<b>");
     }
+
 }

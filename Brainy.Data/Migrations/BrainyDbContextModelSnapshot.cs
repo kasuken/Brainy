@@ -781,6 +781,45 @@ namespace Brainy.Data.Migrations
                     b.ToTable("NoteRelationship", (string)null);
                 });
 
+            modelBuilder.Entity("Brainy.Domain.Entities.OfflineCaptureSyncRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("NoteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("SyncedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("OfflineCaptureSyncRecord", (string)null);
+                });
+
             modelBuilder.Entity("Brainy.Domain.Entities.Output", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1112,6 +1151,46 @@ namespace Brainy.Data.Migrations
                     b.ToTable("Resource", (string)null);
                 });
 
+            modelBuilder.Entity("Brainy.Domain.Entities.ResurfacingDismissal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DismissedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("NoteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NoteId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "NoteId")
+                        .IsUnique();
+
+                    b.ToTable("ResurfacingDismissal", (string)null);
+                });
+
             modelBuilder.Entity("Brainy.Domain.Entities.Source", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1348,6 +1427,10 @@ namespace Brainy.Data.Migrations
 
                     b.Property<int?>("RecurrenceType")
                         .HasColumnType("int");
+
+                    b.Property<string>("RestartNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -2020,6 +2103,23 @@ namespace Brainy.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Area");
+                });
+
+            modelBuilder.Entity("Brainy.Domain.Entities.ResurfacingDismissal", b =>
+                {
+                    b.HasOne("Brainy.Domain.Entities.Note", "Note")
+                        .WithMany()
+                        .HasForeignKey("NoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Brainy.Data.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Note");
                 });
 
             modelBuilder.Entity("Brainy.Domain.Entities.Source", b =>

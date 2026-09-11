@@ -1,4 +1,5 @@
 using Brainy.Application;
+using Brainy.Application.DTOs.Week;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -55,6 +56,23 @@ public sealed class WeekSqlServerTests
         Assert.NotEmpty(picker.Tasks);
         Assert.Single(carryForward);
         Assert.Single(today.PlannedThisWeek.Tasks);
+    }
+
+    [Fact]
+    public async Task UpdateProjectStatusAsync_TranslatesSuccessfullyOnSqlServer()
+    {
+        // Regression test: BuildProjectOverviewQuery's projection embeds correlated Count()
+        // subqueries, and filtering by Id *after* projecting into that shape (rather than on
+        // the raw Project queryable beforehand) is not translatable by EF Core. This only
+        // ever surfaced on SQL Server, never against the InMemory provider used elsewhere.
+        await using var fixture = await SqlServerWeekFixture.CreateAsync();
+        await fixture.SeedAsync();
+
+        var updated = await fixture.WeekService.UpdateProjectStatusAsync(
+            new WeekProjectStatusUpdateDto(fixture.ProjectId, ProjectStatus.Blocked, RowVersion: null));
+
+        Assert.Equal(fixture.ProjectId, updated.Id);
+        Assert.Equal(ProjectStatus.Blocked, updated.Status);
     }
 
     private sealed class SqlServerWeekFixture : IAsyncDisposable

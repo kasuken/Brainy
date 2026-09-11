@@ -1,0 +1,393 @@
+@using System.Text.Json
+@using Brainy.Application.DTOs.Dashboard
+@using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IResumeContextService ResumeContextService
+@inject IUserDashboardPreferenceService PreferenceService
+@inject ISnackbar Snackbar
+
+@* Resume Context (issue #305): a compact, dismissible section on the current-focus card
+   that answers "what was I doing here?" without becoming its own dashboard. Every field
+   is deterministic — there is no AI call behind this panel. *@
+
+<div class="rc-panel">
+    <button type="button" class="rc-header" @onclick="ToggleCollapsedAsync" aria-expanded="@(!_collapsed)">
+        <span class="rc-header-label">Resume context</span>
+        <MudIcon Icon="@(_collapsed ? Icons.Material.Outlined.ExpandMore : Icons.Material.Outlined.ExpandLess)" Size="Size.Small" />
+    </button>
+
+    @if (!_collapsed)
+    {
+        @if (_loading)
+        {
+            <div class="rc-loading">
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Default" />
+            </div>
+        }
+        else if (_context is not null)
+        {
+            var ctx = _context;
+
+            <div class="rc-body">
+                @if (ctx.IsArchived || ctx.TaskStatus == TaskItemStatus.Waiting || ctx.IsBlocked)
+                {
+                    <div class="rc-status-row">
+                        @if (ctx.IsArchived)
+                        {
+                            <span class="rc-badge rc-badge--archived">Archived</span>
+                        }
+                        @if (ctx.TaskStatus == TaskItemStatus.Waiting)
+                        {
+                            <span class="rc-badge rc-badge--waiting">Waiting</span>
+                        }
+                        @if (ctx.IsBlocked)
+                        {
+                            <span class="rc-badge rc-badge--blocked">Blocked on @ctx.UnresolvedDependencyTitle</span>
+                        }
+                    </div>
+                }
+
+                <div class="rc-row">
+                    <span class="rc-row-label">Next step</span>
+                    @if (ctx.HasSubtasks && ctx.NextSubtaskTitle is not null)
+                    {
+                        <span class="rc-row-value">@ctx.NextSubtaskTitle</span>
+                    }
+                    else if (ctx.HasSubtasks)
+                    {
+                        <span class="rc-row-value rc-row-value--muted">All subtasks are done — "@Task.Title" is ready to complete.</span>
+                    }
+                    else
+                    {
+                        <span class="rc-row-value rc-row-value--muted">No subtasks — "@Task.Title" is a single action.</span>
+                    }
+                </div>
+
+                <div class="rc-row">
+                    <span class="rc-row-label">Last touched</span>
+                    @if (ctx.MostRecentLinkedItem is not null)
+                    {
+                        <a class="rc-row-value" href="@LinkedItemHref(ctx.MostRecentLinkedItem)">@ctx.MostRecentLinkedItem.Title</a>
+                        <span class="rc-row-sub">@ctx.MostRecentLinkedItem.UpdatedAtUtc.ToLocalTime().ToString("MMM d")</span>
+                    }
+                    else
+                    {
+                        <span class="rc-row-value rc-row-value--muted">Nothing captured yet in @ctx.ProjectName — link a note or output here once you have one.</span>
+                    }
+                </div>
+
+                <div class="rc-row">
+                    <span class="rc-row-label">Project</span>
+                    <a class="rc-row-value" href="@($"/projects/{ctx.ProjectId}")">@ctx.ProjectName</a>
+                    @if (ctx.ProjectDueDate.HasValue)
+                    {
+                        <span class="rc-row-sub">Due @ctx.ProjectDueDate.Value.ToString("MMM d")</span>
+                    }
+                </div>
+
+                @if (ctx.GoalTitle is not null)
+                {
+                    <div class="rc-row">
+                        <span class="rc-row-label">Goal</span>
+                        <span class="rc-row-value">@ctx.GoalTitle</span>
+                        @if (ctx.GoalDueDate.HasValue)
+                        {
+                            <span class="rc-row-sub">Target @ctx.GoalDueDate.Value.ToString("MMM d")</span>
+                        }
+                    </div>
+                }
+
+                <div class="rc-note">
+                    <span class="rc-row-label">Restart note</span>
+                    @if (_editingNote)
+                    {
+                        <MudTextField @bind-Value="_noteDraft"
+                                      Lines="3"
+                                      Variant="Variant.Outlined"
+                                      FullWidth="true"
+                                      Immediate="true"
+                                      MaxLength="2000"
+                                      Placeholder="What should future-you know to pick this back up?" />
+                        <div class="rc-note-actions">
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                       Disabled="_savingNote" OnClick="SaveNoteAsync">
+                                Save
+                            </MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text"
+                                       Disabled="_savingNote" OnClick="CancelEditNote">
+                                Cancel
+                            </MudButton>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(ctx.RestartNote))
+                    {
+                        <p class="rc-note-text">@ctx.RestartNote</p>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.Edit" OnClick="BeginEditNote">
+                            Edit note
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.NoteAdd" OnClick="BeginEditNote">
+                            Add a restart note
+                        </MudButton>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .rc-panel {
+        margin-top: 0.9rem;
+        border-top: 1px dashed var(--line);
+        padding-top: 0.75rem;
+    }
+
+    .rc-header {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        width: 100%;
+        background: transparent;
+        border: 0;
+        padding: 0;
+        cursor: pointer;
+        font: inherit;
+        color: var(--ink-faint);
+    }
+
+    .rc-header-label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+    }
+
+    .rc-loading {
+        display: flex;
+        justify-content: center;
+        padding: 0.75rem 0;
+    }
+
+    .rc-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        margin-top: 0.6rem;
+        font-size: 0.85rem;
+    }
+
+    .rc-status-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+
+    .rc-badge {
+        display: inline-flex;
+        align-items: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        background: rgba(148, 148, 148, 0.15);
+        color: var(--ink-faint);
+    }
+
+    .rc-badge--archived {
+        background: rgba(148, 148, 148, 0.2);
+        color: var(--ink-faint);
+    }
+
+    .rc-badge--waiting {
+        background: rgba(240, 173, 78, 0.15);
+        color: #8a5a12;
+    }
+
+    .rc-badge--blocked {
+        background: rgba(185, 28, 28, 0.12);
+        color: #b91c1c;
+    }
+
+    .rc-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.4rem;
+    }
+
+    .rc-row-label {
+        flex: 0 0 auto;
+        min-width: 5.5rem;
+        font-weight: 600;
+        color: var(--ink-faint);
+    }
+
+    .rc-row-value {
+        color: var(--ink);
+    }
+
+    a.rc-row-value {
+        text-decoration: underline;
+        text-underline-offset: 0.15em;
+    }
+
+    .rc-row-value--muted {
+        color: var(--ink-faint);
+        font-style: italic;
+    }
+
+    .rc-row-sub {
+        font-size: 0.78rem;
+        color: var(--ink-faint);
+    }
+
+    .rc-note {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        margin-top: 0.2rem;
+    }
+
+    .rc-note-text {
+        margin: 0;
+        color: var(--ink);
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .rc-note-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+</style>
+
+@code {
+    /// <summary>The current-focus task the panel is scoped to.</summary>
+    [Parameter, EditorRequired] public TodayTaskItemDto Task { get; set; } = null!;
+
+    private const string ResumeContextWidgetKey = "resume-context";
+
+    private bool _collapsed;
+    private bool _loading = true;
+    private bool _editingNote;
+    private bool _savingNote;
+    private string _noteDraft = string.Empty;
+    private ResumeContextDto? _context;
+    private UserDashboardPreferenceDto? _preferences;
+    private Guid? _loadedTaskId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _preferences = await PreferenceService.GetOrCreateAsync();
+            _collapsed = ParseCollapsedKeys(_preferences.CollapsedWidgets).Contains(ResumeContextWidgetKey);
+        }
+        catch
+        {
+            _collapsed = false;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedTaskId == Task.Id) return;
+        _loadedTaskId = Task.Id;
+
+        _loading = true;
+        _editingNote = false;
+        try
+        {
+            _context = await ResumeContextService.GetAsync(Task.Id);
+        }
+        catch
+        {
+            _context = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ToggleCollapsedAsync()
+    {
+        _collapsed = !_collapsed;
+
+        try
+        {
+            var keys = ParseCollapsedKeys(_preferences?.CollapsedWidgets);
+            if (_collapsed) keys.Add(ResumeContextWidgetKey);
+            else keys.Remove(ResumeContextWidgetKey);
+
+            _preferences = await PreferenceService.UpdateAsync(new UpdateDashboardPreferenceDto(
+                WidgetOrder: _preferences?.WidgetOrder,
+                CollapsedWidgets: SerializeCollapsedKeys(keys),
+                InboxWarningThreshold: _preferences?.InboxWarningThreshold ?? 10));
+        }
+        catch
+        {
+            // Best-effort persistence; the toggle itself already updated in the UI.
+        }
+    }
+
+    private void BeginEditNote()
+    {
+        _noteDraft = _context?.RestartNote ?? string.Empty;
+        _editingNote = true;
+    }
+
+    private void CancelEditNote() => _editingNote = false;
+
+    private async Task SaveNoteAsync()
+    {
+        _savingNote = true;
+        try
+        {
+            _context = await ResumeContextService.SaveRestartNoteAsync(Task.Id, _noteDraft);
+            _editingNote = false;
+            Snackbar.Add("Restart note saved.", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Could not save your restart note.", Severity.Error);
+        }
+        finally
+        {
+            _savingNote = false;
+        }
+    }
+
+    private static string LinkedItemHref(ResumeContextLinkedItemDto item) => item.Type switch
+    {
+        ResumeContextLinkedItemType.Note => $"/notes/{item.Id}",
+        ResumeContextLinkedItemType.Output => $"/outputs/{item.Id}",
+        _ => "#",
+    };
+
+    private static HashSet<string> ParseCollapsedKeys(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var keys = JsonSerializer.Deserialize<string[]>(json);
+            return keys is null
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(keys, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (JsonException)
+        {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private static string SerializeCollapsedKeys(HashSet<string> keys) =>
+        JsonSerializer.Serialize(keys);
+}
