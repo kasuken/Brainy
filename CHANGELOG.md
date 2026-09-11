@@ -1,5 +1,24 @@
 # Changelog
 
+## [6.0.0] - 2026-09-11
+
+### Added
+
+- **Offline capture and sync** — added a service-worker-based offline fallback with an IndexedDB capture queue, background synchronization, PWA share-target support, cached Today snapshots, and idempotent server-side syncing.
+- **Guided weekly review** — added a weekly review workflow that combines planning, Inbox age bands, and resurfaced useful notes with explicit keep, dismiss, link, archive, and turn-into-task decisions.
+- **Resume Context** — current-focus tasks now surface blocked or waiting state, the next subtask, linked notes, project and goal context, and an editable restart note.
+- **Trust and compliance foundations** — added draft privacy, terms, acceptable-use, and AI-transparency pages, plus a resumable first-run onboarding journey and Starter Mode navigation.
+- **Product analytics** — added privacy-safe, consent-gated analytics with a public event data dictionary, internal dashboard, and export and deletion integration.
+- **Plans and entitlements** — added Starter and Pro plan definitions, server-side entitlement enforcement, downgrade-to-read-only project handling, a pluggable billing-provider abstraction, and an idempotent billing webhook endpoint.
+
+### Improved
+
+- **Capture reliability** — added duplicate detection for share and manual capture flows and offline cleanup during logout.
+- **SEO and deployment hardening** — centralized public page title handling, validated absolute URL schemes, and aligned production verification and smoke-test URLs with the custom Brainy domain.
+- **Regression coverage** — added service, endpoint, rendering, production-surface, and security-focused tests across the new workflows and SEO changes.
+
+---
+
 ## [5.15.0] - 2026-09-07
 
 ### Added
