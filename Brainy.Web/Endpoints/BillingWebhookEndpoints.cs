@@ -9,8 +9,12 @@ namespace Brainy.Web.Endpoints;
 /// </summary>
 public static class BillingWebhookEndpoints
 {
-    /// <summary>The header a billing provider signs its webhook payload with.</summary>
-    public const string SignatureHeaderName = "X-Billing-Signature";
+    /// <summary>
+    /// The header a billing provider signs its webhook payload with. This is Stripe's own
+    /// header name (<c>Stripe-Signature</c>) — Stripe controls what it sends, so this cannot
+    /// be a generic placeholder once a real provider is wired in.
+    /// </summary>
+    public const string SignatureHeaderName = "Stripe-Signature";
 
     public static IEndpointRouteBuilder MapBillingWebhookEndpoints(this IEndpointRouteBuilder endpoints)
     {

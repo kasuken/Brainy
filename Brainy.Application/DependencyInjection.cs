@@ -111,15 +111,27 @@ public static class DependencyInjection
             .GetSection(BillingOptions.SectionName)
             .Get<BillingOptions>() ?? new BillingOptions();
 
-        if (options.Provider == BillingProviderType.None)
+        switch (options.Provider)
         {
-            services.AddSingleton<IBillingProvider, NullBillingProvider>();
-            return services;
+            case BillingProviderType.None:
+                services.AddSingleton<IBillingProvider, NullBillingProvider>();
+                break;
+
+            case BillingProviderType.Stripe:
+                ArgumentException.ThrowIfNullOrWhiteSpace(options.ApiKey, nameof(options.ApiKey));
+                ArgumentException.ThrowIfNullOrWhiteSpace(options.WebhookSigningSecret, nameof(options.WebhookSigningSecret));
+                ArgumentException.ThrowIfNullOrWhiteSpace(options.ProPriceId, nameof(options.ProPriceId));
+                ArgumentException.ThrowIfNullOrWhiteSpace(options.AppBaseUrl, nameof(options.AppBaseUrl));
+
+                // Scoped: StripeBillingProvider reads/writes the per-request IApplicationDbContext.
+                services.AddScoped<IBillingProvider, StripeBillingProvider>();
+                break;
+
+            default:
+                throw new InvalidOperationException($"Unsupported billing provider: {options.Provider}");
         }
 
-        throw new NotSupportedException(
-            $"Billing provider '{options.Provider}' is not implemented yet. Implement IBillingProvider " +
-            "and register it in DependencyInjection.AddBilling.");
+        return services;
     }
 
     /// <summary>

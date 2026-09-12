@@ -92,4 +92,63 @@ public sealed class BillingWebhookProcessorTests
         result.Reason.Should().Be("ignored_event_type");
         (await db.ProcessedWebhookEvents.CountAsync()).Should().Be(0);
     }
+
+    [Fact]
+    public async Task ProcessAsync_WithCustomerAndSubscriptionIds_PersistsThemOnTheUserPlan()
+    {
+        var parsedEvent = new ParsedBillingWebhookEvent(
+            "evt_with_refs", "checkout.session.completed", UserId, PlanTier.Pro, null,
+            BillingProviderCustomerId: "cus_1", BillingProviderSubscriptionId: "sub_1");
+        var (processor, db) = BuildServices(
+            nameof(ProcessAsync_WithCustomerAndSubscriptionIds_PersistsThemOnTheUserPlan), parsedEvent, out _);
+
+        var result = await processor.ProcessAsync("{}", ValidSignature);
+
+        result.Reason.Should().Be("applied");
+        var userPlan = await db.UserPlans.SingleAsync(p => p.UserId == UserId);
+        userPlan.Tier.Should().Be(PlanTier.Pro);
+        userPlan.BillingProviderCustomerId.Should().Be("cus_1");
+        userPlan.BillingProviderSubscriptionId.Should().Be("sub_1");
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithGracePeriod_RecordsItWithoutChangingTier()
+    {
+        var gracePeriodEnd = new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var parsedEvent = new ParsedBillingWebhookEvent(
+            "evt_payment_failed", "invoice.payment_failed", UserId, NewTier: null, PeriodEndsAtUtc: null,
+            GracePeriodEndsAtUtc: gracePeriodEnd);
+        var (processor, db) = BuildServices(
+            nameof(ProcessAsync_WithGracePeriod_RecordsItWithoutChangingTier), parsedEvent, out _);
+        db.UserPlans.Add(new Domain.Entities.UserPlan { UserId = UserId, Tier = PlanTier.Pro });
+        await db.SaveChangesAsync();
+
+        var result = await processor.ProcessAsync("{}", ValidSignature);
+
+        result.Reason.Should().Be("applied");
+        var userPlan = await db.UserPlans.SingleAsync(p => p.UserId == UserId);
+        userPlan.Tier.Should().Be(PlanTier.Pro, "a payment failure alone must not downgrade the plan");
+        userPlan.GracePeriodEndsAtUtc.Should().Be(gracePeriodEnd);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithClearsGracePeriod_ClearsAnExistingGracePeriod()
+    {
+        var parsedEvent = new ParsedBillingWebhookEvent(
+            "evt_payment_recovered", "invoice.paid", UserId, PlanTier.Pro, null, ClearsGracePeriod: true);
+        var (processor, db) = BuildServices(
+            nameof(ProcessAsync_WithClearsGracePeriod_ClearsAnExistingGracePeriod), parsedEvent, out _);
+        db.UserPlans.Add(new Domain.Entities.UserPlan
+        {
+            UserId = UserId,
+            Tier = PlanTier.Pro,
+            GracePeriodEndsAtUtc = new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        });
+        await db.SaveChangesAsync();
+
+        var result = await processor.ProcessAsync("{}", ValidSignature);
+
+        result.Reason.Should().Be("applied");
+        (await db.UserPlans.SingleAsync(p => p.UserId == UserId)).GracePeriodEndsAtUtc.Should().BeNull();
+    }
 }

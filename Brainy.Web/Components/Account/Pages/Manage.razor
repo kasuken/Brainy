@@ -16,6 +16,7 @@
 @using Brainy.Application.DTOs.DataExport
 @using Brainy.Application.DTOs.DataImport
 @using Brainy.Application.DTOs.Search
+@using Brainy.Application.Interfaces.Billing
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Data.Identity
 @using Brainy.Domain.Enums
@@ -32,6 +33,7 @@
 @inject IAnalyticsService AnalyticsService
 @inject IUserDashboardPreferenceService DashboardPreferenceService
 @inject IEntitlementService EntitlementService
+@inject IBillingProvider BillingProvider
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
@@ -140,13 +142,39 @@
                 <p class="account-manage__status">Renews @_planUsage.PlanRenewsAtUtc.Value.ToString("MMM d, yyyy") (UTC).</p>
             }
 
+            @if (_billingActionError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_billingActionError
+                </MudAlert>
+            }
+
             @if (_planUsage.Tier == PlanTier.Starter)
             {
                 <div class="account-manage__actions">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/pricing">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="_startingCheckout"
+                               aria-busy="@_startingCheckout.ToString().ToLowerInvariant()"
+                               OnClick="UpgradeToProAsync">
+                        @(_startingCheckout ? "Starting checkout…" : "Upgrade to Pro")
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/pricing">
                         See Pro plan details
                     </MudButton>
-                    <span class="account-manage__status">There's no live checkout yet — this links to the pricing page. Contact us to upgrade.</span>
+                </div>
+            }
+            else
+            {
+                <div class="account-manage__actions">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="_openingPortal"
+                               aria-busy="@_openingPortal.ToString().ToLowerInvariant()"
+                               OnClick="OpenBillingPortalAsync">
+                        @(_openingPortal ? "Opening billing portal…" : "Manage billing")
+                    </MudButton>
+                    <span class="account-manage__status">Update your payment method, view invoices, or cancel your subscription.</span>
                 </div>
             }
         }
@@ -710,6 +738,9 @@
     private string? _analyticsConsentStatus;
     private PlanUsageSummaryDto? _planUsage;
     private string? _planUsageError;
+    private bool _startingCheckout;
+    private bool _openingPortal;
+    private string? _billingActionError;
     private bool _starterModeEnabled = true;
     private bool _savingStarterMode;
     private string? _starterModeStatus;
@@ -735,6 +766,84 @@
         catch
         {
             _planUsageError = "Brainy could not load your plan and usage details. Try reloading this page.";
+        }
+    }
+
+    private async Task<string?> GetCurrentUserIdAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        return UserManager.GetUserId(authenticationState.User);
+    }
+
+    private async Task UpgradeToProAsync()
+    {
+        if (_startingCheckout)
+            return;
+
+        _startingCheckout = true;
+        _billingActionError = null;
+
+        try
+        {
+            var userId = await GetCurrentUserIdAsync();
+            if (userId is null)
+            {
+                _billingActionError = "Your sign-in session is no longer valid. Sign in again and retry.";
+                return;
+            }
+
+            var result = await BillingProvider.CreateCheckoutSessionAsync(userId, PlanTier.Pro);
+            if (!result.Supported)
+            {
+                _billingActionError = result.UnsupportedReason ?? "Checkout is not available right now.";
+                return;
+            }
+
+            Navigation.NavigateTo(result.RedirectUrl!, forceLoad: true);
+        }
+        catch
+        {
+            _billingActionError = "Brainy could not start checkout. Try again.";
+        }
+        finally
+        {
+            _startingCheckout = false;
+        }
+    }
+
+    private async Task OpenBillingPortalAsync()
+    {
+        if (_openingPortal)
+            return;
+
+        _openingPortal = true;
+        _billingActionError = null;
+
+        try
+        {
+            var userId = await GetCurrentUserIdAsync();
+            if (userId is null)
+            {
+                _billingActionError = "Your sign-in session is no longer valid. Sign in again and retry.";
+                return;
+            }
+
+            var result = await BillingProvider.CreatePortalSessionAsync(userId);
+            if (!result.Supported)
+            {
+                _billingActionError = result.UnsupportedReason ?? "The billing portal is not available right now.";
+                return;
+            }
+
+            Navigation.NavigateTo(result.RedirectUrl!, forceLoad: true);
+        }
+        catch
+        {
+            _billingActionError = "Brainy could not open the billing portal. Try again.";
+        }
+        finally
+        {
+            _openingPortal = false;
         }
     }
 
