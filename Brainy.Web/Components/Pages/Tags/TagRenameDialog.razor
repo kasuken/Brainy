@@ -1,0 +1,70 @@
+@using Brainy.Application.DTOs.Tags
+@using Brainy.Application.Interfaces.Services
+@inject ITagService TagService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-family:var(--font-display)">Rename tag</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (Tag is { UsageCount: > 0 })
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-3">
+                This will affect @Tag.NoteCount note@(Tag.NoteCount == 1 ? "" : "s") and @Tag.ResourceCount resource@(Tag.ResourceCount == 1 ? "" : "s").
+            </MudAlert>
+        }
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <MudTextField @bind-Value="_name" Label="Name" Required="true"
+                          RequiredError="Name is required"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="!_valid || _saving">
+            @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+            Save changes
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public TagDto Tag { get; set; } = null!;
+
+    private MudForm _form = null!;
+    private bool _valid;
+    private bool _saving;
+    private string _name = "";
+
+    protected override void OnInitialized()
+    {
+        _name = Tag.Name;
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_valid) return;
+
+        _saving = true;
+        try
+        {
+            await TagService.RenameAsync(Tag.Id, _name);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

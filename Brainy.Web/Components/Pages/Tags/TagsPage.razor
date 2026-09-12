@@ -1,0 +1,393 @@
+@page "/tags"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Tags
+@using Brainy.Application.Interfaces.Services
+@inject ITagService TagService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Tags — Brainy</PageTitle>
+
+<style>
+
+    .tp-page {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 1.5rem 0;
+        font-family: 'Hanken Grotesk', sans-serif;
+    }
+
+    .tp-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+    }
+
+    @@media (min-width: 1024px) {
+        .tp-layout {
+            grid-template-columns: 360px 1fr;
+            align-items: start;
+            gap: 4rem;
+        }
+    }
+
+    .tp-sidebar {
+        position: sticky;
+        top: 2rem;
+        display: flex;
+        flex-direction: column;
+        animation: tp-fade-up 0.4s ease both;
+    }
+
+    @@keyframes tp-fade-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .tp-eyebrow {
+        font-size: 0.75rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+        font-weight: 700;
+        margin: 0 0 0.5rem;
+    }
+
+    .tp-title {
+        font-family: var(--font-display);
+        font-size: clamp(2.5rem, 6vw, 4rem);
+        font-weight: 600;
+        line-height: 1;
+        color: var(--mud-palette-text-primary);
+        letter-spacing: -0.02em;
+        margin: 0;
+    }
+
+    .tp-title-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .tp-meta {
+        font-size: 0.85rem;
+        color: var(--mud-palette-text-secondary);
+        margin: 0 0 2rem;
+        font-weight: 500;
+    }
+
+    .tp-widget {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+    }
+
+    .tp-name-cell {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .tp-swatch {
+        width: 0.7rem;
+        height: 0.7rem;
+        border-radius: 50%;
+        flex: none;
+        border: 1px solid var(--mud-palette-lines-default);
+    }
+</style>
+
+<div class="tp-page">
+    <div class="tp-layout">
+
+        @* ── Sidebar ── *@
+        <aside class="tp-sidebar">
+            <div class="tp-title-row">
+                <div>
+                    <p class="tp-eyebrow">Organize</p>
+                    <h1 class="tp-title">Tags</h1>
+                </div>
+                <MudSpacer />
+                <PageHelpButton Guide="HelpGuide" />
+            </div>
+            <p class="tp-meta">@(_tags?.Count ?? 0) tags · @UnusedCount unused</p>
+
+            <div class="tp-widget">
+                <MudTextField @bind-Value="_searchText"
+                              Placeholder="Search tags…"
+                              aria-label="Search tags"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Outlined.Search"
+                              Clearable="true"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              OnKeyUp="@(() => ApplyFilter())"
+                              Class="mb-4" />
+
+                <MudButton Variant="Variant.Outlined" Color="Color.Warning"
+                           StartIcon="@Icons.Material.Outlined.CleaningServices"
+                           FullWidth="true"
+                           Disabled="@(UnusedCount == 0)"
+                           OnClick="ConfirmDeleteUnused">
+                    Remove unused tags
+                </MudButton>
+            </div>
+
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                Renaming and merging update every note and resource that uses the tag.
+                Deleting a tag only removes the label — notes and resources are untouched.
+            </MudAlert>
+        </aside>
+
+        @* ── Main ── *@
+        <main>
+            @if (_loading)
+            {
+                <div style="padding: 5rem 0; text-align: center;">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                    <p style="margin-top: 1rem; color: var(--mud-palette-text-disabled); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem;">Loading tags…</p>
+                </div>
+            }
+            else if (_loadError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                    Tags could not be loaded. Check your connection and try again.
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadAsync" Class="ml-2">Retry</MudButton>
+                </MudAlert>
+            }
+            else if (_filtered is { Count: 0 })
+            {
+                <div style="padding: 5rem 2rem; display: flex; flex-direction: column; align-items: center; text-align: center; border: 1px dashed var(--mud-palette-lines-default); border-radius: 16px; background: var(--mud-palette-table-lines);">
+                    <MudIcon Icon="@Icons.Material.Outlined.Sell" Style="font-size:4rem; color: var(--mud-palette-text-disabled); margin-bottom: 1.5rem;" />
+                    <h2 style="font-family: var(--font-display); font-size: 1.75rem; margin: 0 0 0.5rem; color: var(--mud-palette-text-primary);">
+                        @(_tags?.Count == 0 ? "No tags yet" : "Nothing matches")
+                    </h2>
+                    <p style="color: var(--mud-palette-text-secondary); margin: 0; max-width: 400px;">
+                        @(_tags?.Count == 0
+                            ? "Tags appear here once you add them to a note or resource."
+                            : "Try a different search term.")
+                    </p>
+                </div>
+            }
+            else
+            {
+                <MudTable Items="_filtered" Hover="true" Dense="true" Elevation="0" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        <MudTh>Tag</MudTh>
+                        <MudTh>Usage</MudTh>
+                        <MudTh>Last used</MudTh>
+                        <MudTh align="Align.Right">Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Tag">
+                            <span class="tp-name-cell">
+                                <span class="tp-swatch" style="background:@(context.Color ?? "var(--mud-palette-text-disabled)")" aria-hidden="true"></span>
+                                @context.Name
+                            </span>
+                        </MudTd>
+                        <MudTd DataLabel="Usage">
+                            @if (context.IsUnused)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">Unused</MudChip>
+                            }
+                            else
+                            {
+                                <MudTooltip Text="@($"{context.NoteCount} note{(context.NoteCount == 1 ? "" : "s")}, {context.ResourceCount} resource{(context.ResourceCount == 1 ? "" : "s")}")">
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@context.UsageCount item@(context.UsageCount == 1 ? "" : "s")</MudChip>
+                                </MudTooltip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Last used"><UserLocalTime Utc="context.LastUsedAtUtc" /></MudTd>
+                        <MudTd DataLabel="Actions" align="Align.Right">
+                            <MudTooltip Text="View tagged items">
+                                <MudIconButton Icon="@Icons.Material.Outlined.OpenInNew"
+                                               Color="Color.Default" Size="Size.Small"
+                                               Disabled="context.IsUnused"
+                                               OnClick="@(() => ViewTaggedItems(context))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Rename">
+                                <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                               Color="Color.Default" Size="Size.Small"
+                                               OnClick="@(() => OpenRenameDialog(context))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Merge into another tag">
+                                <MudIconButton Icon="@Icons.Material.Outlined.CallMerge"
+                                               Color="Color.Default" Size="Size.Small"
+                                               Disabled="@((_tags?.Count ?? 0) < 2)"
+                                               OnClick="@(() => OpenMergeDialog(context))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Delete">
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete"
+                                               Color="Color.Error" Size="Size.Small"
+                                               OnClick="@(() => ConfirmDelete(context))" />
+                            </MudTooltip>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </main>
+    </div>
+</div>
+
+@code {
+    private static readonly PageHelpGuide HelpGuide = new()
+    {
+        Key = "tags",
+        PageTitle = "Tags",
+        Tagline = "Keep your labels tidy so search and filters stay useful",
+        Sections =
+        [
+            new PageHelpSection
+            {
+                Title = "What this screen is for",
+                Icon = Icons.Material.Outlined.Sell,
+                Lead = "Tags label notes and resources across every PARA category. This page is where you clean them up.",
+                Points =
+                [
+                    "See every tag you have created, how many notes and resources use it, and when it was last used.",
+                    "Rename a tag to fix a typo — every note and resource keeps its association under the new name.",
+                    "Merge two tags that mean the same thing, or delete a tag you no longer need.",
+                    "Remove every unused tag in one action once your vault has grown a few of them."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "The Second Brain idea",
+                Icon = Icons.Material.Outlined.Lightbulb,
+                Lead = "A knowledge system only stays useful if its labels stay accurate — tags that drift or duplicate quietly make search worse over time.",
+                Points =
+                [
+                    "Prefer merging near-duplicate tags (\"meeting\" / \"meetings\") over letting both grow.",
+                    "Deleting a tag never deletes the notes or resources that used it — only the label is removed."
+                ]
+            },
+            new PageHelpSection
+            {
+                Title = "How to use this page",
+                Icon = Icons.Material.Outlined.PlaylistAddCheck,
+                Ordered = true,
+                Points =
+                [
+                    "Use Search tags… to find a specific tag.",
+                    "Use the open-in-new icon to jump to everything tagged with it.",
+                    "Use Rename, Merge, or Delete from the row actions — each shows how many notes and resources are affected before you confirm.",
+                    "Use Remove unused tags to bulk-clean tags with zero active notes or resources."
+                ]
+            }
+        ]
+    };
+
+    private bool _loading = true;
+    private string? _loadError;
+    private List<TagDto>? _tags;
+    private List<TagDto>? _filtered;
+    private string _searchText = "";
+
+    private int UnusedCount => _tags?.Count(t => t.IsUnused) ?? 0;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loadError = null;
+        try
+        {
+            var result = await TagService.GetAllAsync();
+            _tags = result.ToList();
+            ApplyFilter();
+        }
+        catch
+        {
+            _loadError = "Unable to reach the tag list.";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        IEnumerable<TagDto> q = _tags ?? [];
+        if (!string.IsNullOrWhiteSpace(_searchText))
+            q = q.Where(t => t.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+        _filtered = q.ToList();
+    }
+
+    private void ViewTaggedItems(TagDto tag) =>
+        Nav.NavigateTo($"/search?q={Uri.EscapeDataString(tag.Name)}");
+
+    private async Task OpenRenameDialog(TagDto tag)
+    {
+        var parameters = new DialogParameters<TagRenameDialog>();
+        parameters.Add(x => x.Tag, tag);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TagRenameDialog>("Rename tag", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add($"\"{tag.Name}\" renamed.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task OpenMergeDialog(TagDto tag)
+    {
+        var parameters = new DialogParameters<TagMergeDialog>();
+        parameters.Add(x => x.Source, tag);
+        parameters.Add(x => x.Candidates, (_tags ?? []).Where(t => t.Id != tag.Id).ToList());
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TagMergeDialog>("Merge tag", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add($"\"{tag.Name}\" merged.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task ConfirmDelete(TagDto tag)
+    {
+        var message = tag.IsUnused
+            ? $"Delete \"{tag.Name}\"? It is not currently used by any active note or resource."
+            : $"Delete \"{tag.Name}\"? It will be removed from {tag.NoteCount} note{(tag.NoteCount == 1 ? "" : "s")} " +
+              $"and {tag.ResourceCount} resource{(tag.ResourceCount == 1 ? "" : "s")}. Those notes and resources are not deleted.";
+
+        var box = await DialogService.ShowMessageBox(
+            "Delete tag", message, yesText: "Delete", cancelText: "Cancel");
+
+        if (box == true)
+        {
+            await TagService.DeleteAsync(tag.Id);
+            Snackbar.Add($"\"{tag.Name}\" deleted.", Severity.Warning);
+            await LoadAsync();
+        }
+    }
+
+    private async Task ConfirmDeleteUnused()
+    {
+        var count = UnusedCount;
+        if (count == 0) return;
+
+        var box = await DialogService.ShowMessageBox(
+            "Remove unused tags",
+            $"Permanently delete {count} tag{(count == 1 ? "" : "s")} with no active notes or resources? This cannot be undone.",
+            yesText: "Remove", cancelText: "Cancel");
+
+        if (box == true)
+        {
+            var removed = await TagService.DeleteUnusedAsync();
+            Snackbar.Add($"Removed {removed} unused tag{(removed == 1 ? "" : "s")}.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+}

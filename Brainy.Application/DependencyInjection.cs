@@ -47,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<ITaskService, TaskService>();
         services.AddScoped<IAreaService, AreaService>();
         services.AddScoped<IResourceService, ResourceService>();
+        services.AddScoped<ITagService, TagService>();
         services.AddScoped<IParaSummaryService, ParaSummaryService>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<INoteRelationshipService, NoteRelationshipService>();
