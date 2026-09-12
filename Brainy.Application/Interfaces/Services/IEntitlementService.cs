@@ -47,4 +47,28 @@ public interface IEntitlementService
         PlanTier tier,
         DateTime? planRenewsAtUtc = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records the billing provider's customer and/or subscription reference id for
+    /// <paramref name="userId"/>, creating the <c>UserPlan</c> row if none exists yet. Does not
+    /// change the plan tier or any other field. Called by the billing webhook processor when a
+    /// checkout completes or a subscription is created/updated, so the portal and future
+    /// webhooks can be linked back to this user.
+    /// </summary>
+    Task RecordBillingReferencesAsync(
+        string userId,
+        string? billingProviderCustomerId,
+        string? billingProviderSubscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets (when <paramref name="gracePeriodEndsAtUtc"/> is non-null) or clears (when null) the
+    /// payment-failure grace period end for <paramref name="userId"/>. While set and in the
+    /// future, the user's Pro access is unaffected by a failed charge; the tier itself only
+    /// changes via <see cref="SetPlanTierAsync"/> once the provider actually ends the subscription.
+    /// </summary>
+    Task SetGracePeriodAsync(
+        string userId,
+        DateTime? gracePeriodEndsAtUtc,
+        CancellationToken cancellationToken = default);
 }

@@ -156,6 +156,48 @@ internal sealed class EntitlementService(
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task RecordBillingReferencesAsync(
+        string userId,
+        string? billingProviderCustomerId,
+        string? billingProviderSubscriptionId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+
+        var userPlan = await GetOrCreateUserPlanAsync(userId, cancellationToken).ConfigureAwait(false);
+
+        var changed = false;
+        if (billingProviderCustomerId is not null && userPlan.BillingProviderCustomerId != billingProviderCustomerId)
+        {
+            userPlan.BillingProviderCustomerId = billingProviderCustomerId;
+            changed = true;
+        }
+
+        if (billingProviderSubscriptionId is not null && userPlan.BillingProviderSubscriptionId != billingProviderSubscriptionId)
+        {
+            userPlan.BillingProviderSubscriptionId = billingProviderSubscriptionId;
+            changed = true;
+        }
+
+        if (changed)
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SetGracePeriodAsync(
+        string userId,
+        DateTime? gracePeriodEndsAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+
+        var userPlan = await GetOrCreateUserPlanAsync(userId, cancellationToken).ConfigureAwait(false);
+        if (userPlan.GracePeriodEndsAtUtc == gracePeriodEndsAtUtc)
+            return;
+
+        userPlan.GracePeriodEndsAtUtc = gracePeriodEndsAtUtc;
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task<PlanTier> GetPlanTierAsync(string userId, CancellationToken cancellationToken)
     {
         var tier = await context.UserPlans.AsNoTracking()

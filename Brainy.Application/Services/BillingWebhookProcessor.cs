@@ -64,13 +64,33 @@ internal sealed class BillingWebhookProcessor(
             return BillingWebhookProcessingResult.AlreadyProcessed;
         }
 
-        if (!string.IsNullOrWhiteSpace(parsed.TargetUserId) && parsed.NewTier.HasValue)
+        if (!string.IsNullOrWhiteSpace(parsed.TargetUserId))
         {
-            await entitlements.SetPlanTierAsync(
-                parsed.TargetUserId,
-                parsed.NewTier.Value,
-                parsed.PeriodEndsAtUtc,
-                cancellationToken).ConfigureAwait(false);
+            if (parsed.BillingProviderCustomerId is not null || parsed.BillingProviderSubscriptionId is not null)
+            {
+                await entitlements.RecordBillingReferencesAsync(
+                    parsed.TargetUserId,
+                    parsed.BillingProviderCustomerId,
+                    parsed.BillingProviderSubscriptionId,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            if (parsed.ClearsGracePeriod || parsed.GracePeriodEndsAtUtc.HasValue)
+            {
+                await entitlements.SetGracePeriodAsync(
+                    parsed.TargetUserId,
+                    parsed.ClearsGracePeriod ? null : parsed.GracePeriodEndsAtUtc,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            if (parsed.NewTier.HasValue)
+            {
+                await entitlements.SetPlanTierAsync(
+                    parsed.TargetUserId,
+                    parsed.NewTier.Value,
+                    parsed.PeriodEndsAtUtc,
+                    cancellationToken).ConfigureAwait(false);
+            }
         }
 
         return BillingWebhookProcessingResult.Applied;
