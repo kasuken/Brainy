@@ -9,6 +9,7 @@ using Brainy.Web.Configuration;
 using Brainy.Web.Endpoints;
 using Brainy.Web.Health;
 using Brainy.Web.Identity;
+using Brainy.Web.Telemetry;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -209,6 +210,11 @@ builder.Services.AddScoped<IEmailSender<ApplicationUser>, BrainyIdentityEmailSen
 
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseReadinessHealthCheck>("database", tags: ["ready"]);
+
+// OpenTelemetry traces/metrics/logs (issue #322). Telemetry:Enabled defaults to false, so this
+// registers nothing at all unless a host explicitly opts in and configures an OTLP endpoint —
+// self-hosting is unaffected. See docs/production-runbook.md for the exporter setup.
+builder.Services.AddBrainyTelemetry(builder.Configuration);
 
 // Builds Markdown/Obsidian vault exports off the request path so a large account's export
 // never times out the request that started it (see IMarkdownExportJobService).

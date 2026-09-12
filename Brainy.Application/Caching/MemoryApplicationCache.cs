@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Brainy.Application.Interfaces.Caching;
+using Brainy.Application.Telemetry;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Brainy.Application.Caching;
@@ -35,12 +36,20 @@ internal sealed class MemoryApplicationCache : IApplicationCache, IDisposable
 
         var scopedKey = new ScopedCacheKey(userId, key, typeof(T));
         if (TryGetValue(scopedKey, normalizedTags, out T? cachedValue))
+        {
+            RecordLookup(hit: true);
             return cachedValue!;
+        }
 
         using var factoryLock = await AcquireFactoryLockAsync(scopedKey, cancellationToken)
             .ConfigureAwait(false);
         if (TryGetValue(scopedKey, normalizedTags, out cachedValue))
+        {
+            // Won the race after another caller's concurrent factory already published the
+            // value — still a hit from this caller's point of view, not a miss.
+            RecordLookup(hit: true);
             return cachedValue!;
+        }
 
         UserCacheScope scope;
         long generation;
@@ -55,6 +64,7 @@ internal sealed class MemoryApplicationCache : IApplicationCache, IDisposable
 
         try
         {
+            RecordLookup(hit: false);
             var value = await valueFactory(cancellationToken).ConfigureAwait(false);
             var registration = new CacheEntryRegistration(scope, scopedKey, normalizedTags);
             scope.TryPublish(
@@ -145,6 +155,15 @@ internal sealed class MemoryApplicationCache : IApplicationCache, IDisposable
 
         _memoryCache.Dispose();
     }
+
+    /// <summary>
+    /// Records one cache lookup outcome for the hit-ratio metric. Never tagged with the cache
+    /// key, user id, or value — only the fixed hit/miss outcome (see <see cref="BrainyTelemetry"/>).
+    /// </summary>
+    private static void RecordLookup(bool hit) =>
+        BrainyTelemetry.CacheLookups.Add(1,
+            new KeyValuePair<string, object?>("cache.result",
+                hit ? BrainyTelemetry.CacheResult.Hit : BrainyTelemetry.CacheResult.Miss));
 
     private bool TryGetValue<T>(
         ScopedCacheKey scopedKey,
