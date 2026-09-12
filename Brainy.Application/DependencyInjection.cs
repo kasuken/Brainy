@@ -9,6 +9,7 @@ using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Options;
 using Brainy.Application.Services;
+using Brainy.Application.Services.MarkdownExport;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -79,6 +80,15 @@ public static class DependencyInjection
         services.AddScoped<IAnalyticsService, AnalyticsService>();
         services.AddScoped<IDataExportService, DataExportService>();
         services.AddScoped<IDataImportService, DataImportService>();
+        services.AddScoped<IMarkdownExportService, MarkdownExportService>();
+        // Single shared instance so the background consumer (Web's hosted service) and every
+        // request-scoped IMarkdownExportJobService see the same in-memory queue and job store.
+        services.TryAddSingleton<InMemoryMarkdownExportJobCoordinator>();
+        services.TryAddSingleton<IMarkdownExportJobQueue>(
+            provider => provider.GetRequiredService<InMemoryMarkdownExportJobCoordinator>());
+        services.TryAddSingleton<IMarkdownExportJobStore>(
+            provider => provider.GetRequiredService<InMemoryMarkdownExportJobCoordinator>());
+        services.AddScoped<IMarkdownExportJobService, MarkdownExportJobService>();
         services.AddScoped<ILlmFocusExportService, LlmFocusExportService>();
         services.AddScoped<IEntitlementService, EntitlementService>();
         services.AddScoped<IBillingWebhookProcessor, BillingWebhookProcessor>();
