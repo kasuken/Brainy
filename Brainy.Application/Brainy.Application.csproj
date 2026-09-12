@@ -11,8 +11,15 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
+    <PackageReference Include="MailKit" Version="4.17.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Brainy.Domain\Brainy.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Lets Brainy.Application.Tests unit-test the internal email templates/services
+         directly instead of only through the public IEmailSender/IAccountEmailService
+         seams; production behavior is unaffected. -->
+    <InternalsVisibleTo Include="Brainy.Application.Tests" />
   </ItemGroup>
 </Project>

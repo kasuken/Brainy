@@ -3,9 +3,11 @@ using Azure.AI.OpenAI;
 using Brainy.Application.AI;
 using Brainy.Application.Billing;
 using Brainy.Application.Caching;
+using Brainy.Application.Email;
 using Brainy.Application.Interfaces.AI;
 using Brainy.Application.Interfaces.Billing;
 using Brainy.Application.Interfaces.Caching;
+using Brainy.Application.Interfaces.Email;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Options;
 using Brainy.Application.Services;
@@ -154,6 +156,44 @@ public static class DependencyInjection
     public static IServiceCollection AddDisabledAiAssistant(this IServiceCollection services)
     {
         services.AddSingleton<IAiAssistant, NullAiAssistant>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="IEmailSender"/> based on the <c>Email</c> configuration section.
+    /// When <see cref="EmailProviderType.None"/> is configured (the default),
+    /// <see cref="NullEmailSender"/> is registered so the app starts and every outbound
+    /// message is logged instead of sent — local development and self-hosting keep working
+    /// without a mail account configured. Also registers <see cref="IAccountEmailService"/>,
+    /// the templated seam the Web layer's Identity email adapter calls into.
+    /// </summary>
+    public static IServiceCollection AddEmail(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+
+        var options = configuration
+            .GetSection(EmailOptions.SectionName)
+            .Get<EmailOptions>() ?? new EmailOptions();
+
+        switch (options.Provider)
+        {
+            case EmailProviderType.None:
+                services.AddSingleton<IEmailSender, NullEmailSender>();
+                break;
+
+            case EmailProviderType.Smtp:
+                ArgumentException.ThrowIfNullOrWhiteSpace(options.SmtpHost, nameof(options.SmtpHost));
+                ArgumentException.ThrowIfNullOrWhiteSpace(options.FromAddress, nameof(options.FromAddress));
+
+                services.AddSingleton(options);
+                services.AddSingleton<IEmailSender, SmtpEmailSender>();
+                break;
+
+            default:
+                throw new InvalidOperationException($"Unsupported email provider: {options.Provider}");
+        }
+
+        services.AddSingleton<IAccountEmailService, AccountEmailService>();
         return services;
     }
 
