@@ -451,9 +451,26 @@
         ? $"Sort by {option}, currently {(_sortAsc ? "ascending" : "descending")}; activate to reverse"
         : $"Sort by {option}";
 
+    /// <summary>Set by the command palette's "New project" command (issue #318) to open the
+    /// create dialog on load, exactly as the page's own "New Project" button would — so the
+    /// same entitlement check (active-project cap) still runs on save.</summary>
+    [SupplyParameterFromQuery(Name = "new")]
+    public bool? CreateFromQuery { get; set; }
+
+    private bool _paletteCreateHandled;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && CreateFromQuery == true && !_paletteCreateHandled)
+        {
+            _paletteCreateHandled = true;
+            await OpenCreateDialog();
+        }
     }
 
     private async Task LoadAsync()

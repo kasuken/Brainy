@@ -589,9 +589,25 @@
 
     private CancellationTokenSource? _searchCts;
 
+    /// <summary>Set by the command palette's "New output" command (issue #318) to open the
+    /// create dialog on load, exactly as the page's own "New Output" button would.</summary>
+    [SupplyParameterFromQuery(Name = "new")]
+    public bool? CreateFromQuery { get; set; }
+
+    private bool _paletteCreateHandled;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && CreateFromQuery == true && !_paletteCreateHandled)
+        {
+            _paletteCreateHandled = true;
+            await OpenCreateDialogAsync();
+        }
     }
 
     private async Task LoadAsync(CancellationToken cancellationToken = default)
