@@ -25,6 +25,15 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="MudBlazor" Version="8.4.0" />
+    <!-- OpenTelemetry traces/metrics/logs (issue #322). Disabled by default at runtime
+         (Telemetry:Enabled=false); see Brainy.Web/Telemetry/DependencyInjection.cs. -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
+    <!-- Official OpenTelemetry-Contrib package; still pre-1.0 (only prerelease build
+         published) but current and not flagged by NuGet audit. -->
+    <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.18.0-beta.1" />
   </ItemGroup>
 
 </Project>

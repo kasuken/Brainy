@@ -3,6 +3,7 @@ using Brainy.Application.DTOs.Offline;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Application.Telemetry;
 using Brainy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -34,6 +35,11 @@ internal sealed class OfflineCaptureSyncService(
             throw new ArgumentException(
                 $"A sync batch cannot contain more than {IOfflineCaptureSyncService.MaxBatchSize} items.", nameof(batch));
 
+        // The backlog this device is flushing — the practical "queue depth" for offline sync,
+        // since the queue itself lives client-side. Recorded regardless of outcome, never
+        // tagged with anything from the batch's content.
+        BrainyTelemetry.SyncBatchSize.Record(batch.Items.Count);
+
         if (batch.Items.Count == 0)
             return new OfflineCaptureSyncResultDto([]);
 
@@ -42,11 +48,26 @@ internal sealed class OfflineCaptureSyncService(
         var results = new List<OfflineCaptureSyncItemResultDto>(batch.Items.Count);
         foreach (var item in batch.Items)
         {
-            results.Add(await SyncOneAsync(userId, item, cancellationToken).ConfigureAwait(false));
+            var result = await SyncOneAsync(userId, item, cancellationToken).ConfigureAwait(false);
+            results.Add(result);
+
+            // Tagged only with the fixed outcome enum — never the idempotency key, note id, or
+            // rejection message (which may echo back caller-supplied text).
+            BrainyTelemetry.SyncItemsProcessed.Add(1,
+                new KeyValuePair<string, object?>("sync.outcome", MapOutcome(result.Outcome)));
         }
 
         return new OfflineCaptureSyncResultDto(results);
     }
+
+    private static string MapOutcome(OfflineCaptureSyncOutcome outcome) => outcome switch
+    {
+        OfflineCaptureSyncOutcome.Created => BrainyTelemetry.SyncOutcome.Created,
+        OfflineCaptureSyncOutcome.DuplicateIgnored => BrainyTelemetry.SyncOutcome.DuplicateIgnored,
+        OfflineCaptureSyncOutcome.AlreadySynced => BrainyTelemetry.SyncOutcome.AlreadySynced,
+        OfflineCaptureSyncOutcome.Rejected => BrainyTelemetry.SyncOutcome.Rejected,
+        _ => "unknown",
+    };
 
     private async Task<OfflineCaptureSyncItemResultDto> SyncOneAsync(
         string userId, OfflineCaptureSyncItemDto item, CancellationToken cancellationToken)

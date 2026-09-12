@@ -2,6 +2,7 @@ using Brainy.Application.DTOs.Billing;
 using Brainy.Application.Interfaces.Billing;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Application.Telemetry;
 using Brainy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -32,17 +33,17 @@ internal sealed class BillingWebhookProcessor(
             .ConfigureAwait(false);
 
         if (!verification.IsValid)
-            return BillingWebhookProcessingResult.InvalidSignature;
+            return Record(BillingWebhookProcessingResult.InvalidSignature);
 
         var parsed = await billingProvider.ParseWebhookEventAsync(payload, cancellationToken).ConfigureAwait(false);
         if (parsed is null)
-            return BillingWebhookProcessingResult.Ignored;
+            return Record(BillingWebhookProcessingResult.Ignored);
 
         var alreadyProcessed = await context.ProcessedWebhookEvents.AsNoTracking()
             .AnyAsync(e => e.ProviderEventId == parsed.ProviderEventId, cancellationToken)
             .ConfigureAwait(false);
         if (alreadyProcessed)
-            return BillingWebhookProcessingResult.AlreadyProcessed;
+            return Record(BillingWebhookProcessingResult.AlreadyProcessed);
 
         context.ProcessedWebhookEvents.Add(new ProcessedWebhookEvent
         {
@@ -61,7 +62,7 @@ internal sealed class BillingWebhookProcessor(
         {
             // Unique index on ProviderEventId: a concurrent delivery of the same event won
             // the race. Treat this one as the safe no-op it is instead of double-applying.
-            return BillingWebhookProcessingResult.AlreadyProcessed;
+            return Record(BillingWebhookProcessingResult.AlreadyProcessed);
         }
 
         if (!string.IsNullOrWhiteSpace(parsed.TargetUserId))
@@ -93,6 +94,18 @@ internal sealed class BillingWebhookProcessor(
             }
         }
 
-        return BillingWebhookProcessingResult.Applied;
+        return Record(BillingWebhookProcessingResult.Applied);
+    }
+
+    /// <summary>
+    /// Records one processed webhook delivery, tagged only with the fixed <c>Reason</c> code
+    /// (never the raw provider payload, target user id, or any billing identifier) before
+    /// returning it unchanged.
+    /// </summary>
+    private static BillingWebhookProcessingResult Record(BillingWebhookProcessingResult result)
+    {
+        BrainyTelemetry.BillingWebhookEvents.Add(1,
+            new KeyValuePair<string, object?>("billing.webhook_outcome", result.Reason));
+        return result;
     }
 }
