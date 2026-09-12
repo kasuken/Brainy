@@ -4,6 +4,7 @@
 
 @using Brainy.Application.DTOs.Search
 @using Brainy.Application.Interfaces.Services
+@using Brainy.Web.Components.Layout.CommandPalette
 
 @inject ISearchService SearchService
 @inject NavigationManager Nav
@@ -38,10 +39,10 @@
         <input @ref="_inputRef"
                class="gsb__input"
                type="search"
-               placeholder="Search…"
+               placeholder="Search or run a command…"
                autocomplete="off"
                spellcheck="false"
-               aria-label="Global search"
+               aria-label="Search or run a command"
                role="combobox"
                aria-expanded="@_open.ToString().ToLowerInvariant()"
                aria-haspopup="listbox"
@@ -79,10 +80,10 @@
                     <input @ref="_inputRef"
                            class="gsb__input"
                            type="search"
-                           placeholder="Search…"
+                           placeholder="Search or run a command…"
                            autocomplete="off"
                            spellcheck="false"
-                           aria-label="Global search"
+                           aria-label="Search or run a command"
                            role="combobox"
                            aria-expanded="@_open.ToString().ToLowerInvariant()"
                            aria-haspopup="listbox"
@@ -99,7 +100,32 @@
                     <div id="global-search-results-mobile"
                          class="gsb__overlay gsb__overlay--mobile"
                          role="listbox"
-                         aria-label="Search results">
+                         aria-label="Search results and commands">
+
+                        @if (_commands.Count > 0)
+                        {
+                            <div class="gsb__group gsb__group--commands">
+                                <div class="gsb__group-header" aria-hidden="true">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Bolt" Class="gsb__group-icon" Size="Size.Small" />
+                                    <span class="gsb__group-label">Commands</span>
+                                </div>
+
+                                @foreach (var command in _commands)
+                                {
+                                    var localCommand = command;
+                                    <button class="gsb__item gsb__item--command @(IsCommandActive(localCommand.Id) ? "gsb__item--active" : "")"
+                                            id="@($"gsb-cmd-{localCommand.Id}")"
+                                            role="option"
+                                            aria-selected="@IsCommandActive(localCommand.Id)"
+                                            @onclick="() => RunCommandAsync(localCommand)"
+                                            @onmouseenter="() => OnCommandHover(localCommand.Id)">
+                                        <MudIcon Icon="@localCommand.Icon" Class="gsb__cmd-icon" Size="Size.Small" />
+                                        <span class="gsb__item-title">@localCommand.Title</span>
+                                        <span class="gsb__cmd-kind">@CommandKindLabel(localCommand.Kind)</span>
+                                    </button>
+                                }
+                            </div>
+                        }
 
                         @if (_searching)
                         {
@@ -136,8 +162,7 @@
                                     @foreach (var item in group.Value)
                                     {
                                         var localItem = item;
-                                        var isActive = _flatIndex.TryGetValue(localItem.Id, out var idx) &&
-                                                       _selectedIndex == idx;
+                                        var isActive = IsRecordActive(localItem.Id);
                                         <button class="gsb__item @(isActive ? "gsb__item--active" : "")"
                                                 id="@($"gsb-item-{localItem.Id}")"
                                                 role="option"
@@ -176,7 +201,32 @@
     @* ── Results overlay ── *@
     @if (!_mobileOpen && _open && HasVisibleResults)
     {
-        <div id="global-search-results" class="gsb__overlay" role="listbox" aria-label="Search results">
+        <div id="global-search-results" class="gsb__overlay" role="listbox" aria-label="Search results and commands">
+
+            @if (_commands.Count > 0)
+            {
+                <div class="gsb__group gsb__group--commands">
+                    <div class="gsb__group-header" aria-hidden="true">
+                        <MudIcon Icon="@Icons.Material.Outlined.Bolt" Class="gsb__group-icon" Size="Size.Small" />
+                        <span class="gsb__group-label">Commands</span>
+                    </div>
+
+                    @foreach (var command in _commands)
+                    {
+                        var localCommand = command;
+                        <button class="gsb__item gsb__item--command @(IsCommandActive(localCommand.Id) ? "gsb__item--active" : "")"
+                                id="@($"gsb-cmd-{localCommand.Id}")"
+                                role="option"
+                                aria-selected="@IsCommandActive(localCommand.Id)"
+                                @onclick="() => RunCommandAsync(localCommand)"
+                                @onmouseenter="() => OnCommandHover(localCommand.Id)">
+                            <MudIcon Icon="@localCommand.Icon" Class="gsb__cmd-icon" Size="Size.Small" />
+                            <span class="gsb__item-title">@localCommand.Title</span>
+                            <span class="gsb__cmd-kind">@CommandKindLabel(localCommand.Kind)</span>
+                        </button>
+                    }
+                </div>
+            }
 
             @if (_searching)
             {
@@ -397,7 +447,9 @@
         border-radius: 14px;
         box-shadow: var(--shadow-lg);
         z-index: 9999;
-        overflow: hidden;
+        max-height: min(70vh, 480px);
+        overflow-x: hidden;
+        overflow-y: auto;
         animation: gsb-in 0.13s ease;
     }
 
@@ -499,6 +551,38 @@
         line-height: 1.35;
     }
 
+    /* ── Command rows ── */
+    .gsb__item--command {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+    }
+
+    .gsb__cmd-icon {
+        color: var(--clay);
+        flex-shrink: 0;
+        font-size: 0.9rem !important;
+        width: 0.9rem !important;
+        height: 0.9rem !important;
+    }
+
+    .gsb__item--command .gsb__item-title {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .gsb__cmd-kind {
+        margin-left: auto;
+        flex-shrink: 0;
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--appbar-text-faint);
+        padding-left: 0.5rem;
+    }
+
     .gsb__item-snippet {
         display: block;
         font-size: 0.755rem;
@@ -550,6 +634,9 @@
 @code {
     private const int MaxDisplayResults = 10;
     private const int SnippetDisplayLength = 75;
+    private const int DefaultCommandSuggestionCount = 8;
+    private const int MaxMatchingCommands = 6;
+    private const int MaxRecentCommands = 8;
 
     private ElementReference _rootRef;
     private ElementReference _inputRef;
@@ -569,6 +656,18 @@
     private Dictionary<Guid, int> _flatIndex = [];
     private List<SearchResultDto> _flat = [];
 
+    // ── Command palette state (issue #318) ──────────────────────────────────
+    // Kept alongside — not instead of — the record-search state above: a plain
+    // query still runs the exact same SearchAsync path it always has. Commands
+    // are matched and ranked separately (in-memory here, ranking persisted
+    // per-browser via brainySearch.js) and merged only for keyboard navigation
+    // and rendering.
+    private List<PaletteCommand> _commands = [];
+    private Dictionary<string, int> _commandIndex = [];
+    private Dictionary<string, int> _commandUsage = [];
+    private List<string> _recentCommandIds = [];
+    private bool _usageLoaded;
+
     // ── Lifecycle ─────────────────────────────────────────────────────────
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -578,6 +677,7 @@
         _dotNetRef = DotNetObjectReference.Create(this);
         // brainySearch.js (loaded in App.razor) wires up Ctrl+K and click-outside.
         await JS.InvokeVoidAsync("brainySearch.init", _dotNetRef).ConfigureAwait(false);
+        await EnsureUsageLoadedAsync().ConfigureAwait(false);
     }
 
     // ── JS-invokable (called from brainySearch.js) ────────────────────────
@@ -587,6 +687,7 @@
     public async Task OpenFromKeyboardAsync()
     {
         _open = true;
+        RefreshCommandMatches();
         await InvokeAsync(StateHasChanged);
         await FocusInputAsync().ConfigureAwait(false);
     }
@@ -605,6 +706,7 @@
     private Task OnFocusAsync()
     {
         _open = true;
+        RefreshCommandMatches();
         StateHasChanged();
         return Task.CompletedTask;
     }
@@ -612,6 +714,7 @@
     private async Task OnInputAsync(ChangeEventArgs e)
     {
         _query = e.Value?.ToString() ?? string.Empty;
+        RefreshCommandMatches();
 
         // Cancel any pending debounce
         _debounceCts?.Cancel();
@@ -666,23 +769,24 @@
 
     private async Task OnKeyDownAsync(KeyboardEventArgs e)
     {
+        var total = _commands.Count + _flat.Count;
+
         switch (e.Key)
         {
             case "ArrowDown":
-                if (_flat.Count > 0)
-                    _selectedIndex = (_selectedIndex + 1) % _flat.Count;
+                if (total > 0)
+                    _selectedIndex = (_selectedIndex + 1) % total;
                 StateHasChanged();
                 break;
 
             case "ArrowUp":
-                if (_flat.Count > 0)
-                    _selectedIndex = (_selectedIndex - 1 + _flat.Count) % _flat.Count;
+                if (total > 0)
+                    _selectedIndex = (_selectedIndex - 1 + total) % total;
                 StateHasChanged();
                 break;
 
             case "Enter":
-                if (_selectedIndex >= 0 && _selectedIndex < _flat.Count)
-                    NavigateTo(_flat[_selectedIndex]);
+                await ActivateSelectedAsync().ConfigureAwait(false);
                 break;
 
             case "Escape":
@@ -690,23 +794,73 @@
                 StateHasChanged();
                 break;
         }
-
-        await Task.CompletedTask;
     }
 
     private void OnItemHover(Guid id)
     {
         if (_flatIndex.TryGetValue(id, out var idx))
+            _selectedIndex = _commands.Count + idx;
+    }
+
+    private void OnCommandHover(string commandId)
+    {
+        if (_commandIndex.TryGetValue(commandId, out var idx))
             _selectedIndex = idx;
     }
 
+    private bool IsRecordActive(Guid id) =>
+        _flatIndex.TryGetValue(id, out var idx) && _selectedIndex == _commands.Count + idx;
+
+    private bool IsCommandActive(string commandId) =>
+        _commandIndex.TryGetValue(commandId, out var idx) && _selectedIndex == idx;
+
     // ── Navigation ────────────────────────────────────────────────────────
+
+    /// <summary>Activates whatever is currently highlighted — a command or a record — on Enter.</summary>
+    private async Task ActivateSelectedAsync()
+    {
+        if (_selectedIndex < 0) return;
+
+        if (_selectedIndex < _commands.Count)
+        {
+            await RunCommandAsync(_commands[_selectedIndex]).ConfigureAwait(false);
+            return;
+        }
+
+        var recordIndex = _selectedIndex - _commands.Count;
+        if (recordIndex >= 0 && recordIndex < _flat.Count)
+            NavigateTo(_flat[recordIndex]);
+    }
 
     private void NavigateTo(SearchResultDto result)
     {
         CloseSearch(clearQuery: true);
         ResetResults();
         Nav.NavigateTo(BuildUrl(result));
+    }
+
+    /// <summary>
+    /// Runs a palette command: records it (for recent/frequent ranking) and navigates to
+    /// its URL. Every command resolves to a URL of an existing page or dialog trigger, so
+    /// entitlement checks (e.g. the active-project cap) run exactly where they already do
+    /// for that action — the palette never bypasses them.
+    /// </summary>
+    private async Task RunCommandAsync(PaletteCommand command)
+    {
+        CloseSearch(clearQuery: true);
+        ResetResults();
+        _commands = [];
+        _commandIndex = [];
+
+        RecordCommandUsageInMemory(command.Id);
+        try
+        {
+            await JS.InvokeVoidAsync("brainySearch.recordCommandUse", command.Id).ConfigureAwait(false);
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+
+        Nav.NavigateTo(command.Url);
     }
 
     private async Task GoToFullSearchAsync()
@@ -784,12 +938,77 @@
         _         => Icons.Material.Outlined.Circle,
     };
 
-    private string? GetActiveDescendantId() =>
-        _open && _selectedIndex >= 0 && _selectedIndex < _flat.Count
-            ? $"gsb-item-{_flat[_selectedIndex].Id}"
-            : null;
+    // ── Command palette (issue #318) ─────────────────────────────────────
 
-    private bool HasVisibleResults => _results.Count > 0 || _searching || _noResults;
+    /// <summary>Re-filters/ranks the command list for the current query. Synchronous and
+    /// side-effect free on the record-search state, so it never interferes with the
+    /// debounced <see cref="SearchService"/> call above.</summary>
+    private void RefreshCommandMatches()
+    {
+        var limit = string.IsNullOrWhiteSpace(_query) ? DefaultCommandSuggestionCount : MaxMatchingCommands;
+
+        _commands = PaletteCommandRanker
+            .Rank(PaletteCommandCatalog.All, _query, _commandUsage, _recentCommandIds, limit)
+            .ToList();
+
+        _commandIndex = _commands
+            .Select((c, i) => (c.Id, i))
+            .ToDictionary(t => t.Id, t => t.i);
+    }
+
+    private async Task EnsureUsageLoadedAsync()
+    {
+        if (_usageLoaded) return;
+        _usageLoaded = true;
+
+        try
+        {
+            var snapshot = await JS.InvokeAsync<PaletteUsageSnapshot?>("brainySearch.getCommandUsage").ConfigureAwait(false);
+            if (snapshot is not null)
+            {
+                _commandUsage = snapshot.Counts is null ? [] : new Dictionary<string, int>(snapshot.Counts);
+                _recentCommandIds = snapshot.RecentIds is null ? [] : [.. snapshot.RecentIds];
+            }
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+    }
+
+    /// <summary>Updates in-memory ranking state immediately, ahead of (and independent from)
+    /// the fire-and-forget localStorage write, so ranking stays fresh across navigations
+    /// within the same circuit even if the JS write is slow or fails.</summary>
+    private void RecordCommandUsageInMemory(string commandId)
+    {
+        _commandUsage[commandId] = _commandUsage.TryGetValue(commandId, out var count) ? count + 1 : 1;
+
+        _recentCommandIds.RemoveAll(id => id == commandId);
+        _recentCommandIds.Insert(0, commandId);
+        if (_recentCommandIds.Count > MaxRecentCommands)
+            _recentCommandIds.RemoveRange(MaxRecentCommands, _recentCommandIds.Count - MaxRecentCommands);
+    }
+
+    private static string CommandKindLabel(PaletteCommandKind kind) => kind switch
+    {
+        PaletteCommandKind.Navigation => "Go to",
+        PaletteCommandKind.Create     => "Create",
+        PaletteCommandKind.Action     => "Action",
+        _                             => "",
+    };
+
+    private string? GetActiveDescendantId()
+    {
+        if (!_open || _selectedIndex < 0) return null;
+
+        if (_selectedIndex < _commands.Count)
+            return $"gsb-cmd-{_commands[_selectedIndex].Id}";
+
+        var recordIndex = _selectedIndex - _commands.Count;
+        return recordIndex >= 0 && recordIndex < _flat.Count
+            ? $"gsb-item-{_flat[recordIndex].Id}"
+            : null;
+    }
+
+    private bool HasVisibleResults => _results.Count > 0 || _searching || _noResults || _commands.Count > 0;
 
     private async Task ToggleMobileSearchAsync()
     {
@@ -802,6 +1021,7 @@
 
         _mobileOpen = true;
         _open = true;
+        RefreshCommandMatches();
         await InvokeAsync(StateHasChanged);
         await FocusInputAsync().ConfigureAwait(false);
     }

@@ -574,16 +574,31 @@
     [SupplyParameterFromQuery(Name = "open")]
     public Guid? OpenNoteId { get; set; }
 
+    /// <summary>Set by the command palette's "New note" command (issue #318) to open the
+    /// create dialog on load, exactly as the page's own "New Note" button would.</summary>
+    [SupplyParameterFromQuery(Name = "new")]
+    public bool? CreateFromQuery { get; set; }
+
     private bool _deepLinkHandled;
+    private bool _paletteCreateHandled;
 
     protected override async Task OnInitializedAsync() => await LoadNotesAsync();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && OpenNoteId.HasValue && !_deepLinkHandled)
+        if (!firstRender) return;
+
+        if (OpenNoteId.HasValue && !_deepLinkHandled)
         {
             _deepLinkHandled = true;
             await OpenEditDialogAsync(OpenNoteId.Value);
+            return;
+        }
+
+        if (CreateFromQuery == true && !_paletteCreateHandled)
+        {
+            _paletteCreateHandled = true;
+            await OpenCreateDialogAsync();
         }
     }
 
