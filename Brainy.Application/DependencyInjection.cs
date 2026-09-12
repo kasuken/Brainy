@@ -34,6 +34,9 @@ public static class DependencyInjection
         // register their own TimeProvider before calling this to override it.
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IApplicationCache, MemoryApplicationCache>();
+        // Overridden by Brainy.Web with a real Identity-backed implementation; see that
+        // interface's remarks. Kept as a safe zero-count default for hosts/tests that don't.
+        services.TryAddScoped<Brainy.Application.Interfaces.Identity.IUserDirectoryService, NullUserDirectoryService>();
 
         services.AddScoped<INoteService, NoteService>();
         services.AddScoped<IShareCaptureService, ShareCaptureService>();
