@@ -2,6 +2,7 @@ using Brainy.Application;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Data;
 using Brainy.Data.Identity;
+using Brainy.Web.BackgroundServices;
 using Brainy.Web.Components;
 using Brainy.Web.Components.Account;
 using Brainy.Web.Configuration;
@@ -206,6 +207,10 @@ builder.Services.AddScoped<IEmailSender<ApplicationUser>, BrainyIdentityEmailSen
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseReadinessHealthCheck>("database", tags: ["ready"]);
 
+// Builds Markdown/Obsidian vault exports off the request path so a large account's export
+// never times out the request that started it (see IMarkdownExportJobService).
+builder.Services.AddHostedService<MarkdownExportBackgroundService>();
+
 var app = builder.Build();
 
 if (builder.Configuration.GetValue("Database:ApplyMigrationsOnStartup", true))
@@ -250,6 +255,9 @@ app.MapAdditionalIdentityEndpoints();
 
 // Serve note images stored in the database.
 app.MapNoteImageEndpoints();
+
+// Serve completed Markdown/Obsidian vault exports (see MarkdownExportBackgroundService).
+app.MapMarkdownExportEndpoints();
 
 // Inbound billing-provider webhooks (plan/subscription state changes).
 app.MapBillingWebhookEndpoints();

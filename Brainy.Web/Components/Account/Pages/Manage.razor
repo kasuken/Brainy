@@ -10,8 +10,10 @@
    still-registered popover section subscription. Both parts together are needed. *@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize]
+@implements IDisposable
 
 @using Brainy.Application.DTOs.Billing
+@using Brainy.Application.DTOs.DataExport
 @using Brainy.Application.DTOs.DataImport
 @using Brainy.Application.DTOs.Search
 @using Brainy.Application.Interfaces.Services
@@ -23,6 +25,7 @@
 @using Microsoft.AspNetCore.Identity
 
 @inject IDataExportService DataExportService
+@inject IMarkdownExportJobService MarkdownExportJobService
 @inject IDataImportService DataImportService
 @inject IArchiveRetentionService ArchiveRetentionService
 @inject IUserTimeZoneService UserTimeZoneService
@@ -431,6 +434,69 @@
 
         <MudPaper Class="account-manage__card" Elevation="0">
             <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.Notes" aria-hidden="true" />
+                <div>
+                    <h2>Export as a Markdown vault</h2>
+                    <p>
+                        Builds a zip of Markdown files organised by Project/Area/Resource/Archive,
+                        with tags and dates in each note's front matter, [[wiki links]] between related
+                        notes, and images copied alongside — ready to open as an Obsidian vault.
+                    </p>
+                </div>
+            </div>
+
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
+                This complements the JSON export above; it is for reading and using your data
+                elsewhere, not for re-importing into Brainy. Runs as a background job so large
+                accounts export without tying up this page — a download link appears here when it
+                finishes. Never includes account credentials, application secrets, AI-provider keys,
+                or analytics identifiers.
+            </MudAlert>
+
+            @if (_markdownExportError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_markdownExportError
+                </MudAlert>
+            }
+
+            <div class="account-manage__actions">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Outlined.FolderZip"
+                           Disabled="@(_markdownExportState is MarkdownExportJobState.Queued or MarkdownExportJobState.Running)"
+                           aria-busy="@((_markdownExportState is MarkdownExportJobState.Queued or MarkdownExportJobState.Running).ToString().ToLowerInvariant())"
+                           OnClick="StartMarkdownExportAsync">
+                    @if (_markdownExportState is MarkdownExportJobState.Queued or MarkdownExportJobState.Running)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>@(_markdownExportState == MarkdownExportJobState.Queued ? "Queued…" : "Building your vault…")</span>
+                    }
+                    else
+                    {
+                        <span>Start Markdown export</span>
+                    }
+                </MudButton>
+
+                @if (_markdownExportState == MarkdownExportJobState.Completed && _markdownExportJobId is { } completedJobId)
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Outlined.FileDownload"
+                               Href="@($"/api/markdown-export/{completedJobId}")"
+                               target="_blank">
+                        Download @(_markdownExportFileName ?? "vault.zip")
+                    </MudButton>
+                }
+
+                <span class="account-manage__status" role="status" aria-live="polite">
+                    @_markdownExportStatusMessage
+                </span>
+            </div>
+        </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
                 <MudIcon Icon="@Icons.Material.Outlined.UploadFile" aria-hidden="true" />
                 <div>
                     <h2>Import Brainy data</h2>
@@ -608,6 +674,13 @@
     private bool _exporting;
     private string? _exportError;
     private string? _exportStatus;
+
+    private Guid? _markdownExportJobId;
+    private MarkdownExportJobState? _markdownExportState;
+    private string? _markdownExportFileName;
+    private string? _markdownExportError;
+    private string? _markdownExportStatusMessage;
+    private CancellationTokenSource? _markdownExportPollCts;
     private bool _importing;
     private bool _previewing;
     private string? _importError;
@@ -1175,6 +1248,88 @@
         }
     }
 
+    private async Task StartMarkdownExportAsync()
+    {
+        if (_markdownExportState is MarkdownExportJobState.Queued or MarkdownExportJobState.Running)
+            return;
+
+        _markdownExportError = null;
+        _markdownExportFileName = null;
+        _markdownExportStatusMessage = "Starting your export…";
+
+        try
+        {
+            var status = await MarkdownExportJobService.StartExportAsync();
+            ApplyMarkdownExportStatus(status);
+
+            _markdownExportPollCts?.Cancel();
+            _markdownExportPollCts?.Dispose();
+            _markdownExportPollCts = new CancellationTokenSource();
+
+            if (status.State is MarkdownExportJobState.Queued or MarkdownExportJobState.Running)
+                _ = PollMarkdownExportStatusAsync(status.JobId, _markdownExportPollCts.Token);
+        }
+        catch
+        {
+            _markdownExportError = "Brainy could not start your Markdown export. Try again.";
+            _markdownExportStatusMessage = null;
+        }
+    }
+
+    private async Task PollMarkdownExportStatusAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+
+                var status = await MarkdownExportJobService.GetStatusAsync(jobId, cancellationToken);
+                if (status is null || cancellationToken.IsCancellationRequested)
+                    return;
+
+                var shouldStop = status.State is MarkdownExportJobState.Completed or MarkdownExportJobState.Failed;
+
+                await InvokeAsync(() =>
+                {
+                    ApplyMarkdownExportStatus(status);
+                    StateHasChanged();
+                });
+
+                if (shouldStop)
+                    return;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer export superseded this poll loop, or the component was disposed.
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser connection closed; nothing left to update.
+        }
+    }
+
+    private void ApplyMarkdownExportStatus(Brainy.Application.DTOs.DataExport.MarkdownExportJobStatusDto status)
+    {
+        _markdownExportJobId = status.JobId;
+        _markdownExportState = status.State;
+        _markdownExportFileName = status.FileName;
+
+        _markdownExportStatusMessage = status.State switch
+        {
+            MarkdownExportJobState.Queued => "Queued. This can take a moment for large accounts.",
+            MarkdownExportJobState.Running => "Building your vault…",
+            MarkdownExportJobState.Completed => "Your vault is ready to download.",
+            MarkdownExportJobState.Failed => null,
+            _ => null
+        };
+
+        _markdownExportError = status.State == MarkdownExportJobState.Failed
+            ? status.ErrorMessage ?? "Brainy could not build your Markdown export. Try again."
+            : null;
+    }
+
     private async Task DeleteAccountAsync()
     {
         if (_deletingAccount)
@@ -1225,5 +1380,11 @@
             _deletionPassword = string.Empty;
             _deletingAccount = false;
         }
+    }
+
+    public void Dispose()
+    {
+        _markdownExportPollCts?.Cancel();
+        _markdownExportPollCts?.Dispose();
     }
 }
