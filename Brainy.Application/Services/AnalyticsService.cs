@@ -1,6 +1,9 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Brainy.Application.Analytics;
 using Brainy.Application.DTOs.Analytics;
+using Brainy.Application.DTOs.DataExport;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
@@ -24,6 +27,7 @@ namespace Brainy.Application.Services;
 internal sealed class AnalyticsService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
+    IUserDirectoryService userDirectory,
     TimeProvider timeProvider) : IAnalyticsService
 {
     private const int MaxPropertiesJsonLength = 2000;
@@ -81,13 +85,34 @@ internal sealed class AnalyticsService(
 
     public async Task<ActivationFunnelDto> GetActivationFunnelAsync(CancellationToken cancellationToken = default)
     {
+        var registeredUsers = await userDirectory.GetRegisteredUserCountAsync(cancellationToken).ConfigureAwait(false);
+        var consentExcludedUsers = await CountOptedOutUsersAsync(cancellationToken).ConfigureAwait(false);
         var totalUsers = await CountDistinctUsersAsync(cancellationToken).ConfigureAwait(false);
         var firstCapture = await CountDistinctUsersWithEventAsync(AnalyticsEvents.FirstCaptureCreated, cancellationToken).ConfigureAwait(false);
         var firstProcessed = await CountDistinctUsersWithEventAsync(AnalyticsEvents.FirstInboxItemProcessed, cancellationToken).ConfigureAwait(false);
         var firstTask = await CountDistinctUsersWithEventAsync(AnalyticsEvents.FirstTaskCreated, cancellationToken).ConfigureAwait(false);
         var firstFocus = await CountDistinctUsersWithEventAsync(AnalyticsEvents.FirstCurrentFocusSelected, cancellationToken).ConfigureAwait(false);
+        var firstOutput = await CountDistinctUsersWithEventAsync(AnalyticsEvents.FirstOutputCreated, cancellationToken).ConfigureAwait(false);
 
-        return new ActivationFunnelDto(totalUsers, firstCapture, firstProcessed, firstTask, firstFocus);
+        return new ActivationFunnelDto(
+            registeredUsers,
+            consentExcludedUsers,
+            totalUsers,
+            firstCapture,
+            firstProcessed,
+            firstTask,
+            firstFocus,
+            firstOutput);
+    }
+
+    public async Task<KnowledgeReuseDto> GetKnowledgeReuseSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        var totalCaptures = await CountEventsAsync(AnalyticsEvents.CaptureCreated, cancellationToken).ConfigureAwait(false);
+        var reusedAsProject = await CountEventsAsync(AnalyticsEvents.CaptureReusedAsProject, cancellationToken).ConfigureAwait(false);
+        var reusedAsTask = await CountEventsAsync(AnalyticsEvents.CaptureReusedAsTask, cancellationToken).ConfigureAwait(false);
+        var reusedAsOutput = await CountEventsAsync(AnalyticsEvents.CaptureReusedAsOutput, cancellationToken).ConfigureAwait(false);
+
+        return new KnowledgeReuseDto(totalCaptures, reusedAsProject, reusedAsTask, reusedAsOutput);
     }
 
     public async Task<SearchQualityDto> GetSearchQualityAsync(CancellationToken cancellationToken = default)
@@ -104,8 +129,10 @@ internal sealed class AnalyticsService(
     {
         var views = await CountEventsAsync(AnalyticsEvents.WeeklyReviewViewed, cancellationToken).ConfigureAwait(false);
         var resurfaced = await CountEventsAsync(AnalyticsEvents.ResurfacedItemActioned, cancellationToken).ConfigureAwait(false);
+        var totalCaptures = await CountEventsAsync(AnalyticsEvents.CaptureCreated, cancellationToken).ConfigureAwait(false);
+        var processed = await CountEventsAsync(AnalyticsEvents.InboxItemProcessed, cancellationToken).ConfigureAwait(false);
 
-        return new WeeklyReviewSummaryDto(views, resurfaced);
+        return new WeeklyReviewSummaryDto(views, resurfaced, totalCaptures, processed);
     }
 
     public async Task<AiUsageSummaryDto> GetAiUsageSummaryAsync(CancellationToken cancellationToken = default)
@@ -163,6 +190,79 @@ internal sealed class AnalyticsService(
 
         return new RetentionSummaryDto(day7CohortSize, day7Retained, day30CohortSize, day30Retained);
     }
+
+    public async Task<AnalyticsMetricsExportDto> ExportMetricsCsvAsync(CancellationToken cancellationToken = default)
+    {
+        var funnel = await GetActivationFunnelAsync(cancellationToken).ConfigureAwait(false);
+        var reuse = await GetKnowledgeReuseSummaryAsync(cancellationToken).ConfigureAwait(false);
+        var search = await GetSearchQualityAsync(cancellationToken).ConfigureAwait(false);
+        var weeklyReview = await GetWeeklyReviewSummaryAsync(cancellationToken).ConfigureAwait(false);
+        var retention = await GetRetentionSummaryAsync(cancellationToken).ConfigureAwait(false);
+
+        var csv = new StringBuilder();
+        csv.Append("section,metric,value\n");
+
+        AppendRow(csv, "activation_funnel", "registered_users", funnel.RegisteredUserCount);
+        AppendRow(csv, "activation_funnel", "consent_excluded_users", funnel.ConsentExcludedUserCount);
+        AppendRow(csv, "activation_funnel", "eligible_users", funnel.EligibleUserCount);
+        AppendRow(csv, "activation_funnel", "users_with_any_event", funnel.UsersWithAnyEvent);
+        AppendRow(csv, "activation_funnel", "first_capture_users", funnel.UsersWithFirstCapture);
+        AppendRow(csv, "activation_funnel", "first_capture_rate_of_eligible", funnel.FirstCaptureRate);
+        AppendRow(csv, "activation_funnel", "first_classify_users", funnel.UsersWithFirstProcessedItem);
+        AppendRow(csv, "activation_funnel", "first_classify_rate_of_eligible", funnel.FirstProcessedRate);
+        AppendRow(csv, "activation_funnel", "first_classify_rate_of_prior_step", funnel.CaptureToProcessedRate);
+        AppendRow(csv, "activation_funnel", "first_task_users", funnel.UsersWithFirstTask);
+        AppendRow(csv, "activation_funnel", "first_task_rate_of_eligible", funnel.FirstTaskRate);
+        AppendRow(csv, "activation_funnel", "first_task_rate_of_prior_step", funnel.ProcessedToTaskRate);
+        AppendRow(csv, "activation_funnel", "first_focus_users", funnel.UsersWithFirstFocusSelection);
+        AppendRow(csv, "activation_funnel", "first_focus_rate_of_eligible", funnel.FirstFocusRate);
+        AppendRow(csv, "activation_funnel", "first_focus_rate_of_prior_step", funnel.TaskToFocusRate);
+        AppendRow(csv, "activation_funnel", "first_output_users", funnel.UsersWithFirstOutput);
+        AppendRow(csv, "activation_funnel", "first_output_rate_of_eligible", funnel.FirstOutputRate);
+        AppendRow(csv, "activation_funnel", "first_output_rate_of_prior_step", funnel.FocusToOutputRate);
+
+        AppendRow(csv, "knowledge_reuse", "total_captures", reuse.TotalCaptures);
+        AppendRow(csv, "knowledge_reuse", "reused_as_project", reuse.ReusedAsProjectCount);
+        AppendRow(csv, "knowledge_reuse", "reused_as_task", reuse.ReusedAsTaskCount);
+        AppendRow(csv, "knowledge_reuse", "reused_as_output", reuse.ReusedAsOutputCount);
+        AppendRow(csv, "knowledge_reuse", "total_reuse_actions", reuse.TotalReuseActions);
+        AppendRow(csv, "knowledge_reuse", "reuse_rate", reuse.ReuseRate);
+
+        AppendRow(csv, "retrieval_effectiveness", "searches_submitted", search.SearchesSubmitted);
+        AppendRow(csv, "retrieval_effectiveness", "zero_result_searches", search.ZeroResultSearches);
+        AppendRow(csv, "retrieval_effectiveness", "zero_result_rate", search.ZeroResultRate);
+        AppendRow(csv, "retrieval_effectiveness", "results_opened", search.ResultsOpened);
+        AppendRow(csv, "retrieval_effectiveness", "result_open_rate", search.ResultOpenRate);
+        AppendRow(csv, "retrieval_effectiveness", "follow_on_actions", search.FollowOnActions);
+        AppendRow(csv, "retrieval_effectiveness", "follow_on_rate", search.FollowOnRate);
+
+        AppendRow(csv, "weekly_review_and_inbox_adherence", "weekly_review_views", weeklyReview.WeeklyReviewViews);
+        AppendRow(csv, "weekly_review_and_inbox_adherence", "resurfaced_item_actions", weeklyReview.ResurfacedItemActions);
+        AppendRow(csv, "weekly_review_and_inbox_adherence", "total_captures", weeklyReview.TotalCaptures);
+        AppendRow(csv, "weekly_review_and_inbox_adherence", "inbox_items_processed", weeklyReview.InboxItemsProcessed);
+        AppendRow(csv, "weekly_review_and_inbox_adherence", "inbox_processing_adherence_rate", weeklyReview.InboxProcessingAdherenceRate);
+
+        AppendRow(csv, "retention", "day7_cohort_size", retention.Day7CohortSize);
+        AppendRow(csv, "retention", "day7_retained", retention.Day7Retained);
+        AppendRow(csv, "retention", "day7_retention_rate", retention.Day7RetentionRate);
+        AppendRow(csv, "retention", "day30_cohort_size", retention.Day30CohortSize);
+        AppendRow(csv, "retention", "day30_retained", retention.Day30Retained);
+        AppendRow(csv, "retention", "day30_retention_rate", retention.Day30RetentionRate);
+
+        var generatedAtUtc = timeProvider.GetUtcNow().UtcDateTime;
+        var fileName = $"brainy-activation-metrics-{generatedAtUtc:yyyy-MM-dd}.csv";
+        var content = Encoding.UTF8.GetBytes(csv.ToString());
+
+        return new AnalyticsMetricsExportDto(fileName, "text/csv", content);
+    }
+
+    /// <summary>
+    /// Appends one aggregate metric row. Every value here is a cross-user count or rate —
+    /// never a per-user identifier or content — per issue #324's aggregate-only guardrail.
+    /// </summary>
+    private static void AppendRow(StringBuilder csv, string section, string metric, double value) =>
+        csv.Append(section).Append(',').Append(metric).Append(',')
+            .Append(value.ToString(CultureInfo.InvariantCulture)).Append('\n');
 
     private async Task WriteEventAsync(
         string userId,
@@ -237,6 +337,16 @@ internal sealed class AnalyticsService(
             .Select(e => e.UserId)
             .Distinct()
             .CountAsync(cancellationToken);
+
+    /// <summary>
+    /// Users known to have opted out of analytics: those with an explicit
+    /// <see cref="UserDashboardPreference"/> row recording <c>AnalyticsEnabled == false</c>.
+    /// A user who never touched the toggle has no row and defaults to opted in (see
+    /// <see cref="IsAnalyticsEnabledAsync"/>), so this count never overstates the gap.
+    /// </summary>
+    private Task<int> CountOptedOutUsersAsync(CancellationToken cancellationToken) =>
+        context.DashboardPreferences.AsNoTracking()
+            .CountAsync(p => !p.AnalyticsEnabled, cancellationToken);
 
     private static void ValidateEventName(string eventName)
     {

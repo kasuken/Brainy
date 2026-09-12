@@ -181,6 +181,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 // Current-user accessor used by the application layer for per-user data scoping.
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IAccountDeletionService, AccountDeletionService>();
+// Overrides the Application layer's zero-count NullUserDirectoryService registration with
+// the real Identity-backed count, used by the internal analytics dashboard (issue #324).
+builder.Services.AddScoped<Brainy.Application.Interfaces.Identity.IUserDirectoryService, Brainy.Web.Identity.UserDirectoryService>();
 
 // Application-layer services.
 builder.Services.AddBrainyApplication();
@@ -261,6 +264,9 @@ app.MapMarkdownExportEndpoints();
 
 // Inbound billing-provider webhooks (plan/subscription state changes).
 app.MapBillingWebhookEndpoints();
+
+// CSV export of the internal analytics dashboard's aggregate metrics (issue #324).
+app.MapAnalyticsExportEndpoints();
 
 // Offline Lite (issue #302): Today snapshot + queued-capture sync, for the service worker's
 // offline fallback page and the client-side capture queue.

@@ -36,24 +36,71 @@
         else
         {
             var activation = snapshot.Activation;
+            var reuse = snapshot.Reuse;
             var search = snapshot.Search;
             var weeklyReview = snapshot.WeeklyReview;
             var ai = snapshot.Ai;
             var retention = snapshot.Retention;
+
+            <MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2">
+                <MudButton Href="/api/analytics/export.csv"
+                           Target="_blank"
+                           Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Download">
+                    Export CSV
+                </MudButton>
+            </MudStack>
+
+            <MudAlert Severity="Severity.Info" Class="mb-4" Dense="true">
+                <strong>@activation.RegisteredUserCount</strong> registered users &mdash;
+                <strong>@activation.ConsentExcludedUserCount</strong> of them are known to have
+                opted out of analytics and are structurally excluded from every metric on this
+                page (the consent gate never writes an event for them). Every rate below is
+                computed against the <strong>@activation.EligibleUserCount</strong> eligible
+                (registered minus known-excluded) users, not the full registered total &mdash;
+                treat these numbers as a floor, not a silently-undercounted whole population.
+            </MudAlert>
 
             <MudGrid>
                 <MudItem xs="12" md="6">
                     <MudPaper Class="pa-4" Elevation="0" Outlined="true">
                         <MudText Typo="Typo.h6">Activation funnel</MudText>
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            Of @activation.UsersWithAnyEvent tracked user(s):
+                            Registered &rarr; first capture &rarr; first classify &rarr; first task &rarr;
+                            first current focus &rarr; first output. Of @activation.EligibleUserCount eligible
+                            user(s) (@activation.UsersWithAnyEvent with any tracked event):
+                        </MudText>
+                        <MudSimpleTable Dense="true">
+                            <thead>
+                                <tr><th>Step</th><th>Users</th><th>Of eligible</th><th>Of prior step</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Registered (eligible)</td><td>@activation.EligibleUserCount</td><td>100%</td><td>&mdash;</td></tr>
+                                <tr><td>First capture</td><td>@activation.UsersWithFirstCapture</td><td>@FormatRate(activation.FirstCaptureRate)</td><td>&mdash;</td></tr>
+                                <tr><td>First classify (Inbox processed)</td><td>@activation.UsersWithFirstProcessedItem</td><td>@FormatRate(activation.FirstProcessedRate)</td><td>@FormatRate(activation.CaptureToProcessedRate)</td></tr>
+                                <tr><td>First task created</td><td>@activation.UsersWithFirstTask</td><td>@FormatRate(activation.FirstTaskRate)</td><td>@FormatRate(activation.ProcessedToTaskRate)</td></tr>
+                                <tr><td>First current-focus selection</td><td>@activation.UsersWithFirstFocusSelection</td><td>@FormatRate(activation.FirstFocusRate)</td><td>@FormatRate(activation.TaskToFocusRate)</td></tr>
+                                <tr><td>First output created</td><td>@activation.UsersWithFirstOutput</td><td>@FormatRate(activation.FirstOutputRate)</td><td>@FormatRate(activation.FocusToOutputRate)</td></tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                        <MudText Typo="Typo.h6">Knowledge reuse</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Share of captures later referenced in a project, task, or output. Approximate:
+                            reuse actions, not distinct items (one capture reused twice counts twice).
                         </MudText>
                         <MudSimpleTable Dense="true">
                             <tbody>
-                                <tr><td>First capture</td><td>@activation.UsersWithFirstCapture</td><td>@FormatRate(activation.FirstCaptureRate)</td></tr>
-                                <tr><td>First Inbox item processed</td><td>@activation.UsersWithFirstProcessedItem</td><td>@FormatRate(activation.FirstProcessedRate)</td></tr>
-                                <tr><td>First task created</td><td>@activation.UsersWithFirstTask</td><td>@FormatRate(activation.FirstTaskRate)</td></tr>
-                                <tr><td>First current-focus selection</td><td>@activation.UsersWithFirstFocusSelection</td><td>@FormatRate(activation.FirstFocusRate)</td></tr>
+                                <tr><td>Total captures</td><td>@reuse.TotalCaptures</td></tr>
+                                <tr><td>Reused into a project</td><td>@reuse.ReusedAsProjectCount</td></tr>
+                                <tr><td>Reused into a task</td><td>@reuse.ReusedAsTaskCount</td></tr>
+                                <tr><td>Reused into an output</td><td>@reuse.ReusedAsOutputCount</td></tr>
+                                <tr><td>Knowledge reuse rate</td><td>@FormatRate(reuse.ReuseRate)</td></tr>
                             </tbody>
                         </MudSimpleTable>
                     </MudPaper>
@@ -75,11 +122,14 @@
 
                 <MudItem xs="12" md="6">
                     <MudPaper Class="pa-4" Elevation="0" Outlined="true">
-                        <MudText Typo="Typo.h6">Weekly review</MudText>
+                        <MudText Typo="Typo.h6">Weekly review &amp; Inbox processing adherence</MudText>
                         <MudSimpleTable Dense="true">
                             <tbody>
                                 <tr><td>Weekly review views</td><td>@weeklyReview.WeeklyReviewViews</td></tr>
                                 <tr><td>Resurfaced items actioned (carried forward)</td><td>@weeklyReview.ResurfacedItemActions</td></tr>
+                                <tr><td>Total captures</td><td>@weeklyReview.TotalCaptures</td></tr>
+                                <tr><td>Inbox items processed</td><td>@weeklyReview.InboxItemsProcessed</td></tr>
+                                <tr><td>Inbox processing adherence</td><td>@FormatRate(weeklyReview.InboxProcessingAdherenceRate)</td></tr>
                             </tbody>
                         </MudSimpleTable>
                     </MudPaper>
@@ -133,6 +183,7 @@
 
     private sealed record DashboardSnapshot(
         ActivationFunnelDto Activation,
+        KnowledgeReuseDto Reuse,
         SearchQualityDto Search,
         WeeklyReviewSummaryDto WeeklyReview,
         AiUsageSummaryDto Ai,
@@ -158,6 +209,7 @@
         // activation/retention questions, not a per-user report. See AnalyticsService remarks.
         _snapshot = new DashboardSnapshot(
             await AnalyticsService.GetActivationFunnelAsync(),
+            await AnalyticsService.GetKnowledgeReuseSummaryAsync(),
             await AnalyticsService.GetSearchQualityAsync(),
             await AnalyticsService.GetWeeklyReviewSummaryAsync(),
             await AnalyticsService.GetAiUsageSummaryAsync(),

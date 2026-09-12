@@ -294,6 +294,11 @@ internal sealed class OutputService(
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await InvalidateOutputAsync(userId, output.Id).ConfigureAwait(false);
 
+        // Completes the activation funnel (issue #324): first-output is the final step after
+        // first capture / classify / task / focus. Never carries the output's title/content.
+        await analytics.TrackOnceAsync(userId, AnalyticsEvents.FirstOutputCreated, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
         var (projectTitle, areaName, goalTitle) =
             await ResolveLinkedNamesAsync(output, cancellationToken).ConfigureAwait(false);
 

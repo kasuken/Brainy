@@ -1,4 +1,5 @@
 using Brainy.Application.DTOs.Analytics;
+using Brainy.Application.DTOs.DataExport;
 
 namespace Brainy.Application.Interfaces.Services;
 
@@ -63,4 +64,17 @@ public interface IAnalyticsService
 
     /// <summary>Approximate D7/D30 retention across all users.</summary>
     Task<RetentionSummaryDto> GetRetentionSummaryAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Aggregate knowledge-reuse rate across all users: the share of captured items later
+    /// referenced in a task, project, or output.
+    /// </summary>
+    Task<KnowledgeReuseDto> GetKnowledgeReuseSummaryAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Builds a CSV export of every aggregate metric on the analytics dashboard (activation
+    /// funnel, knowledge reuse, search retrieval quality, weekly review / Inbox adherence,
+    /// retention), for the #293 discovery work. Aggregate-only: contains no per-user rows.
+    /// </summary>
+    Task<AnalyticsMetricsExportDto> ExportMetricsCsvAsync(CancellationToken cancellationToken = default);
 }

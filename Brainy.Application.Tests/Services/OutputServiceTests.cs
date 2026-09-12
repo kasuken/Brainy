@@ -122,6 +122,28 @@ public class OutputServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_TracksFirstOutputCreatedOnceForActivationFunnel()
+    {
+        var dbName = nameof(CreateAsync_TracksFirstOutputCreatedOnceForActivationFunnel);
+        var sut = BuildService(dbName);
+
+        await sut.CreateAsync(new CreateOutputDto("First output", null, OutputType.BlogPost));
+        await sut.CreateAsync(new CreateOutputDto("Second output", null, OutputType.Report));
+
+        var options = new DbContextOptionsBuilder<BrainyDbContext>().UseInMemoryDatabase(dbName).Options;
+        await using var context = new BrainyDbContext(options);
+
+        // Fires once per user (issue #324's activation funnel), regardless of how many
+        // outputs the user goes on to create, and never carries the output's title/content.
+        var events = await context.ProductEvents
+            .Where(e => e.EventName == Brainy.Application.Analytics.AnalyticsEvents.FirstOutputCreated)
+            .ToListAsync();
+        events.Should().ContainSingle();
+        events[0].UserId.Should().Be(DefaultUserId);
+        events[0].PropertiesJson.Should().BeNull();
+    }
+
+    [Fact]
     public async Task CreateAsync_WithEmptyTitle_ThrowsArgumentException()
     {
         var sut = BuildService(nameof(CreateAsync_WithEmptyTitle_ThrowsArgumentException));
