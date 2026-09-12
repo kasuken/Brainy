@@ -119,6 +119,23 @@ builder.Services.AddRateLimiter(options =>
                 });
         }
 
+        // Both endpoints trigger an outbound email keyed only by an attacker-suppliable
+        // address, so they get the same per-IP ceiling as registration to prevent using
+        // Brainy as a mail bomb / address-enumeration oracle.
+        if (context.Request.Path.Equals("/Account/ForgotPassword", StringComparison.OrdinalIgnoreCase) ||
+            context.Request.Path.Equals("/Account/ResendEmailConfirmation", StringComparison.OrdinalIgnoreCase))
+        {
+            return RateLimitPartition.GetFixedWindowLimiter(
+                $"account-email:{context.Connection.RemoteIpAddress}",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 5,
+                    Window = TimeSpan.FromHours(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+        }
+
         return RateLimitPartition.GetNoLimiter("other");
     });
 });
@@ -177,6 +194,14 @@ builder.Services.AddAiAssistant(builder.Configuration);
 // enforced, but plan changes only happen via the internal/admin path until a real
 // payment provider is configured.
 builder.Services.AddBilling(builder.Configuration);
+
+// Provider=None (the default) registers NullEmailSender: the app starts and every
+// outbound message (password reset, email confirmation) is logged instead of sent, so
+// local dev/self-hosting keep working without a mail account configured. Adapts
+// Identity's IEmailSender<ApplicationUser> callback shape onto the application-layer
+// email abstraction.
+builder.Services.AddEmail(builder.Configuration);
+builder.Services.AddScoped<IEmailSender<ApplicationUser>, BrainyIdentityEmailSender>();
 
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseReadinessHealthCheck>("database", tags: ["ready"]);

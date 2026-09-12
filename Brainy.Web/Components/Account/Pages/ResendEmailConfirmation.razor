@@ -1,0 +1,90 @@
+@page "/Account/ResendEmailConfirmation"
+@layout AuthLayout
+
+@using System.Text
+@using System.Text.Encodings.Web
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.WebUtilities
+@using Brainy.Data.Identity
+
+@inject UserManager<ApplicationUser> UserManager
+@inject IEmailSender<ApplicationUser> EmailSender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Resend confirmation email · Brainy</PageTitle>
+
+<a class="auth-minibrand" href="/">
+    <img class="auth-wordmark__logo" src="img/logo.png" alt="Brainy logo" />
+    Brainy
+</a>
+
+<span class="auth-eyebrow">Account</span>
+<h2 class="auth-title">Resend confirmation email</h2>
+<p class="auth-subtitle">Enter your email address and we'll send you a new confirmation link.</p>
+
+@if (emailSent)
+{
+    <div class="auth-alert auth-alert--success" role="alert">
+        If an account with that address exists, we've sent a new confirmation link.
+    </div>
+}
+else
+{
+    <EditForm Model="FormInput" method="post" OnValidSubmit="OnValidSubmitAsync" FormName="resend-email-confirmation" class="auth-form">
+        <DataAnnotationsValidator />
+
+        <div class="brainy-field">
+            <label for="email" class="brainy-label">Email</label>
+            <InputText @bind-Value="FormInput.Email" id="email" class="brainy-input"
+                       autocomplete="username" aria-required="true" placeholder="name@example.com" />
+            <ValidationMessage For="() => FormInput.Email" class="validation-message" />
+        </div>
+
+        <button type="submit" class="brainy-btn">Resend confirmation email</button>
+    </EditForm>
+}
+
+<p class="auth-switch">
+    <a href="Account/Login">Back to log in</a>
+</p>
+
+@code {
+    private bool emailSent;
+
+    [SupplyParameterFromForm(Name = nameof(FormInput))]
+    private InputModel? Input { get; set; }
+
+    private InputModel FormInput => Input ??= new();
+
+    private async Task OnValidSubmitAsync()
+    {
+        var user = await UserManager.FindByEmailAsync(FormInput.Email);
+        if (user is null)
+        {
+            // Don't reveal that the address isn't registered.
+            emailSent = true;
+            return;
+        }
+
+        var userId = await UserManager.GetUserIdAsync(user);
+        var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
+        code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+
+        var callbackUrl = NavigationManager.GetUriWithQueryParameters(
+            NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
+            new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code });
+
+        await EmailSender.SendConfirmationLinkAsync(user, FormInput.Email, HtmlEncoder.Default.Encode(callbackUrl));
+
+        emailSent = true;
+    }
+
+    private sealed class InputModel
+    {
+        [Required]
+        [EmailAddress]
+        [Display(Name = "Email")]
+        public string Email { get; set; } = "";
+    }
+}

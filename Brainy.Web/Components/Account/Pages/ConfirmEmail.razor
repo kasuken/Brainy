@@ -1,0 +1,65 @@
+@page "/Account/ConfirmEmail"
+@layout AuthLayout
+
+@using System.Text
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.WebUtilities
+@using Brainy.Data.Identity
+
+@inject UserManager<ApplicationUser> UserManager
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Confirm email · Brainy</PageTitle>
+
+<a class="auth-minibrand" href="/">
+    <img class="auth-wordmark__logo" src="img/logo.png" alt="Brainy logo" />
+    Brainy
+</a>
+
+<span class="auth-eyebrow">Account</span>
+<h2 class="auth-title">Confirm email</h2>
+
+<StatusMessage Message="@statusMessage" />
+
+@if (confirmed)
+{
+    <p class="auth-switch"><a href="Account/Login">Log in</a></p>
+}
+
+@code {
+    private string? statusMessage;
+    private bool confirmed;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery]
+    private string? UserId { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Code { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (UserId is null || Code is null)
+        {
+            RedirectManager.RedirectTo("");
+            return;
+        }
+
+        var user = await UserManager.FindByIdAsync(UserId);
+        if (user is null)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+            statusMessage = $"Error: unable to load user with ID {UserId}.";
+            return;
+        }
+
+        var code = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(Code));
+        var result = await UserManager.ConfirmEmailAsync(user, code);
+        confirmed = result.Succeeded;
+        statusMessage = confirmed
+            ? "Thank you for confirming your email. You can now log in."
+            : "Error: this confirmation link is invalid or has expired.";
+    }
+}
