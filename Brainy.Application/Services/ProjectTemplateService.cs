@@ -130,9 +130,16 @@ internal sealed class ProjectTemplateService(
         template.DefaultGoalId = dto.DefaultGoalId;
 
         // The task list is replaced wholesale: remove the old entries and add the
-        // caller's complete desired set rather than diffing individual rows.
+        // caller's complete desired set rather than diffing individual rows. Explicit
+        // Add/RemoveRange calls (rather than reassigning the navigation) match this
+        // codebase's convention for replacing a child collection (see TaskService's
+        // dependency replacement) and avoid depending on collection-navigation fixup.
         context.ProjectTemplateTasks.RemoveRange(template.Tasks);
-        template.Tasks = BuildTaskEntities(dto.Tasks);
+        var newTasks = BuildTaskEntities(dto.Tasks);
+        foreach (var task in newTasks)
+            task.ProjectTemplateId = template.Id;
+        context.ProjectTemplateTasks.AddRange(newTasks);
+        template.Tasks = newTasks;
 
         try
         {
