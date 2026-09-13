@@ -13,6 +13,7 @@
 @implements IDisposable
 
 @using Brainy.Application.DTOs.Billing
+@using Brainy.Application.DTOs.Calendar
 @using Brainy.Application.DTOs.DataExport
 @using Brainy.Application.DTOs.DataImport
 @using Brainy.Application.DTOs.Search
@@ -20,6 +21,7 @@
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Data.Identity
 @using Brainy.Domain.Enums
+@using Brainy.Web.Endpoints
 @using Brainy.Web.Identity
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
@@ -35,6 +37,9 @@
 @inject IUserDashboardPreferenceService DashboardPreferenceService
 @inject IEntitlementService EntitlementService
 @inject IBillingProvider BillingProvider
+@inject ICalendarFeedTokenService CalendarFeedTokenService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
@@ -526,6 +531,90 @@
 
         <MudPaper Class="account-manage__card" Elevation="0">
             <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.CalendarMonth" aria-hidden="true" />
+                <div>
+                    <h2>Calendar feed</h2>
+                    <p>
+                        Subscribe from Outlook, Google Calendar or Apple Calendar to see task due
+                        dates, project deadlines and dated goal milestones update automatically,
+                        without opening Brainy.
+                    </p>
+                </div>
+            </div>
+
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
+                The link below is a credential, not just a bookmark: anyone who has it can read
+                titles, due dates, and project/area names — nothing else about your account.
+                Revoke it any time to break the subscription immediately; regenerating issues a
+                fresh link without changing anything else. It is never shown in analytics or logs.
+            </MudAlert>
+
+            @if (_calendarFeedError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_calendarFeedError
+                </MudAlert>
+            }
+
+            @if (_calendarFeedUrl is not null)
+            {
+                <MudTextField Value="@_calendarFeedUrl"
+                              Label="Subscription URL — shown once, copy it now"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              ReadOnly="true"
+                              Class="account-manage__notice" />
+            }
+
+            <div class="account-manage__actions">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Outlined.Autorenew"
+                           Disabled="_calendarFeedBusy"
+                           aria-busy="@_calendarFeedBusy.ToString().ToLowerInvariant()"
+                           OnClick="RegenerateCalendarFeedAsync">
+                    @(_calendarFeedStatus?.HasActiveToken == true ? "Regenerate link" : "Generate link")
+                </MudButton>
+
+                @if (_calendarFeedUrl is not null)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="CopyCalendarFeedUrlAsync">
+                        Copy link
+                    </MudButton>
+                }
+
+                @if (_calendarFeedStatus?.HasActiveToken == true)
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Error"
+                               Disabled="_calendarFeedBusy"
+                               OnClick="RevokeCalendarFeedAsync">
+                        Revoke access
+                    </MudButton>
+                }
+
+                <span class="account-manage__status" role="status" aria-live="polite">
+                    @CalendarFeedStatusText
+                </span>
+            </div>
+
+            <MudExpansionPanels Class="account-manage__notice" Elevation="0">
+                <MudExpansionPanel Text="How to subscribe">
+                    <ul>
+                        <li><strong>Outlook (web/desktop):</strong> Add calendar → Subscribe from web → paste the link.</li>
+                        <li><strong>Google Calendar:</strong> Other calendars "+" → From URL → paste the link.</li>
+                        <li><strong>Apple Calendar:</strong> File → New Calendar Subscription → paste the link.</li>
+                    </ul>
+                    <p>
+                        Every client refreshes on its own schedule (Brainy hints hourly); none of
+                        them offer a manual "refresh now" for a subscribed calendar.
+                    </p>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
                 <MudIcon Icon="@Icons.Material.Outlined.UploadFile" aria-hidden="true" />
                 <div>
                     <h2>Import Brainy data</h2>
@@ -849,6 +938,10 @@
     private string _deletionPassword = string.Empty;
     private string _deletionConfirmation = string.Empty;
     private string? _deletionError;
+    private CalendarFeedTokenStatusDto? _calendarFeedStatus;
+    private string? _calendarFeedUrl;
+    private bool _calendarFeedBusy;
+    private string? _calendarFeedError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -866,6 +959,105 @@
         catch
         {
             _planUsageError = "Brainy could not load your plan and usage details. Try reloading this page.";
+        }
+
+        try
+        {
+            _calendarFeedStatus = await CalendarFeedTokenService.GetStatusAsync();
+        }
+        catch
+        {
+            _calendarFeedError = "Brainy could not load your calendar feed status. Try reloading this page.";
+        }
+    }
+
+    private string CalendarFeedStatusText => _calendarFeedStatus switch
+    {
+        { HasActiveToken: true, LastAccessedAtUtc: not null } status =>
+            $"Last fetched {status.LastAccessedAtUtc:MMM d, yyyy 'at' h:mm tt} UTC.",
+        { HasActiveToken: true } => "Generated, not yet fetched by a calendar client.",
+        { RevokedAtUtc: not null } => "Revoked. Generate a new link to subscribe again.",
+        _ => "No calendar feed link yet."
+    };
+
+    private async Task RegenerateCalendarFeedAsync()
+    {
+        if (_calendarFeedBusy)
+            return;
+
+        _calendarFeedBusy = true;
+        _calendarFeedError = null;
+
+        try
+        {
+            var result = await CalendarFeedTokenService.RegenerateAsync();
+            var relativeUrl = $"{CalendarFeedEndpoints.FeedPath}?token={result.RawToken}";
+            _calendarFeedUrl = Navigation.ToAbsoluteUri(relativeUrl).ToString();
+            _calendarFeedStatus = await CalendarFeedTokenService.GetStatusAsync();
+            Snackbar.Add(
+                _calendarFeedStatus.HasActiveToken && _calendarFeedStatus.LastAccessedAtUtc is null
+                    ? "Calendar feed link generated. Copy it now — it will not be shown again."
+                    : "Calendar feed link regenerated. The previous link no longer works.",
+                Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _calendarFeedError = ex.Message;
+        }
+        finally
+        {
+            _calendarFeedBusy = false;
+        }
+    }
+
+    private async Task RevokeCalendarFeedAsync()
+    {
+        if (_calendarFeedBusy)
+            return;
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Revoke calendar feed",
+            "Any calendar app subscribed to this link will stop receiving updates immediately. Continue?",
+            yesText: "Revoke",
+            cancelText: "Cancel");
+
+        if (confirmed != true)
+            return;
+
+        _calendarFeedBusy = true;
+        _calendarFeedError = null;
+
+        try
+        {
+            await CalendarFeedTokenService.RevokeAsync();
+            _calendarFeedUrl = null;
+            _calendarFeedStatus = await CalendarFeedTokenService.GetStatusAsync();
+            Snackbar.Add("Calendar feed access revoked.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _calendarFeedError = ex.Message;
+        }
+        finally
+        {
+            _calendarFeedBusy = false;
+        }
+    }
+
+    private async Task CopyCalendarFeedUrlAsync()
+    {
+        if (_calendarFeedUrl is null)
+            return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _calendarFeedUrl);
+            Snackbar.Add("Link copied.", Severity.Success);
+        }
+        catch (JSException)
+        {
+            // Clipboard access can be unavailable (insecure context, permission denied);
+            // the URL is still visible and selectable in the read-only field above.
         }
     }
 

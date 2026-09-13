@@ -80,6 +80,53 @@ public class GoalMilestoneServiceTests
         await act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
+    [Fact]
+    public async Task CreateAsync_WithDueDate_PersistsIt()
+    {
+        var (sut, db) = BuildService(nameof(CreateAsync_WithDueDate_PersistsIt));
+        var goal = CreateGoal(DefaultUserId);
+        db.Goals.Add(goal);
+        await db.SaveChangesAsync();
+
+        var result = await sut.CreateAsync(new CreateGoalMilestoneDto(goal.Id, "Ship v1", new DateTime(2026, 4, 1)));
+
+        result.DueDate.Should().Be(new DateTime(2026, 4, 1));
+        var stored = await db.GoalMilestones.AsNoTracking().SingleAsync();
+        stored.DueDate.Should().Be(new DateTime(2026, 4, 1));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ChangesDueDate()
+    {
+        var (sut, db) = BuildService(nameof(UpdateAsync_ChangesDueDate));
+        var goal = CreateGoal(DefaultUserId);
+        var milestone = CreateMilestone(goal.Id);
+        milestone.DueDate = new DateTime(2026, 1, 1);
+        db.Goals.Add(goal);
+        db.GoalMilestones.Add(milestone);
+        await db.SaveChangesAsync();
+
+        var result = await sut.UpdateAsync(new UpdateGoalMilestoneDto(milestone.Id, milestone.Title, new DateTime(2026, 2, 2)));
+
+        result.DueDate.Should().Be(new DateTime(2026, 2, 2));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithNoDueDate_ClearsIt()
+    {
+        var (sut, db) = BuildService(nameof(UpdateAsync_WithNoDueDate_ClearsIt));
+        var goal = CreateGoal(DefaultUserId);
+        var milestone = CreateMilestone(goal.Id);
+        milestone.DueDate = new DateTime(2026, 1, 1);
+        db.Goals.Add(goal);
+        db.GoalMilestones.Add(milestone);
+        await db.SaveChangesAsync();
+
+        var result = await sut.UpdateAsync(new UpdateGoalMilestoneDto(milestone.Id, milestone.Title));
+
+        result.DueDate.Should().BeNull();
+    }
+
     // ── Read ──────────────────────────────────────────────────────────────────
 
     [Fact]

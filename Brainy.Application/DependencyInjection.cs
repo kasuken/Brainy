@@ -77,6 +77,8 @@ public static class DependencyInjection
         services.AddScoped<IIdeaService, IdeaService>();
         services.AddScoped<ITasksHubService, TasksHubService>();
         services.AddScoped<ICalendarService, CalendarService>();
+        services.AddScoped<ICalendarFeedService, CalendarFeedService>();
+        services.AddScoped<ICalendarFeedTokenService, CalendarFeedTokenService>();
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<IGoalMilestoneService, GoalMilestoneService>();
         services.AddScoped<IOutputService, OutputService>();

@@ -15,6 +15,8 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using MudBlazor.Services;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -92,6 +94,32 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
     {
+        // The ICS feed is the one GET endpoint that needs a limit: it is a public,
+        // anonymous URL (see CalendarFeedEndpoints) and calendar clients (Outlook, Google,
+        // Apple) are known to poll far more aggressively than the hourly refresh hint the
+        // feed itself publishes. Partition by the token rather than by IP — a shared
+        // corporate egress IP or a calendar provider's shared fetcher pool must not let one
+        // user's polling throttle every other subscriber, and a leaked/guessed token should
+        // be the thing that gets throttled, not innocent traffic sharing its address.
+        if (HttpMethods.IsGet(context.Request.Method) &&
+            context.Request.Path.Equals(CalendarFeedEndpoints.FeedPath, StringComparison.OrdinalIgnoreCase))
+        {
+            var token = context.Request.Query["token"].ToString();
+            var partitionKey = string.IsNullOrEmpty(token)
+                ? $"calendar-feed:ip:{context.Connection.RemoteIpAddress}"
+                : $"calendar-feed:token:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)))}";
+
+            return RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey,
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
+                    Window = TimeSpan.FromMinutes(5),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+        }
+
         if (!HttpMethods.IsPost(context.Request.Method))
             return RateLimitPartition.GetNoLimiter("read");
 
@@ -267,6 +295,9 @@ app.MapNoteImageEndpoints();
 
 // Serve completed Markdown/Obsidian vault exports (see MarkdownExportBackgroundService).
 app.MapMarkdownExportEndpoints();
+
+// Public, token-authenticated ICS calendar feed of deadlines (issue #314).
+app.MapCalendarFeedEndpoints();
 
 // Inbound billing-provider webhooks (plan/subscription state changes).
 app.MapBillingWebhookEndpoints();

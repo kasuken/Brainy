@@ -360,6 +360,21 @@
                     "Drag a task to another day to reschedule its due date.",
                     "Click a calendar day to create a quick task for that date."
                 ]
+            },
+            new PageHelpSection
+            {
+                Title = "Subscribe from your calendar app",
+                Icon = Icons.Material.Outlined.Sync,
+                Lead = "Deadlines shown here can also update automatically inside Outlook, Google Calendar or Apple Calendar, so a plan made in Brainy stays visible without opening Brainy.",
+                Ordered = true,
+                Points =
+                [
+                    "Open Account and data → Calendar feed and generate a subscription link.",
+                    "Outlook (web/desktop): Add calendar → Subscribe from web → paste the link.",
+                    "Google Calendar: Other calendars \"+\" → From URL → paste the link.",
+                    "Apple Calendar: File → New Calendar Subscription → paste the link.",
+                    "Revoke the link any time to break the subscription immediately, or regenerate to issue a new one."
+                ]
             }
         ]
     };
