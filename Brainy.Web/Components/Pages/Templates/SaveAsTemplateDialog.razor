@@ -1,0 +1,48 @@
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Save as template</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-4">@Message</MudText>
+
+        <MudTextField @bind-Value="_templateName"
+                      Label="Template name"
+                      Placeholder="e.g. Client Engagement Kickoff"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      MaxLength="200"
+                      Immediate="true"
+                      Error="@_showError"
+                      ErrorText="A template name is required." />
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Confirm">Save Template</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public string Message { get; set; } = string.Empty;
+
+    private string _templateName = "";
+    private bool _showError;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Confirm()
+    {
+        if (string.IsNullOrWhiteSpace(_templateName))
+        {
+            _showError = true;
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(_templateName.Trim()));
+    }
+}

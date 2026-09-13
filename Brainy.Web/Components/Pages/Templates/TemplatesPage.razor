@@ -1,0 +1,273 @@
+@page "/templates"
+@using Microsoft.AspNetCore.Authorization
+@using Brainy.Application.DTOs.Templates
+@using Brainy.Application.Interfaces.Services
+@attribute [Authorize]
+@inject IProjectTemplateService ProjectTemplateService
+@inject INoteTemplateService NoteTemplateService
+@inject IOutputTemplateService OutputTemplateService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Templates — Brainy</PageTitle>
+
+<div style="max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem;">
+    <p style="font-size:0.75rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--mud-palette-text-disabled); font-weight:700; margin:0 0 0.5rem;">Reusable Blueprints</p>
+    <h1 style="font-family:var(--font-display); font-size:clamp(2rem,5vw,3rem); font-weight:600; margin:0 0 0.5rem;">Templates</h1>
+    <p style="color:var(--mud-palette-text-secondary); margin:0 0 2rem;">
+        Save any project, note or output as a template, then create new ones from it in one step.
+        Instantiating a template is a plain create — the normal project limit for your plan still applies.
+    </p>
+
+    <MudTabs @bind-ActivePanelIndex="_activeTab" Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+        <MudTabPanel Text="Project Templates">
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@_projectTemplates.Count template(s)</MudText>
+                <div>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlaylistAdd" OnClick="@(() => OpenProjectPickerAsync(null))" Class="mr-2">
+                        New From Template
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => OpenProjectEditorAsync(null))">
+                        New Template
+                    </MudButton>
+                </div>
+            </div>
+
+            @if (_projectTemplates.Count == 0)
+            {
+                <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined">No project templates yet.</MudAlert>
+            }
+            else
+            {
+                @foreach (var t in _projectTemplates)
+                {
+                    <MudPaper Class="pa-3 mb-2" Outlined="true">
+                        <div class="d-flex justify-space-between align-center">
+                            <div>
+                                <MudText Typo="Typo.subtitle1">
+                                    @t.Name
+                                    @if (t.IsBuiltIn)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">Built-in</MudChip>
+                                    }
+                                </MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    "@t.ProjectNamePattern" · @t.Tasks.Count task(s) · @t.DefaultPriority priority
+                                </MudText>
+                            </div>
+                            <div>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => OpenProjectPickerAsync(t.Id))">Use</MudButton>
+                                <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="@(() => OpenProjectEditorAsync(t.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteProjectTemplateAsync(t.Id))" />
+                            </div>
+                        </div>
+                    </MudPaper>
+                }
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="Note Templates">
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@_noteTemplates.Count template(s)</MudText>
+                <div>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlaylistAdd" OnClick="@(() => OpenNotePickerAsync(null))" Class="mr-2">
+                        New From Template
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => OpenNoteEditorAsync(null))">
+                        New Template
+                    </MudButton>
+                </div>
+            </div>
+
+            @if (_noteTemplates.Count == 0)
+            {
+                <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined">No note templates yet.</MudAlert>
+            }
+            else
+            {
+                @foreach (var t in _noteTemplates)
+                {
+                    <MudPaper Class="pa-3 mb-2" Outlined="true">
+                        <div class="d-flex justify-space-between align-center">
+                            <div>
+                                <MudText Typo="Typo.subtitle1">
+                                    @t.Name
+                                    @if (t.IsBuiltIn)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">Built-in</MudChip>
+                                    }
+                                </MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">"@t.TitlePattern" · @t.DefaultParaCategory</MudText>
+                            </div>
+                            <div>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => OpenNotePickerAsync(t.Id))">Use</MudButton>
+                                <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="@(() => OpenNoteEditorAsync(t.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteNoteTemplateAsync(t.Id))" />
+                            </div>
+                        </div>
+                    </MudPaper>
+                }
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="Output Templates">
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@_outputTemplates.Count template(s)</MudText>
+                <div>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlaylistAdd" OnClick="@(() => OpenOutputPickerAsync(null))" Class="mr-2">
+                        New From Template
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => OpenOutputEditorAsync(null))">
+                        New Template
+                    </MudButton>
+                </div>
+            </div>
+
+            @if (_outputTemplates.Count == 0)
+            {
+                <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined">No output templates yet.</MudAlert>
+            }
+            else
+            {
+                @foreach (var t in _outputTemplates)
+                {
+                    <MudPaper Class="pa-3 mb-2" Outlined="true">
+                        <div class="d-flex justify-space-between align-center">
+                            <div>
+                                <MudText Typo="Typo.subtitle1">
+                                    @t.Name
+                                    @if (t.IsBuiltIn)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">Built-in</MudChip>
+                                    }
+                                </MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">"@t.TitlePattern" · @t.Type</MudText>
+                            </div>
+                            <div>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => OpenOutputPickerAsync(t.Id))">Use</MudButton>
+                                <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="@(() => OpenOutputEditorAsync(t.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteOutputTemplateAsync(t.Id))" />
+                            </div>
+                        </div>
+                    </MudPaper>
+                }
+            }
+        </MudTabPanel>
+    </MudTabs>
+</div>
+
+@code {
+    private int _activeTab;
+    private List<ProjectTemplateDto> _projectTemplates = [];
+    private List<NoteTemplateDto> _noteTemplates = [];
+    private List<OutputTemplateDto> _outputTemplates = [];
+
+    /// <summary>Lets a "From Template" button elsewhere land straight on the right tab, e.g. <c>/templates?type=note</c>.</summary>
+    [SupplyParameterFromQuery(Name = "type")]
+    public string? InitialType { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _activeTab = InitialType switch
+        {
+            "note" => 1,
+            "output" => 2,
+            _ => 0
+        };
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _projectTemplates = (await ProjectTemplateService.GetAllAsync()).ToList();
+        _noteTemplates = (await NoteTemplateService.GetAllAsync()).ToList();
+        _outputTemplates = (await OutputTemplateService.GetAllAsync()).ToList();
+    }
+
+    private static readonly DialogOptions DialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+
+    private async Task OpenProjectEditorAsync(Guid? templateId)
+    {
+        var parameters = new DialogParameters<ProjectTemplateEditorDialog> { { x => x.TemplateId, templateId } };
+        var dialog = await DialogService.ShowAsync<ProjectTemplateEditorDialog>(
+            templateId.HasValue ? "Edit project template" : "New project template", parameters, DialogOptions);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled) await LoadAsync();
+    }
+
+    private async Task OpenNoteEditorAsync(Guid? templateId)
+    {
+        var parameters = new DialogParameters<NoteTemplateEditorDialog> { { x => x.TemplateId, templateId } };
+        var dialog = await DialogService.ShowAsync<NoteTemplateEditorDialog>(
+            templateId.HasValue ? "Edit note template" : "New note template", parameters, DialogOptions);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled) await LoadAsync();
+    }
+
+    private async Task OpenOutputEditorAsync(Guid? templateId)
+    {
+        var parameters = new DialogParameters<OutputTemplateEditorDialog> { { x => x.TemplateId, templateId } };
+        var dialog = await DialogService.ShowAsync<OutputTemplateEditorDialog>(
+            templateId.HasValue ? "Edit output template" : "New output template", parameters, DialogOptions);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled) await LoadAsync();
+    }
+
+    private async Task OpenProjectPickerAsync(Guid? preselected = null)
+    {
+        var parameters = new DialogParameters<ProjectTemplatePickerDialog> { { x => x.PreselectedTemplateId, preselected } };
+        var dialog = await DialogService.ShowAsync<ProjectTemplatePickerDialog>("New project from template", parameters, DialogOptions);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled && result.Data is Brainy.Application.DTOs.Projects.ProjectDto project)
+        {
+            Snackbar.Add($"Project \"{project.Name}\" created.", Severity.Success);
+            Nav.NavigateTo($"/projects/{project.Id}");
+        }
+    }
+
+    private async Task OpenNotePickerAsync(Guid? preselected = null)
+    {
+        var parameters = new DialogParameters<NoteTemplatePickerDialog> { { x => x.PreselectedTemplateId, preselected } };
+        var dialog = await DialogService.ShowAsync<NoteTemplatePickerDialog>("New note from template", parameters, DialogOptions);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled && result.Data is Brainy.Application.DTOs.Notes.NoteDto note)
+        {
+            Snackbar.Add($"Note \"{note.Title}\" created.", Severity.Success);
+            Nav.NavigateTo($"/notes/{note.Id}");
+        }
+    }
+
+    private async Task OpenOutputPickerAsync(Guid? preselected = null)
+    {
+        var parameters = new DialogParameters<OutputTemplatePickerDialog> { { x => x.PreselectedTemplateId, preselected } };
+        var dialog = await DialogService.ShowAsync<OutputTemplatePickerDialog>("New output from template", parameters, DialogOptions);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled && result.Data is Brainy.Application.DTOs.Outputs.OutputDto output)
+        {
+            Snackbar.Add($"Output \"{output.Title}\" created.", Severity.Success);
+            Nav.NavigateTo($"/outputs/{output.Id}");
+        }
+    }
+
+    private async Task DeleteProjectTemplateAsync(Guid id)
+    {
+        await ProjectTemplateService.DeleteAsync(id);
+        Snackbar.Add("Template deleted.", Severity.Success);
+        await LoadAsync();
+    }
+
+    private async Task DeleteNoteTemplateAsync(Guid id)
+    {
+        await NoteTemplateService.DeleteAsync(id);
+        Snackbar.Add("Template deleted.", Severity.Success);
+        await LoadAsync();
+    }
+
+    private async Task DeleteOutputTemplateAsync(Guid id)
+    {
+        await OutputTemplateService.DeleteAsync(id);
+        Snackbar.Add("Template deleted.", Severity.Success);
+        await LoadAsync();
+    }
+}

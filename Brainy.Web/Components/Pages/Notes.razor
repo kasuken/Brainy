@@ -7,8 +7,11 @@
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @using Brainy.Web.Components.Pages.Notes
+@using Brainy.Web.Components.Pages.Templates
+@using Brainy.Application.DTOs.Templates
 
 @inject INoteService NoteService
+@inject INoteTemplateService NoteTemplateService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -297,6 +300,14 @@
                                    Style="border-radius: 8px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;">
                             Write New Note
                         </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                                   Size="Size.Medium"
+                                   StartIcon="@Icons.Material.Filled.PlaylistAdd"
+                                   OnClick="OpenNoteTemplatePickerAsync"
+                                   FullWidth="true"
+                                   Class="mt-2">
+                            From Template
+                        </MudButton>
                     </div>
                 </aside>
 
@@ -410,6 +421,7 @@
                                     <MudTh>Category</MudTh>
                                     <MudTh>Status</MudTh>
                                     <MudTh>Updated</MudTh>
+                                    <MudTh Style="width:48px"></MudTh>
                                 </HeaderContent>
 
                                 <RowTemplate Context="noteContext">
@@ -456,6 +468,16 @@
                                     </MudTd>
                                     <MudTd DataLabel="Updated">
                                         <div style="color:var(--mud-palette-text-secondary); font-size: 0.8rem;"><UserLocalTime Utc="noteContext.UpdatedAtUtc" /></div>
+                                    </MudTd>
+                                    <MudTd>
+                                        <span @onclick:stopPropagation="true">
+                                            <MudTooltip Text="Save as template">
+                                                <MudIconButton Icon="@Icons.Material.Outlined.ContentCopy"
+                                                               Size="Size.Small"
+                                                               aria-label="@($"Save {noteContext.Title} as a template")"
+                                                               OnClick="@(() => SaveAsTemplateAsync(noteContext))" />
+                                            </MudTooltip>
+                                        </span>
                                     </MudTd>
                                 </RowTemplate>
 
@@ -627,6 +649,28 @@
         var result = await dialog.Result;
         if (result is { Canceled: false })
             await LoadNotesAsync();
+    }
+
+    private async Task OpenNoteTemplatePickerAsync()
+    {
+        var dialog = await DialogService.ShowAsync<NoteTemplatePickerDialog>("New note from template", _dialogOptions);
+        var result = await dialog.Result;
+        if (result is { Canceled: false } && result.Data is NoteDto)
+            await LoadNotesAsync();
+    }
+
+    private async Task SaveAsTemplateAsync(NoteDto note)
+    {
+        var parameters = new DialogParameters<SaveAsTemplateDialog>
+        {
+            { x => x.Message, $"Save \"{note.Title}\" — its title and content — as a reusable template." }
+        };
+        var dialog = await DialogService.ShowAsync<SaveAsTemplateDialog>("Save as template", parameters, _dialogOptions);
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not string templateName) return;
+
+        await NoteTemplateService.CreateFromNoteAsync(new SaveNoteAsTemplateDto(note.Id, templateName));
+        Snackbar.Add($"Saved \"{templateName}\" as a template.", Severity.Success);
     }
 
     private async Task OpenEditDialogAsync(Guid noteId)
