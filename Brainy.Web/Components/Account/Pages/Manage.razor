@@ -28,6 +28,7 @@
 @inject IDataExportService DataExportService
 @inject IMarkdownExportJobService MarkdownExportJobService
 @inject IDataImportService DataImportService
+@inject IExternalImportService ExternalImportService
 @inject IArchiveRetentionService ArchiveRetentionService
 @inject IUserTimeZoneService UserTimeZoneService
 @inject IAnalyticsService AnalyticsService
@@ -592,6 +593,95 @@
                 <span class="account-manage__status" role="status" aria-live="polite">@_importStatus</span>
             </div>
         </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.Inbox" aria-hidden="true" />
+                <div>
+                    <h2>Import from another app</h2>
+                    <p>
+                        Bring in an Obsidian vault, a Notion "Markdown &amp; CSV" export, a plain
+                        folder of Markdown files, or an Evernote <code>.enex</code> file — zipped,
+                        except Evernote which is a single file.
+                    </p>
+                </div>
+            </div>
+
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
+                Every imported note lands in your Inbox rather than a guessed Project/Area/Resource,
+                so you file it yourself. Tags and links between notes (Obsidian <code>[[wiki links]]</code>,
+                Notion page links) carry over; attachments Brainy can't safely import are listed rather
+                than silently dropped. Preview first to see exactly what will be created before anything
+                is written. Re-importing the same source is safe and will not create duplicates.
+            </MudAlert>
+
+            @if (_externalImportError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_externalImportError
+                </MudAlert>
+            }
+
+            @if (_externalPreviewResult is not null)
+            {
+                <MudAlert Severity="@GetExternalPreviewSeverity()" Variant="Variant.Outlined" Class="account-manage__notice">
+                    <div class="account-manage__import-summary">
+                        <strong>Preview — nothing has been written yet</strong>
+                        @RenderOutcomes(_externalPreviewResult.EntityOutcomes, _externalPreviewResult.UnmappedAttachments, _externalPreviewResult.Conflicts, _externalPreviewResult.IntegrityIssues)
+                    </div>
+                </MudAlert>
+            }
+
+            @if (_externalImportResult is not null)
+            {
+                <MudAlert Severity="@GetExternalResultSeverity()" Variant="Variant.Outlined" Class="account-manage__notice">
+                    <div class="account-manage__import-summary">
+                        <strong>Import complete</strong>
+                        @RenderOutcomes(_externalImportResult.EntityOutcomes, _externalImportResult.UnmappedAttachments, _externalImportResult.Conflicts, _externalImportResult.IntegrityIssues)
+                    </div>
+                </MudAlert>
+            }
+
+            <div class="account-manage__settings-stack">
+                <MudSelect T="ExternalImportSourceFormat"
+                           @bind-Value="_externalImportFormat"
+                           Label="Source"
+                           Variant="Variant.Outlined"
+                           Disabled="@(_externalImporting || _externalPreviewing)">
+                    <MudSelectItem T="ExternalImportSourceFormat" Value="ExternalImportSourceFormat.ObsidianVault">Obsidian vault (.zip)</MudSelectItem>
+                    <MudSelectItem T="ExternalImportSourceFormat" Value="ExternalImportSourceFormat.NotionExport">Notion export (.zip)</MudSelectItem>
+                    <MudSelectItem T="ExternalImportSourceFormat" Value="ExternalImportSourceFormat.MarkdownFolder">Markdown folder (.zip)</MudSelectItem>
+                    <MudSelectItem T="ExternalImportSourceFormat" Value="ExternalImportSourceFormat.Evernote">Evernote export (.enex)</MudSelectItem>
+                </MudSelect>
+
+                <div class="account-manage__import-picker">
+                    <InputFile OnChange="HandleExternalImportFileSelected"
+                               accept="@(_externalImportFormat == ExternalImportSourceFormat.Evernote ? ".enex" : ".zip")"
+                               disabled="@(_externalImporting || _externalPreviewing)" />
+                    <span class="account-manage__status">@(_externalImportFileName ?? "Choose a file")</span>
+                </div>
+
+                <div class="account-manage__actions">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Outlined.Preview"
+                               Disabled="@(_externalPreviewing || _externalImporting || _selectedExternalImportFile is null)"
+                               aria-busy="@_externalPreviewing.ToString().ToLowerInvariant()"
+                               OnClick="PreviewExternalImportAsync">
+                        @(_externalPreviewing ? "Checking…" : "Preview import")
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Outlined.Publish"
+                               Disabled="@(_externalImporting || _externalPreviewing || _externalPreviewResult is null)"
+                               aria-busy="@_externalImporting.ToString().ToLowerInvariant()"
+                               OnClick="ImportExternalAsync">
+                        @(_externalImporting ? "Importing…" : "Confirm import")
+                    </MudButton>
+                    <span class="account-manage__status" role="status" aria-live="polite">@_externalImportStatus</span>
+                </div>
+            </div>
+        </MudPaper>
     </section>
 
     <MudPaper Class="account-manage__card account-manage__danger" Elevation="0">
@@ -717,6 +807,16 @@
     private DataImportResultDto? _importResult;
     private IBrowserFile? _selectedImportFile;
     private string? _importFileName;
+    private const long MaxExternalImportFileBytes = 100L * 1024 * 1024;
+    private ExternalImportSourceFormat _externalImportFormat = ExternalImportSourceFormat.ObsidianVault;
+    private bool _externalImporting;
+    private bool _externalPreviewing;
+    private string? _externalImportError;
+    private string? _externalImportStatus;
+    private ExternalImportPreviewDto? _externalPreviewResult;
+    private ExternalImportResultDto? _externalImportResult;
+    private IBrowserFile? _selectedExternalImportFile;
+    private string? _externalImportFileName;
     private bool _changingPassword;
     private string _currentPassword = string.Empty;
     private string _newPassword = string.Empty;
@@ -1144,6 +1244,104 @@
             _importing = false;
         }
     }
+
+    private void HandleExternalImportFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedExternalImportFile = e.File;
+        _externalImportFileName = _selectedExternalImportFile?.Name;
+        _externalImportError = null;
+        _externalImportStatus = null;
+        _externalPreviewResult = null;
+        _externalImportResult = null;
+    }
+
+    private async Task PreviewExternalImportAsync()
+    {
+        if (_externalPreviewing || _externalImporting || _selectedExternalImportFile is null)
+            return;
+
+        _externalPreviewing = true;
+        _externalImportError = null;
+        _externalImportStatus = "Checking the file against your account without changing anything.";
+        _externalPreviewResult = null;
+        _externalImportResult = null;
+
+        try
+        {
+            await using var stream = _selectedExternalImportFile.OpenReadStream(MaxExternalImportFileBytes);
+            _externalPreviewResult = await ExternalImportService.PreviewImportAsync(_externalImportFormat, stream);
+            _externalImportStatus = "Preview checked. Review the plan, then confirm to write it.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            _externalImportError = ex.Message;
+            _externalImportStatus = null;
+        }
+        catch (IOException)
+        {
+            _externalImportError = "The selected file could not be read. Choose it again and retry.";
+            _externalImportStatus = null;
+        }
+        catch
+        {
+            _externalImportError = "Brainy could not preview that file.";
+            _externalImportStatus = null;
+        }
+        finally
+        {
+            _externalPreviewing = false;
+        }
+    }
+
+    private async Task ImportExternalAsync()
+    {
+        if (_externalImporting || _externalPreviewing || _selectedExternalImportFile is null || _externalPreviewResult is null)
+            return;
+
+        _externalImporting = true;
+        _externalImportError = null;
+        _externalImportStatus = "Importing your notes inside a single transaction.";
+        _externalImportResult = null;
+
+        try
+        {
+            await using var stream = _selectedExternalImportFile.OpenReadStream(MaxExternalImportFileBytes);
+            _externalImportResult = await ExternalImportService.ImportCurrentUserAsync(_externalImportFormat, stream);
+            _externalPreviewResult = null;
+            _externalImportStatus = "Import committed. New notes are waiting in your Inbox.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            _externalImportError = ex.Message;
+            _externalImportStatus = null;
+        }
+        catch (IOException)
+        {
+            _externalImportError = "The selected file could not be read. Choose it again and retry.";
+            _externalImportStatus = null;
+        }
+        catch
+        {
+            _externalImportError = "Brainy could not import that file. The transaction was rolled back, so no partial data was written.";
+            _externalImportStatus = null;
+        }
+        finally
+        {
+            _externalImporting = false;
+        }
+    }
+
+    private Severity GetExternalPreviewSeverity() =>
+        _externalPreviewResult is not null &&
+        HasWarnings(_externalPreviewResult.EntityOutcomes, _externalPreviewResult.UnmappedAttachments, _externalPreviewResult.Conflicts, _externalPreviewResult.IntegrityIssues)
+            ? Severity.Warning
+            : Severity.Success;
+
+    private Severity GetExternalResultSeverity() =>
+        _externalImportResult is not null &&
+        HasWarnings(_externalImportResult.EntityOutcomes, _externalImportResult.UnmappedAttachments, _externalImportResult.Conflicts, _externalImportResult.IntegrityIssues)
+            ? Severity.Warning
+            : Severity.Success;
 
     private static bool HasWarnings(
         IReadOnlyList<DataImportEntityOutcomeDto> outcomes,
