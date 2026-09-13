@@ -59,7 +59,7 @@ public class DataExportServiceTests
 
         export.SchemaVersion.Should().Be(IDataExportService.SchemaVersion);
         export.ContentType.Should().Be("application/json;charset=utf-8");
-        export.FileName.Should().Be("brainy-data-export-20260813-101112Z-v1.3.json");
+        export.FileName.Should().Be("brainy-data-export-20260813-101112Z-v1.4.json");
 
         var json = Encoding.UTF8.GetString(export.Content);
         json.Should().Contain("MINE");
@@ -116,7 +116,7 @@ public class DataExportServiceTests
             "security",
             "images",
             "data");
-        root.GetProperty("schemaVersion").GetString().Should().Be("1.3");
+        root.GetProperty("schemaVersion").GetString().Should().Be("1.4");
         var security = root.GetProperty("security");
         security.EnumerateObject().Select(property => property.Name).Should().Equal(
             "accountCredentialsIncluded",
@@ -147,6 +147,10 @@ public class DataExportServiceTests
             "taskDependencies",
             "outputs",
             "outputSourceNoteLinks",
+            "projectTemplates",
+            "projectTemplateTasks",
+            "noteTemplates",
+            "outputTemplates",
             "ideas",
             "goals",
             "goalMilestones",
