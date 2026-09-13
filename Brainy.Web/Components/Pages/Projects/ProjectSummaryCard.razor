@@ -76,7 +76,7 @@
 
     </div>
 
-    @if (OnEdit.HasDelegate || OnArchive.HasDelegate || OnComplete.HasDelegate)
+    @if (OnEdit.HasDelegate || OnArchive.HasDelegate || OnComplete.HasDelegate || OnSaveAsTemplate.HasDelegate)
     {
         <div class="psc__actions" aria-label="@($"Actions for {Project.Name}")">
             @if (OnComplete.HasDelegate && Project.Status != ProjectStatus.Completed && Project.Status != ProjectStatus.Archived)
@@ -97,6 +97,13 @@
                 <button type="button" class="psc__action-btn psc__action-btn--warn" aria-label="@($"Archive {Project.Name}")"
                         @onclick="() => OnArchive.InvokeAsync(Project)">
                     <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 2a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 1 12.5V5a1 1 0 0 1-1-1V2Zm2 3v7.5A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5V5H2Zm13-3H1v2h14V2ZM5 7.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5Z"/></svg>
+                </button>
+            }
+            @if (OnSaveAsTemplate.HasDelegate)
+            {
+                <button type="button" class="psc__action-btn" aria-label="@($"Save {Project.Name} as a template")"
+                        @onclick="() => OnSaveAsTemplate.InvokeAsync(Project)">
+                    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1Z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3ZM8 5a.5.5 0 0 1 .5.5V7H10a.5.5 0 0 1 0 1H8.5v1.5a.5.5 0 0 1-1 0V8H6a.5.5 0 0 1 0-1h1.5V5.5A.5.5 0 0 1 8 5Z"/></svg>
                 </button>
             }
         </div>
@@ -355,6 +362,10 @@
     /// <summary>When set, a Complete action button is rendered (hidden when already completed/archived).</summary>
     [Parameter]
     public EventCallback<ProjectSummaryDto> OnComplete { get; set; }
+
+    /// <summary>When set, a Save as Template action button is rendered.</summary>
+    [Parameter]
+    public EventCallback<ProjectSummaryDto> OnSaveAsTemplate { get; set; }
 
     /// <summary>Renders in compact/narrow layout. Default: false.</summary>
     [Parameter]

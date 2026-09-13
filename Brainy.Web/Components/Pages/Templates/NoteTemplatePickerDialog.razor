@@ -1,0 +1,100 @@
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.DTOs.Templates
+@using Brainy.Application.Interfaces.Services
+@inject INoteTemplateService NoteTemplateService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">New note from template</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (_templates.Count == 0)
+        {
+            <MudText Typo="Typo.body2">No note templates yet. Create one from the Templates page first.</MudText>
+        }
+        else
+        {
+            <MudSelect T="Guid" @bind-Value="_selectedTemplateId" Label="Template" Variant="Variant.Outlined" Margin="Margin.Dense"
+                       Class="mb-3" AnchorOrigin="Origin.BottomCenter">
+                @foreach (var t in _templates)
+                {
+                    <MudSelectItem Value="@t.Id">@t.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (SelectedTemplate is not null)
+            {
+                <MudTextField @bind-Value="_title"
+                              Label="Note title (optional override)"
+                              Placeholder="@SelectedTemplate.TitlePattern"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" />
+            }
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(SelectedTemplate is null)" OnClick="CreateAsync">
+            Create Note
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>Optional project the created note should be linked to (e.g. opened from a project page).</summary>
+    [Parameter]
+    public Guid? ProjectId { get; set; }
+
+    /// <summary>Optionally opens the dialog with a specific template pre-selected (e.g. the "Use" action on the Templates page).</summary>
+    [Parameter]
+    public Guid? PreselectedTemplateId { get; set; }
+
+    private List<NoteTemplateDto> _templates = [];
+    private bool _loading = true;
+    private Guid _selectedTemplateId;
+    private string _title = "";
+
+    private NoteTemplateDto? SelectedTemplate => _templates.FirstOrDefault(t => t.Id == _selectedTemplateId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _templates = (await NoteTemplateService.GetAllAsync()).ToList();
+        if (_templates.Count > 0)
+        {
+            _selectedTemplateId = PreselectedTemplateId.HasValue && _templates.Any(t => t.Id == PreselectedTemplateId.Value)
+                ? PreselectedTemplateId.Value
+                : _templates[0].Id;
+        }
+        _loading = false;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task CreateAsync()
+    {
+        if (SelectedTemplate is null) return;
+
+        try
+        {
+            var note = await NoteTemplateService.InstantiateAsync(new InstantiateNoteTemplateDto(
+                SelectedTemplate.Id,
+                Title: string.IsNullOrWhiteSpace(_title) ? null : _title.Trim(),
+                ProjectId: ProjectId));
+
+            MudDialog.Close(DialogResult.Ok(note));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

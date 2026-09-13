@@ -1,0 +1,189 @@
+@using Brainy.Application.DTOs.Areas
+@using Brainy.Application.DTOs.Goals
+@using Brainy.Application.DTOs.Templates
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject IProjectTemplateService ProjectTemplateService
+@inject IAreaService AreaService
+@inject IGoalService GoalService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(TemplateId.HasValue ? "Edit project template" : "New project template")</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            <MudTextField @bind-Value="_name" Label="Template name" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Class="mb-3" MaxLength="200" Required="true" />
+
+            <MudTextField @bind-Value="_projectNamePattern" Label="Project name pattern" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Class="mb-3" MaxLength="200" Required="true"
+                          HelperText="Use {Date} or {Year} to include the instantiation date." />
+
+            <MudTextField @bind-Value="_description" Label="Description" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Class="mb-3" Lines="2" MaxLength="2000" />
+
+            <MudTextField @bind-Value="_desiredOutcome" Label="Desired outcome" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Class="mb-3" Lines="2" MaxLength="1000" />
+
+            <MudSelect T="ProjectPriority" @bind-Value="_priority" Label="Default priority" Variant="Variant.Outlined"
+                       Margin="Margin.Dense" Class="mb-3" AnchorOrigin="Origin.BottomCenter">
+                @foreach (var p in Enum.GetValues<ProjectPriority>())
+                {
+                    <MudSelectItem Value="@p">@p</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="Guid?" @bind-Value="_areaId" Label="Default area (optional)" Variant="Variant.Outlined"
+                       Margin="Margin.Dense" Class="mb-3" AnchorOrigin="Origin.BottomCenter" Clearable="true">
+                @foreach (var area in _areas)
+                {
+                    <MudSelectItem T="Guid?" Value="@((Guid?)area.Id)">@area.Emoji @area.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="Guid?" @bind-Value="_goalId" Label="Default goal (optional)" Variant="Variant.Outlined"
+                       Margin="Margin.Dense" Class="mb-4" AnchorOrigin="Origin.BottomCenter" Clearable="true">
+                @foreach (var goal in _goals)
+                {
+                    <MudSelectItem T="Guid?" Value="@((Guid?)goal.Id)">@goal.Title</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Default task list</MudText>
+            @for (var i = 0; i < _tasks.Count; i++)
+            {
+                var index = i;
+                var row = _tasks[index];
+                <div class="d-flex align-center gap-2 mb-2" style="width:100%;">
+                    <MudTextField T="string" Value="@row.Title" ValueChanged="@(v => row.Title = v)"
+                                  Label="Task" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500"
+                                  Style="flex:2;" />
+                    <MudNumericField T="int?" Value="@row.DueDateOffsetDays" ValueChanged="@(v => row.DueDateOffsetDays = v)"
+                                     Label="Due in (days)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                     Style="flex:1;" />
+                    <MudSelect T="TaskPriority" Value="@row.Priority" ValueChanged="@(v => row.Priority = v)"
+                               Label="Priority" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;">
+                        @foreach (var p in Enum.GetValues<TaskPriority>())
+                        {
+                            <MudSelectItem Value="@p">@p</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudIconButton Icon="@Icons.Material.Outlined.Delete" Color="Color.Error" Size="Size.Small"
+                                   OnClick="@(() => _tasks.RemoveAt(index))" />
+                </div>
+            }
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddTaskRow" Class="mb-2">
+                Add task
+            </MudButton>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">Save Template</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public Guid? TemplateId { get; set; }
+
+    private bool _loading = true;
+    private List<AreaDto> _areas = [];
+    private List<GoalDto> _goals = [];
+
+    private string _name = "";
+    private string _projectNamePattern = "";
+    private string? _description;
+    private string? _desiredOutcome;
+    private ProjectPriority _priority = ProjectPriority.Medium;
+    private Guid? _areaId;
+    private Guid? _goalId;
+    private byte[]? _rowVersion;
+    private readonly List<TaskRow> _tasks = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _areas = (await AreaService.GetAllActiveAsync()).ToList();
+        _goals = (await GoalService.GetAllActiveAsync()).ToList();
+
+        if (TemplateId.HasValue)
+        {
+            var template = await ProjectTemplateService.GetByIdAsync(TemplateId.Value);
+            if (template is not null)
+            {
+                _name = template.Name;
+                _projectNamePattern = template.ProjectNamePattern;
+                _description = template.Description;
+                _desiredOutcome = template.DesiredOutcome;
+                _priority = template.DefaultPriority;
+                _areaId = template.DefaultAreaId;
+                _goalId = template.DefaultGoalId;
+                _rowVersion = template.RowVersion;
+                _tasks.AddRange(template.Tasks
+                    .OrderBy(t => t.SortOrder)
+                    .Select(t => new TaskRow { Title = t.Title, Priority = t.Priority, DueDateOffsetDays = t.DueDateOffsetDays }));
+            }
+        }
+
+        _loading = false;
+    }
+
+    private void AddTaskRow() => _tasks.Add(new TaskRow());
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_projectNamePattern))
+        {
+            Snackbar.Add("A template name and project name pattern are required.", Severity.Warning);
+            return;
+        }
+
+        var taskDtos = _tasks
+            .Where(t => !string.IsNullOrWhiteSpace(t.Title))
+            .Select((t, index) => new CreateProjectTemplateTaskDto(t.Title.Trim(), Priority: t.Priority, DueDateOffsetDays: t.DueDateOffsetDays, SortOrder: index))
+            .ToList();
+
+        try
+        {
+            if (TemplateId.HasValue)
+            {
+                var updated = await ProjectTemplateService.UpdateAsync(new UpdateProjectTemplateDto(
+                    TemplateId.Value, _name.Trim(), _projectNamePattern.Trim(), _description, _desiredOutcome,
+                    _priority, _areaId, _goalId, taskDtos, _rowVersion));
+                MudDialog.Close(DialogResult.Ok(updated));
+            }
+            else
+            {
+                var created = await ProjectTemplateService.CreateAsync(new CreateProjectTemplateDto(
+                    _name.Trim(), _projectNamePattern.Trim(), _description, _desiredOutcome,
+                    _priority, _areaId, _goalId, taskDtos));
+                MudDialog.Close(DialogResult.Ok(created));
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private sealed class TaskRow
+    {
+        public string Title { get; set; } = "";
+        public TaskPriority Priority { get; set; } = TaskPriority.Medium;
+        public int? DueDateOffsetDays { get; set; }
+    }
+}

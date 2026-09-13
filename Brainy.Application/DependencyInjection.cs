@@ -100,6 +100,9 @@ public static class DependencyInjection
         services.AddScoped<ILlmFocusExportService, LlmFocusExportService>();
         services.AddScoped<IEntitlementService, EntitlementService>();
         services.AddScoped<IBillingWebhookProcessor, BillingWebhookProcessor>();
+        services.AddScoped<IProjectTemplateService, ProjectTemplateService>();
+        services.AddScoped<INoteTemplateService, NoteTemplateService>();
+        services.AddScoped<IOutputTemplateService, OutputTemplateService>();
         return services;
     }
 

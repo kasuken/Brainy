@@ -67,6 +67,7 @@ internal sealed class DataImportService(
         "noteImages", "highlights", "summaries",
         "tasks", "actionItems", "noteRelationships", "taskDependencies",
         "outputs", "outputSourceNoteLinks",
+        "projectTemplates", "projectTemplateTasks", "noteTemplates", "outputTemplates",
         "ideas", "goalMilestones", "goalActivities",
         "archiveRetentionRules", "weeklyTaskSelections"
     ];
@@ -87,6 +88,10 @@ internal sealed class DataImportService(
         ["taskDependencies"] = "Task dependencies",
         ["outputs"] = "Outputs",
         ["outputSourceNoteLinks"] = "Output source note links",
+        ["projectTemplates"] = "Project templates",
+        ["projectTemplateTasks"] = "Project template tasks",
+        ["noteTemplates"] = "Note templates",
+        ["outputTemplates"] = "Output templates",
         ["ideas"] = "Ideas",
         ["goals"] = "Goals",
         ["goalMilestones"] = "Goal milestones",
@@ -158,6 +163,10 @@ internal sealed class DataImportService(
         await ImportTaskDependenciesAsync(data, state, cancellationToken).ConfigureAwait(false);
         await ImportOutputsAsync(data, state, cancellationToken).ConfigureAwait(false);
         await ImportOutputSourceNoteLinksAsync(data, state, cancellationToken).ConfigureAwait(false);
+        await ImportProjectTemplatesAsync(data, state, cancellationToken).ConfigureAwait(false);
+        await ImportProjectTemplateTasksAsync(data, state, cancellationToken).ConfigureAwait(false);
+        await ImportNoteTemplatesAsync(data, state, cancellationToken).ConfigureAwait(false);
+        await ImportOutputTemplatesAsync(data, state, cancellationToken).ConfigureAwait(false);
         await ImportIdeasAsync(data, state, cancellationToken).ConfigureAwait(false);
         await ImportGoalMilestonesAsync(data, state, cancellationToken).ConfigureAwait(false);
         await ImportGoalActivitiesAsync(data, state, cancellationToken).ConfigureAwait(false);
@@ -1207,6 +1216,207 @@ internal sealed class DataImportService(
         return attached;
     }
 
+    private async Task ImportProjectTemplatesAsync(JsonElement data, ImportState state, CancellationToken cancellationToken)
+    {
+        var rows = GetArrayProperty(data, "projectTemplates");
+        var existing = await context.ProjectTemplates.AsNoTracking()
+            .Where(template => template.UserId == state.UserId)
+            .Select(template => new { template.Id, template.Name })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        var existingByName = BuildNameLookup(existing.Select(t => (t.Name, t.Id)), "Project template", state.Conflicts);
+
+        int created = 0, reused = 0, skipped = 0;
+        foreach (var row in rows.EnumerateArray())
+        {
+            if (!TryReadGuid(row, "id", out var exportId))
+            {
+                skipped++;
+                continue;
+            }
+
+            var name = ReadRequiredString(row, "name", 200);
+            var projectNamePattern = ReadRequiredString(row, "projectNamePattern", 200);
+            if (name is null || projectNamePattern is null ||
+                !TryReadEnum(row, "defaultPriority", out ProjectPriority defaultPriority) ||
+                !TryResolveOptionalReference(row, "defaultAreaId", state.AreaIds, out var defaultAreaId) ||
+                !TryResolveOptionalReference(row, "defaultGoalId", state.GoalIds, out var defaultGoalId))
+            {
+                skipped++;
+                continue;
+            }
+
+            if (existingByName.TryGetValue(NormalizeKey(name), out var existingId))
+            {
+                state.ProjectTemplateIds[exportId] = existingId;
+                reused++;
+                continue;
+            }
+
+            var template = new ProjectTemplate
+            {
+                Id = Guid.NewGuid(),
+                UserId = state.UserId,
+                Name = name,
+                ProjectNamePattern = projectNamePattern,
+                Description = ReadOptionalString(row, "description", 2000),
+                DesiredOutcome = ReadOptionalString(row, "desiredOutcome", 1000),
+                DefaultPriority = defaultPriority,
+                DefaultAreaId = defaultAreaId,
+                DefaultGoalId = defaultGoalId,
+                IsBuiltIn = ReadBoolean(row, "isBuiltIn")
+            };
+
+            if (state.Commit) context.ProjectTemplates.Add(template);
+            state.ProjectTemplateIds[exportId] = template.Id;
+            existingByName[NormalizeKey(name)] = template.Id;
+            created++;
+        }
+
+        state.RecordOutcome("Project templates", created, reused, skipped);
+    }
+
+    private async Task ImportProjectTemplateTasksAsync(JsonElement data, ImportState state, CancellationToken cancellationToken)
+    {
+        var rows = GetArrayProperty(data, "projectTemplateTasks");
+        var existingKeys = (await context.ProjectTemplateTasks.AsNoTracking()
+            .Where(task => task.ProjectTemplate.UserId == state.UserId)
+            .Select(task => new { task.ProjectTemplateId, task.Title })
+            .ToListAsync(cancellationToken).ConfigureAwait(false))
+            .Select(t => (t.ProjectTemplateId, t.Title))
+            .ToHashSet();
+
+        int created = 0, skipped = 0;
+
+        foreach (var row in rows.EnumerateArray())
+        {
+            var title = ReadRequiredString(row, "title", 500);
+            if (title is null ||
+                !TryResolveRequiredReference(row, "projectTemplateId", state.ProjectTemplateIds, out var projectTemplateId) ||
+                !TryReadEnum(row, "priority", out TaskPriority priority))
+            {
+                skipped++;
+                continue;
+            }
+
+            if (!existingKeys.Add((projectTemplateId, title)))
+            {
+                skipped++;
+                continue;
+            }
+
+            var task = new ProjectTemplateTask
+            {
+                Id = Guid.NewGuid(),
+                ProjectTemplateId = projectTemplateId,
+                Title = title,
+                Description = ReadOptionalString(row, "description", 4000),
+                Priority = priority,
+                Complexity = ReadNullableEnum<TaskComplexity>(row, "complexity"),
+                DueDateOffsetDays = ReadNullableInt(row, "dueDateOffsetDays"),
+                SortOrder = ReadNullableInt(row, "sortOrder") ?? 0
+            };
+
+            if (state.Commit) context.ProjectTemplateTasks.Add(task);
+            created++;
+        }
+
+        state.RecordOutcome("Project template tasks", created, 0, skipped);
+    }
+
+    private async Task ImportNoteTemplatesAsync(JsonElement data, ImportState state, CancellationToken cancellationToken)
+    {
+        var rows = GetArrayProperty(data, "noteTemplates");
+        var existing = await context.NoteTemplates.AsNoTracking()
+            .Where(template => template.UserId == state.UserId)
+            .Select(template => new { template.Id, template.Name })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        var existingByName = BuildNameLookup(existing.Select(t => (t.Name, t.Id)), "Note template", state.Conflicts);
+
+        int created = 0, reused = 0, skipped = 0;
+        foreach (var row in rows.EnumerateArray())
+        {
+            var name = ReadRequiredString(row, "name", 200);
+            var titlePattern = ReadRequiredString(row, "titlePattern", 200);
+            if (name is null || titlePattern is null ||
+                !TryReadEnum(row, "defaultParaCategory", out ParaCategory defaultParaCategory))
+            {
+                skipped++;
+                continue;
+            }
+
+            if (existingByName.ContainsKey(NormalizeKey(name)))
+            {
+                reused++;
+                continue;
+            }
+
+            var template = new NoteTemplate
+            {
+                Id = Guid.NewGuid(),
+                UserId = state.UserId,
+                Name = name,
+                TitlePattern = titlePattern,
+                ContentScaffold = ReadOptionalString(row, "contentScaffold", int.MaxValue) ?? string.Empty,
+                DefaultParaCategory = defaultParaCategory,
+                IsBuiltIn = ReadBoolean(row, "isBuiltIn")
+            };
+
+            if (state.Commit) context.NoteTemplates.Add(template);
+            existingByName[NormalizeKey(name)] = template.Id;
+            created++;
+        }
+
+        state.RecordOutcome("Note templates", created, reused, skipped);
+    }
+
+    private async Task ImportOutputTemplatesAsync(JsonElement data, ImportState state, CancellationToken cancellationToken)
+    {
+        var rows = GetArrayProperty(data, "outputTemplates");
+        var existing = await context.OutputTemplates.AsNoTracking()
+            .Where(template => template.UserId == state.UserId)
+            .Select(template => new { template.Id, template.Name })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        var existingByName = BuildNameLookup(existing.Select(t => (t.Name, t.Id)), "Output template", state.Conflicts);
+
+        int created = 0, reused = 0, skipped = 0;
+        foreach (var row in rows.EnumerateArray())
+        {
+            var name = ReadRequiredString(row, "name", 200);
+            var titlePattern = ReadRequiredString(row, "titlePattern", 200);
+            if (name is null || titlePattern is null ||
+                !TryReadEnum(row, "type", out OutputType type) ||
+                !TryReadEnum(row, "defaultSourceSelection", out OutputTemplateSourceSelectionMode defaultSourceSelection))
+            {
+                skipped++;
+                continue;
+            }
+
+            if (existingByName.ContainsKey(NormalizeKey(name)))
+            {
+                reused++;
+                continue;
+            }
+
+            var template = new OutputTemplate
+            {
+                Id = Guid.NewGuid(),
+                UserId = state.UserId,
+                Name = name,
+                TitlePattern = titlePattern,
+                Type = type,
+                ContentScaffold = ReadOptionalString(row, "contentScaffold", int.MaxValue) ?? string.Empty,
+                DefaultSourceSelection = defaultSourceSelection,
+                IsBuiltIn = ReadBoolean(row, "isBuiltIn")
+            };
+
+            if (state.Commit) context.OutputTemplates.Add(template);
+            existingByName[NormalizeKey(name)] = template.Id;
+            created++;
+        }
+
+        state.RecordOutcome("Output templates", created, reused, skipped);
+    }
+
     private async Task ImportIdeasAsync(JsonElement data, ImportState state, CancellationToken cancellationToken)
     {
         var rows = GetArrayProperty(data, "ideas");
@@ -1643,6 +1853,7 @@ internal sealed class DataImportService(
         public Dictionary<Guid, Guid> TaskIds { get; } = [];
         public Dictionary<Guid, Guid> OutputIds { get; } = [];
         public Dictionary<Guid, Guid> IdeaIds { get; } = [];
+        public Dictionary<Guid, Guid> ProjectTemplateIds { get; } = [];
 
         public HashSet<Guid> DuplicateNoteExportIds { get; } = [];
         public HashSet<Guid> DuplicateResourceExportIds { get; } = [];

@@ -6,7 +6,10 @@
 @using Brainy.Application.DTOs.Outputs
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
+@using Brainy.Application.DTOs.Templates
+@using Brainy.Web.Components.Pages.Templates
 @inject IOutputService OutputService
+@inject IOutputTemplateService OutputTemplateService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
@@ -296,6 +299,15 @@
                 New Output
             </MudButton>
 
+            <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                       StartIcon="@Icons.Material.Filled.PlaylistAdd"
+                       Size="Size.Medium"
+                       Class="mb-6"
+                       FullWidth="true"
+                       OnClick="OpenOutputTemplatePickerAsync">
+                From Template
+            </MudButton>
+
             <div class="op-widget">
                 <MudTextField Value="@_searchText"
                               ValueChanged="@((string v) => OnSearchChanged(v))"
@@ -445,6 +457,10 @@
                                                         <MudIcon Icon="@Icons.Material.Outlined.Publish" Size="Size.Small" />
                                                     </button>
                                                 }
+                                                <button class="op-btn-action" title="Save as template"
+                                                        @onclick="() => SaveAsTemplateAsync(output)">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
+                                                </button>
                                                 <button class="op-btn-action" title="Archive"
                                                         @onclick="() => ConfirmArchiveAsync(output)">
                                                     <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
@@ -690,6 +706,33 @@
             q = q.Where(o => o.Status == _statusFilter.Value);
 
         _filtered = q.ToList();
+    }
+
+    private async Task OpenOutputTemplatePickerAsync()
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<OutputTemplatePickerDialog>("New output from template", options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled && result.Data is OutputDto created)
+        {
+            Nav.NavigateTo($"/outputs/{created.Id}");
+        }
+    }
+
+    private async Task SaveAsTemplateAsync(OutputDto output)
+    {
+        var parameters = new DialogParameters<SaveAsTemplateDialog>
+        {
+            { x => x.Message, $"Save \"{output.Title}\" — its type and content — as a reusable template." }
+        };
+        var dialog = await DialogService.ShowAsync<SaveAsTemplateDialog>(
+            "Save as template", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not string templateName) return;
+
+        await OutputTemplateService.CreateFromOutputAsync(new SaveOutputAsTemplateDto(output.Id, templateName));
+        Snackbar.Add($"Saved \"{templateName}\" as a template.", Severity.Success);
     }
 
     private async Task OpenCreateDialogAsync()
