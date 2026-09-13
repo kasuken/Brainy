@@ -27,6 +27,12 @@
                           Variant="Variant.Outlined"
                           Margin="Margin.Dense"
                           Immediate="true" />
+            <MudDatePicker @bind-Date="_newMilestoneDueDate"
+                           Label="Due date (optional)"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Clearable="true"
+                           Editable="true" />
             <div class="goal-milestones__composer-actions">
                 <MudButton Variant="Variant.Text" OnClick="CancelAdd">Cancel</MudButton>
                 <MudButton Variant="Variant.Filled"
@@ -66,11 +72,19 @@
 
                         @if (_editingMilestoneId == milestone.Id)
                         {
-                            <MudTextField @bind-Value="_editingTitle"
-                                          Variant="Variant.Outlined"
-                                          Margin="Margin.Dense"
-                                          Immediate="true"
-                                          Class="goal-milestones__edit-field" />
+                            <div class="goal-milestones__edit-fields">
+                                <MudTextField @bind-Value="_editingTitle"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              Immediate="true"
+                                              Class="goal-milestones__edit-field" />
+                                <MudDatePicker @bind-Date="_editingDueDate"
+                                               Label="Due date"
+                                               Variant="Variant.Outlined"
+                                               Margin="Margin.Dense"
+                                               Clearable="true"
+                                               Editable="true" />
+                            </div>
                             <div class="goal-milestones__item-actions">
                                 <MudIconButton Icon="@Icons.Material.Filled.Check"
                                                Color="Color.Success"
@@ -90,7 +104,18 @@
                                     @milestone.Title
                                 </span>
                                 <span class="goal-milestones__meta">
-                                    <UserLocalTime Utc="milestone.CompletedAtUtc" Fallback="Pending" />
+                                    @if (milestone.IsCompleted)
+                                    {
+                                        <UserLocalTime Utc="milestone.CompletedAtUtc" Fallback="Pending" />
+                                    }
+                                    else if (milestone.DueDate.HasValue)
+                                    {
+                                        <span>Due @milestone.DueDate.Value.ToString("MMM d, yyyy")</span>
+                                    }
+                                    else
+                                    {
+                                        <span>No due date</span>
+                                    }
                                 </span>
                             </button>
                             <div class="goal-milestones__item-actions">
@@ -232,6 +257,22 @@
     width: 100%;
 }
 
+.goal-milestones__edit-fields {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: .5rem;
+    width: 100%;
+}
+
+.goal-milestones__edit-fields .goal-milestones__edit-field {
+    flex: 2 1 12rem;
+}
+
+.goal-milestones__edit-fields .mud-picker {
+    flex: 1 1 9rem;
+}
+
 @@media (max-width: 640px) {
     .goal-milestones__row {
         grid-template-columns: auto 1fr;
@@ -253,7 +294,9 @@
     private bool _showAddForm;
     private Guid _loadedGoalId;
     private string _newMilestoneTitle = "";
+    private DateTime? _newMilestoneDueDate;
     private string _editingTitle = "";
+    private DateTime? _editingDueDate;
     private Guid? _editingMilestoneId;
     private List<GoalMilestoneDto> _milestones = [];
 
@@ -282,6 +325,7 @@
     {
         _showAddForm = false;
         _newMilestoneTitle = "";
+        _newMilestoneDueDate = null;
     }
 
     private async Task AddMilestoneAsync()
@@ -293,8 +337,10 @@
 
         try
         {
-            await GoalMilestoneService.CreateAsync(new CreateGoalMilestoneDto(GoalId, _newMilestoneTitle.Trim()));
+            await GoalMilestoneService.CreateAsync(
+                new CreateGoalMilestoneDto(GoalId, _newMilestoneTitle.Trim(), _newMilestoneDueDate));
             _newMilestoneTitle = "";
+            _newMilestoneDueDate = null;
             _showAddForm = false;
             Snackbar.Add("Milestone added.", Severity.Success);
             await NotifyChangedAsync();
@@ -334,12 +380,14 @@
     {
         _editingMilestoneId = milestone.Id;
         _editingTitle = milestone.Title;
+        _editingDueDate = milestone.DueDate;
     }
 
     private void CancelEdit()
     {
         _editingMilestoneId = null;
         _editingTitle = "";
+        _editingDueDate = null;
     }
 
     private async Task SaveEditAsync()
@@ -349,7 +397,8 @@
 
         try
         {
-            await GoalMilestoneService.UpdateAsync(new UpdateGoalMilestoneDto(_editingMilestoneId.Value, _editingTitle.Trim()));
+            await GoalMilestoneService.UpdateAsync(
+                new UpdateGoalMilestoneDto(_editingMilestoneId.Value, _editingTitle.Trim(), _editingDueDate));
             CancelEdit();
             Snackbar.Add("Milestone updated.", Severity.Success);
             await NotifyChangedAsync();
