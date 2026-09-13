@@ -18,13 +18,17 @@ namespace Brainy.Application.Services;
 /// tasks in the middle, link tables last), with cross-references remapped from the
 /// export's original ids to freshly generated ones.
 ///
-/// Three sections are deliberately never imported and are always reported as
+/// Four sections are deliberately never imported and are always reported as
 /// unsupported instead:
 /// - <c>lifecycleActivities</c>: an append-only audit ledger of what happened in the
 ///   *old* account. Replaying it would misrepresent history in the new account, and
 ///   importing notes/tasks/projects/outputs/ideas/goals already appends fresh,
 ///   accurate lifecycle entries for the moment they enter this account (see
 ///   <c>BrainyDbContext.AppendLifecycleActivities</c>).
+/// - <c>noteRevisions</c>: an append-only history of a note's earlier titles and
+///   bodies in the *old* account. Importing a note creates a fresh initial revision
+///   for the moment it enters this account, so replaying the old timeline would
+///   attribute edits that never happened here.
 /// - <c>productEvents</c>: internal analytics events scoped to the old account's
 ///   usage timeline; replaying them would corrupt activation/retention measurement.
 /// - <c>dashboardPreferences</c>: per-device UI/consent settings (widget layout,
@@ -78,6 +82,7 @@ internal sealed class DataImportService(
         ["summaries"] = "Summaries",
         ["actionItems"] = "Action items",
         ["noteRelationships"] = "Note relationships",
+        ["noteRevisions"] = "Note revisions",
         ["tasks"] = "Tasks",
         ["taskDependencies"] = "Task dependencies",
         ["outputs"] = "Outputs",
