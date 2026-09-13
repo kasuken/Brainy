@@ -90,6 +90,12 @@ public sealed class ExternalImportServiceObsidianTests
         var beta = await db.Notes.SingleAsync(n => n.Title == "Beta");
         beta.Status.Should().Be(NoteStatus.Inbox);
 
+        var alphaRevision = await db.NoteRevisions.SingleAsync(r => r.NoteId == alpha.Id);
+        alphaRevision.Reason.Should().Be(NoteRevisionReason.Import);
+        alphaRevision.Title.Should().Be(alpha.Title);
+        alphaRevision.Content.Should().Be(alpha.Content);
+        (await db.NoteRevisions.CountAsync(r => r.NoteId == beta.Id)).Should().Be(1);
+
         var relationship = await db.NoteRelationships.SingleAsync();
         relationship.SourceNoteId.Should().Be(alpha.Id);
         relationship.TargetNoteId.Should().Be(beta.Id);

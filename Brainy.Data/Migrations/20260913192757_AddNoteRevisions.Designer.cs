@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Brainy.Data.Migrations
 {
     [DbContext(typeof(BrainyDbContext))]
-    [Migration("20260913192123_AddNoteRevisions")]
+    [Migration("20260913192757_AddNoteRevisions")]
     partial class AddNoteRevisions
     {
         /// <inheritdoc />
@@ -2104,7 +2104,7 @@ namespace Brainy.Data.Migrations
                     b.HasOne("Brainy.Domain.Entities.NoteRevision", null)
                         .WithMany()
                         .HasForeignKey("RestoredFromRevisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Brainy.Data.Identity.ApplicationUser", null)
                         .WithMany()

@@ -50,6 +50,9 @@ public class OfflineCaptureSyncServiceTests
         result.Items[0].NoteId.Should().NotBeNull();
         (await db.Notes.CountAsync()).Should().Be(1);
         (await db.OfflineCaptureSyncRecords.CountAsync()).Should().Be(1);
+
+        var revision = await db.NoteRevisions.SingleAsync(r => r.NoteId == result.Items[0].NoteId);
+        revision.Reason.Should().Be(Brainy.Domain.Enums.NoteRevisionReason.OfflineSync);
     }
 
     [Fact]

@@ -90,10 +90,29 @@ internal static class NoteRevisionSupport
         if (toDelete.Count == 0)
             return;
 
-        await context.NoteRevisions
-            .Where(r => r.UserId == userId && r.NoteId == noteId && toDelete.Contains(r.Id))
-            .ExecuteDeleteAsync(cancellationToken)
+        // RestoredFromRevisionId is Restrict (NO ACTION) at the database level — SQL Server
+        // refuses a cascading self-reference alongside the existing Note -> NoteRevision
+        // cascade — so any surviving revision that points at one about to be purged must be
+        // cleared first, or the delete below would fail with a foreign-key violation.
+        var restoredPointersToClear = await context.NoteRevisions
+            .Where(r => r.UserId == userId && r.NoteId == noteId &&
+                        r.RestoredFromRevisionId != null && toDelete.Contains(r.RestoredFromRevisionId!.Value))
+            .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+        foreach (var revision in restoredPointersToClear)
+            revision.RestoredFromRevisionId = null;
+
+        // Loaded-then-removed rather than ExecuteDeleteAsync: the latter is not supported
+        // by the EF Core InMemory provider used by this codebase's unit tests, and the row
+        // counts here are small (bounded by MaxRevisionsPerNote) so the extra round trip
+        // costs nothing meaningful in production either.
+        var entitiesToDelete = await context.NoteRevisions
+            .Where(r => r.UserId == userId && r.NoteId == noteId && toDelete.Contains(r.Id))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        context.NoteRevisions.RemoveRange(entitiesToDelete);
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>The <see cref="ArchiveRetentionRule.EntityType"/> key used for revision retention.</summary>

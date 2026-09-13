@@ -2101,7 +2101,7 @@ namespace Brainy.Data.Migrations
                     b.HasOne("Brainy.Domain.Entities.NoteRevision", null)
                         .WithMany()
                         .HasForeignKey("RestoredFromRevisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Brainy.Data.Identity.ApplicationUser", null)
                         .WithMany()

@@ -42,12 +42,15 @@ public class NoteRevisionConfiguration : IEntityTypeConfiguration<NoteRevision>
             .HasForeignKey(r => r.NoteId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Self-referencing "restored from" pointer. SetNull (rather than Restrict) so an
-        // older revision purged by retention never blocks deletion; the newer restore
-        // revision just loses its provenance pointer.
+        // Self-referencing "restored from" pointer. SQL Server refuses a cascading (or
+        // SET NULL) action here because NoteRevision already cascades from Note, which
+        // would create a second, ambiguous cascade path into the same table. Restrict
+        // (NO ACTION at the database level) avoids that; application code is responsible
+        // for clearing this pointer before an old revision it targets is purged by
+        // retention (see NoteRevisionSupport.TrimRetentionAsync).
         builder.HasOne<NoteRevision>()
             .WithMany()
             .HasForeignKey(r => r.RestoredFromRevisionId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

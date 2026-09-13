@@ -42,7 +42,7 @@ namespace Brainy.Data.Migrations
                         column: x => x.RestoredFromRevisionId,
                         principalTable: "NoteRevision",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_NoteRevision_Note_NoteId",
                         column: x => x.NoteId,
