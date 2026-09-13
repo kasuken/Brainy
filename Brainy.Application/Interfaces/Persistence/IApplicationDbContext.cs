@@ -40,6 +40,10 @@ public interface IApplicationDbContext
     DbSet<UserPlan> UserPlans { get; }
     DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents { get; }
     DbSet<OfflineCaptureSyncRecord> OfflineCaptureSyncRecords { get; }
+    DbSet<ProjectTemplate> ProjectTemplates { get; }
+    DbSet<ProjectTemplateTask> ProjectTemplateTasks { get; }
+    DbSet<NoteTemplate> NoteTemplates { get; }
+    DbSet<OutputTemplate> OutputTemplates { get; }
 
     /// <summary>
     /// Change-tracker entry for <paramref name="entity"/>; used to set the original

@@ -78,6 +78,14 @@ public class BrainyDbContext(
 
     public DbSet<OfflineCaptureSyncRecord> OfflineCaptureSyncRecords => Set<OfflineCaptureSyncRecord>();
 
+    public DbSet<ProjectTemplate> ProjectTemplates => Set<ProjectTemplate>();
+
+    public DbSet<ProjectTemplateTask> ProjectTemplateTasks => Set<ProjectTemplateTask>();
+
+    public DbSet<NoteTemplate> NoteTemplates => Set<NoteTemplate>();
+
+    public DbSet<OutputTemplate> OutputTemplates => Set<OutputTemplate>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Configure Identity schema first, then apply Brainy entity configurations.
