@@ -21,6 +21,9 @@ internal static class AttachmentImportSupport
         [".pdf"] = "application/pdf"
     };
 
+    private static readonly HashSet<string> AllowedContentTypes =
+        new(ContentTypesByExtension.Values, StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Returns the content type for an importable attachment file name, or null when the
     /// file type is not one this import supports attaching (reported by the caller, never
@@ -33,4 +36,23 @@ internal static class AttachmentImportSupport
             ? contentType
             : null;
     }
+
+    /// <summary>
+    /// True when <paramref name="contentType"/> (e.g. a source's own declared MIME type,
+    /// used when a file name/extension is not available) is one this import supports.
+    /// </summary>
+    public static bool IsAllowedContentType(string? contentType) =>
+        contentType is not null && AllowedContentTypes.Contains(contentType);
+
+    /// <summary>Picks a file extension for a supported content type that arrived without a file name.</summary>
+    public static string ExtensionForContentType(string contentType) => contentType switch
+    {
+        "image/png" => ".png",
+        "image/jpeg" => ".jpg",
+        "image/gif" => ".gif",
+        "image/webp" => ".webp",
+        "image/bmp" => ".bmp",
+        "application/pdf" => ".pdf",
+        _ => ".bin"
+    };
 }
