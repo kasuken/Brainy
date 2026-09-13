@@ -34,6 +34,8 @@ public class BrainyDbContext(
 
     public DbSet<NoteImage> NoteImages => Set<NoteImage>();
 
+    public DbSet<NoteRevision> NoteRevisions => Set<NoteRevision>();
+
     public DbSet<Tag> Tags => Set<Tag>();
 
     public DbSet<Highlight> Highlights => Set<Highlight>();

@@ -54,7 +54,8 @@ internal sealed class ShareCaptureService(
                 Status: NoteStatus.Inbox,
                 SourceUrl: url,
                 SourceTitle: title,
-                SourceType: url is not null ? SourceType.SharedLink : null),
+                SourceType: url is not null ? SourceType.SharedLink : null,
+                ChangeReason: dto.ChangeReason),
             cancellationToken).ConfigureAwait(false);
 
         return new ShareCaptureResultDto(created, ShareCaptureOutcome.Created);

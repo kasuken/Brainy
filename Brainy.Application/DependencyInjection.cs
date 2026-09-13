@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.TryAddScoped<Brainy.Application.Interfaces.Identity.IUserDirectoryService, NullUserDirectoryService>();
 
         services.AddScoped<INoteService, NoteService>();
+        services.AddScoped<INoteRevisionService, NoteRevisionService>();
         services.AddScoped<IShareCaptureService, ShareCaptureService>();
         // Kept as a deliberate no-op: issue #302 ("Offline Lite") ended up implementing real
         // offline persistence entirely client-side (IndexedDB + a plain sync endpoint, see

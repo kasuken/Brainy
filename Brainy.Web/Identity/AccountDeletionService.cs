@@ -127,6 +127,8 @@ public sealed class AccountDeletionService(
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await context.Summaries.Where(summary => summary.Note.UserId == userId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await context.NoteRevisions.Where(revision => revision.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await context.NoteImages.Where(image => image.UserId == userId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await context.LifecycleActivities.Where(activity => activity.UserId == userId)

@@ -136,6 +136,23 @@ internal sealed class DataExportService(
             })
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
+        var noteRevisions = await context.NoteRevisions.AsNoTracking()
+            .Where(revision => revision.UserId == userId)
+            .OrderBy(revision => revision.Id)
+            .Select(revision => new
+            {
+                revision.Id,
+                revision.NoteId,
+                revision.Title,
+                revision.Content,
+                revision.Reason,
+                revision.Model,
+                revision.PromptVersion,
+                revision.RestoredFromRevisionId,
+                revision.CreatedAtUtc
+            })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
         var tags = await context.Tags.AsNoTracking()
             .Where(tag => tag.UserId == userId)
             .OrderBy(tag => tag.Id)
@@ -536,6 +553,7 @@ internal sealed class DataExportService(
                 Resources = resources,
                 Sources = sources,
                 Notes = notes,
+                NoteRevisions = noteRevisions,
                 Tags = tags,
                 NoteTagLinks = noteTagLinks,
                 ResourceTagLinks = resourceTagLinks,
