@@ -44,6 +44,7 @@ public interface IApplicationDbContext
     DbSet<ProjectTemplateTask> ProjectTemplateTasks { get; }
     DbSet<NoteTemplate> NoteTemplates { get; }
     DbSet<OutputTemplate> OutputTemplates { get; }
+    DbSet<CalendarFeedToken> CalendarFeedTokens { get; }
 
     /// <summary>
     /// Change-tracker entry for <paramref name="entity"/>; used to set the original

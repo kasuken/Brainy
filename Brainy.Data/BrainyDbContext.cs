@@ -86,6 +86,8 @@ public class BrainyDbContext(
 
     public DbSet<OutputTemplate> OutputTemplates => Set<OutputTemplate>();
 
+    public DbSet<CalendarFeedToken> CalendarFeedTokens => Set<CalendarFeedToken>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Configure Identity schema first, then apply Brainy entity configurations.
