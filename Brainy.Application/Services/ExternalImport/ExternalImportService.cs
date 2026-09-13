@@ -3,6 +3,7 @@ using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
+using Brainy.Application.Services;
 using Brainy.Domain.Entities;
 using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -222,7 +223,12 @@ internal sealed class ExternalImportService(
                 Tags = tags
             };
 
-            if (state.Commit) context.Notes.Add(note);
+            if (state.Commit)
+            {
+                context.Notes.Add(note);
+                context.NoteRevisions.Add(NoteRevisionSupport.BuildRevision(
+                    state.UserId, noteId, title, finalContent, NoteRevisionReason.Import));
+            }
             state.NoteKeyToId[parsedNote.Key] = noteId;
             existingByDedupKey[dedupKey] = noteId;
             notesCreated++;

@@ -59,7 +59,7 @@ public class DataExportServiceTests
 
         export.SchemaVersion.Should().Be(IDataExportService.SchemaVersion);
         export.ContentType.Should().Be("application/json;charset=utf-8");
-        export.FileName.Should().Be("brainy-data-export-20260813-101112Z-v1.2.json");
+        export.FileName.Should().Be("brainy-data-export-20260813-101112Z-v1.3.json");
 
         var json = Encoding.UTF8.GetString(export.Content);
         json.Should().Contain("MINE");
@@ -84,6 +84,7 @@ public class DataExportServiceTests
         image.GetProperty("dataBase64").GetString().Should().Be(Convert.ToBase64String(mine.ImageBytes));
         image.GetProperty("sha256").GetString().Should().MatchRegex("^[0-9a-f]{64}$");
 
+        data.GetProperty("noteRevisions").GetArrayLength().Should().Be(1);
         data.GetProperty("noteRelationships").GetArrayLength().Should().Be(1);
         data.GetProperty("taskDependencies").GetArrayLength().Should().Be(1);
         data.GetProperty("weeklyTaskSelections").GetArrayLength().Should().Be(1);
@@ -115,7 +116,7 @@ public class DataExportServiceTests
             "security",
             "images",
             "data");
-        root.GetProperty("schemaVersion").GetString().Should().Be("1.2");
+        root.GetProperty("schemaVersion").GetString().Should().Be("1.3");
         var security = root.GetProperty("security");
         security.EnumerateObject().Select(property => property.Name).Should().Equal(
             "accountCredentialsIncluded",
@@ -133,6 +134,7 @@ public class DataExportServiceTests
             "resources",
             "sources",
             "notes",
+            "noteRevisions",
             "tags",
             "noteTagLinks",
             "resourceTagLinks",
@@ -172,6 +174,17 @@ public class DataExportServiceTests
             "isFavorite",
             "createdAtUtc",
             "updatedAtUtc");
+
+        data.GetProperty("noteRevisions")[0].EnumerateObject().Select(property => property.Name).Should().Equal(
+            "id",
+            "noteId",
+            "title",
+            "content",
+            "reason",
+            "model",
+            "promptVersion",
+            "restoredFromRevisionId",
+            "createdAtUtc");
 
         data.GetProperty("noteImages")[0].EnumerateObject().Select(property => property.Name).Should().Equal(
             "id",
@@ -257,6 +270,11 @@ public class DataExportServiceTests
             secondTask,
             output,
             image,
+            new NoteRevision
+            {
+                Id = Guid.NewGuid(), UserId = userId, Note = note, Title = note.Title, Content = note.Content,
+                Reason = NoteRevisionReason.UserEdit
+            },
             new Highlight { Id = Guid.NewGuid(), Note = note, Text = $"{marker} highlight" },
             new Summary { Id = Guid.NewGuid(), Note = note, Content = $"{marker} summary" },
             new ActionItem { Id = Guid.NewGuid(), Note = note, Title = $"{marker} action" },

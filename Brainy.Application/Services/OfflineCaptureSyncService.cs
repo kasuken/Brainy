@@ -5,6 +5,7 @@ using Brainy.Application.Interfaces.Persistence;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Telemetry;
 using Brainy.Domain.Entities;
+using Brainy.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Brainy.Application.Services;
@@ -92,7 +93,9 @@ internal sealed class OfflineCaptureSyncService(
         try
         {
             captureResult = await shareCaptureService
-                .CaptureAsync(new ShareCaptureDto(item.Title, item.Text, item.Url), cancellationToken)
+                .CaptureAsync(
+                    new ShareCaptureDto(item.Title, item.Text, item.Url, NoteRevisionReason.OfflineSync),
+                    cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (ArgumentException ex)

@@ -27,6 +27,7 @@
 @inject IHighlightService HighlightService
 @inject ISummaryService SummaryService
 @inject IActionItemService ActionItemService
+@inject INoteRevisionService RevisionService
 @inject IOutputService OutputService
 @inject IAiAssistant AiAssistant
 @inject IJSRuntime JS
@@ -897,6 +898,21 @@
                                 </div>
 
                                 <div class="note-editor__sidebar-section">
+                                    <div class="ned-links__header">
+                                        <h3 class="note-editor__sidebar-heading">History</h3>
+                                    </div>
+                                    <p class="ned-links__empty">
+                                        @(_revisionCount == 1 ? "1 revision recorded." : $"{_revisionCount} revisions recorded.")
+                                    </p>
+                                    <MudButton Variant="Variant.Outlined"
+                                               Size="Size.Small"
+                                               StartIcon="@Icons.Material.Outlined.History"
+                                               OnClick="OpenHistoryAsync">
+                                        View version history
+                                    </MudButton>
+                                </div>
+
+                                <div class="note-editor__sidebar-section">
                                     <h3 class="note-editor__sidebar-heading">Metadata</h3>
                                     <div class="note-editor__meta">
                                         <div class="note-editor__meta-row">
@@ -1182,6 +1198,9 @@
     private bool _actionsExtracting;
     private IReadOnlyList<OutputDto> _linkedOutputs = [];
     private bool _linkedOutputsLoading;
+    // ── Version history ──
+    private int _revisionCount;
+
     private string? _duplicateCheckModel;
     private string? _duplicateCheckPromptVersion;
     private DateTime? _duplicateCheckGeneratedAtUtc;
@@ -1250,6 +1269,48 @@
         _summaries  = await SummaryService.GetByNoteAsync(NoteId.Value);
         _actions    = await ActionItemService.GetByNoteAsync(NoteId.Value);
         await ReloadLinkedOutputsAsync();
+        await ReloadRevisionCountAsync();
+    }
+
+    private async Task ReloadRevisionCountAsync()
+    {
+        if (!NoteId.HasValue) return;
+        try
+        {
+            _revisionCount = (await RevisionService.GetTimelineAsync(NoteId.Value)).Count;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not load version history: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenHistoryAsync()
+    {
+        if (!NoteId.HasValue) return;
+
+        var parameters = new DialogParameters<NoteRevisionHistoryDialog>
+        {
+            { x => x.NoteId, NoteId.Value },
+            { x => x.CurrentRowVersion, _originalNote?.RowVersion }
+        };
+        var opts = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<NoteRevisionHistoryDialog>("", parameters, opts);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: true })
+        {
+            // A restore happened inside the dialog: reload the note so the editor reflects
+            // the newly-created revision's content instead of the stale in-memory copy.
+            var refreshed = await NoteService.GetByIdAsync(NoteId.Value);
+            if (refreshed is not null)
+            {
+                ApplyLoadedNote(refreshed);
+                _isDirty = false;
+                _saved = true;
+            }
+            await ReloadRevisionCountAsync();
+        }
     }
 
     private void ApplyLoadedNote(NoteDto note)

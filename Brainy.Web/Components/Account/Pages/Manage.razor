@@ -782,7 +782,7 @@
 @code {
     private const string BrowserTimeZoneOptionValue = "__browser__";
     private const long MaxImportFileBytes = 50L * 1024 * 1024;
-    private static readonly string[] RetentionEntityTypes = ["Project", "Area", "Resource", "Note"];
+    private static readonly string[] RetentionEntityTypes = ["Project", "Area", "Resource", "Note", "NoteRevision"];
     private static readonly IReadOnlyList<TimeZoneOption> TimeZoneOptions = TimeZoneInfo.GetSystemTimeZones()
         .OrderBy(zone => zone.BaseUtcOffset)
         .ThenBy(zone => zone.Id, StringComparer.Ordinal)
@@ -1444,6 +1444,7 @@
         "Project" => "Projects",
         "Area" => "Areas",
         "Resource" => "Resources",
+        "NoteRevision" => "Note version history",
         _ => "Notes"
     };
 
@@ -1452,6 +1453,7 @@
         "Project" => "Completed projects and their archived context.",
         "Area" => "Inactive responsibilities you still want on record.",
         "Resource" => "Reference material you no longer need in active views.",
+        "NoteRevision" => "Older note revisions, beyond the most recent one for each note.",
         _ => "Archived notes kept for later recall."
     };
 

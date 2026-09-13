@@ -24,4 +24,9 @@ public record CreateNoteDto(
     /// Overrides the <see cref="Domain.Entities.Source"/> type created for <see cref="SourceUrl"/>.
     /// Defaults to <see cref="SourceType.Url"/> when not supplied (e.g. a pasted link).
     /// </summary>
-    SourceType? SourceType = null);
+    SourceType? SourceType = null,
+    /// <summary>
+    /// Why the note's initial revision is being captured. Defaults to
+    /// <see cref="NoteRevisionReason.UserEdit"/> when not supplied.
+    /// </summary>
+    NoteRevisionReason? ChangeReason = null);
