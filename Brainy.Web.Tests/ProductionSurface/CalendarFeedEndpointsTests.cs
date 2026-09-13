@@ -104,6 +104,27 @@ public sealed class CalendarFeedEndpointsTests
     }
 
     [Fact]
+    public async Task Get_PolledMoreThanThePermitLimit_Returns429()
+    {
+        // Program.cs partitions the feed's rate limit by (a hash of) the token itself, so
+        // this works with a token that never resolves to anyone — the limiter runs ahead of,
+        // and independently of, token validation.
+        await using var factory = new CalendarFeedFactory();
+        using var client = CreateClient(factory);
+        var token = new string('b', 64);
+
+        HttpStatusCode? rateLimited = null;
+        for (var i = 0; i < 35 && rateLimited is null; i++)
+        {
+            using var response = await client.GetAsync($"{FeedUrl}?token={token}");
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                rateLimited = response.StatusCode;
+        }
+
+        rateLimited.Should().Be(HttpStatusCode.TooManyRequests, "the feed endpoint must reject aggressive polling once its rate limit is exceeded");
+    }
+
+    [Fact]
     public async Task Get_NeverEchoesTheTokenInAResponseHeader()
     {
         // The token must never leak via any transport surface an operator might log
