@@ -83,6 +83,7 @@ public static class DependencyInjection
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<IGoalMilestoneService, GoalMilestoneService>();
         services.AddScoped<IOutputService, OutputService>();
+        services.AddScoped<IOutputShareLinkService, OutputShareLinkService>();
         services.AddScoped<IHighlightService, HighlightService>();
         services.AddScoped<ISummaryService, SummaryService>();
         services.AddScoped<IActionItemService, ActionItemService>();
