@@ -199,45 +199,13 @@
         if (authenticationState.User.Identity?.IsAuthenticated == true)
         {
             _userTimeZone = await UserTimeZoneService.GetTimeZoneAsync();
-            await ApplyUserCultureAsync();
-        }
-    }
-
-    /// <summary>
-    /// Applies the current user's stored UI-culture preference for this circuit (both the
-    /// prerender pass and the interactive circuit re-run this, mirroring how
-    /// PersistBrowserTimeZoneAsync below establishes <see cref="_userTimeZone"/>). When no
-    /// preference is recorded yet, the culture already negotiated by RequestLocalizationMiddleware
-    /// (cookie, then Accept-Language, then the app default — see Program.cs) is persisted as-is,
-    /// so it stays stable across future sessions and devices instead of being re-negotiated
-    /// every time. This only ever affects UI language/display formatting: due-date and audit
-    /// timestamp storage and arithmetic are culture-invariant and untouched by this.
-    /// </summary>
-    private async Task ApplyUserCultureAsync()
-    {
-        try
-        {
-            var storedCultureId = await UserCultureService.GetCultureIdAsync();
-            if (string.IsNullOrWhiteSpace(storedCultureId))
-            {
-                var negotiatedId = SupportedCultures.NormalizeToStorableId(CultureInfo.CurrentUICulture);
-                await UserCultureService.SetCultureIdAsync(negotiatedId);
-                _currentCultureId = negotiatedId;
-                return;
-            }
-
-            if (!SupportedCultures.IsSupported(storedCultureId))
-                return;
-
-            var culture = SupportedCultures.Resolve(storedCultureId);
-            CultureInfo.CurrentCulture = culture;
-            CultureInfo.CurrentUICulture = culture;
-            _currentCultureId = storedCultureId;
-        }
-        catch (ArgumentException)
-        {
-            // The negotiated culture wasn't one of SupportedCultures (e.g. a stale cookie from
-            // a since-removed locale); keep whatever CultureInfo.CurrentUICulture already is.
+            // UserCulturePreferenceMiddleware (Program.cs) already resolved the user's stored
+            // preference — or persisted the negotiated default — and applied it to
+            // CultureInfo.CurrentUICulture before this request reached component rendering.
+            // This just mirrors that value so the language menu can show a checkmark; it must
+            // NOT redo the CultureInfo assignment here (see that middleware's remarks for why a
+            // component lifecycle method is the wrong place for it).
+            _currentCultureId = SupportedCultures.NormalizeToStorableId(CultureInfo.CurrentUICulture);
         }
     }
 
