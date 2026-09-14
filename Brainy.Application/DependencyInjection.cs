@@ -72,6 +72,8 @@ public static class DependencyInjection
         // Layouts and pages resolve this service concurrently during Blazor SSR.
         // Keep its captured transient DbContext isolated per consumer.
         services.AddTransient<IUserTimeZoneService, UserTimeZoneService>();
+        // Same isolation reasoning as IUserTimeZoneService above.
+        services.AddTransient<IUserCultureService, UserCultureService>();
         services.AddScoped<IArchiveRetentionService, ArchiveRetentionService>();
         services.AddScoped<IInboxMetricsService, InboxMetricsService>();
         services.AddScoped<IInboxSuggestionsService, InboxSuggestionsService>();
