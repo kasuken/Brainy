@@ -10,12 +10,18 @@ using Brainy.Web.Configuration;
 using Brainy.Web.Endpoints;
 using Brainy.Web.Health;
 using Brainy.Web.Identity;
+using Brainy.Web.Localization;
 using Brainy.Web.Telemetry;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Localization;
+using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MudBlazor.Services;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -49,6 +55,31 @@ builder.Services.AddSingleton(serviceProvider =>
 // Backs CurrentUserService's fallback path for the Offline Lite (issue #302) minimal API
 // endpoints, which run outside any Razor component/circuit DI scope.
 builder.Services.AddHttpContextAccessor();
+
+// Localization infrastructure (issue #323). AddLocalization registers the default
+// IStringLocalizerFactory; the AddSingleton below replaces it (last registration wins) with a
+// decorator that, in Development only, visibly flags a string that fell back to English because
+// the current UI culture's own resource is missing that key (see FallbackVisibleStringLocalizer).
+// Anonymous/first-load negotiation (marketing pages, sign-in) comes from
+// RequestLocalizationOptions' default providers (cookie, then Accept-Language, then
+// SupportedCultures.Default below); an authenticated user's own stored preference
+// (UserDashboardPreference.CultureId via IUserCultureService) is applied per-circuit in
+// MainLayout, the same way IUserTimeZoneService's stored preference already is.
+builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
+builder.Services.AddSingleton<IStringLocalizerFactory>(serviceProvider => new FallbackVisibleStringLocalizerFactory(
+    serviceProvider.GetRequiredService<IOptions<LocalizationOptions>>(),
+    serviceProvider.GetRequiredService<ILoggerFactory>(),
+    builder.Environment.IsDevelopment()));
+builder.Services.Configure<RequestLocalizationOptions>(options =>
+{
+    var supportedCultures = Brainy.Application.Localization.SupportedCultures.All
+        .Select(cultureId => new CultureInfo(cultureId))
+        .ToArray();
+
+    options.DefaultRequestCulture = new RequestCulture(Brainy.Application.Localization.SupportedCultures.Default);
+    options.SupportedCultures = supportedCultures;
+    options.SupportedUICultures = supportedCultures;
+});
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -294,6 +325,10 @@ if (builder.Configuration.GetValue("Database:ApplyMigrationsOnStartup", true))
 
 // Configure the HTTP request pipeline.
 app.UseForwardedHeaders();
+// Negotiates the request culture (cookie, then Accept-Language, then
+// SupportedCultures.Default) for anonymous/first-load rendering, including prerendering.
+// An authenticated user's own stored preference overrides this per-circuit in MainLayout.
+app.UseRequestLocalization();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);

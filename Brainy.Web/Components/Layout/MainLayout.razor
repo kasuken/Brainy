@@ -1,5 +1,7 @@
+@using System.Globalization
 @using Brainy.Application.DTOs.Notes
 @using Brainy.Application.Interfaces.Services
+@using Brainy.Application.Localization
 @using Brainy.Web.Components.Onboarding
 @using Brainy.Web.Components.Pages.Inbox
 @using Brainy.Web.Themes
@@ -10,6 +12,7 @@
 @inject ThemeService ThemeService
 @inject IJSRuntime JSRuntime
 @inject IUserTimeZoneService UserTimeZoneService
+@inject IUserCultureService UserCultureService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Navigation
 
@@ -72,6 +75,20 @@
                             <span>One Dark Pro</span>
                         </div>
                     </MudMenuItem>
+                </MudMenu>
+                <MudMenu Icon="@Icons.Material.Filled.Language" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="mr-2" aria-label="Change language">
+                    @foreach (var option in LanguageOptions)
+                    {
+                        <MudMenuItem OnClick="() => SetCultureAsync(option.CultureId)">
+                            <div class="d-flex align-center justify-space-between gap-4" style="min-width: 10rem;">
+                                <span>@option.DisplayName</span>
+                                @if (string.Equals(option.CultureId, _currentCultureId, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                                }
+                            </div>
+                        </MudMenuItem>
+                    }
                 </MudMenu>
                 <a class="brainy-user brainy-user-link" href="/Account/Manage" aria-label="Manage account and export data">
                     <span class="brainy-user__avatar">@GetInitials(context.User.Identity?.Name)</span>
@@ -157,10 +174,18 @@
 </style>
 
 @code {
+    /// <summary>Display names are deliberately not localized: each names itself in its own language.</summary>
+    private static readonly (string CultureId, string DisplayName)[] LanguageOptions =
+    [
+        (SupportedCultures.Default, "English"),
+        (SupportedCultures.Italian, "Italiano"),
+    ];
+
     private bool _drawerOpen = true;
     private MudTheme _currentTheme = AppThemes.BrainyTheme;
     private bool _isDarkMode;
     private TimeZoneInfo _userTimeZone = TimeZoneInfo.Utc;
+    private string _currentCultureId = SupportedCultures.Default;
 
     protected override void OnInitialized()
     {
@@ -172,7 +197,59 @@
     {
         var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         if (authenticationState.User.Identity?.IsAuthenticated == true)
+        {
             _userTimeZone = await UserTimeZoneService.GetTimeZoneAsync();
+            await ApplyUserCultureAsync();
+        }
+    }
+
+    /// <summary>
+    /// Applies the current user's stored UI-culture preference for this circuit (both the
+    /// prerender pass and the interactive circuit re-run this, mirroring how
+    /// PersistBrowserTimeZoneAsync below establishes <see cref="_userTimeZone"/>). When no
+    /// preference is recorded yet, the culture already negotiated by RequestLocalizationMiddleware
+    /// (cookie, then Accept-Language, then the app default — see Program.cs) is persisted as-is,
+    /// so it stays stable across future sessions and devices instead of being re-negotiated
+    /// every time. This only ever affects UI language/display formatting: due-date and audit
+    /// timestamp storage and arithmetic are culture-invariant and untouched by this.
+    /// </summary>
+    private async Task ApplyUserCultureAsync()
+    {
+        try
+        {
+            var storedCultureId = await UserCultureService.GetCultureIdAsync();
+            if (string.IsNullOrWhiteSpace(storedCultureId))
+            {
+                await UserCultureService.SetCultureIdAsync(CultureInfo.CurrentUICulture.Name);
+                _currentCultureId = CultureInfo.CurrentUICulture.Name;
+                return;
+            }
+
+            if (!SupportedCultures.IsSupported(storedCultureId))
+                return;
+
+            var culture = new CultureInfo(storedCultureId);
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.CurrentUICulture = culture;
+            _currentCultureId = storedCultureId;
+        }
+        catch (ArgumentException)
+        {
+            // The negotiated culture wasn't one of SupportedCultures (e.g. a stale cookie from
+            // a since-removed locale); keep whatever CultureInfo.CurrentUICulture already is.
+        }
+    }
+
+    private async Task SetCultureAsync(string cultureId)
+    {
+        if (string.Equals(cultureId, _currentCultureId, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        await UserCultureService.SetCultureIdAsync(cultureId);
+        // Blazor Server fixes CultureInfo for the lifetime of a circuit at connection time; a
+        // full reload starts a new circuit that picks up the freshly persisted preference in
+        // ApplyUserCultureAsync above (see Microsoft's Blazor globalization docs).
+        Navigation.Refresh(forceReload: true);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
