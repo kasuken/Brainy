@@ -4,6 +4,7 @@
   <Project Path="Brainy.Data/Brainy.Data.csproj" />
   <Project Path="Brainy.Data.IntegrationTests/Brainy.Data.IntegrationTests.csproj" />
   <Project Path="Brainy.Domain/Brainy.Domain.csproj" />
+  <Project Path="Brainy.E2E.Tests/Brainy.E2E.Tests.csproj" />
   <Project Path="Brainy.Web/Brainy.Web.csproj" />
   <Project Path="Brainy.Web.Tests/Brainy.Web.Tests.csproj" />
 </Solution>
