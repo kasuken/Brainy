@@ -18,31 +18,50 @@ public sealed class CircuitReconnectionTests(BrainyE2EFixture fixture) : E2ETest
     {
         await RunAsync(async page =>
         {
+            // Two Playwright-level ways to simulate "the connection is gone" turned out
+            // unusable in this environment:
+            //  - BrowserContext.SetOfflineAsync(true) does not sever an already-established
+            //    WebSocket at all here — the reconnect UI never appeared even after 45s
+            //    (well past SignalR's 30s default server-timeout watchdog).
+            //  - Page.RouteWebSocketAsync (proxy the socket, then close the proxy) does force
+            //    a real close, but crashed the whole Playwright<->browser connection outright
+            //    within seconds, taking every other test in the run down with it — reproduced
+            //    consistently across several variations.
+            // Instead, capture Blazor's own real WebSocket object via a plain JS
+            // constructor patch (installed before any page script runs) and call the
+            // standard WebSocket.close() on it directly from the page's own JS context. This
+            // is a real close of the real socket SignalR is using — no Playwright network
+            // interception involved, and no proxy layer to be unstable.
+            await page.Context.AddInitScriptAsync(
+                """
+                (() => {
+                    window.__capturedSockets = [];
+                    const NativeWebSocket = window.WebSocket;
+                    window.WebSocket = new Proxy(NativeWebSocket, {
+                        construct(target, args) {
+                            const socket = new target(...args);
+                            if (String(args[0]).includes('/_blazor')) {
+                                window.__capturedSockets.push(socket);
+                            }
+                            return socket;
+                        }
+                    });
+                })();
+                """);
+
             await page.RegisterNewUserAsync(BaseUrl);
 
             var reconnectModal = page.Locator("#components-reconnect-modal[open]");
 
-            // A real network condition (Chromium's offline emulation): the already-open
-            // SignalR connection is black-holed, not merely told to close. Blazor's SignalR
-            // client has its own keep-alive/server-timeout watchdog (default 30s) independent
-            // of the OS/transport actually noticing the drop, so it declares the circuit lost
-            // and shows the reconnect UI once that watchdog expires — no faked event needed,
-            // just enough real time for the existing mechanism to notice.
-            //
-            // (An earlier version of this test tried to force an immediate drop by routing the
-            // WebSocket through Page.RouteWebSocketAsync and closing that proxy — technically
-            // closer to "instant", but calling WebSocketRoute.CloseAsync while Blazor's client
-            // was mid-reconnect intermittently crashed the whole Playwright<->browser
-            // connection, taking every other test in the run down with it. Not worth the
-            // instability for a few seconds saved.)
-            await page.Context.SetOfflineAsync(true);
+            // Close the real, live SignalR WebSocket — indistinguishable to Blazor's client
+            // runtime from the underlying connection actually dropping.
+            await page.EvaluateAsync("() => window.__capturedSockets.at(-1)?.close()");
 
-            await Expect(reconnectModal).ToBeVisibleAsync(new() { Timeout = 45_000 });
+            await Expect(reconnectModal).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
-            await page.Context.SetOfflineAsync(false);
-
-            // Blazor's default reconnection backoff retries automatically once the network is
-            // back.
+            // Blazor's default reconnection backoff retries automatically; its new WebSocket
+            // is captured by the same init script (ordinary browser networking, no mock
+            // involved), so nothing further is needed for the retry to succeed.
             await Expect(reconnectModal).Not.ToBeVisibleAsync(new() { Timeout = 30_000 });
 
             // The circuit being visually reconnected isn't proof it is actually usable again —
