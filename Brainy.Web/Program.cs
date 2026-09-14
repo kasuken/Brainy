@@ -359,18 +359,21 @@ app.Use(async (context, next) =>
 });
 
 app.UseRateLimiter();
-app.UseAntiforgery();
 
 // Explicit so UserCulturePreference below can run after authentication (it reads
-// HttpContext.User) and before the Razor Components render pipeline. Placed exactly where
-// ASP.NET Core would otherwise auto-insert them (immediately before the first Map call) so
-// this changes nothing about existing request handling/ordering above.
+// HttpContext.User) and before the Razor Components render pipeline. WebApplication would
+// otherwise auto-insert these immediately after UseRouting — that is, ahead of all user
+// middleware — so they must stay ahead of UseAntiforgery to preserve the original ordering.
 app.UseAuthentication();
 app.UseAuthorization();
 // Overrides RequestLocalizationMiddleware's negotiated culture with an authenticated user's
 // own stored preference (see UserCulturePreferenceMiddlewareExtensions for why this must be
 // real middleware and not something applied inside a component).
 app.UseUserCulturePreference();
+// Must follow UseAuthentication/UseAuthorization: antiforgery tokens are bound to the
+// authenticated user, so validating them before HttpContext.User is populated compares
+// against an anonymous identity. See the ASP.NET Core middleware-order documentation.
+app.UseAntiforgery();
 
 app.MapStaticAssets();
 app.MapSeoEndpoints();
