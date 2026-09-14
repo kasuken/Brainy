@@ -58,3 +58,57 @@ jobs:
           name: coverage
           path: '**/TestResults/**/coverage.cobertura.xml'
           if-no-files-found: error
+
+  e2e-tests:
+    # Playwright browser E2E tests (issue #321, docs/roadmap/release-7/15-e2e-tests.md) run as
+    # their own job rather than folding into build-and-test's `dotnet test`: they drive a real
+    # browser against a real Kestrel-hosted app and a real SQL Server database, so they need
+    # their own SQL service container, a browser install step neither needed nor wanted for the
+    # rest of the suite, and materially longer per-test time. Brainy.E2E.Tests sets
+    # <IsTestProject>false</IsTestProject> specifically so `dotnet test`/`dotnet test <solution>`
+    # (this job's own included) never picks it up; it is invoked directly here via `dotnet
+    # vstest` against the built test assembly instead.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: ${{ format('B7r!{0}xQ9_Test', github.run_id) }}
+        ports:
+          - 1433:1433
+    env:
+      BRAINY_TEST_SQL_CONNECTIONSTRING: ${{ format('Server=localhost,1433;Database=master;User Id=sa;Password=B7r!{0}xQ9_Test;TrustServerCertificate=true;Connect Timeout=2', github.run_id) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Brainy.E2E.Tests/Brainy.E2E.Tests.csproj
+
+      - name: Build
+        run: dotnet build Brainy.E2E.Tests/Brainy.E2E.Tests.csproj --no-restore --configuration Release
+
+      - name: Install Playwright's Chromium
+        run: pwsh Brainy.E2E.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: E2E tests
+        run: >
+          dotnet vstest Brainy.E2E.Tests/bin/Release/net10.0/Brainy.E2E.Tests.dll
+          --logger:"console;verbosity=normal" --logger:"trx"
+          --ResultsDirectory:TestResults
+
+      - name: Upload traces and screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-artifacts
+          path: Brainy.E2E.Tests/bin/Release/net10.0/test-results/**
+          if-no-files-found: ignore
