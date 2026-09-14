@@ -91,11 +91,28 @@ public abstract class E2ETestBase(BrainyE2EFixture fixture)
                 // Best-effort, same as the screenshot above.
             }
 
-            await context.Tracing.StopAsync(new TracingStopOptions
+            try
             {
-                Path = Path.Combine(resultsDir, "trace.zip")
-            });
-            await context.CloseAsync();
+                await context.Tracing.StopAsync(new TracingStopOptions
+                {
+                    Path = Path.Combine(resultsDir, "trace.zip")
+                });
+            }
+            catch
+            {
+                // Best-effort, same as the screenshot/HTML dump above — never let a cleanup
+                // failure (e.g. the browser connection itself died) hide the real test failure.
+            }
+
+            try
+            {
+                await context.CloseAsync();
+            }
+            catch
+            {
+                // Same as above.
+            }
+
             throw;
         }
 
