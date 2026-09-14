@@ -10,12 +10,18 @@ using Brainy.Web.Configuration;
 using Brainy.Web.Endpoints;
 using Brainy.Web.Health;
 using Brainy.Web.Identity;
+using Brainy.Web.Localization;
 using Brainy.Web.Telemetry;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Localization;
+using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MudBlazor.Services;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -49,6 +55,38 @@ builder.Services.AddSingleton(serviceProvider =>
 // Backs CurrentUserService's fallback path for the Offline Lite (issue #302) minimal API
 // endpoints, which run outside any Razor component/circuit DI scope.
 builder.Services.AddHttpContextAccessor();
+
+// Localization infrastructure (issue #323). AddLocalization registers the default
+// IStringLocalizerFactory; the AddSingleton below replaces it (last registration wins) with a
+// decorator that, in Development only, visibly flags a string that fell back to English because
+// the current UI culture's own resource is missing that key (see FallbackVisibleStringLocalizer).
+// Anonymous/first-load negotiation (marketing pages, sign-in) comes from
+// RequestLocalizationOptions' default providers (cookie, then Accept-Language, then
+// SupportedCultures.Default below); an authenticated user's own stored preference
+// (UserDashboardPreference.CultureId via IUserCultureService) is applied per-circuit in
+// MainLayout, the same way IUserTimeZoneService's stored preference already is.
+builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
+builder.Services.AddSingleton<IStringLocalizerFactory>(serviceProvider => new FallbackVisibleStringLocalizerFactory(
+    serviceProvider.GetRequiredService<IOptions<LocalizationOptions>>(),
+    serviceProvider.GetRequiredService<ILoggerFactory>(),
+    builder.Environment.IsDevelopment()));
+builder.Services.Configure<RequestLocalizationOptions>(options =>
+{
+    // Every negotiable culture EXCEPT the default, expressed as real CultureInfo objects for
+    // AcceptLanguage/cookie matching purposes. The default itself resolves to
+    // CultureInfo.InvariantCulture (see SupportedCultures.Default's remarks) and is set as
+    // DefaultRequestCulture below rather than listed here, so an unmatched/English request
+    // falls back to exactly today's (pre-#323) ambient culture instead of a real "en-US" one.
+    var negotiableCultures = Brainy.Application.Localization.SupportedCultures.All
+        .Where(cultureId => cultureId != Brainy.Application.Localization.SupportedCultures.Default)
+        .Select(Brainy.Application.Localization.SupportedCultures.Resolve)
+        .Append(CultureInfo.InvariantCulture)
+        .ToArray();
+
+    options.DefaultRequestCulture = new RequestCulture(CultureInfo.InvariantCulture);
+    options.SupportedCultures = negotiableCultures;
+    options.SupportedUICultures = negotiableCultures;
+});
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -294,6 +332,10 @@ if (builder.Configuration.GetValue("Database:ApplyMigrationsOnStartup", true))
 
 // Configure the HTTP request pipeline.
 app.UseForwardedHeaders();
+// Negotiates the request culture (cookie, then Accept-Language, then
+// SupportedCultures.Default) for anonymous/first-load rendering, including prerendering.
+// An authenticated user's own stored preference overrides this per-circuit in MainLayout.
+app.UseRequestLocalization();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -318,6 +360,17 @@ app.Use(async (context, next) =>
 
 app.UseRateLimiter();
 app.UseAntiforgery();
+
+// Explicit so UserCulturePreference below can run after authentication (it reads
+// HttpContext.User) and before the Razor Components render pipeline. Placed exactly where
+// ASP.NET Core would otherwise auto-insert them (immediately before the first Map call) so
+// this changes nothing about existing request handling/ordering above.
+app.UseAuthentication();
+app.UseAuthorization();
+// Overrides RequestLocalizationMiddleware's negotiated culture with an authenticated user's
+// own stored preference (see UserCulturePreferenceMiddlewareExtensions for why this must be
+// real middleware and not something applied inside a component).
+app.UseUserCulturePreference();
 
 app.MapStaticAssets();
 app.MapSeoEndpoints();
