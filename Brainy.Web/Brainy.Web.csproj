@@ -17,6 +17,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Lets Brainy.Web.Tests unit-test internal Web-layer services (e.g. CurrentUserService's
+         background-impersonation seam, issue #315) directly instead of only through public
+         seams; production behavior is unaffected. -->
+    <InternalsVisibleTo Include="Brainy.Web.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
     <PackageReference Include="Heron.MudCalendar" Version="3.4.0" />
     <PackageReference Include="Markdig" Version="1.2.0" />

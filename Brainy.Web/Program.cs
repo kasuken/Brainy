@@ -209,6 +209,11 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 
 // Current-user accessor used by the application layer for per-user data scoping.
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+// Lets the push dispatch background service (no request/circuit of its own) impersonate one
+// user per DI scope so it can reuse ITodayNotificationService/IUserTimeZoneService unchanged.
+builder.Services.AddScoped<Brainy.Web.Identity.BackgroundUserContext>();
+builder.Services.AddScoped<Brainy.Application.Interfaces.Identity.IBackgroundUserContextAccessor>(
+    sp => sp.GetRequiredService<Brainy.Web.Identity.BackgroundUserContext>());
 builder.Services.AddScoped<IAccountDeletionService, AccountDeletionService>();
 // Overrides the Application layer's zero-count NullUserDirectoryService registration with
 // the real Identity-backed count, used by the internal analytics dashboard (issue #324).
@@ -236,6 +241,11 @@ builder.Services.AddBilling(builder.Configuration);
 builder.Services.AddEmail(builder.Configuration);
 builder.Services.AddScoped<IEmailSender<ApplicationUser>, BrainyIdentityEmailSender>();
 
+// No VAPID key pair configured (the default) registers NullPushNotificationSender: push
+// settings and subscription management still work, but nothing is actually sent. Strictly
+// opt-in and off by default regardless (see PushNotificationPreference.Enabled).
+builder.Services.AddWebPush(builder.Configuration);
+
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseReadinessHealthCheck>("database", tags: ["ready"]);
 
@@ -247,6 +257,9 @@ builder.Services.AddBrainyTelemetry(builder.Configuration);
 // Builds Markdown/Obsidian vault exports off the request path so a large account's export
 // never times out the request that started it (see IMarkdownExportJobService).
 builder.Services.AddHostedService<MarkdownExportBackgroundService>();
+
+// Evaluates and sends due Web Push notifications for opted-in users (issue #315).
+builder.Services.AddHostedService<PushNotificationDispatchBackgroundService>();
 
 var app = builder.Build();
 

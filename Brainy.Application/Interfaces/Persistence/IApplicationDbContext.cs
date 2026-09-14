@@ -45,6 +45,9 @@ public interface IApplicationDbContext
     DbSet<NoteTemplate> NoteTemplates { get; }
     DbSet<OutputTemplate> OutputTemplates { get; }
     DbSet<CalendarFeedToken> CalendarFeedTokens { get; }
+    DbSet<PushSubscription> PushSubscriptions { get; }
+    DbSet<PushNotificationPreference> PushNotificationPreferences { get; }
+    DbSet<PushNotificationDeliveryLog> PushNotificationDeliveryLogs { get; }
 
     /// <summary>
     /// Change-tracker entry for <paramref name="entity"/>; used to set the original
