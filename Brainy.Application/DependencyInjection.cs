@@ -10,6 +10,7 @@ using Brainy.Application.Interfaces.Caching;
 using Brainy.Application.Interfaces.Email;
 using Brainy.Application.Interfaces.Services;
 using Brainy.Application.Options;
+using Brainy.Application.Push;
 using Brainy.Application.Services;
 using Brainy.Application.Services.ExternalImport;
 using Brainy.Application.Services.MarkdownExport;
@@ -105,6 +106,35 @@ public static class DependencyInjection
         services.AddScoped<IProjectTemplateService, ProjectTemplateService>();
         services.AddScoped<INoteTemplateService, NoteTemplateService>();
         services.AddScoped<IOutputTemplateService, OutputTemplateService>();
+        services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
+        services.AddScoped<IPushNotificationPreferenceService, PushNotificationPreferenceService>();
+        services.AddScoped<IPushDispatchService, PushDispatchService>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="IPushNotificationSender"/> based on the <c>WebPush</c>
+    /// configuration section. When the VAPID key pair is not fully configured (the default),
+    /// <see cref="NullPushNotificationSender"/> is registered so the app starts and every
+    /// push attempt is logged instead of sent — mirroring <see cref="AddEmail"/>.
+    /// </summary>
+    public static IServiceCollection AddWebPush(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<WebPushOptions>(configuration.GetSection(WebPushOptions.SectionName));
+
+        var options = configuration
+            .GetSection(WebPushOptions.SectionName)
+            .Get<WebPushOptions>() ?? new WebPushOptions();
+
+        if (options.IsConfigured)
+        {
+            services.AddSingleton<IPushNotificationSender, WebPushNotificationSender>();
+        }
+        else
+        {
+            services.AddSingleton<IPushNotificationSender, NullPushNotificationSender>();
+        }
+
         return services;
     }
 
