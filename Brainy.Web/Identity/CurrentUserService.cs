@@ -15,15 +15,16 @@ namespace Brainy.Web.Identity;
 /// throws <see cref="InvalidOperationException"/> rather than returning a result.
 /// </summary>
 /// <remarks>
-/// A third source, checked first, is <see cref="BackgroundUserContext"/>: issue #315's push
-/// notification dispatcher runs with no request, circuit, or <see cref="HttpContext"/> at
-/// all, so it sets that scoped holder to impersonate one user for the DI scope's lifetime
-/// instead of every scoped service needing its own explicit-userId variant.
+/// A third source, checked first, is <see cref="IBackgroundUserContextAccessor"/> (backed by
+/// the scoped <see cref="BackgroundUserContext"/>): issue #315's push notification
+/// dispatcher runs with no request, circuit, or <see cref="HttpContext"/> at all, so it sets
+/// that holder to impersonate one user for the DI scope's lifetime instead of every scoped
+/// service needing its own explicit-userId variant.
 /// </remarks>
 internal sealed class CurrentUserService(
     AuthenticationStateProvider authenticationStateProvider,
     IHttpContextAccessor httpContextAccessor,
-    BackgroundUserContext backgroundUserContext) : ICurrentUserService
+    IBackgroundUserContextAccessor backgroundUserContext) : ICurrentUserService
 {
     public async Task<string?> GetUserIdAsync(CancellationToken cancellationToken = default)
     {
