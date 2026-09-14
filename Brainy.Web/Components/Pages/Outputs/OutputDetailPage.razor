@@ -10,6 +10,7 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.JSInterop
 @inject IOutputService OutputService
+@inject IOutputShareLinkService ShareLinkService
 @inject INoteService NoteService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -70,6 +71,13 @@ else
                     {
                         <MudChip T="string" Color="Color.Warning" Size="Size.Small">Archived</MudChip>
                     }
+                    @if (_shareStatus is { IsActive: true })
+                    {
+                        <span class="od-badge od-badge--shared" title="A public, read-only link for this output is active">
+                            <MudIcon Icon="@Icons.Material.Outlined.Public" Size="Size.Small" Style="font-size:0.8rem;" />
+                            Shared
+                        </span>
+                    }
                 </div>
                 <div class="od-meta-row">
                     @if (!string.IsNullOrWhiteSpace(_detail.AreaName))
@@ -127,6 +135,14 @@ else
                            Size="Size.Small"
                            OnClick="OpenEditDialogAsync">
                     Edit
+                </MudButton>
+
+                <MudButton Variant="Variant.Outlined"
+                           Color="@(_shareStatus is { IsActive: true } ? Color.Success : Color.Default)"
+                           StartIcon="@Icons.Material.Outlined.Share"
+                           Size="Size.Small"
+                           OnClick="OpenShareDialogAsync">
+                    Share
                 </MudButton>
 
                 @if (!_detail.IsArchived && _detail.Status != OutputStatus.Published)
@@ -367,6 +383,7 @@ body { font-family: var(--font-body); }
     text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
 }
 .od-badge-type { background: var(--paper-sunk); color: var(--ink-soft); border: 1px solid var(--line); }
+.od-badge--shared { background: rgba(2,136,209,.12); color: #0277bd; border: 1px solid rgba(2,136,209,.2); gap: .25rem; }
 .od-status--draft     { background: var(--paper-sunk); color: var(--ink-soft); border: 1px solid var(--line); }
 .od-status--inreview  { background: rgba(237,108,2,.12); color: #b06000; border: 1px solid rgba(237,108,2,.2); }
 .od-status--ready     { background: rgba(2,136,209,.12); color: #0277bd; border: 1px solid rgba(2,136,209,.2); }
@@ -554,6 +571,7 @@ body { font-family: var(--font-body); }
     private bool _saving;
     private bool _showRawMarkdown;
     private OutputDetailDto? _detail;
+    private OutputShareLinkStatusDto? _shareStatus;
 
     private List<NoteDto> _allNotes = [];
     private NoteDto? _selectedNote;
@@ -609,8 +627,23 @@ body { font-family: var(--font-body); }
         _loading = true;
         StateHasChanged();
         _detail = await OutputService.GetDetailAsync(Id);
+        _shareStatus = await ShareLinkService.GetStatusAsync(Id);
         _loading = false;
         StateHasChanged();
+    }
+
+    private async Task OpenShareDialogAsync()
+    {
+        if (_detail is null) return;
+
+        var parameters = new DialogParameters<OutputShareDialog>();
+        parameters.Add(x => x.OutputId, Id);
+        parameters.Add(x => x.OutputTitle, _detail.Title);
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<OutputShareDialog>("Share link", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+            _shareStatus = await ShareLinkService.GetStatusAsync(Id);
     }
 
     private async Task OpenEditDialogAsync()

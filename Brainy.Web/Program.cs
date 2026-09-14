@@ -5,6 +5,7 @@ using Brainy.Data.Identity;
 using Brainy.Web.BackgroundServices;
 using Brainy.Web.Components;
 using Brainy.Web.Components.Account;
+using Brainy.Web.Components.Marketing;
 using Brainy.Web.Configuration;
 using Brainy.Web.Endpoints;
 using Brainy.Web.Health;
@@ -108,6 +109,29 @@ builder.Services.AddRateLimiter(options =>
             var partitionKey = string.IsNullOrEmpty(token)
                 ? $"calendar-feed:ip:{context.Connection.RemoteIpAddress}"
                 : $"calendar-feed:token:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)))}";
+
+            return RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey,
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
+                    Window = TimeSpan.FromMinutes(5),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+        }
+
+        // The public output share page (issue #319) is the same shape of risk as the ICS
+        // feed above: a public, anonymous URL whose only credential is a token in the query
+        // string. Partition by the token itself for the same reason — a shared IP must not
+        // throttle every other visitor, and a guessing attempt should throttle itself.
+        if (HttpMethods.IsGet(context.Request.Method) &&
+            context.Request.Path.Equals(OutputSharePage.RoutePath, StringComparison.OrdinalIgnoreCase))
+        {
+            var token = context.Request.Query["token"].ToString();
+            var partitionKey = string.IsNullOrEmpty(token)
+                ? $"output-share:ip:{context.Connection.RemoteIpAddress}"
+                : $"output-share:token:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)))}";
 
             return RateLimitPartition.GetFixedWindowLimiter(
                 partitionKey,
