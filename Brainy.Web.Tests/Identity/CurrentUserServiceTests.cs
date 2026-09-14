@@ -35,6 +35,29 @@ public class CurrentUserServiceTests
     }
 
     [Fact]
+    public async Task GetUserIdAsync_WithBackgroundUserSetInsideARequestScope_Throws()
+    {
+        // Impersonation is consulted before the authenticated principal, so allowing it inside a
+        // request scope would silently serve one user's data under another user's request.
+        var httpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.NameIdentifier, HttpContextUserId)],
+                IdentityConstants.ApplicationScheme))
+        };
+
+        var sut = new CurrentUserService(
+            new ThrowingAuthenticationStateProvider(),
+            new FixedHttpContextAccessor(httpContext),
+            new BackgroundUserContext { UserId = ImpersonatedUserId });
+
+        var act = async () => await sut.GetUserIdAsync();
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*impersonation*");
+    }
+
+    [Fact]
     public async Task GetUserIdAsync_WithNoBackgroundUser_FallsBackToTheCircuitAuthenticationState()
     {
         var sut = new CurrentUserService(

@@ -29,7 +29,21 @@ internal sealed class CurrentUserService(
     public async Task<string?> GetUserIdAsync(CancellationToken cancellationToken = default)
     {
         if (backgroundUserContext.UserId is { } impersonatedUserId)
+        {
+            // Impersonation is checked before the authenticated principal, so it must never be
+            // reachable from a request scope: anything that set it there would silently override
+            // the signed-in user for every scoped service. The only legitimate caller creates a
+            // fresh background scope, which has no HttpContext. Fail loudly rather than serving
+            // one user's data under another user's request.
+            if (httpContextAccessor.HttpContext is not null)
+            {
+                throw new InvalidOperationException(
+                    "Background user impersonation was set inside an HTTP request scope. It is only valid " +
+                    "in a dedicated background scope (see IBackgroundUserContextAccessor).");
+            }
+
             return impersonatedUserId;
+        }
 
         try
         {
