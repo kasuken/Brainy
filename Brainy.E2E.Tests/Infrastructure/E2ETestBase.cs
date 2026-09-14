@@ -82,6 +82,15 @@ public abstract class E2ETestBase(BrainyE2EFixture fixture)
                 // crash/navigation error. The trace below is the more important artifact.
             }
 
+            try
+            {
+                await File.WriteAllTextAsync(Path.Combine(resultsDir, "failure.html"), await page.ContentAsync());
+            }
+            catch
+            {
+                // Best-effort, same as the screenshot above.
+            }
+
             await context.Tracing.StopAsync(new TracingStopOptions
             {
                 Path = Path.Combine(resultsDir, "trace.zip")

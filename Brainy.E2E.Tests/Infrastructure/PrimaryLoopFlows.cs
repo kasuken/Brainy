@@ -52,6 +52,12 @@ public static class PrimaryLoopFlows
         await nameField.WaitForAsync();
         await nameField.FillAsync(name);
         await page.SelectMudOptionAsync("Area", areaName);
+        // Projects default to "Not Started". TasksHubService.GetActiveTasksAsync (which
+        // backs the Focus Picker, among other "active work" views) defaults to
+        // TaskHubProjectScope.ActiveOnly, so a task under a Not-Started project would never
+        // be offered as a focus candidate — a deliberate product rule, not a bug, but this
+        // test's task needs to actually be focusable.
+        await page.SelectMudOptionAsync("Status", "Active");
         await page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Create project" }).ClickAsync();
 
         await page.GetByText(name, new PageGetByTextOptions { Exact = false })
