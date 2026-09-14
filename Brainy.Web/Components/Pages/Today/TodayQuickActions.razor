@@ -4,6 +4,7 @@
 ───────────────────────────────────────────────────────────────────────────── *@
 @inject NavigationManager Nav
 @inject IDialogService DialogService
+@inject IStringLocalizer<TodayQuickActions> Localizer
 
 <div class="td-section" style="display:flex; gap:0.5rem; flex-wrap:wrap; padding-bottom:0.5rem;">
 
@@ -11,35 +12,35 @@
                StartIcon="@Icons.Material.Outlined.AddTask"
                Style="border-color:var(--line-strong); color:var(--ink-soft); font-size:0.78rem;"
                OnClick="() => OnAddTask.InvokeAsync()">
-        New Task
+        @Localizer["NewTask"]
     </MudButton>
 
     <MudButton Variant="Variant.Outlined" Size="Size.Small"
                StartIcon="@Icons.Material.Outlined.TaskAlt"
                Style="border-color:var(--line-strong); color:var(--ink-soft); font-size:0.78rem;"
                OnClick="@(() => Nav.NavigateTo("/projects"))">
-        Complete a Task
+        @Localizer["CompleteTask"]
     </MudButton>
 
     <MudButton Variant="Variant.Outlined" Size="Size.Small"
                StartIcon="@Icons.Material.Outlined.CenterFocusStrong"
                Style="border-color:var(--line-strong); color:var(--ink-soft); font-size:0.78rem;"
                OnClick="OpenFocusPickerAsync">
-        Set Focus
+        @Localizer["SetFocus"]
     </MudButton>
 
     <MudButton Variant="Variant.Outlined" Size="Size.Small"
                StartIcon="@Icons.Material.Outlined.Inbox"
                Style="border-color:var(--line-strong); color:var(--ink-soft); font-size:0.78rem;"
                OnClick="@(() => Nav.NavigateTo("/inbox"))">
-        Process Inbox
+        @Localizer["ProcessInbox"]
     </MudButton>
 
     <MudButton Variant="Variant.Outlined" Size="Size.Small"
                StartIcon="@Icons.Material.Outlined.NoteAdd"
                Style="border-color:var(--line-strong); color:var(--ink-soft); font-size:0.78rem;"
                OnClick="@(() => Nav.NavigateTo("/notes"))">
-        New Note
+        @Localizer["NewNote"]
     </MudButton>
 
 </div>
@@ -57,7 +58,7 @@
         };
 
         var dialog = await DialogService.ShowAsync<FocusPickerDialog>(
-            "Choose your current focus",
+            Localizer["FocusPickerDialogTitle"],
             parameters,
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
 

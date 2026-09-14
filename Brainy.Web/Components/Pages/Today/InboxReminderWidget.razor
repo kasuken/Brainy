@@ -2,6 +2,7 @@
    InboxReminderWidget — compact horizontal bar showing unprocessed inbox count.
    Turns amber when InboxCount >= WarningThreshold.
 ───────────────────────────────────────────────────────────────────────────── *@
+@inject IStringLocalizer<InboxReminderWidget> Localizer
 
 <div class="td-widget td-section">
     <div style="display:flex; align-items:center; gap:0.75rem; padding:0.65rem 0.9rem;
@@ -16,19 +17,19 @@
 
         <span style="font-size:0.82rem; color:var(--ink-soft);">
             <strong style="color:@(InboxCount > 0 ? "var(--ink)" : "var(--ink-faint)");">@InboxCount</strong>
-            &nbsp;item@(InboxCount == 1 ? "" : "s") in inbox
+            &nbsp;@(InboxCount == 1 ? Localizer["ItemInInboxSingular"] : Localizer["ItemsInInboxPlural"])
         </span>
 
         @if (IsWarning)
         {
             <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined"
                      Style="margin-left:0.25rem;">
-                Your inbox is growing
+                @Localizer["GrowingWarning"]
             </MudChip>
         }
 
         <a href="/inbox" class="td-nav-chip" style="margin-left:auto; text-decoration:none; font-size:0.75rem; padding:0.3rem 0.7rem;">
-            Process →
+            @Localizer["ProcessLink"]
         </a>
     </div>
 </div>
