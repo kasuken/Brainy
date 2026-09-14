@@ -88,6 +88,12 @@ public class BrainyDbContext(
 
     public DbSet<CalendarFeedToken> CalendarFeedTokens => Set<CalendarFeedToken>();
 
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+
+    public DbSet<PushNotificationPreference> PushNotificationPreferences => Set<PushNotificationPreference>();
+
+    public DbSet<PushNotificationDeliveryLog> PushNotificationDeliveryLogs => Set<PushNotificationDeliveryLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Configure Identity schema first, then apply Brainy entity configurations.
