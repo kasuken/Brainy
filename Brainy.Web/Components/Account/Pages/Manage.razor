@@ -16,6 +16,7 @@
 @using Brainy.Application.DTOs.Calendar
 @using Brainy.Application.DTOs.DataExport
 @using Brainy.Application.DTOs.DataImport
+@using Brainy.Application.DTOs.Push
 @using Brainy.Application.DTOs.Search
 @using Brainy.Application.Interfaces.Billing
 @using Brainy.Application.Interfaces.Services
@@ -38,6 +39,8 @@
 @inject IEntitlementService EntitlementService
 @inject IBillingProvider BillingProvider
 @inject ICalendarFeedTokenService CalendarFeedTokenService
+@inject IPushSubscriptionService PushSubscriptionService
+@inject IPushNotificationPreferenceService PushNotificationPreferenceService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IJSRuntime JS
@@ -360,6 +363,131 @@
             </div>
 
             <span class="account-manage__status" role="status" aria-live="polite">@_retentionStatus</span>
+        </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.NotificationsActive" aria-hidden="true" />
+                <div>
+                    <h2>Push notifications</h2>
+                    <p>
+                        Off by default. When on, Brainy sends at most a daily focus nudge, an overdue-task
+                        alert, and a weekly review reminder — never note or task content, only counts.
+                        Quiet hours and each category can be turned off independently, and removing a
+                        device below stops delivery to it immediately.
+                    </p>
+                </div>
+            </div>
+
+            @if (_pushError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_pushError
+                </MudAlert>
+            }
+
+            @if (PushSubscriptionService.GetVapidPublicKey() is null)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
+                    Push notifications are not configured on this Brainy deployment yet.
+                </MudAlert>
+            }
+            else
+            {
+                <div class="account-manage__settings-stack">
+                    <MudSwitch T="bool"
+                               Value="_pushEnabled"
+                               ValueChanged="OnPushEnabledChangedAsync"
+                               Color="Color.Primary"
+                               Disabled="_savingPushPreference"
+                               Label="@(_pushEnabled ? "Push notifications on" : "Push notifications off")" />
+
+                    @if (_pushEnabled)
+                    {
+                        <MudSwitch T="bool" @bind-Value="_pushOverdueTaskEnabled" Color="Color.Primary" Label="Overdue task alert" />
+                        <MudSwitch T="bool" @bind-Value="_pushDailyFocusNudgeEnabled" Color="Color.Primary" Label="Daily focus nudge" />
+                        <MudSwitch T="bool" @bind-Value="_pushWeeklyReviewReminderEnabled" Color="Color.Primary" Label="Weekly review reminder" />
+
+                        <div class="account-manage__meta-grid">
+                            <MudNumericField T="int" @bind-Value="_pushDailyFocusNudgeHour" Label="Daily nudge — send at (hour, 0-23)" Min="0" Max="23" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            <MudSelect T="DayOfWeek" @bind-Value="_pushWeeklyReviewDayOfWeek" Label="Weekly review — day" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                @foreach (var day in Enum.GetValues<DayOfWeek>())
+                                {
+                                    <MudSelectItem T="DayOfWeek" Value="@day">@day</MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudNumericField T="int" @bind-Value="_pushWeeklyReviewHour" Label="Weekly review — send at (hour, 0-23)" Min="0" Max="23" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        </div>
+
+                        <MudSwitch T="bool" @bind-Value="_pushQuietHoursEnabled" Color="Color.Primary" Label="Quiet hours" />
+                        @if (_pushQuietHoursEnabled)
+                        {
+                            <div class="account-manage__meta-grid">
+                                <MudNumericField T="int" @bind-Value="_pushQuietHoursStartHour" Label="Quiet hours start (hour, 0-23)" Min="0" Max="23" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                <MudNumericField T="int" @bind-Value="_pushQuietHoursEndHour" Label="Quiet hours end (hour, 0-23)" Min="0" Max="23" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </div>
+                        }
+                    }
+                </div>
+
+                <div class="account-manage__actions">
+                    @if (_pushEnabled)
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Disabled="_savingPushPreference"
+                                   aria-busy="@_savingPushPreference.ToString().ToLowerInvariant()"
+                                   OnClick="SavePushPreferenceAsync">
+                            @(_savingPushPreference ? "Saving…" : "Save push settings")
+                        </MudButton>
+                    }
+                    <span class="account-manage__status" role="status" aria-live="polite">@_pushPreferenceStatus</span>
+                </div>
+
+                @if (_pushEnabled)
+                {
+                    <div class="account-manage__settings-stack">
+                        <h3 class="account-manage__subheading">Devices</h3>
+
+                        @if (_pushSubscriptions.Count == 0)
+                        {
+                            <p class="account-manage__status">No devices registered yet.</p>
+                        }
+                        else
+                        {
+                            @foreach (var subscription in _pushSubscriptions)
+                            {
+                                <div class="account-manage__device-row">
+                                    <span>@(subscription.DeviceLabel ?? "Unnamed device") — registered @subscription.CreatedAtUtc.ToString("MMM d, yyyy")</span>
+                                    <MudButton Variant="Variant.Text"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               Disabled="_pushBusy"
+                                               OnClick="() => RemovePushSubscriptionAsync(subscription.Id)">
+                                        Remove
+                                    </MudButton>
+                                </div>
+                            }
+                        }
+
+                        <div class="account-manage__actions">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Disabled="_pushBusy"
+                                       aria-busy="@_pushBusy.ToString().ToLowerInvariant()"
+                                       OnClick="SubscribeThisDeviceAsync">
+                                @(_pushBusy ? "Working…" : "Enable on this device")
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       Disabled="@(_pushBusy || _pushSubscriptions.Count == 0)"
+                                       OnClick="SendTestPushAsync">
+                                Send test notification
+                            </MudButton>
+                        </div>
+                    </div>
+                }
+            }
         </MudPaper>
     </section>
 
@@ -849,6 +977,8 @@
     .account-manage__import-summary ul { margin: .5rem 0 0; padding-left: 1.1rem; }
     .account-manage__import-summary li + li { margin-top: .25rem; }
     .account-manage__danger { border-color: var(--mud-palette-error); }
+    .account-manage__subheading { margin: 1.25rem 0 0; font-size: .95rem; color: var(--ink); }
+    .account-manage__device-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .6rem .85rem; border-radius: 12px; background: color-mix(in srgb, var(--paper) 75%, transparent); border: 1px solid var(--line); font-size: .875rem; }
     .account-manage__actions { margin-top: 1.25rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
     .account-manage__status { color: var(--ink-soft); font-size: .875rem; }
 
@@ -942,6 +1072,21 @@
     private string? _calendarFeedUrl;
     private bool _calendarFeedBusy;
     private string? _calendarFeedError;
+    private bool _pushEnabled;
+    private bool _pushOverdueTaskEnabled = true;
+    private bool _pushDailyFocusNudgeEnabled = true;
+    private bool _pushWeeklyReviewReminderEnabled = true;
+    private int _pushDailyFocusNudgeHour = 8;
+    private DayOfWeek _pushWeeklyReviewDayOfWeek = DayOfWeek.Sunday;
+    private int _pushWeeklyReviewHour = 17;
+    private bool _pushQuietHoursEnabled = true;
+    private int _pushQuietHoursStartHour = 21;
+    private int _pushQuietHoursEndHour = 8;
+    private bool _savingPushPreference;
+    private string? _pushPreferenceStatus;
+    private string? _pushError;
+    private bool _pushBusy;
+    private IReadOnlyList<PushSubscriptionDto> _pushSubscriptions = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -969,7 +1114,209 @@
         {
             _calendarFeedError = "Brainy could not load your calendar feed status. Try reloading this page.";
         }
+
+        try
+        {
+            await LoadPushSettingsAsync();
+        }
+        catch
+        {
+            _pushError = "Brainy could not load your push notification settings. Try reloading this page.";
+        }
     }
+
+    private async Task LoadPushSettingsAsync()
+    {
+        var preference = await PushNotificationPreferenceService.GetOrCreateAsync();
+        ApplyPreference(preference);
+        _pushSubscriptions = await PushSubscriptionService.GetSubscriptionsAsync();
+    }
+
+    private void ApplyPreference(PushNotificationPreferenceDto preference)
+    {
+        _pushEnabled = preference.Enabled;
+        _pushOverdueTaskEnabled = preference.OverdueTaskEnabled;
+        _pushDailyFocusNudgeEnabled = preference.DailyFocusNudgeEnabled;
+        _pushWeeklyReviewReminderEnabled = preference.WeeklyReviewReminderEnabled;
+        _pushDailyFocusNudgeHour = preference.DailyFocusNudgeHour;
+        _pushWeeklyReviewDayOfWeek = preference.WeeklyReviewDayOfWeek;
+        _pushWeeklyReviewHour = preference.WeeklyReviewHour;
+        _pushQuietHoursEnabled = preference.QuietHoursEnabled;
+        _pushQuietHoursStartHour = preference.QuietHoursStart.Hour;
+        _pushQuietHoursEndHour = preference.QuietHoursEnd.Hour;
+    }
+
+    private async Task OnPushEnabledChangedAsync(bool value)
+    {
+        _pushEnabled = value;
+
+        if (!value)
+        {
+            // Master switch off is the one-click "stop everything" path: save immediately
+            // rather than waiting for the (now-hidden) Save button.
+            await SavePushPreferenceAsync();
+            return;
+        }
+
+        if (_pushSubscriptions.Count == 0)
+        {
+            await SubscribeThisDeviceAsync();
+        }
+    }
+
+    private async Task SavePushPreferenceAsync()
+    {
+        if (_savingPushPreference)
+            return;
+
+        _savingPushPreference = true;
+        _pushError = null;
+        _pushPreferenceStatus = null;
+
+        try
+        {
+            var dto = new UpdatePushNotificationPreferenceDto(
+                _pushEnabled,
+                _pushDailyFocusNudgeEnabled,
+                _pushOverdueTaskEnabled,
+                _pushWeeklyReviewReminderEnabled,
+                _pushQuietHoursEnabled,
+                new TimeOnly(_pushQuietHoursStartHour, 0),
+                new TimeOnly(_pushQuietHoursEndHour, 0),
+                _pushDailyFocusNudgeHour,
+                _pushWeeklyReviewDayOfWeek,
+                _pushWeeklyReviewHour);
+
+            var saved = await PushNotificationPreferenceService.UpdateAsync(dto);
+            ApplyPreference(saved);
+            _pushPreferenceStatus = _pushEnabled ? "Push notifications are on." : "Push notifications are off.";
+        }
+        catch (Exception ex)
+        {
+            _pushError = ex.Message;
+        }
+        finally
+        {
+            _savingPushPreference = false;
+        }
+    }
+
+    private async Task SubscribeThisDeviceAsync()
+    {
+        if (_pushBusy)
+            return;
+
+        _pushBusy = true;
+        _pushError = null;
+
+        try
+        {
+            var publicKey = PushSubscriptionService.GetVapidPublicKey();
+            if (publicKey is null)
+            {
+                _pushError = "Push notifications are not configured on this Brainy deployment yet.";
+                return;
+            }
+
+            var subscription = await JS.InvokeAsync<BrowserPushSubscription>("brainyPush.subscribe", publicKey);
+
+            var browserLabel = await GetBrowserDeviceLabelAsync();
+            await PushSubscriptionService.RegisterAsync(new RegisterPushSubscriptionDto(
+                subscription.Endpoint, subscription.P256dh, subscription.Auth, browserLabel));
+
+            _pushSubscriptions = await PushSubscriptionService.GetSubscriptionsAsync();
+
+            if (!_pushEnabled)
+            {
+                _pushEnabled = true;
+                await SavePushPreferenceAsync();
+            }
+
+            Snackbar.Add("This device is enabled for push notifications.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _pushError = ex.Message;
+        }
+        finally
+        {
+            _pushBusy = false;
+        }
+    }
+
+    private async Task RemovePushSubscriptionAsync(Guid subscriptionId)
+    {
+        if (_pushBusy)
+            return;
+
+        _pushBusy = true;
+        _pushError = null;
+
+        try
+        {
+            await PushSubscriptionService.UnregisterAsync(subscriptionId);
+            try
+            {
+                await JS.InvokeVoidAsync("brainyPush.unsubscribe");
+            }
+            catch (JSException)
+            {
+                // The server-side row is already gone, which is what stops delivery;
+                // failing to also clear the browser's own subscription object is cosmetic.
+            }
+
+            _pushSubscriptions = await PushSubscriptionService.GetSubscriptionsAsync();
+            Snackbar.Add("Device removed. Push notifications to it stop immediately.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _pushError = ex.Message;
+        }
+        finally
+        {
+            _pushBusy = false;
+        }
+    }
+
+    private async Task SendTestPushAsync()
+    {
+        if (_pushBusy)
+            return;
+
+        _pushBusy = true;
+        _pushError = null;
+
+        try
+        {
+            var sent = await PushSubscriptionService.SendTestNotificationAsync();
+            Snackbar.Add(
+                sent ? "Test notification sent." : "Brainy could not deliver a test notification to any of your devices.",
+                sent ? Severity.Success : Severity.Warning);
+            _pushSubscriptions = await PushSubscriptionService.GetSubscriptionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _pushError = ex.Message;
+        }
+        finally
+        {
+            _pushBusy = false;
+        }
+    }
+
+    private async Task<string?> GetBrowserDeviceLabelAsync()
+    {
+        try
+        {
+            return await JS.InvokeAsync<string>("brainyPush.getDeviceLabel");
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private sealed record BrowserPushSubscription(string Endpoint, string P256dh, string Auth);
 
     private string CalendarFeedStatusText => _calendarFeedStatus switch
     {
