@@ -72,13 +72,20 @@ builder.Services.AddSingleton<IStringLocalizerFactory>(serviceProvider => new Fa
     builder.Environment.IsDevelopment()));
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
-    var supportedCultures = Brainy.Application.Localization.SupportedCultures.All
-        .Select(cultureId => new CultureInfo(cultureId))
+    // Every negotiable culture EXCEPT the default, expressed as real CultureInfo objects for
+    // AcceptLanguage/cookie matching purposes. The default itself resolves to
+    // CultureInfo.InvariantCulture (see SupportedCultures.Default's remarks) and is set as
+    // DefaultRequestCulture below rather than listed here, so an unmatched/English request
+    // falls back to exactly today's (pre-#323) ambient culture instead of a real "en-US" one.
+    var negotiableCultures = Brainy.Application.Localization.SupportedCultures.All
+        .Where(cultureId => cultureId != Brainy.Application.Localization.SupportedCultures.Default)
+        .Select(Brainy.Application.Localization.SupportedCultures.Resolve)
+        .Append(CultureInfo.InvariantCulture)
         .ToArray();
 
-    options.DefaultRequestCulture = new RequestCulture(Brainy.Application.Localization.SupportedCultures.Default);
-    options.SupportedCultures = supportedCultures;
-    options.SupportedUICultures = supportedCultures;
+    options.DefaultRequestCulture = new RequestCulture(CultureInfo.InvariantCulture);
+    options.SupportedCultures = negotiableCultures;
+    options.SupportedUICultures = negotiableCultures;
 });
 
 // Add services to the container.

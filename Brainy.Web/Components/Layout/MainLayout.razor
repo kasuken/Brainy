@@ -220,15 +220,16 @@
             var storedCultureId = await UserCultureService.GetCultureIdAsync();
             if (string.IsNullOrWhiteSpace(storedCultureId))
             {
-                await UserCultureService.SetCultureIdAsync(CultureInfo.CurrentUICulture.Name);
-                _currentCultureId = CultureInfo.CurrentUICulture.Name;
+                var negotiatedId = SupportedCultures.NormalizeToStorableId(CultureInfo.CurrentUICulture);
+                await UserCultureService.SetCultureIdAsync(negotiatedId);
+                _currentCultureId = negotiatedId;
                 return;
             }
 
             if (!SupportedCultures.IsSupported(storedCultureId))
                 return;
 
-            var culture = new CultureInfo(storedCultureId);
+            var culture = SupportedCultures.Resolve(storedCultureId);
             CultureInfo.CurrentCulture = culture;
             CultureInfo.CurrentUICulture = culture;
             _currentCultureId = storedCultureId;
