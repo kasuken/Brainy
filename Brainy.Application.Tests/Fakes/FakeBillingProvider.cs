@@ -14,7 +14,10 @@ internal sealed class FakeBillingProvider(ParsedBillingWebhookEvent? eventToRetu
     public int ParseCallCount { get; private set; }
 
     public Task<CheckoutSessionResult> CreateCheckoutSessionAsync(
-        string userId, PlanTier targetTier, CancellationToken cancellationToken = default) =>
+        string userId,
+        PlanTier targetTier,
+        BillingInterval interval = BillingInterval.Yearly,
+        CancellationToken cancellationToken = default) =>
         Task.FromResult(new CheckoutSessionResult(false, null, "not implemented in test"));
 
     public Task<PortalSessionResult> CreatePortalSessionAsync(string userId, CancellationToken cancellationToken = default) =>

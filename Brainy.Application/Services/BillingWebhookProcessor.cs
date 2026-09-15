@@ -64,7 +64,19 @@ internal sealed class BillingWebhookProcessor(
             return BillingWebhookProcessingResult.AlreadyProcessed;
         }
 
-        if (!string.IsNullOrWhiteSpace(parsed.TargetUserId) && parsed.NewTier.HasValue)
+        if (string.IsNullOrWhiteSpace(parsed.TargetUserId))
+            return BillingWebhookProcessingResult.Applied;
+
+        // Link before granting: an event that only identifies the provider's customer (a
+        // completed checkout) still has to record it, so the user can reach the billing
+        // portal even if the tier-granting subscription event is delayed.
+        await entitlements.LinkBillingAccountAsync(
+            parsed.TargetUserId,
+            parsed.ProviderCustomerId,
+            parsed.ProviderSubscriptionId,
+            cancellationToken).ConfigureAwait(false);
+
+        if (parsed.NewTier.HasValue)
         {
             await entitlements.SetPlanTierAsync(
                 parsed.TargetUserId,

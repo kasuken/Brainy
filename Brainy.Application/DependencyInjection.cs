@@ -88,7 +88,10 @@ public static class DependencyInjection
     /// Registers <see cref="IBillingProvider"/> based on the <c>Billing</c> configuration
     /// section. When <see cref="BillingProviderType.None"/> is configured (the default),
     /// <see cref="NullBillingProvider"/> is registered so the entitlement system works fully
-    /// without a live payment-provider account.
+    /// without a live payment-provider account. <see cref="BillingProviderType.Stripe"/>
+    /// registers <see cref="StripeBillingProvider"/>, failing fast at startup when any
+    /// setting it needs is missing — a half-configured payment provider would otherwise
+    /// surface as a failed checkout for a real user mid-purchase.
     /// </summary>
     public static IServiceCollection AddBilling(this IServiceCollection services, IConfiguration configuration)
     {
@@ -98,15 +101,55 @@ public static class DependencyInjection
             .GetSection(BillingOptions.SectionName)
             .Get<BillingOptions>() ?? new BillingOptions();
 
-        if (options.Provider == BillingProviderType.None)
+        switch (options.Provider)
         {
-            services.AddSingleton<IBillingProvider, NullBillingProvider>();
-            return services;
+            case BillingProviderType.None:
+                services.AddSingleton<IBillingProvider, NullBillingProvider>();
+                return services;
+
+            case BillingProviderType.Stripe:
+                ValidateStripeOptions(options);
+                // Scoped, not singleton: the provider reads the per-user billing link
+                // through the scoped IApplicationDbContext.
+                services.AddScoped<IBillingProvider, StripeBillingProvider>();
+                return services;
+
+            default:
+                throw new NotSupportedException(
+                    $"Billing provider '{options.Provider}' is not implemented yet. Implement IBillingProvider " +
+                    "and register it in DependencyInjection.AddBilling.");
+        }
+    }
+
+    /// <summary>
+    /// Fails startup with one message naming every missing Stripe setting, rather than one
+    /// round-trip per fix.
+    /// </summary>
+    private static void ValidateStripeOptions(BillingOptions options)
+    {
+        var missing = new List<string>();
+
+        void Require(string? value, string key)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                missing.Add($"{BillingOptions.SectionName}:{key}");
         }
 
-        throw new NotSupportedException(
-            $"Billing provider '{options.Provider}' is not implemented yet. Implement IBillingProvider " +
-            "and register it in DependencyInjection.AddBilling.");
+        Require(options.ApiKey, nameof(BillingOptions.ApiKey));
+        Require(options.WebhookSigningSecret, nameof(BillingOptions.WebhookSigningSecret));
+        Require(options.ProMonthlyPriceId, nameof(BillingOptions.ProMonthlyPriceId));
+        Require(options.ProYearlyPriceId, nameof(BillingOptions.ProYearlyPriceId));
+        Require(options.CheckoutSuccessUrl, nameof(BillingOptions.CheckoutSuccessUrl));
+        Require(options.CheckoutCancelUrl, nameof(BillingOptions.CheckoutCancelUrl));
+        Require(options.PortalReturnUrl, nameof(BillingOptions.PortalReturnUrl));
+
+        if (missing.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "Billing:Provider is 'Stripe' but these settings are missing: " +
+                $"{string.Join(", ", missing)}. Supply them (user-secrets or environment " +
+                "variables for the secrets) or set Billing:Provider to 'None'.");
+        }
     }
 
     /// <summary>

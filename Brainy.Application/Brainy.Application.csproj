@@ -11,6 +11,7 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
+    <PackageReference Include="Stripe.net" Version="52.4.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Brainy.Domain\Brainy.Domain.csproj" />

@@ -20,9 +20,20 @@ public sealed record WebhookVerificationResult(bool IsValid, string? FailureReas
 /// <param name="TargetUserId">The Brainy user the event applies to, when the provider payload identifies one.</param>
 /// <param name="NewTier">The plan tier to apply, when this event represents a plan change.</param>
 /// <param name="PeriodEndsAtUtc">The new renewal/period-end timestamp, when the event carries one.</param>
+/// <param name="ProviderCustomerId">
+/// The provider's customer id carried by this event, when it has one. Persisted onto
+/// <c>UserPlan.BillingProviderCustomerId</c> so later portal sessions can be opened for a
+/// user who signed up through hosted checkout.
+/// </param>
+/// <param name="ProviderSubscriptionId">
+/// The provider's subscription id carried by this event, when it has one. Persisted onto
+/// <c>UserPlan.BillingProviderSubscriptionId</c> for support and audit.
+/// </param>
 public sealed record ParsedBillingWebhookEvent(
     string ProviderEventId,
     string EventType,
     string? TargetUserId,
     PlanTier? NewTier,
-    DateTime? PeriodEndsAtUtc);
+    DateTime? PeriodEndsAtUtc,
+    string? ProviderCustomerId = null,
+    string? ProviderSubscriptionId = null);

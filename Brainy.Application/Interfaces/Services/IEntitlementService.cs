@@ -47,4 +47,17 @@ public interface IEntitlementService
         PlanTier tier,
         DateTime? planRenewsAtUtc = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records the billing provider's customer and subscription ids for <paramref name="userId"/>,
+    /// so a self-service portal session can later be opened for a user who subscribed through
+    /// hosted checkout. Grants no entitlement on its own — a tier change always goes through
+    /// <see cref="SetPlanTierAsync"/>. Null arguments leave the corresponding id unchanged,
+    /// since not every provider event carries both.
+    /// </summary>
+    Task LinkBillingAccountAsync(
+        string userId,
+        string? providerCustomerId,
+        string? providerSubscriptionId,
+        CancellationToken cancellationToken = default);
 }

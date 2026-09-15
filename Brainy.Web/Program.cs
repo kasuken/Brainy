@@ -17,6 +17,12 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Local, uncommitted secret overrides (Billing:ApiKey, Billing:WebhookSigningSecret, ...).
+// appsettings.Local.json is genuinely git-ignored and untracked, unlike appsettings.json,
+// which .gitignore lists but cannot ignore because it is already tracked. Added last so it
+// wins over both appsettings.json and appsettings.{Environment}.json.
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 builder.Services.AddOptions<SeoOptions>()
     .Bind(builder.Configuration.GetSection("Seo"))
     .ValidateDataAnnotations()
