@@ -10,25 +10,39 @@
    still-registered popover section subscription. Both parts together are needed. *@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize]
+@implements IDisposable
 
 @using Brainy.Application.DTOs.Billing
+@using Brainy.Application.DTOs.Calendar
+@using Brainy.Application.DTOs.DataExport
 @using Brainy.Application.DTOs.DataImport
+@using Brainy.Application.DTOs.Push
 @using Brainy.Application.DTOs.Search
+@using Brainy.Application.Interfaces.Billing
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Data.Identity
 @using Brainy.Domain.Enums
+@using Brainy.Web.Endpoints
 @using Brainy.Web.Identity
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Identity
 
 @inject IDataExportService DataExportService
+@inject IMarkdownExportJobService MarkdownExportJobService
 @inject IDataImportService DataImportService
+@inject IExternalImportService ExternalImportService
 @inject IArchiveRetentionService ArchiveRetentionService
 @inject IUserTimeZoneService UserTimeZoneService
 @inject IAnalyticsService AnalyticsService
 @inject IUserDashboardPreferenceService DashboardPreferenceService
 @inject IEntitlementService EntitlementService
+@inject IBillingProvider BillingProvider
+@inject ICalendarFeedTokenService CalendarFeedTokenService
+@inject IPushSubscriptionService PushSubscriptionService
+@inject IPushNotificationPreferenceService PushNotificationPreferenceService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
@@ -137,13 +151,39 @@
                 <p class="account-manage__status">Renews @_planUsage.PlanRenewsAtUtc.Value.ToString("MMM d, yyyy") (UTC).</p>
             }
 
+            @if (_billingActionError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_billingActionError
+                </MudAlert>
+            }
+
             @if (_planUsage.Tier == PlanTier.Starter)
             {
                 <div class="account-manage__actions">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/pricing">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="_startingCheckout"
+                               aria-busy="@_startingCheckout.ToString().ToLowerInvariant()"
+                               OnClick="UpgradeToProAsync">
+                        @(_startingCheckout ? "Starting checkout…" : "Upgrade to Pro")
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/pricing">
                         See Pro plan details
                     </MudButton>
-                    <span class="account-manage__status">There's no live checkout yet — this links to the pricing page. Contact us to upgrade.</span>
+                </div>
+            }
+            else
+            {
+                <div class="account-manage__actions">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="_openingPortal"
+                               aria-busy="@_openingPortal.ToString().ToLowerInvariant()"
+                               OnClick="OpenBillingPortalAsync">
+                        @(_openingPortal ? "Opening billing portal…" : "Manage billing")
+                    </MudButton>
+                    <span class="account-manage__status">Update your payment method, view invoices, or cancel your subscription.</span>
                 </div>
             }
         }
@@ -324,6 +364,131 @@
 
             <span class="account-manage__status" role="status" aria-live="polite">@_retentionStatus</span>
         </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.NotificationsActive" aria-hidden="true" />
+                <div>
+                    <h2>Push notifications</h2>
+                    <p>
+                        Off by default. When on, Brainy sends at most a daily focus nudge, an overdue-task
+                        alert, and a weekly review reminder — never note or task content, only counts.
+                        Quiet hours and each category can be turned off independently, and removing a
+                        device below stops delivery to it immediately.
+                    </p>
+                </div>
+            </div>
+
+            @if (_pushError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_pushError
+                </MudAlert>
+            }
+
+            @if (PushSubscriptionService.GetVapidPublicKey() is null)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
+                    Push notifications are not configured on this Brainy deployment yet.
+                </MudAlert>
+            }
+            else
+            {
+                <div class="account-manage__settings-stack">
+                    <MudSwitch T="bool"
+                               Value="_pushEnabled"
+                               ValueChanged="OnPushEnabledChangedAsync"
+                               Color="Color.Primary"
+                               Disabled="_savingPushPreference"
+                               Label="@(_pushEnabled ? "Push notifications on" : "Push notifications off")" />
+
+                    @if (_pushEnabled)
+                    {
+                        <MudSwitch T="bool" @bind-Value="_pushOverdueTaskEnabled" Color="Color.Primary" Label="Overdue task alert" />
+                        <MudSwitch T="bool" @bind-Value="_pushDailyFocusNudgeEnabled" Color="Color.Primary" Label="Daily focus nudge" />
+                        <MudSwitch T="bool" @bind-Value="_pushWeeklyReviewReminderEnabled" Color="Color.Primary" Label="Weekly review reminder" />
+
+                        <div class="account-manage__meta-grid">
+                            <MudNumericField T="int" @bind-Value="_pushDailyFocusNudgeHour" Label="Daily nudge — send at (hour, 0-23)" Min="0" Max="23" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            <MudSelect T="DayOfWeek" @bind-Value="_pushWeeklyReviewDayOfWeek" Label="Weekly review — day" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                @foreach (var day in Enum.GetValues<DayOfWeek>())
+                                {
+                                    <MudSelectItem T="DayOfWeek" Value="@day">@day</MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudNumericField T="int" @bind-Value="_pushWeeklyReviewHour" Label="Weekly review — send at (hour, 0-23)" Min="0" Max="23" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        </div>
+
+                        <MudSwitch T="bool" @bind-Value="_pushQuietHoursEnabled" Color="Color.Primary" Label="Quiet hours" />
+                        @if (_pushQuietHoursEnabled)
+                        {
+                            <div class="account-manage__meta-grid">
+                                <MudNumericField T="int" @bind-Value="_pushQuietHoursStartHour" Label="Quiet hours start (hour, 0-23)" Min="0" Max="23" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                <MudNumericField T="int" @bind-Value="_pushQuietHoursEndHour" Label="Quiet hours end (hour, 0-23)" Min="0" Max="23" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </div>
+                        }
+                    }
+                </div>
+
+                <div class="account-manage__actions">
+                    @if (_pushEnabled)
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Disabled="_savingPushPreference"
+                                   aria-busy="@_savingPushPreference.ToString().ToLowerInvariant()"
+                                   OnClick="SavePushPreferenceAsync">
+                            @(_savingPushPreference ? "Saving…" : "Save push settings")
+                        </MudButton>
+                    }
+                    <span class="account-manage__status" role="status" aria-live="polite">@_pushPreferenceStatus</span>
+                </div>
+
+                @if (_pushEnabled)
+                {
+                    <div class="account-manage__settings-stack">
+                        <h3 class="account-manage__subheading">Devices</h3>
+
+                        @if (_pushSubscriptions.Count == 0)
+                        {
+                            <p class="account-manage__status">No devices registered yet.</p>
+                        }
+                        else
+                        {
+                            @foreach (var subscription in _pushSubscriptions)
+                            {
+                                <div class="account-manage__device-row">
+                                    <span>@(subscription.DeviceLabel ?? "Unnamed device") — registered @subscription.CreatedAtUtc.ToString("MMM d, yyyy")</span>
+                                    <MudButton Variant="Variant.Text"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               Disabled="_pushBusy"
+                                               OnClick="() => RemovePushSubscriptionAsync(subscription.Id)">
+                                        Remove
+                                    </MudButton>
+                                </div>
+                            }
+                        }
+
+                        <div class="account-manage__actions">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Disabled="_pushBusy"
+                                       aria-busy="@_pushBusy.ToString().ToLowerInvariant()"
+                                       OnClick="SubscribeThisDeviceAsync">
+                                @(_pushBusy ? "Working…" : "Enable on this device")
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       Disabled="@(_pushBusy || _pushSubscriptions.Count == 0)"
+                                       OnClick="SendTestPushAsync">
+                                Send test notification
+                            </MudButton>
+                        </div>
+                    </div>
+                }
+            }
+        </MudPaper>
     </section>
 
     <MudPaper Class="account-manage__card" Elevation="0">
@@ -431,6 +596,153 @@
 
         <MudPaper Class="account-manage__card" Elevation="0">
             <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.Notes" aria-hidden="true" />
+                <div>
+                    <h2>Export as a Markdown vault</h2>
+                    <p>
+                        Builds a zip of Markdown files organised by Project/Area/Resource/Archive,
+                        with tags and dates in each note's front matter, [[wiki links]] between related
+                        notes, and images copied alongside — ready to open as an Obsidian vault.
+                    </p>
+                </div>
+            </div>
+
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
+                This complements the JSON export above; it is for reading and using your data
+                elsewhere, not for re-importing into Brainy. Runs as a background job so large
+                accounts export without tying up this page — a download link appears here when it
+                finishes. Never includes account credentials, application secrets, AI-provider keys,
+                or analytics identifiers.
+            </MudAlert>
+
+            @if (_markdownExportError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_markdownExportError
+                </MudAlert>
+            }
+
+            <div class="account-manage__actions">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Outlined.FolderZip"
+                           Disabled="@(_markdownExportState is MarkdownExportJobState.Queued or MarkdownExportJobState.Running)"
+                           aria-busy="@((_markdownExportState is MarkdownExportJobState.Queued or MarkdownExportJobState.Running).ToString().ToLowerInvariant())"
+                           OnClick="StartMarkdownExportAsync">
+                    @if (_markdownExportState is MarkdownExportJobState.Queued or MarkdownExportJobState.Running)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>@(_markdownExportState == MarkdownExportJobState.Queued ? "Queued…" : "Building your vault…")</span>
+                    }
+                    else
+                    {
+                        <span>Start Markdown export</span>
+                    }
+                </MudButton>
+
+                @if (_markdownExportState == MarkdownExportJobState.Completed && _markdownExportJobId is { } completedJobId)
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Outlined.FileDownload"
+                               Href="@($"/api/markdown-export/{completedJobId}")"
+                               target="_blank">
+                        Download @(_markdownExportFileName ?? "vault.zip")
+                    </MudButton>
+                }
+
+                <span class="account-manage__status" role="status" aria-live="polite">
+                    @_markdownExportStatusMessage
+                </span>
+            </div>
+        </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.CalendarMonth" aria-hidden="true" />
+                <div>
+                    <h2>Calendar feed</h2>
+                    <p>
+                        Subscribe from Outlook, Google Calendar or Apple Calendar to see task due
+                        dates, project deadlines and dated goal milestones update automatically,
+                        without opening Brainy.
+                    </p>
+                </div>
+            </div>
+
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
+                The link below is a credential, not just a bookmark: anyone who has it can read
+                titles, due dates, and project/area names — nothing else about your account.
+                Revoke it any time to break the subscription immediately; regenerating issues a
+                fresh link without changing anything else. It is never shown in analytics or logs.
+            </MudAlert>
+
+            @if (_calendarFeedError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_calendarFeedError
+                </MudAlert>
+            }
+
+            @if (_calendarFeedUrl is not null)
+            {
+                <MudTextField Value="@_calendarFeedUrl"
+                              Label="Subscription URL — shown once, copy it now"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              ReadOnly="true"
+                              Class="account-manage__notice" />
+            }
+
+            <div class="account-manage__actions">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Outlined.Autorenew"
+                           Disabled="_calendarFeedBusy"
+                           aria-busy="@_calendarFeedBusy.ToString().ToLowerInvariant()"
+                           OnClick="RegenerateCalendarFeedAsync">
+                    @(_calendarFeedStatus?.HasActiveToken == true ? "Regenerate link" : "Generate link")
+                </MudButton>
+
+                @if (_calendarFeedUrl is not null)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="CopyCalendarFeedUrlAsync">
+                        Copy link
+                    </MudButton>
+                }
+
+                @if (_calendarFeedStatus?.HasActiveToken == true)
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Error"
+                               Disabled="_calendarFeedBusy"
+                               OnClick="RevokeCalendarFeedAsync">
+                        Revoke access
+                    </MudButton>
+                }
+
+                <span class="account-manage__status" role="status" aria-live="polite">
+                    @CalendarFeedStatusText
+                </span>
+            </div>
+
+            <MudExpansionPanels Class="account-manage__notice" Elevation="0">
+                <MudExpansionPanel Text="How to subscribe">
+                    <ul>
+                        <li><strong>Outlook (web/desktop):</strong> Add calendar → Subscribe from web → paste the link.</li>
+                        <li><strong>Google Calendar:</strong> Other calendars "+" → From URL → paste the link.</li>
+                        <li><strong>Apple Calendar:</strong> File → New Calendar Subscription → paste the link.</li>
+                    </ul>
+                    <p>
+                        Every client refreshes on its own schedule (Brainy hints hourly); none of
+                        them offer a manual "refresh now" for a subscribed calendar.
+                    </p>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
                 <MudIcon Icon="@Icons.Material.Outlined.UploadFile" aria-hidden="true" />
                 <div>
                     <h2>Import Brainy data</h2>
@@ -496,6 +808,95 @@
                     @(_importing ? "Importing…" : "Confirm import")
                 </MudButton>
                 <span class="account-manage__status" role="status" aria-live="polite">@_importStatus</span>
+            </div>
+        </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.Inbox" aria-hidden="true" />
+                <div>
+                    <h2>Import from another app</h2>
+                    <p>
+                        Bring in an Obsidian vault, a Notion "Markdown &amp; CSV" export, a plain
+                        folder of Markdown files, or an Evernote <code>.enex</code> file — zipped,
+                        except Evernote which is a single file.
+                    </p>
+                </div>
+            </div>
+
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
+                Every imported note lands in your Inbox rather than a guessed Project/Area/Resource,
+                so you file it yourself. Tags and links between notes (Obsidian <code>[[wiki links]]</code>,
+                Notion page links) carry over; attachments Brainy can't safely import are listed rather
+                than silently dropped. Preview first to see exactly what will be created before anything
+                is written. Re-importing the same source is safe and will not create duplicates.
+            </MudAlert>
+
+            @if (_externalImportError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_externalImportError
+                </MudAlert>
+            }
+
+            @if (_externalPreviewResult is not null)
+            {
+                <MudAlert Severity="@GetExternalPreviewSeverity()" Variant="Variant.Outlined" Class="account-manage__notice">
+                    <div class="account-manage__import-summary">
+                        <strong>Preview — nothing has been written yet</strong>
+                        @RenderOutcomes(_externalPreviewResult.EntityOutcomes, _externalPreviewResult.UnmappedAttachments, _externalPreviewResult.Conflicts, _externalPreviewResult.IntegrityIssues)
+                    </div>
+                </MudAlert>
+            }
+
+            @if (_externalImportResult is not null)
+            {
+                <MudAlert Severity="@GetExternalResultSeverity()" Variant="Variant.Outlined" Class="account-manage__notice">
+                    <div class="account-manage__import-summary">
+                        <strong>Import complete</strong>
+                        @RenderOutcomes(_externalImportResult.EntityOutcomes, _externalImportResult.UnmappedAttachments, _externalImportResult.Conflicts, _externalImportResult.IntegrityIssues)
+                    </div>
+                </MudAlert>
+            }
+
+            <div class="account-manage__settings-stack">
+                <MudSelect T="ExternalImportSourceFormat"
+                           @bind-Value="_externalImportFormat"
+                           Label="Source"
+                           Variant="Variant.Outlined"
+                           Disabled="@(_externalImporting || _externalPreviewing)">
+                    <MudSelectItem T="ExternalImportSourceFormat" Value="ExternalImportSourceFormat.ObsidianVault">Obsidian vault (.zip)</MudSelectItem>
+                    <MudSelectItem T="ExternalImportSourceFormat" Value="ExternalImportSourceFormat.NotionExport">Notion export (.zip)</MudSelectItem>
+                    <MudSelectItem T="ExternalImportSourceFormat" Value="ExternalImportSourceFormat.MarkdownFolder">Markdown folder (.zip)</MudSelectItem>
+                    <MudSelectItem T="ExternalImportSourceFormat" Value="ExternalImportSourceFormat.Evernote">Evernote export (.enex)</MudSelectItem>
+                </MudSelect>
+
+                <div class="account-manage__import-picker">
+                    <InputFile OnChange="HandleExternalImportFileSelected"
+                               accept="@(_externalImportFormat == ExternalImportSourceFormat.Evernote ? ".enex" : ".zip")"
+                               disabled="@(_externalImporting || _externalPreviewing)" />
+                    <span class="account-manage__status">@(_externalImportFileName ?? "Choose a file")</span>
+                </div>
+
+                <div class="account-manage__actions">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Outlined.Preview"
+                               Disabled="@(_externalPreviewing || _externalImporting || _selectedExternalImportFile is null)"
+                               aria-busy="@_externalPreviewing.ToString().ToLowerInvariant()"
+                               OnClick="PreviewExternalImportAsync">
+                        @(_externalPreviewing ? "Checking…" : "Preview import")
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Outlined.Publish"
+                               Disabled="@(_externalImporting || _externalPreviewing || _externalPreviewResult is null)"
+                               aria-busy="@_externalImporting.ToString().ToLowerInvariant()"
+                               OnClick="ImportExternalAsync">
+                        @(_externalImporting ? "Importing…" : "Confirm import")
+                    </MudButton>
+                    <span class="account-manage__status" role="status" aria-live="polite">@_externalImportStatus</span>
+                </div>
             </div>
         </MudPaper>
     </section>
@@ -576,6 +977,8 @@
     .account-manage__import-summary ul { margin: .5rem 0 0; padding-left: 1.1rem; }
     .account-manage__import-summary li + li { margin-top: .25rem; }
     .account-manage__danger { border-color: var(--mud-palette-error); }
+    .account-manage__subheading { margin: 1.25rem 0 0; font-size: .95rem; color: var(--ink); }
+    .account-manage__device-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .6rem .85rem; border-radius: 12px; background: color-mix(in srgb, var(--paper) 75%, transparent); border: 1px solid var(--line); font-size: .875rem; }
     .account-manage__actions { margin-top: 1.25rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
     .account-manage__status { color: var(--ink-soft); font-size: .875rem; }
 
@@ -598,7 +1001,7 @@
 @code {
     private const string BrowserTimeZoneOptionValue = "__browser__";
     private const long MaxImportFileBytes = 50L * 1024 * 1024;
-    private static readonly string[] RetentionEntityTypes = ["Project", "Area", "Resource", "Note"];
+    private static readonly string[] RetentionEntityTypes = ["Project", "Area", "Resource", "Note", "NoteRevision"];
     private static readonly IReadOnlyList<TimeZoneOption> TimeZoneOptions = TimeZoneInfo.GetSystemTimeZones()
         .OrderBy(zone => zone.BaseUtcOffset)
         .ThenBy(zone => zone.Id, StringComparer.Ordinal)
@@ -608,6 +1011,13 @@
     private bool _exporting;
     private string? _exportError;
     private string? _exportStatus;
+
+    private Guid? _markdownExportJobId;
+    private MarkdownExportJobState? _markdownExportState;
+    private string? _markdownExportFileName;
+    private string? _markdownExportError;
+    private string? _markdownExportStatusMessage;
+    private CancellationTokenSource? _markdownExportPollCts;
     private bool _importing;
     private bool _previewing;
     private string? _importError;
@@ -616,6 +1026,16 @@
     private DataImportResultDto? _importResult;
     private IBrowserFile? _selectedImportFile;
     private string? _importFileName;
+    private const long MaxExternalImportFileBytes = 100L * 1024 * 1024;
+    private ExternalImportSourceFormat _externalImportFormat = ExternalImportSourceFormat.ObsidianVault;
+    private bool _externalImporting;
+    private bool _externalPreviewing;
+    private string? _externalImportError;
+    private string? _externalImportStatus;
+    private ExternalImportPreviewDto? _externalPreviewResult;
+    private ExternalImportResultDto? _externalImportResult;
+    private IBrowserFile? _selectedExternalImportFile;
+    private string? _externalImportFileName;
     private bool _changingPassword;
     private string _currentPassword = string.Empty;
     private string _newPassword = string.Empty;
@@ -637,6 +1057,9 @@
     private string? _analyticsConsentStatus;
     private PlanUsageSummaryDto? _planUsage;
     private string? _planUsageError;
+    private bool _startingCheckout;
+    private bool _openingPortal;
+    private string? _billingActionError;
     private bool _starterModeEnabled = true;
     private bool _savingStarterMode;
     private string? _starterModeStatus;
@@ -645,6 +1068,25 @@
     private string _deletionPassword = string.Empty;
     private string _deletionConfirmation = string.Empty;
     private string? _deletionError;
+    private CalendarFeedTokenStatusDto? _calendarFeedStatus;
+    private string? _calendarFeedUrl;
+    private bool _calendarFeedBusy;
+    private string? _calendarFeedError;
+    private bool _pushEnabled;
+    private bool _pushOverdueTaskEnabled = true;
+    private bool _pushDailyFocusNudgeEnabled = true;
+    private bool _pushWeeklyReviewReminderEnabled = true;
+    private int _pushDailyFocusNudgeHour = 8;
+    private DayOfWeek _pushWeeklyReviewDayOfWeek = DayOfWeek.Sunday;
+    private int _pushWeeklyReviewHour = 17;
+    private bool _pushQuietHoursEnabled = true;
+    private int _pushQuietHoursStartHour = 21;
+    private int _pushQuietHoursEndHour = 8;
+    private bool _savingPushPreference;
+    private string? _pushPreferenceStatus;
+    private string? _pushError;
+    private bool _pushBusy;
+    private IReadOnlyList<PushSubscriptionDto> _pushSubscriptions = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -662,6 +1104,385 @@
         catch
         {
             _planUsageError = "Brainy could not load your plan and usage details. Try reloading this page.";
+        }
+
+        try
+        {
+            _calendarFeedStatus = await CalendarFeedTokenService.GetStatusAsync();
+        }
+        catch
+        {
+            _calendarFeedError = "Brainy could not load your calendar feed status. Try reloading this page.";
+        }
+
+        try
+        {
+            await LoadPushSettingsAsync();
+        }
+        catch
+        {
+            _pushError = "Brainy could not load your push notification settings. Try reloading this page.";
+        }
+    }
+
+    private async Task LoadPushSettingsAsync()
+    {
+        var preference = await PushNotificationPreferenceService.GetOrCreateAsync();
+        ApplyPreference(preference);
+        _pushSubscriptions = await PushSubscriptionService.GetSubscriptionsAsync();
+    }
+
+    private void ApplyPreference(PushNotificationPreferenceDto preference)
+    {
+        _pushEnabled = preference.Enabled;
+        _pushOverdueTaskEnabled = preference.OverdueTaskEnabled;
+        _pushDailyFocusNudgeEnabled = preference.DailyFocusNudgeEnabled;
+        _pushWeeklyReviewReminderEnabled = preference.WeeklyReviewReminderEnabled;
+        _pushDailyFocusNudgeHour = preference.DailyFocusNudgeHour;
+        _pushWeeklyReviewDayOfWeek = preference.WeeklyReviewDayOfWeek;
+        _pushWeeklyReviewHour = preference.WeeklyReviewHour;
+        _pushQuietHoursEnabled = preference.QuietHoursEnabled;
+        _pushQuietHoursStartHour = preference.QuietHoursStart.Hour;
+        _pushQuietHoursEndHour = preference.QuietHoursEnd.Hour;
+    }
+
+    private async Task OnPushEnabledChangedAsync(bool value)
+    {
+        _pushEnabled = value;
+
+        if (!value)
+        {
+            // Master switch off is the one-click "stop everything" path: save immediately
+            // rather than waiting for the (now-hidden) Save button.
+            await SavePushPreferenceAsync();
+            return;
+        }
+
+        if (_pushSubscriptions.Count == 0)
+        {
+            await SubscribeThisDeviceAsync();
+        }
+    }
+
+    private async Task SavePushPreferenceAsync()
+    {
+        if (_savingPushPreference)
+            return;
+
+        _savingPushPreference = true;
+        _pushError = null;
+        _pushPreferenceStatus = null;
+
+        try
+        {
+            var dto = new UpdatePushNotificationPreferenceDto(
+                _pushEnabled,
+                _pushDailyFocusNudgeEnabled,
+                _pushOverdueTaskEnabled,
+                _pushWeeklyReviewReminderEnabled,
+                _pushQuietHoursEnabled,
+                new TimeOnly(_pushQuietHoursStartHour, 0),
+                new TimeOnly(_pushQuietHoursEndHour, 0),
+                _pushDailyFocusNudgeHour,
+                _pushWeeklyReviewDayOfWeek,
+                _pushWeeklyReviewHour);
+
+            var saved = await PushNotificationPreferenceService.UpdateAsync(dto);
+            ApplyPreference(saved);
+            _pushPreferenceStatus = _pushEnabled ? "Push notifications are on." : "Push notifications are off.";
+        }
+        catch (Exception ex)
+        {
+            _pushError = ex.Message;
+        }
+        finally
+        {
+            _savingPushPreference = false;
+        }
+    }
+
+    private async Task SubscribeThisDeviceAsync()
+    {
+        if (_pushBusy)
+            return;
+
+        _pushBusy = true;
+        _pushError = null;
+
+        try
+        {
+            var publicKey = PushSubscriptionService.GetVapidPublicKey();
+            if (publicKey is null)
+            {
+                _pushError = "Push notifications are not configured on this Brainy deployment yet.";
+                return;
+            }
+
+            var subscription = await JS.InvokeAsync<BrowserPushSubscription>("brainyPush.subscribe", publicKey);
+
+            var browserLabel = await GetBrowserDeviceLabelAsync();
+            await PushSubscriptionService.RegisterAsync(new RegisterPushSubscriptionDto(
+                subscription.Endpoint, subscription.P256dh, subscription.Auth, browserLabel));
+
+            _pushSubscriptions = await PushSubscriptionService.GetSubscriptionsAsync();
+
+            if (!_pushEnabled)
+            {
+                _pushEnabled = true;
+                await SavePushPreferenceAsync();
+            }
+
+            Snackbar.Add("This device is enabled for push notifications.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _pushError = ex.Message;
+        }
+        finally
+        {
+            _pushBusy = false;
+        }
+    }
+
+    private async Task RemovePushSubscriptionAsync(Guid subscriptionId)
+    {
+        if (_pushBusy)
+            return;
+
+        _pushBusy = true;
+        _pushError = null;
+
+        try
+        {
+            await PushSubscriptionService.UnregisterAsync(subscriptionId);
+            try
+            {
+                await JS.InvokeVoidAsync("brainyPush.unsubscribe");
+            }
+            catch (JSException)
+            {
+                // The server-side row is already gone, which is what stops delivery;
+                // failing to also clear the browser's own subscription object is cosmetic.
+            }
+
+            _pushSubscriptions = await PushSubscriptionService.GetSubscriptionsAsync();
+            Snackbar.Add("Device removed. Push notifications to it stop immediately.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _pushError = ex.Message;
+        }
+        finally
+        {
+            _pushBusy = false;
+        }
+    }
+
+    private async Task SendTestPushAsync()
+    {
+        if (_pushBusy)
+            return;
+
+        _pushBusy = true;
+        _pushError = null;
+
+        try
+        {
+            var sent = await PushSubscriptionService.SendTestNotificationAsync();
+            Snackbar.Add(
+                sent ? "Test notification sent." : "Brainy could not deliver a test notification to any of your devices.",
+                sent ? Severity.Success : Severity.Warning);
+            _pushSubscriptions = await PushSubscriptionService.GetSubscriptionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _pushError = ex.Message;
+        }
+        finally
+        {
+            _pushBusy = false;
+        }
+    }
+
+    private async Task<string?> GetBrowserDeviceLabelAsync()
+    {
+        try
+        {
+            return await JS.InvokeAsync<string>("brainyPush.getDeviceLabel");
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private sealed record BrowserPushSubscription(string Endpoint, string P256dh, string Auth);
+
+    private string CalendarFeedStatusText => _calendarFeedStatus switch
+    {
+        { HasActiveToken: true, LastAccessedAtUtc: not null } status =>
+            $"Last fetched {status.LastAccessedAtUtc:MMM d, yyyy 'at' h:mm tt} UTC.",
+        { HasActiveToken: true } => "Generated, not yet fetched by a calendar client.",
+        { RevokedAtUtc: not null } => "Revoked. Generate a new link to subscribe again.",
+        _ => "No calendar feed link yet."
+    };
+
+    private async Task RegenerateCalendarFeedAsync()
+    {
+        if (_calendarFeedBusy)
+            return;
+
+        _calendarFeedBusy = true;
+        _calendarFeedError = null;
+
+        try
+        {
+            var result = await CalendarFeedTokenService.RegenerateAsync();
+            var relativeUrl = $"{CalendarFeedEndpoints.FeedPath}?token={result.RawToken}";
+            _calendarFeedUrl = Navigation.ToAbsoluteUri(relativeUrl).ToString();
+            _calendarFeedStatus = await CalendarFeedTokenService.GetStatusAsync();
+            Snackbar.Add(
+                _calendarFeedStatus.HasActiveToken && _calendarFeedStatus.LastAccessedAtUtc is null
+                    ? "Calendar feed link generated. Copy it now — it will not be shown again."
+                    : "Calendar feed link regenerated. The previous link no longer works.",
+                Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _calendarFeedError = ex.Message;
+        }
+        finally
+        {
+            _calendarFeedBusy = false;
+        }
+    }
+
+    private async Task RevokeCalendarFeedAsync()
+    {
+        if (_calendarFeedBusy)
+            return;
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Revoke calendar feed",
+            "Any calendar app subscribed to this link will stop receiving updates immediately. Continue?",
+            yesText: "Revoke",
+            cancelText: "Cancel");
+
+        if (confirmed != true)
+            return;
+
+        _calendarFeedBusy = true;
+        _calendarFeedError = null;
+
+        try
+        {
+            await CalendarFeedTokenService.RevokeAsync();
+            _calendarFeedUrl = null;
+            _calendarFeedStatus = await CalendarFeedTokenService.GetStatusAsync();
+            Snackbar.Add("Calendar feed access revoked.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _calendarFeedError = ex.Message;
+        }
+        finally
+        {
+            _calendarFeedBusy = false;
+        }
+    }
+
+    private async Task CopyCalendarFeedUrlAsync()
+    {
+        if (_calendarFeedUrl is null)
+            return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _calendarFeedUrl);
+            Snackbar.Add("Link copied.", Severity.Success);
+        }
+        catch (JSException)
+        {
+            // Clipboard access can be unavailable (insecure context, permission denied);
+            // the URL is still visible and selectable in the read-only field above.
+        }
+    }
+
+    private async Task<string?> GetCurrentUserIdAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        return UserManager.GetUserId(authenticationState.User);
+    }
+
+    private async Task UpgradeToProAsync()
+    {
+        if (_startingCheckout)
+            return;
+
+        _startingCheckout = true;
+        _billingActionError = null;
+
+        try
+        {
+            var userId = await GetCurrentUserIdAsync();
+            if (userId is null)
+            {
+                _billingActionError = "Your sign-in session is no longer valid. Sign in again and retry.";
+                return;
+            }
+
+            var result = await BillingProvider.CreateCheckoutSessionAsync(userId, PlanTier.Pro);
+            if (!result.Supported)
+            {
+                _billingActionError = result.UnsupportedReason ?? "Checkout is not available right now.";
+                return;
+            }
+
+            Navigation.NavigateTo(result.RedirectUrl!, forceLoad: true);
+        }
+        catch
+        {
+            _billingActionError = "Brainy could not start checkout. Try again.";
+        }
+        finally
+        {
+            _startingCheckout = false;
+        }
+    }
+
+    private async Task OpenBillingPortalAsync()
+    {
+        if (_openingPortal)
+            return;
+
+        _openingPortal = true;
+        _billingActionError = null;
+
+        try
+        {
+            var userId = await GetCurrentUserIdAsync();
+            if (userId is null)
+            {
+                _billingActionError = "Your sign-in session is no longer valid. Sign in again and retry.";
+                return;
+            }
+
+            var result = await BillingProvider.CreatePortalSessionAsync(userId);
+            if (!result.Supported)
+            {
+                _billingActionError = result.UnsupportedReason ?? "The billing portal is not available right now.";
+                return;
+            }
+
+            Navigation.NavigateTo(result.RedirectUrl!, forceLoad: true);
+        }
+        catch
+        {
+            _billingActionError = "Brainy could not open the billing portal. Try again.";
+        }
+        finally
+        {
+            _openingPortal = false;
         }
     }
 
@@ -963,6 +1784,104 @@
         }
     }
 
+    private void HandleExternalImportFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedExternalImportFile = e.File;
+        _externalImportFileName = _selectedExternalImportFile?.Name;
+        _externalImportError = null;
+        _externalImportStatus = null;
+        _externalPreviewResult = null;
+        _externalImportResult = null;
+    }
+
+    private async Task PreviewExternalImportAsync()
+    {
+        if (_externalPreviewing || _externalImporting || _selectedExternalImportFile is null)
+            return;
+
+        _externalPreviewing = true;
+        _externalImportError = null;
+        _externalImportStatus = "Checking the file against your account without changing anything.";
+        _externalPreviewResult = null;
+        _externalImportResult = null;
+
+        try
+        {
+            await using var stream = _selectedExternalImportFile.OpenReadStream(MaxExternalImportFileBytes);
+            _externalPreviewResult = await ExternalImportService.PreviewImportAsync(_externalImportFormat, stream);
+            _externalImportStatus = "Preview checked. Review the plan, then confirm to write it.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            _externalImportError = ex.Message;
+            _externalImportStatus = null;
+        }
+        catch (IOException)
+        {
+            _externalImportError = "The selected file could not be read. Choose it again and retry.";
+            _externalImportStatus = null;
+        }
+        catch
+        {
+            _externalImportError = "Brainy could not preview that file.";
+            _externalImportStatus = null;
+        }
+        finally
+        {
+            _externalPreviewing = false;
+        }
+    }
+
+    private async Task ImportExternalAsync()
+    {
+        if (_externalImporting || _externalPreviewing || _selectedExternalImportFile is null || _externalPreviewResult is null)
+            return;
+
+        _externalImporting = true;
+        _externalImportError = null;
+        _externalImportStatus = "Importing your notes inside a single transaction.";
+        _externalImportResult = null;
+
+        try
+        {
+            await using var stream = _selectedExternalImportFile.OpenReadStream(MaxExternalImportFileBytes);
+            _externalImportResult = await ExternalImportService.ImportCurrentUserAsync(_externalImportFormat, stream);
+            _externalPreviewResult = null;
+            _externalImportStatus = "Import committed. New notes are waiting in your Inbox.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            _externalImportError = ex.Message;
+            _externalImportStatus = null;
+        }
+        catch (IOException)
+        {
+            _externalImportError = "The selected file could not be read. Choose it again and retry.";
+            _externalImportStatus = null;
+        }
+        catch
+        {
+            _externalImportError = "Brainy could not import that file. The transaction was rolled back, so no partial data was written.";
+            _externalImportStatus = null;
+        }
+        finally
+        {
+            _externalImporting = false;
+        }
+    }
+
+    private Severity GetExternalPreviewSeverity() =>
+        _externalPreviewResult is not null &&
+        HasWarnings(_externalPreviewResult.EntityOutcomes, _externalPreviewResult.UnmappedAttachments, _externalPreviewResult.Conflicts, _externalPreviewResult.IntegrityIssues)
+            ? Severity.Warning
+            : Severity.Success;
+
+    private Severity GetExternalResultSeverity() =>
+        _externalImportResult is not null &&
+        HasWarnings(_externalImportResult.EntityOutcomes, _externalImportResult.UnmappedAttachments, _externalImportResult.Conflicts, _externalImportResult.IntegrityIssues)
+            ? Severity.Warning
+            : Severity.Success;
+
     private static bool HasWarnings(
         IReadOnlyList<DataImportEntityOutcomeDto> outcomes,
         IReadOnlyList<DataImportEntityCountDto> unsupported,
@@ -1064,6 +1983,7 @@
         "Project" => "Projects",
         "Area" => "Areas",
         "Resource" => "Resources",
+        "NoteRevision" => "Note version history",
         _ => "Notes"
     };
 
@@ -1072,6 +1992,7 @@
         "Project" => "Completed projects and their archived context.",
         "Area" => "Inactive responsibilities you still want on record.",
         "Resource" => "Reference material you no longer need in active views.",
+        "NoteRevision" => "Older note revisions, beyond the most recent one for each note.",
         _ => "Archived notes kept for later recall."
     };
 
@@ -1175,6 +2096,88 @@
         }
     }
 
+    private async Task StartMarkdownExportAsync()
+    {
+        if (_markdownExportState is MarkdownExportJobState.Queued or MarkdownExportJobState.Running)
+            return;
+
+        _markdownExportError = null;
+        _markdownExportFileName = null;
+        _markdownExportStatusMessage = "Starting your export…";
+
+        try
+        {
+            var status = await MarkdownExportJobService.StartExportAsync();
+            ApplyMarkdownExportStatus(status);
+
+            _markdownExportPollCts?.Cancel();
+            _markdownExportPollCts?.Dispose();
+            _markdownExportPollCts = new CancellationTokenSource();
+
+            if (status.State is MarkdownExportJobState.Queued or MarkdownExportJobState.Running)
+                _ = PollMarkdownExportStatusAsync(status.JobId, _markdownExportPollCts.Token);
+        }
+        catch
+        {
+            _markdownExportError = "Brainy could not start your Markdown export. Try again.";
+            _markdownExportStatusMessage = null;
+        }
+    }
+
+    private async Task PollMarkdownExportStatusAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+
+                var status = await MarkdownExportJobService.GetStatusAsync(jobId, cancellationToken);
+                if (status is null || cancellationToken.IsCancellationRequested)
+                    return;
+
+                var shouldStop = status.State is MarkdownExportJobState.Completed or MarkdownExportJobState.Failed;
+
+                await InvokeAsync(() =>
+                {
+                    ApplyMarkdownExportStatus(status);
+                    StateHasChanged();
+                });
+
+                if (shouldStop)
+                    return;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer export superseded this poll loop, or the component was disposed.
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser connection closed; nothing left to update.
+        }
+    }
+
+    private void ApplyMarkdownExportStatus(Brainy.Application.DTOs.DataExport.MarkdownExportJobStatusDto status)
+    {
+        _markdownExportJobId = status.JobId;
+        _markdownExportState = status.State;
+        _markdownExportFileName = status.FileName;
+
+        _markdownExportStatusMessage = status.State switch
+        {
+            MarkdownExportJobState.Queued => "Queued. This can take a moment for large accounts.",
+            MarkdownExportJobState.Running => "Building your vault…",
+            MarkdownExportJobState.Completed => "Your vault is ready to download.",
+            MarkdownExportJobState.Failed => null,
+            _ => null
+        };
+
+        _markdownExportError = status.State == MarkdownExportJobState.Failed
+            ? status.ErrorMessage ?? "Brainy could not build your Markdown export. Try again."
+            : null;
+    }
+
     private async Task DeleteAccountAsync()
     {
         if (_deletingAccount)
@@ -1225,5 +2228,11 @@
             _deletionPassword = string.Empty;
             _deletingAccount = false;
         }
+    }
+
+    public void Dispose()
+    {
+        _markdownExportPollCts?.Cancel();
+        _markdownExportPollCts?.Dispose();
     }
 }

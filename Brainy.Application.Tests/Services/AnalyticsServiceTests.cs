@@ -1,3 +1,4 @@
+using System.Text;
 using Brainy.Application.Analytics;
 using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
@@ -24,13 +25,15 @@ public class AnalyticsServiceTests
 
     private static (IAnalyticsService Sut, BrainyDbContext Db, FixedTimeProvider Clock) BuildService(
         string dbName,
-        string userId = DefaultUserId)
+        string userId = DefaultUserId,
+        int registeredUserCount = 0)
     {
         var services = new ServiceCollection();
 
         services.AddDbContext<BrainyDbContext>(o => o.UseInMemoryDatabase(dbName));
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<BrainyDbContext>());
         services.AddSingleton<ICurrentUserService>(new FakeCurrentUserService(userId));
+        services.AddSingleton<IUserDirectoryService>(new FakeUserDirectoryService(registeredUserCount));
 
         var clock = new FixedTimeProvider(FixedNow);
         services.AddSingleton<TimeProvider>(clock);
@@ -128,7 +131,9 @@ public class AnalyticsServiceTests
     [Fact]
     public async Task GetActivationFunnelAsync_ComputesCountsAcrossUsers()
     {
-        var (sut, _, _) = BuildService(nameof(GetActivationFunnelAsync_ComputesCountsAcrossUsers));
+        var (sut, _, _) = BuildService(
+            nameof(GetActivationFunnelAsync_ComputesCountsAcrossUsers),
+            registeredUserCount: 2);
 
         await sut.TrackOnceAsync(DefaultUserId, AnalyticsEvents.FirstCaptureCreated);
         await sut.TrackOnceAsync(DefaultUserId, AnalyticsEvents.FirstTaskCreated);
@@ -136,11 +141,55 @@ public class AnalyticsServiceTests
 
         var funnel = await sut.GetActivationFunnelAsync();
 
+        funnel.RegisteredUserCount.Should().Be(2);
+        funnel.ConsentExcludedUserCount.Should().Be(0);
+        funnel.EligibleUserCount.Should().Be(2);
         funnel.UsersWithAnyEvent.Should().Be(2);
         funnel.UsersWithFirstCapture.Should().Be(2);
         funnel.UsersWithFirstTask.Should().Be(1);
         funnel.UsersWithFirstProcessedItem.Should().Be(0);
-        funnel.FirstTaskRate.Should().BeApproximately(0.5, 0.0001);
+        funnel.UsersWithFirstOutput.Should().Be(0);
+        funnel.FirstTaskRate.Should().BeApproximately(0.5, 0.0001, "the rate is of the 2 eligible (registered, non-excluded) users");
+    }
+
+    [Fact]
+    public async Task GetActivationFunnelAsync_ComputesFirstOutputStep()
+    {
+        var (sut, _, _) = BuildService(
+            nameof(GetActivationFunnelAsync_ComputesFirstOutputStep),
+            registeredUserCount: 1);
+
+        await sut.TrackOnceAsync(DefaultUserId, AnalyticsEvents.FirstOutputCreated);
+        await sut.TrackOnceAsync(DefaultUserId, AnalyticsEvents.FirstOutputCreated);
+
+        var funnel = await sut.GetActivationFunnelAsync();
+
+        funnel.UsersWithFirstOutput.Should().Be(1);
+        funnel.FirstOutputRate.Should().BeApproximately(1.0, 0.0001);
+    }
+
+    [Fact]
+    public async Task GetActivationFunnelAsync_ReportsConsentExcludedUsersAsKnownGap_NotSilentUndercount()
+    {
+        var dbName = nameof(GetActivationFunnelAsync_ReportsConsentExcludedUsersAsKnownGap_NotSilentUndercount);
+        var (sut, _, _) = BuildService(dbName, registeredUserCount: 5);
+        var (otherSut, otherDb, _) = BuildService(dbName, userId: OtherUserId, registeredUserCount: 5);
+
+        // OtherUserId opts out of analytics before doing anything else: every subsequent
+        // TrackAsync call for them must be a silent no-op per the consent gate.
+        await otherSut.SetCurrentUserOptedInAsync(false);
+        await otherSut.TrackAsync(OtherUserId, AnalyticsEvents.CaptureCreated);
+        await sut.TrackOnceAsync(DefaultUserId, AnalyticsEvents.FirstCaptureCreated);
+
+        var funnel = await sut.GetActivationFunnelAsync();
+
+        funnel.RegisteredUserCount.Should().Be(5, "the registered total counts every Identity user, including the opted-out one");
+        funnel.ConsentExcludedUserCount.Should().Be(1, "one user explicitly opted out and must be reported, not silently dropped");
+        funnel.EligibleUserCount.Should().Be(4);
+        // The opted-out user's event was never written: confirms the exclusion is real, not
+        // merely reported without effect.
+        (await otherDb.ProductEvents.CountAsync(e => e.UserId == OtherUserId)).Should().Be(0);
+        funnel.UsersWithAnyEvent.Should().Be(1);
     }
 
     [Fact]
@@ -186,5 +235,73 @@ public class AnalyticsServiceTests
         retention.Day7CohortSize.Should().Be(2);
         retention.Day7Retained.Should().Be(1);
         retention.Day30CohortSize.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetKnowledgeReuseSummaryAsync_ComputesReuseRateFromExistingEvents()
+    {
+        var (sut, _, _) = BuildService(nameof(GetKnowledgeReuseSummaryAsync_ComputesReuseRateFromExistingEvents));
+
+        await sut.TrackAsync(DefaultUserId, AnalyticsEvents.CaptureCreated);
+        await sut.TrackAsync(DefaultUserId, AnalyticsEvents.CaptureCreated);
+        await sut.TrackAsync(DefaultUserId, AnalyticsEvents.CaptureReusedAsProject);
+        await sut.TrackAsync(DefaultUserId, AnalyticsEvents.CaptureReusedAsTask);
+
+        var reuse = await sut.GetKnowledgeReuseSummaryAsync();
+
+        reuse.TotalCaptures.Should().Be(2);
+        reuse.ReusedAsProjectCount.Should().Be(1);
+        reuse.ReusedAsTaskCount.Should().Be(1);
+        reuse.ReusedAsOutputCount.Should().Be(0);
+        reuse.TotalReuseActions.Should().Be(2);
+        reuse.ReuseRate.Should().BeApproximately(1.0, 0.0001);
+    }
+
+    [Fact]
+    public async Task GetWeeklyReviewSummaryAsync_ComputesInboxProcessingAdherence()
+    {
+        var (sut, _, _) = BuildService(nameof(GetWeeklyReviewSummaryAsync_ComputesInboxProcessingAdherence));
+
+        await sut.TrackAsync(DefaultUserId, AnalyticsEvents.CaptureCreated);
+        await sut.TrackAsync(DefaultUserId, AnalyticsEvents.CaptureCreated);
+        await sut.TrackAsync(DefaultUserId, AnalyticsEvents.InboxItemProcessed);
+        await sut.TrackAsync(DefaultUserId, AnalyticsEvents.WeeklyReviewViewed);
+        await sut.TrackAsync(DefaultUserId, AnalyticsEvents.ResurfacedItemActioned);
+
+        var summary = await sut.GetWeeklyReviewSummaryAsync();
+
+        summary.WeeklyReviewViews.Should().Be(1);
+        summary.ResurfacedItemActions.Should().Be(1);
+        summary.TotalCaptures.Should().Be(2);
+        summary.InboxItemsProcessed.Should().Be(1);
+        summary.InboxProcessingAdherenceRate.Should().BeApproximately(0.5, 0.0001);
+    }
+
+    [Fact]
+    public async Task ExportMetricsCsvAsync_ProducesAggregateOnlyCsvWithNoPerUserIdentifiers()
+    {
+        var (sut, _, _) = BuildService(
+            nameof(ExportMetricsCsvAsync_ProducesAggregateOnlyCsvWithNoPerUserIdentifiers),
+            registeredUserCount: 3);
+
+        await sut.TrackOnceAsync(DefaultUserId, AnalyticsEvents.FirstCaptureCreated);
+        await sut.TrackAsync(DefaultUserId, AnalyticsEvents.SearchSubmitted);
+        await sut.TrackAsync(OtherUserId, AnalyticsEvents.SearchZeroResult);
+
+        var export = await sut.ExportMetricsCsvAsync();
+
+        export.ContentType.Should().Be("text/csv");
+        export.FileName.Should().EndWith(".csv");
+
+        var csv = Encoding.UTF8.GetString(export.Content);
+        csv.Should().StartWith("section,metric,value");
+        csv.Should().Contain("activation_funnel,registered_users,3");
+        csv.Should().Contain("activation_funnel,first_capture_users,1");
+        csv.Should().Contain("retrieval_effectiveness,searches_submitted,1");
+
+        // Aggregate only: the export must never carry a user id, email, or other per-user
+        // identifier alongside the cross-user counts (issue #324's aggregate-only guardrail).
+        csv.Should().NotContain(DefaultUserId);
+        csv.Should().NotContain(OtherUserId);
     }
 }

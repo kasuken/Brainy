@@ -7,12 +7,16 @@
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @using Brainy.Web.Components.Pages.Notes
+@using Brainy.Web.Components.Pages.Templates
+@using Brainy.Application.DTOs.Templates
 
 @inject INoteService NoteService
+@inject INoteTemplateService NoteTemplateService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IStringLocalizer<Notes> Localizer
 
-<PageTitle>Notes – Brainy</PageTitle>
+<PageTitle>@Localizer["PageTitle"]</PageTitle>
 
 <style>
 
@@ -225,17 +229,17 @@
                 @* ── Sidebar ── *@
                 <aside class="nn-sidebar">
                     <div class="nn-hero">
-                        <p class="nn-eyebrow">Knowledge Base</p>
+                        <p class="nn-eyebrow">@Localizer["Eyebrow"]</p>
                         <div style="display:flex; align-items:center; gap:0.5rem;">
-                            <h1 class="nn-title">Notes</h1>
+                            <h1 class="nn-title">@Localizer["Title"]</h1>
                             <MudSpacer />
                             <PageHelpButton Guide="HelpGuide" />
                         </div>
                     </div>
 
                     <MudTextField @bind-Value="_searchText"
-                                  Placeholder="Search entries…"
-                                  aria-label="Search notes"
+                                  Placeholder="@Localizer["SearchPlaceholder"]"
+                                  aria-label="@Localizer["SearchAriaLabel"]"
                                   Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.Search"
                                   Clearable="true"
@@ -245,8 +249,8 @@
 
                     <MudSelect T="ParaCategory" @bind-SelectedValues="_selectedCategories"
                                MultiSelection="true"
-                               Label="Category"
-                               Placeholder="All categories"
+                               Label="@Localizer["CategoryLabel"]"
+                               Placeholder="@Localizer["CategoryPlaceholder"]"
                                Variant="Variant.Outlined"
                                Clearable="true"
                                Dense="true"
@@ -259,8 +263,8 @@
 
                     <MudSelect T="NoteStatus" @bind-SelectedValues="_selectedStatuses"
                                MultiSelection="true"
-                               Label="Status"
-                               Placeholder="All statuses"
+                               Label="@Localizer["StatusLabel"]"
+                               Placeholder="@Localizer["StatusPlaceholder"]"
                                Variant="Variant.Outlined"
                                Clearable="true"
                                Dense="true"
@@ -273,7 +277,7 @@
 
                     <MudSwitch T="bool" @bind-Value="_favoritesOnly"
                                Color="Color.Warning"
-                               Label="Favorites only"
+                               Label="@Localizer["FavoritesOnlyLabel"]"
                                Class="mb-3" />
 
                     @if (HasActiveFilters)
@@ -283,7 +287,7 @@
                                    StartIcon="@Icons.Material.Filled.FilterAltOff"
                                    OnClick="ClearFilters"
                                    Class="mb-2">
-                            Clear filters
+                            @Localizer["ClearFilters"]
                         </MudButton>
                     }
 
@@ -295,7 +299,15 @@
                                    OnClick="OpenCreateDialogAsync"
                                    FullWidth="true"
                                    Style="border-radius: 8px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;">
-                            Write New Note
+                            @Localizer["WriteNewNote"]
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                                   Size="Size.Medium"
+                                   StartIcon="@Icons.Material.Filled.PlaylistAdd"
+                                   OnClick="OpenNoteTemplatePickerAsync"
+                                   FullWidth="true"
+                                   Class="mt-2">
+                            @Localizer["FromTemplate"]
                         </MudButton>
                     </div>
                 </aside>
@@ -311,8 +323,8 @@
                     else if (_loadError is not null)
                     {
                         <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
-                            Notes could not be loaded. Check your connection and try again.
-                            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadNotesAsync" Class="ml-2">Retry</MudButton>
+                            @Localizer["LoadError"]
+                            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadNotesAsync" Class="ml-2">@Localizer["Retry"]</MudButton>
                         </MudAlert>
                     }
                     else
@@ -320,7 +332,7 @@
                         @if (FavoriteNotes.Any())
                         {
                             <div class="nn-section-head">
-                                <span class="nn-section-label">Quick Access</span>
+                                <span class="nn-section-label">@Localizer["QuickAccess"]</span>
                             </div>
                             <div class="nn-fav-grid">
                                 @foreach (var note in FavoriteNotes)
@@ -332,7 +344,7 @@
                                                 <MudIconButton Icon="@Icons.Material.Filled.Star"
                                                                Color="Color.Warning"
                                                                Size="Size.Small"
-                                                               aria-label="@($"Remove {note.Title} from favorites")"
+                                                               aria-label="@Localizer["RemoveFromFavoritesAria", note.Title]"
                                                                OnClick="@(() => ToggleFavoriteAsync(note.Id))" />
                                             </span>
                                         </div>
@@ -353,18 +365,18 @@
                         {
                             <div style="padding: 4rem 2rem; display: flex; flex-direction: column; align-items: center; text-align: center; border: 1px dashed var(--mud-palette-lines-default); border-radius: 16px; background: var(--mud-palette-table-lines);">
                                 <MudIcon Icon="@Icons.Material.Outlined.StickyNote2" Style="font-size:3.5rem; color: var(--mud-palette-text-disabled); margin-bottom: 1.5rem;" />
-                                <h2 style="font-family: var(--font-display); font-size: 1.75rem; margin: 0 0 0.5rem; color: var(--mud-palette-text-primary);">No notes yet</h2>
-                                <p style="color: var(--mud-palette-text-secondary); margin: 0 0 2rem; max-width: 400px;">Capture your first piece of knowledge to get started.</p>
+                                <h2 style="font-family: var(--font-display); font-size: 1.75rem; margin: 0 0 0.5rem; color: var(--mud-palette-text-primary);">@Localizer["NoNotesYetTitle"]</h2>
+                                <p style="color: var(--mud-palette-text-secondary); margin: 0 0 2rem; max-width: 400px;">@Localizer["NoNotesYetDescription"]</p>
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary"
                                            StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialogAsync">
-                                    Create your first note
+                                    @Localizer["CreateFirstNote"]
                                 </MudButton>
                             </div>
                         }
                         else
                         {
                             <div class="nn-section-head" style="margin-top:2rem;">
-                                <span class="nn-section-label">Library</span>
+                                <span class="nn-section-label">@Localizer["Library"]</span>
                             </div>
                             
                             <MudTable Items="FilteredNotes"
@@ -380,10 +392,10 @@
                                 
                                 <ToolBarContent>
                                     <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
-                                        @FilteredNotes.Count() note@(FilteredNotes.Count() == 1 ? "" : "s")
+                                        @Localizer[FilteredNotes.Count() == 1 ? "NoteCountSingular" : "NoteCountPlural", FilteredNotes.Count()]
                                         @if (HasActiveFilters)
                                         {
-                                            <span> matching current filters</span>
+                                            <span> @Localizer["MatchingFilters"]</span>
                                         }
                                     </MudText>
                                     <MudSpacer />
@@ -391,14 +403,14 @@
                                     {
                                         <div class="notes-bulk-bar" style="display:flex; align-items:center; background:rgba(192, 86, 29, 0.1); padding:4px 8px; border-radius:8px; border: 1px solid rgba(192, 86, 29, 0.3);">
                                             <MudChip T="string" Size="Size.Small" Style="background: var(--mud-palette-surface);" Variant="Variant.Filled" Class="mr-2">
-                                                <span style="color: var(--mud-palette-text-primary); font-weight: 600;">@_selectedNotes.Count selected</span>
+                                                <span style="color: var(--mud-palette-text-primary); font-weight: 600;">@Localizer["SelectedCount", _selectedNotes.Count]</span>
                                             </MudChip>
                                             <MudButton Size="Size.Small"
                                                        Variant="Variant.Filled"
                                                        Color="Color.Primary"
                                                        StartIcon="@Icons.Material.Filled.DriveFileMove"
                                                        OnClick="BulkMoveCategoryAsync">
-                                                Move to…
+                                                @Localizer["MoveTo"]
                                             </MudButton>
                                         </div>
                                     }
@@ -406,10 +418,11 @@
 
                                 <HeaderContent>
                                     <MudTh Style="width:48px"></MudTh>
-                                    <MudTh>Title</MudTh>
-                                    <MudTh>Category</MudTh>
-                                    <MudTh>Status</MudTh>
-                                    <MudTh>Updated</MudTh>
+                                    <MudTh>@Localizer["ColumnTitle"]</MudTh>
+                                    <MudTh>@Localizer["ColumnCategory"]</MudTh>
+                                    <MudTh>@Localizer["ColumnStatus"]</MudTh>
+                                    <MudTh>@Localizer["ColumnUpdated"]</MudTh>
+                                    <MudTh Style="width:48px"></MudTh>
                                 </HeaderContent>
 
                                 <RowTemplate Context="noteContext">
@@ -431,7 +444,7 @@
                                             </button>
                                             @if (noteContext.HasImages)
                                             {
-                                                <MudTooltip Text="Contains images" Placement="Placement.Top">
+                                                <MudTooltip Text="@Localizer["ContainsImagesTooltip"]" Placement="Placement.Top">
                                                     <MudIcon Icon="@Icons.Material.Outlined.Image"
                                                              Style="font-size:1rem; color:var(--mud-palette-text-secondary); flex-shrink:0;" />
                                                 </MudTooltip>
@@ -457,14 +470,24 @@
                                     <MudTd DataLabel="Updated">
                                         <div style="color:var(--mud-palette-text-secondary); font-size: 0.8rem;"><UserLocalTime Utc="noteContext.UpdatedAtUtc" /></div>
                                     </MudTd>
+                                    <MudTd>
+                                        <span @onclick:stopPropagation="true">
+                                            <MudTooltip Text="@Localizer["SaveAsTemplateTooltip"]">
+                                                <MudIconButton Icon="@Icons.Material.Outlined.ContentCopy"
+                                                               Size="Size.Small"
+                                                               aria-label="@Localizer["SaveAsTemplateAria", noteContext.Title]"
+                                                               OnClick="@(() => SaveAsTemplateAsync(noteContext))" />
+                                            </MudTooltip>
+                                        </span>
+                                    </MudTd>
                                 </RowTemplate>
 
                                 <NoRecordsContent>
                                     <MudStack Class="pa-6" AlignItems="AlignItems.Center" Spacing="2">
                                         <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Style="font-size:3rem;" Color="Color.Secondary" />
-                                                        <MudText Typo="Typo.subtitle1">No notes match your filters</MudText>
+                                                        <MudText Typo="Typo.subtitle1">@Localizer["NoNotesMatchFilters"]</MudText>
                                         <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                                                            Try different keywords or <MudLink @onclick="ClearFilters">clear all filters</MudLink>.
+                                                            @Localizer["TryDifferentKeywords"] <MudLink @onclick="ClearFilters">@Localizer["ClearAllFiltersLink"]</MudLink>.
                                         </MudText>
                                     </MudStack>
                                 </NoRecordsContent>
@@ -557,9 +580,9 @@
             && (!_selectedStatuses.Any() || _selectedStatuses.Contains(n.Status))
             && (!_favoritesOnly || n.IsFavorite));
 
-    private static string FavoriteAriaLabel(NoteDto note) => note.IsFavorite
-        ? $"Remove {note.Title} from favorites"
-        : $"Add {note.Title} to favorites";
+    private string FavoriteAriaLabel(NoteDto note) => note.IsFavorite
+        ? Localizer["RemoveFromFavoritesAria", note.Title]
+        : Localizer["AddToFavoritesAria", note.Title];
 
     private static readonly DialogOptions _dialogOptions = new()
     {
@@ -574,16 +597,31 @@
     [SupplyParameterFromQuery(Name = "open")]
     public Guid? OpenNoteId { get; set; }
 
+    /// <summary>Set by the command palette's "New note" command (issue #318) to open the
+    /// create dialog on load, exactly as the page's own "New Note" button would.</summary>
+    [SupplyParameterFromQuery(Name = "new")]
+    public bool? CreateFromQuery { get; set; }
+
     private bool _deepLinkHandled;
+    private bool _paletteCreateHandled;
 
     protected override async Task OnInitializedAsync() => await LoadNotesAsync();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && OpenNoteId.HasValue && !_deepLinkHandled)
+        if (!firstRender) return;
+
+        if (OpenNoteId.HasValue && !_deepLinkHandled)
         {
             _deepLinkHandled = true;
             await OpenEditDialogAsync(OpenNoteId.Value);
+            return;
+        }
+
+        if (CreateFromQuery == true && !_paletteCreateHandled)
+        {
+            _paletteCreateHandled = true;
+            await OpenCreateDialogAsync();
         }
     }
 
@@ -612,6 +650,28 @@
         var result = await dialog.Result;
         if (result is { Canceled: false })
             await LoadNotesAsync();
+    }
+
+    private async Task OpenNoteTemplatePickerAsync()
+    {
+        var dialog = await DialogService.ShowAsync<NoteTemplatePickerDialog>("New note from template", _dialogOptions);
+        var result = await dialog.Result;
+        if (result is { Canceled: false } && result.Data is NoteDto)
+            await LoadNotesAsync();
+    }
+
+    private async Task SaveAsTemplateAsync(NoteDto note)
+    {
+        var parameters = new DialogParameters<SaveAsTemplateDialog>
+        {
+            { x => x.Message, $"Save \"{note.Title}\" — its title and content — as a reusable template." }
+        };
+        var dialog = await DialogService.ShowAsync<SaveAsTemplateDialog>("Save as template", parameters, _dialogOptions);
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not string templateName) return;
+
+        await NoteTemplateService.CreateFromNoteAsync(new SaveNoteAsTemplateDto(note.Id, templateName));
+        Snackbar.Add($"Saved \"{templateName}\" as a template.", Severity.Success);
     }
 
     private async Task OpenEditDialogAsync(Guid noteId)

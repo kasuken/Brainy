@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="SeoTitle" xml:space="preserve">
+    <value>Brainy — Un secondo cervello pratico per professionisti</value>
+  </data>
+  <data name="SeoDescription" xml:space="preserve">
+    <value>Brainy trasforma informazioni sparse in conoscenza organizzata e riutilizzabile. Pensato per la concentrazione — anche per menti ADHD e AuDHD. Acquisisci rapidamente, organizza con PARA, distilla ciò che conta e trasforma ciò che sai in risultati concreti.</value>
+  </data>
+  <data name="JsonLdDescription" xml:space="preserve">
+    <value>Un secondo cervello pratico per acquisizione, organizzazione e lavoro concentrato.</value>
+  </data>
+  <data name="HeroEyebrow" xml:space="preserve">
+    <value>Il tuo secondo cervello, su carta che pensa</value>
+  </data>
+  <data name="HeroTitle" xml:space="preserve">
+    <value>Smetti di archiviare. Inizia a &lt;em&gt;usare&lt;/em&gt; ciò che sai.</value>
+  </data>
+  <data name="HeroLead" xml:space="preserve">
+    <value>Brainy aiuta i professionisti a costruire un secondo cervello pratico — trasformando note sparse, link e appunti di riunione in conoscenza organizzata e riutilizzabile che emerge esattamente quando lavori.</value>
+  </data>
+  <data name="HeroCtaPrimary" xml:space="preserve">
+    <value>Inizia ad acquisire gratis</value>
+  </data>
+  <data name="HeroCtaSecondary" xml:space="preserve">
+    <value>Scopri le funzionalità</value>
+  </data>
+  <data name="HeroNote" xml:space="preserve">
+    <value>Nessuna carta di credito. Le tue note restano tue.</value>
+  </data>
+  <data name="CodeCapture" xml:space="preserve">
+    <value>Acquisisci</value>
+  </data>
+  <data name="CodeOrganize" xml:space="preserve">
+    <value>Organizza</value>
+  </data>
+  <data name="CodeDistill" xml:space="preserve">
+    <value>Distilla</value>
+  </data>
+  <data name="CodeExpress" xml:space="preserve">
+    <value>Esprimi</value>
+  </data>
+  <data name="ParaStripProjects" xml:space="preserve">
+    <value>&lt;strong&gt;P&lt;/strong&gt;rogetti</value>
+  </data>
+  <data name="ParaStripAreas" xml:space="preserve">
+    <value>&lt;strong&gt;A&lt;/strong&gt;ree</value>
+  </data>
+  <data name="ParaStripResources" xml:space="preserve">
+    <value>&lt;strong&gt;R&lt;/strong&gt;isorse</value>
+  </data>
+  <data name="ParaStripArchives" xml:space="preserve">
+    <value>&lt;strong&gt;A&lt;/strong&gt;rchivi</value>
+  </data>
+  <data name="ParaStripTagline" xml:space="preserve">
+    <value>— Il metodo PARA, integrato</value>
+  </data>
+  <data name="CodeEyebrow" xml:space="preserve">
+    <value>Il flusso CODE</value>
+  </data>
+  <data name="CodeSectionTitle" xml:space="preserve">
+    <value>Da appunti sparsi a &lt;em&gt;lavoro finito&lt;/em&gt;, in quattro mosse.</value>
+  </data>
+  <data name="Code01Body" xml:space="preserve">
+    <value>Salva note, link e appunti di riunione nel momento in cui appaiono. Nessun modulo, nessuna archiviazione preventiva — la posta in arrivo raccoglie tutto.</value>
+  </data>
+  <data name="Code02Body" xml:space="preserve">
+    <value>Archivia gli elementi vicino all'azione con suggerimenti PARA intelligenti — progetto, area, risorsa o archivio. Niente labirinti di cartelle.</value>
+  </data>
+  <data name="Code03Body" xml:space="preserve">
+    <value>Evidenzia ciò che conta, estrai elementi d'azione e decisioni, e riassumi progressivamente così che le note restino utili per mesi.</value>
+  </data>
+  <data name="Code04Body" xml:space="preserve">
+    <value>Trasforma la conoscenza acquisita in articoli, report, specifiche e brief. La conoscenza vale solo quando diventa risultato.</value>
+  </data>
+  <data name="ParaEyebrow" xml:space="preserve">
+    <value>Il metodo PARA</value>
+  </data>
+  <data name="ParaSectionTitle" xml:space="preserve">
+    <value>Una sola casa per tutto, organizzata per &lt;em&gt;azionabilità&lt;/em&gt;.</value>
+  </data>
+  <data name="ParaSectionLead" xml:space="preserve">
+    <value>Ogni elemento risponde a una domanda: è per un progetto attuale, una responsabilità continua, un riferimento futuro — o è concluso e vale la pena conservarlo?</value>
+  </data>
+  <data name="ParaCardProjectsTitle" xml:space="preserve">
+    <value>Progetti</value>
+  </data>
+  <data name="ParaCardProjectsBody" xml:space="preserve">
+    <value>Risultati a breve termine con scadenze. Attività, note e priorità in un unico posto.</value>
+  </data>
+  <data name="ParaCardAreasTitle" xml:space="preserve">
+    <value>Aree</value>
+  </data>
+  <data name="ParaCardAreasBody" xml:space="preserve">
+    <value>Responsabilità continue senza una fine fissa. Standard che mantieni nel tempo.</value>
+  </data>
+  <data name="ParaCardResourcesTitle" xml:space="preserve">
+    <value>Risorse</value>
+  </data>
+  <data name="ParaCardResourcesBody" xml:space="preserve">
+    <value>Argomenti di interesse e materiale di riferimento, pronti quando un progetto ne ha bisogno.</value>
+  </data>
+  <data name="ParaCardArchivesTitle" xml:space="preserve">
+    <value>Archivi</value>
+  </data>
+  <data name="ParaCardArchivesBody" xml:space="preserve">
+    <value>Materiale inattivo conservato — in modo reversibile — per dopo. Fuori dai piedi, mai perso.</value>
+  </data>
+  <data name="TodayEyebrow" xml:space="preserve">
+    <value>Oggi</value>
+  </data>
+  <data name="TodaySectionTitle" xml:space="preserve">
+    <value>Una prima pagina per la tua &lt;em&gt;giornata lavorativa&lt;/em&gt;.</value>
+  </data>
+  <data name="TodaySectionLead" xml:space="preserve">
+    <value>Oggi è dove la conoscenza incontra l'esecuzione: l'attività su cui stai lavorando ora, cosa scade, cosa è in ritardo e cosa viene dopo — mai rumore d'archivio.</value>
+  </data>
+  <data name="TodayChecklist1" xml:space="preserve">
+    <value>&lt;strong&gt;Attività attuale&lt;/strong&gt; — l'unica cosa su cui stai lavorando attivamente.</value>
+  </data>
+  <data name="TodayChecklist2" xml:space="preserve">
+    <value>&lt;strong&gt;Lavoro sui progetti prioritari&lt;/strong&gt; — attività importanti dai progetti prioritari.</value>
+  </data>
+  <data name="TodayChecklist3" xml:space="preserve">
+    <value>&lt;strong&gt;Scadenze e ritardi&lt;/strong&gt; — scadenze di oggi, di questa settimana e ciò che è slittato.</value>
+  </data>
+  <data name="TodayChecklist4" xml:space="preserve">
+    <value>&lt;strong&gt;Prossime attività&lt;/strong&gt; — cosa arriva nei prossimi giorni e settimane.</value>
+  </data>
+  <data name="TodaySheetAriaLabel" xml:space="preserve">
+    <value>Illustrazione della schermata Oggi con un'attività in corso e code di scadenze</value>
+  </data>
+  <data name="TodaySheetEdition" xml:space="preserve">
+    <value>Gio · Ed. № 47</value>
+  </data>
+  <data name="TodaySheetRow1" xml:space="preserve">
+    <value>Bozza del racconto prodotto Q3</value>
+  </data>
+  <data name="TodaySheetRow1Tag" xml:space="preserve">
+    <value>In corso</value>
+  </data>
+  <data name="TodaySheetRow2" xml:space="preserve">
+    <value>Rivedi le note di ricerca sull'onboarding</value>
+  </data>
+  <data name="TodaySheetRow2Tag" xml:space="preserve">
+    <value>Scade oggi</value>
+  </data>
+  <data name="TodaySheetRow3" xml:space="preserve">
+    <value>Distilla l'intervista cliente #12</value>
+  </data>
+  <data name="TodaySheetRow3Tag" xml:space="preserve">
+    <value>Questa settimana</value>
+  </data>
+  <data name="TodaySheetRow4" xml:space="preserve">
+    <value>Invia il brief di lancio al design</value>
+  </data>
+  <data name="TodaySheetRow4Tag" xml:space="preserve">
+    <value>Fatto</value>
+  </data>
+  <data name="NdEyebrow" xml:space="preserve">
+    <value>Pensato per ogni mente</value>
+  </data>
+  <data name="NdSectionTitle" xml:space="preserve">
+    <value>Progettato per la concentrazione — &lt;em&gt;incluse le menti ADHD e AuDHD&lt;/em&gt;.</value>
+  </data>
+  <data name="NdSectionLead" xml:space="preserve">
+    <value>La memoria di lavoro non dovrebbe essere un requisito professionale. Brainy esternalizza il ricordare, l'ordinare e il "cosa stavo facendo?" — così la tua attenzione può andare dove vuole davvero andare.</value>
+  </data>
+  <data name="NdCard1Title" xml:space="preserve">
+    <value>Catturalo prima che sfugga</value>
+  </data>
+  <data name="NdCard1Body" xml:space="preserve">
+    <value>Un pensiero improvviso? Salvalo in pochi secondi — nessun modulo, nessuna decisione di archiviazione. Un pensiero catturato è un pensiero fuori dalla mente.</value>
+  </data>
+  <data name="NdCard2Title" xml:space="preserve">
+    <value>Una cosa alla volta</value>
+  </data>
+  <data name="NdCard2Body" xml:space="preserve">
+    <value>Oggi mette la tua attività attuale in primo piano. Tornare dopo una distrazione è un'occhiata, non una caccia al tesoro.</value>
+  </data>
+  <data name="NdCard3Title" xml:space="preserve">
+    <value>Una struttura che ricorda per te</value>
+  </data>
+  <data name="NdCard3Body" xml:space="preserve">
+    <value>PARA dà a tutto una casa ovvia. Niente sistemi di archiviazione basati sulla forza di volontà, niente alberi decisionali con venti cartelle.</value>
+  </data>
+  <data name="NdCard4Title" xml:space="preserve">
+    <value>Calma per progettazione</value>
+  </data>
+  <data name="NdCard4Body" xml:space="preserve">
+    <value>Un'interfaccia silenziosa e prevedibile con basso carico cognitivo. Il ritardo è informazione, non punizione — niente serie da mantenere, niente sensi di colpa.</value>
+  </data>
+  <data name="NdFooterNote" xml:space="preserve">
+    <value>Nessun meccanismo di colpa. Nessun rumore. Solo un sistema che &lt;strong&gt;incontra la tua mente dove si trova&lt;/strong&gt; — comunque funzioni.</value>
+  </data>
+  <data name="CtaTitle" xml:space="preserve">
+    <value>Pensa meglio. Lavora più in fretta. &lt;em&gt;Crea di più&lt;/em&gt; da ciò che già sai.</value>
+  </data>
+  <data name="CtaBody" xml:space="preserve">
+    <value>Configura il tuo secondo cervello in pochi minuti. Acquisisci la tua prima nota oggi e lascia che PARA la tenga esattamente dove il tuo io futuro guarderà.</value>
+  </data>
+  <data name="CtaPrimary" xml:space="preserve">
+    <value>Inizia gratis</value>
+  </data>
+  <data name="CtaSecondary" xml:space="preserve">
+    <value>Vedi i prezzi</value>
+  </data>
+</root>

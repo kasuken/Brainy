@@ -26,6 +26,9 @@ public class UserDashboardPreferenceConfiguration : IEntityTypeConfiguration<Use
             .HasMaxLength(100)
             .HasDefaultValue("UTC");
 
+        builder.Property(p => p.CultureId)
+            .HasMaxLength(20);
+
         builder.Property(p => p.AnalyticsEnabled)
             .HasDefaultValue(true);
 

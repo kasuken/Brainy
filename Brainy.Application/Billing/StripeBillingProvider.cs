@@ -8,9 +8,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Stripe;
 using Stripe.Checkout;
-
-// Stripe.net ships its own unrelated PlanTier (tiered-pricing metadata on legacy Plans),
-// which collides with Brainy's plan enum in this file's scope.
 using PlanTier = Brainy.Domain.Enums.PlanTier;
 
 namespace Brainy.Application.Billing;
@@ -18,9 +15,8 @@ namespace Brainy.Application.Billing;
 /// <summary>
 /// Live Stripe implementation of <see cref="IBillingProvider"/>, selected by
 /// <c>Billing:Provider = Stripe</c>. Upgrades go through hosted Stripe Checkout, self-service
-/// changes through the hosted Customer Portal, and every plan-state change arrives back as a
-/// signature-verified webhook — Brainy never grants a tier from a browser redirect, only from
-/// a verified event, so a user who edits a success URL cannot upgrade themselves.
+/// changes through the hosted Customer Portal, and plan-state changes are applied only from
+/// signature-verified webhooks.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -37,24 +33,32 @@ namespace Brainy.Application.Billing;
 /// than silently granting Pro.
 /// </para>
 /// </remarks>
-internal sealed class StripeBillingProvider(
-    IOptions<BillingOptions> options,
-    IApplicationDbContext context,
-    ILogger<StripeBillingProvider> logger) : IBillingProvider
+internal sealed class StripeBillingProvider : IBillingProvider
 {
-    /// <summary>Session/subscription metadata key carrying the Brainy user id.</summary>
     internal const string UserIdMetadataKey = "brainy_user_id";
 
-    /// <summary>
-    /// Stripe subscription statuses that still entitle the user to their paid tier.
-    /// <c>past_due</c> is included deliberately: Stripe retries a failed charge for days
-    /// before giving up, and cutting access off on the first failure would punish an expired
-    /// card. The terminal outcome arrives as <c>customer.subscription.deleted</c>.
-    /// </summary>
     private static readonly string[] EntitlingStatuses = ["active", "trialing", "past_due"];
+    private static readonly TimeSpan DefaultPaymentFailureGracePeriod = TimeSpan.FromDays(7);
 
-    private readonly BillingOptions _options = options.Value;
-    private readonly IStripeClient _stripe = new StripeClient(options.Value.ApiKey);
+    private readonly BillingOptions _options;
+    private readonly IApplicationDbContext _context;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<StripeBillingProvider> _logger;
+    private readonly IStripeClient _stripeClient;
+
+    public StripeBillingProvider(
+        IOptions<BillingOptions> options,
+        IApplicationDbContext context,
+        TimeProvider timeProvider,
+        ILogger<StripeBillingProvider> logger,
+        IStripeClient? stripeClient = null)
+    {
+        _options = options.Value;
+        _context = context;
+        _timeProvider = timeProvider;
+        _logger = logger;
+        _stripeClient = stripeClient ?? new StripeClient(_options.ApiKey);
+    }
 
     public async Task<CheckoutSessionResult> CreateCheckoutSessionAsync(
         string userId,
@@ -64,34 +68,21 @@ internal sealed class StripeBillingProvider(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
 
-        if (targetTier == PlanTier.Starter)
-        {
-            // Starter is free and has no Stripe price: moving down to it is a cancellation,
-            // which belongs in the portal, not in a checkout session for a $0 product.
-            return new CheckoutSessionResult(false, null,
-                "Starter is free — cancel your Pro subscription from the billing portal to move back to it.");
-        }
+        if (targetTier != PlanTier.Pro)
+            return new CheckoutSessionResult(false, null, "Only upgrading to Pro requires checkout.");
 
         var priceId = ResolvePriceId(targetTier, interval);
-        var existingCustomerId = await GetCustomerIdAsync(userId, cancellationToken).ConfigureAwait(false);
+        var existingCustomerId = await GetStoredCustomerIdAsync(userId, cancellationToken).ConfigureAwait(false);
 
         var sessionOptions = new SessionCreateOptions
         {
             Mode = "subscription",
+            Customer = existingCustomerId,
+            ClientReferenceId = userId,
+            Metadata = new Dictionary<string, string> { [UserIdMetadataKey] = userId },
             LineItems = [new SessionLineItemOptions { Price = priceId, Quantity = 1 }],
             SuccessUrl = _options.CheckoutSuccessUrl,
             CancelUrl = _options.CheckoutCancelUrl,
-
-            // Identifies the Brainy user on checkout.session.completed.
-            ClientReferenceId = userId,
-            Metadata = new Dictionary<string, string> { [UserIdMetadataKey] = userId },
-
-            // Reuse the existing customer when we have one, so a returning user doesn't end
-            // up with a second Stripe customer record; otherwise let Stripe create one.
-            Customer = existingCustomerId,
-
-            // Copied onto the created Subscription, so later subscription.* events identify
-            // their Brainy user without a lookup.
             SubscriptionData = new SessionSubscriptionDataOptions
             {
                 Metadata = new Dictionary<string, string> { [UserIdMetadataKey] = userId },
@@ -100,19 +91,18 @@ internal sealed class StripeBillingProvider(
 
         try
         {
-            var session = await new SessionService(_stripe)
+            var session = await new SessionService(_stripeClient)
                 .CreateAsync(sessionOptions, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
-            return new CheckoutSessionResult(true, session.Url, null);
+            return string.IsNullOrWhiteSpace(session.Url)
+                ? new CheckoutSessionResult(false, null, "Stripe did not return a checkout URL.")
+                : new CheckoutSessionResult(true, session.Url, null);
         }
         catch (StripeException ex)
         {
-            // Stripe's own message can name prices, accounts, or API keys; log it and show
-            // the user a generic retry instead.
-            logger.LogError(ex, "Stripe checkout session creation failed for user {UserId} on price {PriceId}.", userId, priceId);
-            return new CheckoutSessionResult(false, null,
-                "We couldn't start checkout just now. Please try again in a moment.");
+            _logger.LogError(ex, "Stripe checkout session creation failed for user {UserId} on price {PriceId}.", userId, priceId);
+            return new CheckoutSessionResult(false, null, "We couldn't start checkout just now. Please try again in a moment.");
         }
     }
 
@@ -120,18 +110,13 @@ internal sealed class StripeBillingProvider(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
 
-        var customerId = await GetCustomerIdAsync(userId, cancellationToken).ConfigureAwait(false);
+        var customerId = await GetStoredCustomerIdAsync(userId, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(customerId))
-        {
-            // No Stripe customer yet: the user has never completed a checkout, so there is
-            // nothing for the portal to manage.
-            return new PortalSessionResult(false, null,
-                "You don't have a paid subscription yet, so there's nothing to manage here.");
-        }
+            return new PortalSessionResult(false, null, "You don't have a billing account yet. Upgrade to Pro first.");
 
         try
         {
-            var session = await new Stripe.BillingPortal.SessionService(_stripe)
+            var session = await new Stripe.BillingPortal.SessionService(_stripeClient)
                 .CreateAsync(
                     new Stripe.BillingPortal.SessionCreateOptions
                     {
@@ -141,27 +126,32 @@ internal sealed class StripeBillingProvider(
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
-            return new PortalSessionResult(true, session.Url, null);
+            return string.IsNullOrWhiteSpace(session.Url)
+                ? new PortalSessionResult(false, null, "Stripe did not return a portal URL.")
+                : new PortalSessionResult(true, session.Url, null);
         }
         catch (StripeException ex)
         {
-            logger.LogError(ex, "Stripe billing portal session creation failed for user {UserId}.", userId);
-            return new PortalSessionResult(false, null,
-                "We couldn't open the billing portal just now. Please try again in a moment.");
+            _logger.LogError(ex, "Stripe billing portal session creation failed for user {UserId}.", userId);
+            return new PortalSessionResult(false, null, "We couldn't open the billing portal just now. Please try again in a moment.");
         }
     }
 
     public Task<WebhookVerificationResult> VerifyWebhookSignatureAsync(
-        string payload, string signatureHeader, CancellationToken cancellationToken = default)
+        string payload,
+        string signatureHeader,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        ArgumentNullException.ThrowIfNull(signatureHeader);
+
+        if (string.IsNullOrWhiteSpace(_options.WebhookSigningSecret))
+            return Task.FromResult(new WebhookVerificationResult(false, "Webhook signing secret is not configured."));
+
+        if (string.IsNullOrWhiteSpace(signatureHeader))
+            return Task.FromResult(new WebhookVerificationResult(false, "Missing webhook signature header."));
 
         try
         {
-            // Also enforces Stripe's replay-window tolerance on the signed timestamp.
-            // throwOnApiVersionMismatch: false — Brainy reads only long-stable fields, and a
-            // Stripe-initiated API version bump must not start rejecting live webhooks.
             EventUtility.ConstructEvent(
                 payload,
                 signatureHeader,
@@ -172,114 +162,155 @@ internal sealed class StripeBillingProvider(
         }
         catch (StripeException ex)
         {
-            logger.LogWarning(ex, "Rejected a billing webhook delivery with an invalid Stripe signature.");
+            _logger.LogWarning(ex, "Rejected a billing webhook delivery with an invalid Stripe signature.");
             return Task.FromResult(new WebhookVerificationResult(false, "Stripe signature verification failed."));
         }
     }
 
     public async Task<ParsedBillingWebhookEvent?> ParseWebhookEventAsync(
-        string payload, CancellationToken cancellationToken = default)
+        string payload,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);
 
         Event stripeEvent;
         try
         {
-            // The signature was already verified by VerifyWebhookSignatureAsync; this only
-            // deserializes the payload the processor already trusts.
             stripeEvent = EventUtility.ParseEvent(payload, throwOnApiVersionMismatch: false);
         }
         catch (StripeException ex)
         {
-            logger.LogWarning(ex, "Could not parse a signature-verified Stripe webhook payload.");
+            _logger.LogWarning(ex, "Could not parse a signature-verified Stripe webhook payload.");
             return null;
         }
 
         return stripeEvent.Type switch
         {
-            EventTypes.CheckoutSessionCompleted =>
-                ParseCheckoutCompleted(stripeEvent),
-
-            EventTypes.CustomerSubscriptionCreated or
-            EventTypes.CustomerSubscriptionUpdated or
-            EventTypes.CustomerSubscriptionDeleted =>
-                await ParseSubscriptionEventAsync(stripeEvent, cancellationToken).ConfigureAwait(false),
-
-            // Every other event type (invoice.*, payment_intent.*, ...) carries nothing
-            // Brainy's entitlement model acts on. Returning null makes the processor
-            // acknowledge the delivery so Stripe stops retrying it.
+            EventTypes.CheckoutSessionCompleted => ParseCheckoutCompleted(stripeEvent),
+            EventTypes.CustomerSubscriptionCreated or EventTypes.CustomerSubscriptionUpdated or EventTypes.CustomerSubscriptionDeleted
+                => await ParseSubscriptionEventAsync(stripeEvent, cancellationToken).ConfigureAwait(false),
+            EventTypes.InvoicePaymentFailed => await MapInvoicePaymentFailedAsync(stripeEvent, cancellationToken).ConfigureAwait(false),
+            EventTypes.InvoicePaid => await MapInvoicePaidAsync(stripeEvent, cancellationToken).ConfigureAwait(false),
             _ => null,
         };
     }
 
-    /// <summary>
-    /// Links the Stripe customer and subscription to the Brainy user. No tier is granted
-    /// here: the subscription events carry the authoritative price and period, and Stripe
-    /// always sends one alongside a completed checkout.
-    /// </summary>
     private ParsedBillingWebhookEvent? ParseCheckoutCompleted(Event stripeEvent)
     {
-        if (stripeEvent.Data.Object is not Session session)
+        if (stripeEvent.Data.Object is not Session session || session.Mode != "subscription")
             return null;
 
         var userId = session.ClientReferenceId ?? GetMetadataUserId(session.Metadata);
         if (string.IsNullOrWhiteSpace(userId))
         {
-            logger.LogWarning(
-                "Stripe checkout session {SessionId} completed without a Brainy user id; ignoring.", session.Id);
+            _logger.LogWarning("Stripe checkout session {SessionId} completed without a Brainy user id; ignoring.", session.Id);
             return null;
         }
 
         return new ParsedBillingWebhookEvent(
-            stripeEvent.Id,
-            stripeEvent.Type,
-            userId,
+            ProviderEventId: stripeEvent.Id,
+            EventType: stripeEvent.Type,
+            TargetUserId: userId,
             NewTier: null,
             PeriodEndsAtUtc: null,
-            ProviderCustomerId: session.CustomerId,
-            ProviderSubscriptionId: session.SubscriptionId);
+            BillingProviderCustomerId: session.CustomerId,
+            BillingProviderSubscriptionId: session.SubscriptionId);
     }
 
     private async Task<ParsedBillingWebhookEvent?> ParseSubscriptionEventAsync(
-        Event stripeEvent, CancellationToken cancellationToken)
+        Event stripeEvent,
+        CancellationToken cancellationToken)
     {
         if (stripeEvent.Data.Object is not Subscription subscription)
             return null;
 
         var userId = GetMetadataUserId(subscription.Metadata)
-            ?? await FindUserIdByCustomerAsync(subscription.CustomerId, cancellationToken).ConfigureAwait(false);
+            ?? await ResolveUserIdFromCustomerIdAsync(subscription.CustomerId, cancellationToken).ConfigureAwait(false);
 
         if (string.IsNullOrWhiteSpace(userId))
         {
-            logger.LogWarning(
+            _logger.LogWarning(
                 "Stripe subscription {SubscriptionId} for customer {CustomerId} maps to no Brainy user; ignoring.",
-                subscription.Id, subscription.CustomerId);
+                subscription.Id,
+                subscription.CustomerId);
             return null;
         }
 
-        var deleted = stripeEvent.Type == EventTypes.CustomerSubscriptionDeleted;
-        var entitled = !deleted && EntitlingStatuses.Contains(subscription.Status);
+        if (stripeEvent.Type == EventTypes.CustomerSubscriptionDeleted)
+        {
+            return new ParsedBillingWebhookEvent(
+                ProviderEventId: stripeEvent.Id,
+                EventType: stripeEvent.Type,
+                TargetUserId: userId,
+                NewTier: PlanTier.Starter,
+                PeriodEndsAtUtc: null,
+                BillingProviderCustomerId: subscription.CustomerId,
+                BillingProviderSubscriptionId: subscription.Id,
+                ClearsGracePeriod: true);
+        }
 
-        // A cancelled, unpaid, or incomplete subscription drops the user to the free tier.
-        // Resolving Pro from the price id (rather than assuming it) means an unconfigured
-        // price can never silently grant a paid tier.
-        var tier = entitled ? ResolveTier(subscription) : PlanTier.Starter;
+        if (EntitlingStatuses.Contains(subscription.Status))
+        {
+            return new ParsedBillingWebhookEvent(
+                ProviderEventId: stripeEvent.Id,
+                EventType: stripeEvent.Type,
+                TargetUserId: userId,
+                NewTier: ResolveTier(subscription),
+                PeriodEndsAtUtc: GetCurrentPeriodEndUtc(subscription),
+                BillingProviderCustomerId: subscription.CustomerId,
+                BillingProviderSubscriptionId: subscription.Id,
+                ClearsGracePeriod: subscription.Status is "active" or "trialing");
+        }
 
         return new ParsedBillingWebhookEvent(
-            stripeEvent.Id,
-            stripeEvent.Type,
-            userId,
-            tier,
-            entitled ? GetCurrentPeriodEndUtc(subscription) : null,
-            subscription.CustomerId,
-            subscription.Id);
+            ProviderEventId: stripeEvent.Id,
+            EventType: stripeEvent.Type,
+            TargetUserId: userId,
+            NewTier: null,
+            PeriodEndsAtUtc: null,
+            BillingProviderCustomerId: subscription.CustomerId,
+            BillingProviderSubscriptionId: subscription.Id);
     }
 
-    /// <summary>
-    /// Maps a subscription's price ids back to a Brainy tier. An unrecognized price falls
-    /// back to <see cref="PlanTier.Starter"/> with a warning rather than granting a tier
-    /// Brainy has no entitlement row for.
-    /// </summary>
+    private async Task<ParsedBillingWebhookEvent?> MapInvoicePaymentFailedAsync(Event stripeEvent, CancellationToken cancellationToken)
+    {
+        if (stripeEvent.Data.Object is not Invoice invoice)
+            return null;
+
+        var userId = await ResolveUserIdFromCustomerIdAsync(invoice.CustomerId, cancellationToken).ConfigureAwait(false);
+        if (userId is null)
+            return null;
+
+        var gracePeriodEndsAtUtc = invoice.NextPaymentAttempt?.ToUniversalTime()
+            ?? _timeProvider.GetUtcNow().UtcDateTime + DefaultPaymentFailureGracePeriod;
+
+        return new ParsedBillingWebhookEvent(
+            ProviderEventId: stripeEvent.Id,
+            EventType: stripeEvent.Type,
+            TargetUserId: userId,
+            NewTier: null,
+            PeriodEndsAtUtc: null,
+            GracePeriodEndsAtUtc: gracePeriodEndsAtUtc);
+    }
+
+    private async Task<ParsedBillingWebhookEvent?> MapInvoicePaidAsync(Event stripeEvent, CancellationToken cancellationToken)
+    {
+        if (stripeEvent.Data.Object is not Invoice invoice)
+            return null;
+
+        var userId = await ResolveUserIdFromCustomerIdAsync(invoice.CustomerId, cancellationToken).ConfigureAwait(false);
+        if (userId is null)
+            return null;
+
+        return new ParsedBillingWebhookEvent(
+            ProviderEventId: stripeEvent.Id,
+            EventType: stripeEvent.Type,
+            TargetUserId: userId,
+            NewTier: PlanTier.Pro,
+            PeriodEndsAtUtc: invoice.PeriodEnd.ToUniversalTime(),
+            ClearsGracePeriod: true);
+    }
+
     private PlanTier ResolveTier(Subscription subscription)
     {
         var priceIds = subscription.Items?.Data?
@@ -290,18 +321,13 @@ internal sealed class StripeBillingProvider(
         if (priceIds.Any(id => id == _options.ProMonthlyPriceId || id == _options.ProYearlyPriceId))
             return PlanTier.Pro;
 
-        logger.LogWarning(
+        _logger.LogWarning(
             "Stripe subscription {SubscriptionId} carries no configured Brainy price ({PriceIds}); treating as Starter.",
-            subscription.Id, string.Join(", ", priceIds));
+            subscription.Id,
+            string.Join(", ", priceIds));
         return PlanTier.Starter;
     }
 
-    /// <summary>
-    /// Reads the current period end. As of Stripe API version 2025-03-31 this lives on the
-    /// subscription's items rather than on the subscription itself, so the latest end across
-    /// items is used: Brainy sells a single-item subscription, but taking the maximum is
-    /// correct for any subscription and never returns a stale date.
-    /// </summary>
     private static DateTime? GetCurrentPeriodEndUtc(Subscription subscription)
     {
         var periodEnds = subscription.Items?.Data?
@@ -324,21 +350,20 @@ internal sealed class StripeBillingProvider(
             ? userId
             : null;
 
-    private Task<string?> GetCustomerIdAsync(string userId, CancellationToken cancellationToken) =>
-        context.UserPlans.AsNoTracking()
+    private Task<string?> ResolveUserIdFromCustomerIdAsync(string? customerId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(customerId))
+            return Task.FromResult<string?>(null);
+
+        return _context.UserPlans.AsNoTracking()
+            .Where(plan => plan.BillingProviderCustomerId == customerId)
+            .Select(plan => plan.UserId)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    private Task<string?> GetStoredCustomerIdAsync(string userId, CancellationToken cancellationToken) =>
+        _context.UserPlans.AsNoTracking()
             .Where(plan => plan.UserId == userId)
             .Select(plan => plan.BillingProviderCustomerId)
             .FirstOrDefaultAsync(cancellationToken);
-
-    private async Task<string?> FindUserIdByCustomerAsync(string? customerId, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(customerId))
-            return null;
-
-        return await context.UserPlans.AsNoTracking()
-            .Where(plan => plan.BillingProviderCustomerId == customerId)
-            .Select(plan => plan.UserId)
-            .FirstOrDefaultAsync(cancellationToken)
-            .ConfigureAwait(false);
-    }
 }

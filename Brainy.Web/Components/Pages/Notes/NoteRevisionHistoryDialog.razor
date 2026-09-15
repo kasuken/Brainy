@@ -1,0 +1,335 @@
+@using Brainy.Application.Common
+@using Brainy.Application.DTOs.Notes
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+
+@inject INoteRevisionService RevisionService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog Class="nrh-dialog">
+
+    <TitleContent>
+        <div class="nrh__title">
+            <MudIcon Icon="@Icons.Material.Filled.History" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Version History</MudText>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_loading)
+        {
+            <div class="nrh__loading">
+                <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Loading history…</MudText>
+            </div>
+        }
+        else if (_timeline.Count == 0)
+        {
+            <p class="nrh__empty">No revisions recorded yet. Editing this note creates one.</p>
+        }
+        else
+        {
+            <div class="nrh__body">
+
+                @if (_timeline.Count > 1)
+                {
+                    <div class="nrh__compare">
+                        <MudSelect T="Guid" Value="_fromId" ValueChanged="OnFromChanged"
+                                   Label="Compare from" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                            @foreach (var revision in _timeline)
+                            {
+                                <MudSelectItem Value="revision.Id">@DescribeRevision(revision)</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Class="nrh__compare-arrow" />
+                        <MudSelect T="Guid" Value="_toId" ValueChanged="OnToChanged"
+                                   Label="Compare to" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                            @foreach (var revision in _timeline)
+                            {
+                                <MudSelectItem Value="revision.Id">@DescribeRevision(revision)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </div>
+
+                    @if (_diffing)
+                    {
+                        <div class="nrh__loading"><MudProgressCircular Indeterminate="true" Size="Size.Small" /></div>
+                    }
+                    else if (_diff is not null)
+                    {
+                        <div class="nrh__diff">
+                            @if (_diff.TitleDiff.Any(l => l.Kind != NoteRevisionDiffLineKind.Unchanged))
+                            {
+                                <div class="nrh__diff-section">
+                                    <h4 class="nrh__diff-heading">Title</h4>
+                                    <div class="nrh__diff-block">
+                                        @foreach (var line in _diff.TitleDiff)
+                                        {
+                                            <div class="nrh__diff-line nrh__diff-line--@line.Kind.ToString().ToLowerInvariant()">@DiffPrefix(line.Kind)@line.Text</div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            <div class="nrh__diff-section">
+                                <h4 class="nrh__diff-heading">Content</h4>
+                                <div class="nrh__diff-block">
+                                    @foreach (var line in _diff.ContentDiff)
+                                    {
+                                        <div class="nrh__diff-line nrh__diff-line--@line.Kind.ToString().ToLowerInvariant()">@DiffPrefix(line.Kind)@line.Text</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+
+                <h4 class="nrh__diff-heading nrh__timeline-heading">Timeline</h4>
+                <div class="nrh__timeline">
+                    @for (var i = 0; i < _timeline.Count; i++)
+                    {
+                        var revision = _timeline[i];
+                        var isCurrent = i == 0;
+                        <div class="nrh__entry @(isCurrent ? "nrh__entry--current" : "")">
+                            <div class="nrh__entry-meta">
+                                <span class="nrh__reason-badge nrh__reason-badge--@revision.Reason.ToString().ToLowerInvariant()">
+                                    <MudIcon Icon="@ReasonIcon(revision.Reason)" Size="Size.Small" />
+                                    @ReasonLabel(revision.Reason)
+                                </span>
+                                @if (isCurrent)
+                                {
+                                    <span class="nrh__current-badge">Current</span>
+                                }
+                                <span class="nrh__entry-time">
+                                    <UserLocalTime Utc="revision.CreatedAtUtc" Format="MMM d, yyyy h:mm tt" />
+                                </span>
+                            </div>
+                            <p class="nrh__entry-title">@revision.Title</p>
+                            <p class="nrh__entry-preview">@Preview(revision.Content)</p>
+                            @if (!isCurrent)
+                            {
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Outlined"
+                                           Disabled="_restoring"
+                                           StartIcon="@Icons.Material.Filled.SettingsBackupRestore"
+                                           OnClick="() => RestoreAsync(revision)">
+                                    Restore this version
+                                </MudButton>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Close(DialogResult.Ok(_restoredNote is not null))">Close</MudButton>
+    </DialogActions>
+
+</MudDialog>
+
+<style>
+    .nrh__title { display: flex; align-items: center; gap: .5rem; }
+
+    .nrh__loading {
+        display: flex; flex-direction: column; align-items: center; gap: .5rem;
+        padding: 2rem 0;
+    }
+
+    .nrh__empty { color: var(--mud-palette-text-secondary); padding: 1rem 0; }
+
+    .nrh__body { display: flex; flex-direction: column; gap: 1rem; min-width: min(70vw, 640px); }
+
+    .nrh__compare { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .nrh__compare-arrow { flex-shrink: 0; }
+    .nrh__compare .mud-select { flex: 1 1 220px; min-width: 180px; }
+
+    .nrh__diff-heading { margin: 0 0 .35rem; font-size: .85rem; font-weight: 600; opacity: .75; }
+    .nrh__timeline-heading { margin-top: .5rem; }
+
+    .nrh__diff { display: flex; flex-direction: column; gap: .75rem; }
+    .nrh__diff-section { display: flex; flex-direction: column; }
+
+    .nrh__diff-block {
+        padding: .6rem .75rem;
+        border-radius: 10px;
+        background: color-mix(in srgb, currentColor 4%, transparent);
+        border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: .8rem;
+        line-height: 1.5;
+        max-height: 220px;
+        overflow-y: auto;
+    }
+
+    .nrh__diff-line { white-space: pre-wrap; word-break: break-word; }
+    .nrh__diff-line--added { background: rgba(76, 175, 80, .16); color: #1b5e20; }
+    .nrh__diff-line--removed { background: rgba(244, 67, 54, .14); color: #b71c1c; text-decoration: line-through; text-decoration-thickness: 1px; }
+
+    .nrh__timeline { display: flex; flex-direction: column; gap: .6rem; max-height: 320px; overflow-y: auto; }
+
+    .nrh__entry {
+        border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+        border-radius: 12px;
+        padding: .65rem .8rem;
+        display: flex;
+        flex-direction: column;
+        gap: .35rem;
+    }
+
+    .nrh__entry--current { border-color: color-mix(in srgb, var(--mud-palette-primary) 40%, transparent); }
+
+    .nrh__entry-meta { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+
+    .nrh__reason-badge {
+        display: inline-flex; align-items: center; gap: .3rem;
+        padding: .15rem .55rem; border-radius: 999px;
+        font-size: .72rem; line-height: 1.4;
+        background: color-mix(in srgb, currentColor 10%, transparent);
+    }
+
+    .nrh__current-badge {
+        font-size: .7rem; font-weight: 600; color: var(--mud-palette-primary);
+    }
+
+    .nrh__entry-time { font-size: .75rem; opacity: .65; margin-left: auto; }
+
+    .nrh__entry-title { margin: 0; font-weight: 600; font-size: .9rem; }
+    .nrh__entry-preview {
+        margin: 0; font-size: .82rem; opacity: .75;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public Guid NoteId { get; set; }
+
+    /// <summary>The note's RowVersion as loaded by the caller, used to guard restore against a stale edit.</summary>
+    [Parameter] public byte[]? CurrentRowVersion { get; set; }
+
+    private bool _loading = true;
+    private IReadOnlyList<NoteRevisionDto> _timeline = [];
+    private Guid _fromId;
+    private Guid _toId;
+    private NoteRevisionDiffDto? _diff;
+    private bool _diffing;
+    private bool _restoring;
+    private NoteDto? _restoredNote;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _timeline = await RevisionService.GetTimelineAsync(NoteId);
+        _loading = false;
+
+        if (_timeline.Count > 1)
+        {
+            _toId = _timeline[0].Id;
+            _fromId = _timeline[1].Id;
+            await LoadDiffAsync();
+        }
+    }
+
+    private async Task OnFromChanged(Guid value)
+    {
+        _fromId = value;
+        await LoadDiffAsync();
+    }
+
+    private async Task OnToChanged(Guid value)
+    {
+        _toId = value;
+        await LoadDiffAsync();
+    }
+
+    private async Task LoadDiffAsync()
+    {
+        if (_fromId == Guid.Empty || _toId == Guid.Empty) return;
+
+        _diffing = true;
+        try
+        {
+            _diff = await RevisionService.DiffAsync(NoteId, _fromId, _toId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not compare revisions: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _diffing = false;
+        }
+    }
+
+    private async Task RestoreAsync(NoteRevisionDto revision)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Restore this version?",
+            $"This creates a NEW revision with the content from {FormattableString.Invariant($"{revision.CreatedAtUtc:g}")} UTC. " +
+            "Nothing in the note's history is deleted or overwritten.",
+            yesText: "Restore", cancelText: "Cancel");
+
+        if (confirmed != true) return;
+
+        _restoring = true;
+        try
+        {
+            _restoredNote = await RevisionService.RestoreAsync(NoteId, revision.Id, CurrentRowVersion);
+            Snackbar.Add("Version restored as a new revision.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (ConcurrencyConflictException)
+        {
+            Snackbar.Add(
+                "This note changed elsewhere since you opened it. Close and reopen the editor to restore safely.",
+                Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not restore version: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _restoring = false;
+        }
+    }
+
+    private static string Preview(string content)
+    {
+        var normalized = content.Replace('\n', ' ').Replace('\r', ' ').Trim();
+        return normalized.Length > 160 ? normalized[..160].TrimEnd() + "…" : normalized;
+    }
+
+    private string DescribeRevision(NoteRevisionDto revision) =>
+        $"{ReasonLabel(revision.Reason)} — {revision.CreatedAtUtc:MMM d, h:mm tt} UTC";
+
+    private static string DiffPrefix(NoteRevisionDiffLineKind kind) => kind switch
+    {
+        NoteRevisionDiffLineKind.Added => "+ ",
+        NoteRevisionDiffLineKind.Removed => "- ",
+        _ => "  "
+    };
+
+    private static string ReasonLabel(NoteRevisionReason reason) => reason switch
+    {
+        NoteRevisionReason.UserEdit => "Edited",
+        NoteRevisionReason.AiGeneration => "AI generated",
+        NoteRevisionReason.Import => "Imported",
+        NoteRevisionReason.OfflineSync => "Synced offline",
+        NoteRevisionReason.Restore => "Restored",
+        _ => reason.ToString()
+    };
+
+    private static string ReasonIcon(NoteRevisionReason reason) => reason switch
+    {
+        NoteRevisionReason.UserEdit => Icons.Material.Outlined.Edit,
+        NoteRevisionReason.AiGeneration => Icons.Material.Outlined.AutoAwesome,
+        NoteRevisionReason.Import => Icons.Material.Outlined.FileDownload,
+        NoteRevisionReason.OfflineSync => Icons.Material.Outlined.CloudSync,
+        NoteRevisionReason.Restore => Icons.Material.Outlined.SettingsBackupRestore,
+        _ => Icons.Material.Outlined.Circle
+    };
+}

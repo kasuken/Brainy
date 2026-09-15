@@ -56,6 +56,9 @@ public class Note : BaseEntity, IUserOwnedEntity
 
     public ICollection<Summary> Summaries { get; set; } = new List<Summary>();
 
+    /// <summary>Append-only history of this note's title/content over time. See <see cref="NoteRevision"/>.</summary>
+    public ICollection<NoteRevision> Revisions { get; set; } = new List<NoteRevision>();
+
     public ICollection<ActionItem> ActionItems { get; set; } = new List<ActionItem>();
 
     /// <summary>Relationships where this note is the source.</summary>

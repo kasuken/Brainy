@@ -15,8 +15,9 @@
 @inject IInboxSuggestionsService SuggestionsService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IStringLocalizer<InboxPage> Localizer
 
-<PageTitle>Inbox – Brainy</PageTitle>
+<PageTitle>@Localizer["PageTitle"]</PageTitle>
 
 <div class="inbox-page">
     <div class="inbox-layout">
@@ -27,7 +28,7 @@
             <div class="inbox-hero">
                 <div class="inbox-hero__text">
                     <div class="inbox-hero__heading-row">
-                        <h1 class="inbox-hero__heading">Inbox</h1>
+                        <h1 class="inbox-hero__heading">@Localizer["Heading"]</h1>
                         @if (!_loading && _notes.Count > 0)
                         {
                             <span class="inbox-hero__badge">@_notes.Count</span>
@@ -38,15 +39,15 @@
                     <MudText Typo="Typo.body1" Class="mud-text-secondary">
                         @if (_loading)
                         {
-                            <span>Loading…</span>
+                            <span>@Localizer["LoadingStatus"]</span>
                         }
                         else if (_notes.Count == 0)
                         {
-                            <span>Your inbox is clear — nothing to process.</span>
+                            <span>@Localizer["ClearStatus"]</span>
                         }
                         else
                         {
-                            <span>Decide where each captured note belongs.</span>
+                            <span>@Localizer["DecideStatus"]</span>
                         }
                     </MudText>
                 </div>
@@ -62,13 +63,13 @@
                                        OnClick="BulkProcessSelectedAsync"
                                        Disabled="_busy"
                                        Class="inbox-hero__cta">
-                                Process @_selectedIds.Count selected
+                                @Localizer["ProcessSelected", _selectedIds.Count]
                             </MudButton>
                             <MudButton Variant="Variant.Text"
                                        OnClick="ClearSelection"
                                        Disabled="_busy"
                                        Class="inbox-hero__cta-clear">
-                                Clear
+                                @Localizer["Clear"]
                             </MudButton>
                         }
                         else
@@ -78,13 +79,13 @@
                                        OnClick="ProcessNextAsync"
                                        Disabled="_busy"
                                        Class="inbox-hero__cta">
-                                Process next
+                                @Localizer["ProcessNext"]
                             </MudButton>
                             <MudButton Variant="Variant.Text"
                                        StartIcon="@Icons.Material.Outlined.CheckBox"
                                        OnClick="SelectAll"
                                        Class="inbox-hero__cta-clear">
-                                Select all
+                                @Localizer["SelectAll"]
                             </MudButton>
                         }
                     </div>
@@ -95,12 +96,12 @@
             @if (!_loading && _totalOnLoad > 0)
             {
                 var processed = _totalOnLoad - _notes.Count;
-                <div class="inbox-progress" title="@processed of @_totalOnLoad processed">
+                <div class="inbox-progress" title="@Localizer["ProgressLabel", processed, _totalOnLoad]">
                     <div class="inbox-progress__track">
                         <div class="inbox-progress__fill"
                              style="width: @((processed * 100 / _totalOnLoad).ToString())%"></div>
                     </div>
-                    <span class="inbox-progress__label">@processed / @_totalOnLoad processed</span>
+                    <span class="inbox-progress__label">@Localizer["ProgressLabel", processed, _totalOnLoad]</span>
                 </div>
             }
 
@@ -112,23 +113,23 @@
                         <span class="inbox-metric-tile__value @(_metrics.WaitingCount > 10 ? "inbox-metric--warn" : "")">
                             @_metrics.WaitingCount
                         </span>
-                        <span class="inbox-metric-tile__label">Waiting</span>
+                        <span class="inbox-metric-tile__label">@Localizer["Waiting"]</span>
                     </div>
                     <div class="inbox-metric-tile">
                         <span class="inbox-metric-tile__value">@_metrics.CapturedTodayCount</span>
-                        <span class="inbox-metric-tile__label">Captured Today</span>
+                        <span class="inbox-metric-tile__label">@Localizer["CapturedToday"]</span>
                     </div>
                     <div class="inbox-metric-tile">
                         <span class="inbox-metric-tile__value">
                             @(_metrics.OldestItemAgeInDays.HasValue ? $"{_metrics.OldestItemAgeInDays}d" : "—")
                         </span>
-                        <span class="inbox-metric-tile__label">Oldest Item</span>
+                        <span class="inbox-metric-tile__label">@Localizer["OldestItem"]</span>
                     </div>
                     <div class="inbox-metric-tile">
                         <span class="inbox-metric-tile__value">
                             @(_metrics.AvgProcessingDays.HasValue ? $"{_metrics.AvgProcessingDays:F1}d" : "—")
                         </span>
-                        <span class="inbox-metric-tile__label">Avg. Processing</span>
+                        <span class="inbox-metric-tile__label">@Localizer["AvgProcessing"]</span>
                     </div>
                 </div>
             }
@@ -141,15 +142,15 @@
             {
                 <div class="inbox-state">
                     <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">Loading inbox…</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">@Localizer["LoadingInbox"]</MudText>
                 </div>
             }
 
             else if (_loadError is not null)
             {
                 <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
-                    Inbox could not be loaded. Check your connection and try again.
-                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadAsync" Class="ml-2">Retry</MudButton>
+                    @Localizer["LoadError"]
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadAsync" Class="ml-2">@Localizer["Retry"]</MudButton>
                 </MudAlert>
             }
 
@@ -163,16 +164,16 @@
                         <span class="inbox-empty__ring inbox-empty__ring--2"></span>
                     </div>
                     <MudText Typo="Typo.h6" GutterBottom="true" Class="inbox-empty__headline">
-                        All clear
+                        @Localizer["AllClear"]
                     </MudText>
                     <MudText Typo="Typo.body2" Class="mud-text-secondary mb-5">
-                        Every captured note has been processed. Great work.
+                        @Localizer["AllProcessed"]
                     </MudText>
                     <MudButton Variant="Variant.Filled"
                                Color="Color.Primary"
                                StartIcon="@Icons.Material.Filled.NoteAdd"
                                Href="/notes">
-                        Capture a new note
+                        @Localizer["CaptureNewNote"]
                     </MudButton>
                 </div>
             }
@@ -189,7 +190,7 @@
 
                             <div class="inbox-card__header-row">
                                 @* Checkbox *@
-                                <label class="inbox-card__checkbox-wrap" aria-label="@($"Select {note.Title} for bulk processing")">
+                                <label class="inbox-card__checkbox-wrap" aria-label="@Localizer["SelectForBulkAria", note.Title]">
                                     <input type="checkbox"
                                            class="inbox-card__checkbox"
                                            checked="@isSelected"
@@ -204,7 +205,7 @@
                                 </label>
 
                                 <div class="inbox-card__meta">
-                                    <span class="inbox-card__pill">Unprocessed</span>
+                                    <span class="inbox-card__pill">@Localizer["Unprocessed"]</span>
                                     <span class="inbox-card__date">
                                         <UserLocalTime Utc="note.CreatedAtUtc" />
                                     </span>
@@ -217,7 +218,7 @@
                                 @if (suggestion is not null)
                                 {
                                     <span class="inbox-card__pill inbox-card__pill--suggestion" title="@suggestion.Reasoning">
-                                        Suggested: @suggestion.SuggestedCategory
+                                        @Localizer["SuggestedPrefix", suggestion.SuggestedCategory]
                                     </span>
                                 }
 
@@ -235,20 +236,20 @@
                                            Disabled="_busy"
                                            OnClick="() => ProcessNoteAsync(note)"
                                            Class="inbox-card__btn-process">
-                                    Process
+                                    @Localizer["Process"]
                                 </MudButton>
 
                                 <div class="inbox-card__actions-right">
                                     <MudIconButton Icon="@Icons.Material.Outlined.Edit"
                                                    Size="Size.Small"
-                                                   aria-label="@($"Edit {note.Title}")"
+                                                   aria-label="@Localizer["EditAria", note.Title]"
                                                    Disabled="_busy"
                                                    OnClick="() => EditNoteAsync(note)"
                                                    Class="inbox-card__btn-icon" />
 
                                     <MudIconButton Icon="@Icons.Material.Outlined.Archive"
                                                    Size="Size.Small"
-                                                   aria-label="@($"Archive {note.Title} without processing")"
+                                                   aria-label="@Localizer["ArchiveAria", note.Title]"
                                                    Disabled="_busy"
                                                    OnClick="() => QuickArchiveAsync(note)"
                                                    Class="inbox-card__btn-icon" />

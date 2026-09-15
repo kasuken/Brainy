@@ -11,9 +11,20 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
+    <PackageReference Include="MailKit" Version="4.17.0" />
     <PackageReference Include="Stripe.net" Version="52.4.2" />
+    <!-- Web Push (RFC 8030/8291/VAPID) client for issue #315. Maintained by the
+         web-push-libs GitHub org (the same org behind Node's `web-push`); actively
+         released (net10.0 target) and clean of known vulnerabilities per NuGetAudit. -->
+    <PackageReference Include="WebPush" Version="1.0.13" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Brainy.Domain\Brainy.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Lets Brainy.Application.Tests unit-test the internal email templates/services
+         directly instead of only through the public IEmailSender/IAccountEmailService
+         seams; production behavior is unaffected. -->
+    <InternalsVisibleTo Include="Brainy.Application.Tests" />
   </ItemGroup>
 </Project>

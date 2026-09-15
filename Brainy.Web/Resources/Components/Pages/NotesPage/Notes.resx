@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="PageTitle" xml:space="preserve">
+    <value>Notes – Brainy</value>
+  </data>
+  <data name="Eyebrow" xml:space="preserve">
+    <value>Knowledge Base</value>
+  </data>
+  <data name="Title" xml:space="preserve">
+    <value>Notes</value>
+  </data>
+  <data name="SearchPlaceholder" xml:space="preserve">
+    <value>Search entries…</value>
+  </data>
+  <data name="SearchAriaLabel" xml:space="preserve">
+    <value>Search notes</value>
+  </data>
+  <data name="CategoryLabel" xml:space="preserve">
+    <value>Category</value>
+  </data>
+  <data name="CategoryPlaceholder" xml:space="preserve">
+    <value>All categories</value>
+  </data>
+  <data name="StatusLabel" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="StatusPlaceholder" xml:space="preserve">
+    <value>All statuses</value>
+  </data>
+  <data name="FavoritesOnlyLabel" xml:space="preserve">
+    <value>Favorites only</value>
+  </data>
+  <data name="ClearFilters" xml:space="preserve">
+    <value>Clear filters</value>
+  </data>
+  <data name="WriteNewNote" xml:space="preserve">
+    <value>Write New Note</value>
+  </data>
+  <data name="FromTemplate" xml:space="preserve">
+    <value>From Template</value>
+  </data>
+  <data name="LoadError" xml:space="preserve">
+    <value>Notes could not be loaded. Check your connection and try again.</value>
+  </data>
+  <data name="Retry" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="QuickAccess" xml:space="preserve">
+    <value>Quick Access</value>
+  </data>
+  <data name="RemoveFromFavoritesAria" xml:space="preserve">
+    <value>Remove {0} from favorites</value>
+  </data>
+  <data name="AddToFavoritesAria" xml:space="preserve">
+    <value>Add {0} to favorites</value>
+  </data>
+  <data name="NoNotesYetTitle" xml:space="preserve">
+    <value>No notes yet</value>
+  </data>
+  <data name="NoNotesYetDescription" xml:space="preserve">
+    <value>Capture your first piece of knowledge to get started.</value>
+  </data>
+  <data name="CreateFirstNote" xml:space="preserve">
+    <value>Create your first note</value>
+  </data>
+  <data name="Library" xml:space="preserve">
+    <value>Library</value>
+  </data>
+  <data name="NoteCountSingular" xml:space="preserve">
+    <value>{0} note</value>
+  </data>
+  <data name="NoteCountPlural" xml:space="preserve">
+    <value>{0} notes</value>
+  </data>
+  <data name="MatchingFilters" xml:space="preserve">
+    <value>matching current filters</value>
+  </data>
+  <data name="MoveTo" xml:space="preserve">
+    <value>Move to…</value>
+  </data>
+  <data name="SelectedCount" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="ContainsImagesTooltip" xml:space="preserve">
+    <value>Contains images</value>
+  </data>
+  <data name="ColumnTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="ColumnCategory" xml:space="preserve">
+    <value>Category</value>
+  </data>
+  <data name="ColumnStatus" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="ColumnUpdated" xml:space="preserve">
+    <value>Updated</value>
+  </data>
+  <data name="SaveAsTemplateTooltip" xml:space="preserve">
+    <value>Save as template</value>
+  </data>
+  <data name="SaveAsTemplateAria" xml:space="preserve">
+    <value>Save {0} as a template</value>
+  </data>
+  <data name="NoNotesMatchFilters" xml:space="preserve">
+    <value>No notes match your filters</value>
+  </data>
+  <data name="TryDifferentKeywords" xml:space="preserve">
+    <value>Try different keywords or</value>
+  </data>
+  <data name="ClearAllFiltersLink" xml:space="preserve">
+    <value>clear all filters</value>
+  </data>
+</root>

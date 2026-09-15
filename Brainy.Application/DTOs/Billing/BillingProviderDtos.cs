@@ -20,14 +20,21 @@ public sealed record WebhookVerificationResult(bool IsValid, string? FailureReas
 /// <param name="TargetUserId">The Brainy user the event applies to, when the provider payload identifies one.</param>
 /// <param name="NewTier">The plan tier to apply, when this event represents a plan change.</param>
 /// <param name="PeriodEndsAtUtc">The new renewal/period-end timestamp, when the event carries one.</param>
-/// <param name="ProviderCustomerId">
-/// The provider's customer id carried by this event, when it has one. Persisted onto
-/// <c>UserPlan.BillingProviderCustomerId</c> so later portal sessions can be opened for a
-/// user who signed up through hosted checkout.
+/// <param name="BillingProviderCustomerId">
+/// The provider's customer id to persist for <paramref name="TargetUserId"/>, when the event carries one
+/// (e.g. a completed checkout). Null means "leave whatever is already stored unchanged".
 /// </param>
-/// <param name="ProviderSubscriptionId">
-/// The provider's subscription id carried by this event, when it has one. Persisted onto
-/// <c>UserPlan.BillingProviderSubscriptionId</c> for support and audit.
+/// <param name="BillingProviderSubscriptionId">
+/// The provider's subscription id to persist for <paramref name="TargetUserId"/>, when the event carries
+/// one. Null means "leave whatever is already stored unchanged".
+/// </param>
+/// <param name="GracePeriodEndsAtUtc">
+/// When set, the payment-failure grace period end to record — the user keeps paid access until this
+/// timestamp despite a failed charge. Ignored unless <paramref name="ClearsGracePeriod"/> is also false.
+/// </param>
+/// <param name="ClearsGracePeriod">
+/// True when this event (a successful charge, or a subscription returning to an active state) means any
+/// previously-recorded grace period no longer applies and should be cleared.
 /// </param>
 public sealed record ParsedBillingWebhookEvent(
     string ProviderEventId,
@@ -35,5 +42,7 @@ public sealed record ParsedBillingWebhookEvent(
     string? TargetUserId,
     PlanTier? NewTier,
     DateTime? PeriodEndsAtUtc,
-    string? ProviderCustomerId = null,
-    string? ProviderSubscriptionId = null);
+    string? BillingProviderCustomerId = null,
+    string? BillingProviderSubscriptionId = null,
+    DateTime? GracePeriodEndsAtUtc = null,
+    bool ClearsGracePeriod = false);

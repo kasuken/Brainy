@@ -1,0 +1,121 @@
+@page "/share"
+@layout MarketingLayout
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Web.Security
+@inject IOutputShareLinkService ShareLinkService
+
+@* Anonymous, read-only public view of exactly one Output's own content (issue #319).
+   Deliberately renders with static SSR (see _Imports.razor's ExcludeFromInteractiveRouting)
+   so a revoked/expired/unknown token can set a real 404 status code before any content is
+   written — see ConfirmEmail.razor for the same pattern. Never authenticated, never
+   interactive: there is nothing here to log into or click beyond reading.
+
+   The token lives in the query string, never a path segment, exactly like
+   CalendarFeedEndpoints (issue #314) and for the same reason: PrivacyRedactionProcessor
+   redacts the "url.query" telemetry attribute but not the request path, so a path segment
+   would leave the token sitting unredacted in traces (and in any plain access log). *@
+
+<HeadContent>
+    @if (_output is not null)
+    {
+        <SeoHeadContent Path="@($"/share?token={Token}")"
+                        Title="@($"{_output.Title} — Shared via Brainy")"
+                        Description="@Description" />
+    }
+    else
+    {
+        <title>Link not found — Brainy</title>
+    }
+    @* Shared output pages are never indexed unless a future owner explicitly opts in —
+       there is no such control today, so this is unconditional (see #319's guardrail:
+       "noindex unless the user deliberately opts into indexing"). *@
+    <meta name="robots" content="noindex, nofollow" />
+</HeadContent>
+
+@if (_output is null)
+{
+    <section class="mkt-hero">
+        <div class="mkt-wrap">
+            <span class="mkt-eyebrow mkt-rise">Shared output</span>
+            <h1 class="mkt-title mkt-rise mkt-d1">Link not found.</h1>
+            <p class="mkt-lead mkt-rise mkt-d2">
+                This share link is invalid, has been revoked, or has expired.
+            </p>
+            <div class="mkt-hero__cta mkt-rise mkt-d3">
+                <a class="mkt-btn mkt-btn--primary" href="/">Go to Brainy</a>
+            </div>
+        </div>
+    </section>
+}
+else
+{
+    <section class="mkt-hero">
+        <div class="mkt-wrap">
+            <span class="mkt-eyebrow mkt-rise">Shared from Brainy</span>
+            <h1 class="mkt-title mkt-rise mkt-d1">@_output.Title</h1>
+            @if (!string.IsNullOrWhiteSpace(_output.Description))
+            {
+                <p class="mkt-lead mkt-rise mkt-d2">@_output.Description</p>
+            }
+        </div>
+    </section>
+
+    <section class="mkt-section">
+        <div class="mkt-wrap">
+            <article class="mkt-changelog osp-content">
+                @RenderedContent
+            </article>
+        </div>
+    </section>
+}
+
+<style>
+    /* .mkt-changelog hides its first h1 (its own document title, styled above via
+       .mkt-title instead) and otherwise gives rendered Markdown the same editorial
+       typography as the changelog page. Nothing else is Brainy-specific here — this
+       page carries no project/task/note/user data to style around. */
+    .osp-content { overflow-wrap: anywhere; }
+    .osp-content pre { padding: 1rem; border-radius: 8px; overflow-x: auto; background: var(--mkt-paper-raised); border: 1px solid var(--mkt-line); }
+    .osp-content code { padding: .1rem .3rem; border-radius: 4px; background: var(--mkt-paper-raised); }
+    .osp-content pre code { padding: 0; background: transparent; }
+    .osp-content table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+    .osp-content th, .osp-content td { padding: .45rem .65rem; border: 1px solid var(--mkt-line); text-align: left; }
+</style>
+
+@code {
+    /// <summary>
+    /// The page's route, exposed so <c>Program.cs</c> can partition its rate limit by this
+    /// exact path without duplicating the literal (see <c>CalendarFeedEndpoints.FeedPath</c>
+    /// for the same convention on the anonymous ICS feed).
+    /// </summary>
+    public const string RoutePath = "/share";
+
+    [SupplyParameterFromQuery(Name = "token")]
+    private string? Token { get; set; }
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    private Brainy.Application.DTOs.Outputs.SharedOutputDto? _output;
+
+    private string Description =>
+        string.IsNullOrWhiteSpace(_output?.Description)
+            ? "A document shared read-only from Brainy."
+            : _output!.Description!;
+
+    private MarkupString RenderedContent =>
+        new(MarkdownHtmlRenderer.Render(_output?.Content ?? string.Empty));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _output = await ShareLinkService.ResolvePublicAsync(Token);
+
+        if (_output is null)
+        {
+            // A revoked, expired, or unknown token must be indistinguishable from a page
+            // that never existed — a clean 404, never a 403 that would confirm a link once
+            // worked (see #319's guardrails).
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+        }
+    }
+}

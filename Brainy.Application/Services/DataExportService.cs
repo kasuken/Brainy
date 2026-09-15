@@ -136,6 +136,23 @@ internal sealed class DataExportService(
             })
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
+        var noteRevisions = await context.NoteRevisions.AsNoTracking()
+            .Where(revision => revision.UserId == userId)
+            .OrderBy(revision => revision.Id)
+            .Select(revision => new
+            {
+                revision.Id,
+                revision.NoteId,
+                revision.Title,
+                revision.Content,
+                revision.Reason,
+                revision.Model,
+                revision.PromptVersion,
+                revision.RestoredFromRevisionId,
+                revision.CreatedAtUtc
+            })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
         var tags = await context.Tags.AsNoTracking()
             .Where(tag => tag.UserId == userId)
             .OrderBy(tag => tag.Id)
@@ -360,6 +377,76 @@ internal sealed class DataExportService(
             .SelectMany(row => row.NoteIds.Select(noteId => new { row.OutputId, NoteId = noteId }))
             .ToList();
 
+        var projectTemplates = await context.ProjectTemplates.AsNoTracking()
+            .Where(template => template.UserId == userId)
+            .OrderBy(template => template.Id)
+            .Select(template => new
+            {
+                template.Id,
+                template.Name,
+                template.ProjectNamePattern,
+                template.Description,
+                template.DesiredOutcome,
+                template.DefaultPriority,
+                template.DefaultAreaId,
+                template.DefaultGoalId,
+                template.IsBuiltIn,
+                template.CreatedAtUtc,
+                template.UpdatedAtUtc
+            })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        var projectTemplateTasks = await context.ProjectTemplateTasks.AsNoTracking()
+            .Where(task => task.ProjectTemplate.UserId == userId)
+            .OrderBy(task => task.Id)
+            .Select(task => new
+            {
+                task.Id,
+                task.ProjectTemplateId,
+                task.Title,
+                task.Description,
+                task.Priority,
+                task.Complexity,
+                task.DueDateOffsetDays,
+                task.SortOrder,
+                task.CreatedAtUtc,
+                task.UpdatedAtUtc
+            })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        var noteTemplates = await context.NoteTemplates.AsNoTracking()
+            .Where(template => template.UserId == userId)
+            .OrderBy(template => template.Id)
+            .Select(template => new
+            {
+                template.Id,
+                template.Name,
+                template.TitlePattern,
+                template.ContentScaffold,
+                template.DefaultParaCategory,
+                template.IsBuiltIn,
+                template.CreatedAtUtc,
+                template.UpdatedAtUtc
+            })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        var outputTemplates = await context.OutputTemplates.AsNoTracking()
+            .Where(template => template.UserId == userId)
+            .OrderBy(template => template.Id)
+            .Select(template => new
+            {
+                template.Id,
+                template.Name,
+                template.TitlePattern,
+                template.Type,
+                template.ContentScaffold,
+                template.DefaultSourceSelection,
+                template.IsBuiltIn,
+                template.CreatedAtUtc,
+                template.UpdatedAtUtc
+            })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
         var ideas = await context.Ideas.AsNoTracking()
             .Where(idea => idea.UserId == userId)
             .OrderBy(idea => idea.Id)
@@ -536,6 +623,7 @@ internal sealed class DataExportService(
                 Resources = resources,
                 Sources = sources,
                 Notes = notes,
+                NoteRevisions = noteRevisions,
                 Tags = tags,
                 NoteTagLinks = noteTagLinks,
                 ResourceTagLinks = resourceTagLinks,
@@ -548,6 +636,10 @@ internal sealed class DataExportService(
                 TaskDependencies = taskDependencies,
                 Outputs = outputs,
                 OutputSourceNoteLinks = outputSourceNoteLinks,
+                ProjectTemplates = projectTemplates,
+                ProjectTemplateTasks = projectTemplateTasks,
+                NoteTemplates = noteTemplates,
+                OutputTemplates = outputTemplates,
                 Ideas = ideas,
                 Goals = goals,
                 GoalMilestones = goalMilestones,

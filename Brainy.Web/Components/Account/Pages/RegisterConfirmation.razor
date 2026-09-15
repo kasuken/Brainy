@@ -1,0 +1,29 @@
+@page "/Account/RegisterConfirmation"
+@layout AuthLayout
+
+<PageTitle>Check your email · Brainy</PageTitle>
+
+<a class="auth-minibrand" href="/">
+    <img class="auth-wordmark__logo" src="img/logo.png" alt="Brainy logo" />
+    Brainy
+</a>
+
+<span class="auth-eyebrow">Almost there</span>
+<h2 class="auth-title">Check your email</h2>
+<p class="auth-subtitle">
+    We've sent a confirmation link@(string.IsNullOrEmpty(Email) ? "" : $" to {Email}"). Follow it to finish
+    setting up your account.
+</p>
+
+<p class="auth-switch">
+    Didn't get it? <a href="Account/ResendEmailConfirmation">Resend the confirmation email</a>
+</p>
+
+<p class="auth-switch">
+    <a href="Account/Login">Back to log in</a>
+</p>
+
+@code {
+    [SupplyParameterFromQuery]
+    private string? Email { get; set; }
+}

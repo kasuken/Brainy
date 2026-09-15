@@ -4,8 +4,10 @@
 @using Brainy.Application.Interfaces.Services
 @using Brainy.Domain.Enums
 @using Brainy.Web.Components.Shared
+@using Brainy.Web.Components.Pages.Templates
 @attribute [Authorize]
 @inject IProjectService ProjectService
+@inject IProjectTemplateService ProjectTemplateService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
@@ -191,6 +193,15 @@
                 New Project
             </MudButton>
 
+            <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                       StartIcon="@Icons.Material.Filled.PlaylistAdd"
+                       Size="Size.Medium"
+                       Class="mb-6"
+                       FullWidth="true"
+                       OnClick="OpenProjectTemplatePicker">
+                From Template
+            </MudButton>
+
             <div class="pp-widget">
                 <MudTextField @bind-Value="_searchText"
                               Placeholder="Search projects…"
@@ -349,6 +360,12 @@
                                                    Size="Size.Small"
                                                    OnClick="@(() => ConfirmArchive(context.Id, context.Name))" />
                                 </MudTooltip>
+                                <MudTooltip Text="Save as template">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.ContentCopy"
+                                                   Color="Color.Default"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => SaveAsTemplateAsync(context))" />
+                                </MudTooltip>
                             </MudTd>
                         </RowTemplate>
                     </MudTable>
@@ -366,7 +383,8 @@
                                                     OnNavigate="id => OpenDetail(id)"
                                                     OnEdit="proj => OpenEditDialog(proj)"
                                                     OnComplete="proj => OpenCompletionDialog(proj)"
-                                                    OnArchive="proj => ConfirmArchive(proj.Id, proj.Name)" />
+                                                    OnArchive="proj => ConfirmArchive(proj.Id, proj.Name)"
+                                                    OnSaveAsTemplate="proj => SaveAsTemplateAsync(proj)" />
                             </div>
                         }
                     </div>
@@ -451,9 +469,26 @@
         ? $"Sort by {option}, currently {(_sortAsc ? "ascending" : "descending")}; activate to reverse"
         : $"Sort by {option}";
 
+    /// <summary>Set by the command palette's "New project" command (issue #318) to open the
+    /// create dialog on load, exactly as the page's own "New Project" button would — so the
+    /// same entitlement check (active-project cap) still runs on save.</summary>
+    [SupplyParameterFromQuery(Name = "new")]
+    public bool? CreateFromQuery { get; set; }
+
+    private bool _paletteCreateHandled;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && CreateFromQuery == true && !_paletteCreateHandled)
+        {
+            _paletteCreateHandled = true;
+            await OpenCreateDialog();
+        }
     }
 
     private async Task LoadAsync()
@@ -628,6 +663,33 @@
         var result = await dialog.Result;
         if (result is not null && !result.Canceled)
             await LoadAsync();
+    }
+
+    private async Task OpenProjectTemplatePicker()
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ProjectTemplatePickerDialog>("New project from template", options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled && result.Data is ProjectDto created)
+        {
+            Nav.NavigateTo($"/projects/{created.Id}");
+        }
+    }
+
+    private async Task SaveAsTemplateAsync(ProjectSummaryDto project)
+    {
+        var parameters = new DialogParameters<Brainy.Web.Components.Pages.Templates.SaveAsTemplateDialog>
+        {
+            { x => x.Message, $"Save \"{project.Name}\" — its default area/goal, priority and open tasks — as a reusable template." }
+        };
+        var dialog = await DialogService.ShowAsync<Brainy.Web.Components.Pages.Templates.SaveAsTemplateDialog>(
+            "Save as template", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not string templateName) return;
+
+        await ProjectTemplateService.CreateFromProjectAsync(new Brainy.Application.DTOs.Templates.SaveProjectAsTemplateDto(project.Id, templateName));
+        Snackbar.Add($"Saved \"{templateName}\" as a template.", Severity.Success);
     }
 
     private async Task ConfirmArchive(Guid id, string name)

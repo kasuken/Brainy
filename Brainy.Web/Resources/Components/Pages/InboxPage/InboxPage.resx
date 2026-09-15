@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="PageTitle" xml:space="preserve">
+    <value>Inbox – Brainy</value>
+  </data>
+  <data name="Heading" xml:space="preserve">
+    <value>Inbox</value>
+  </data>
+  <data name="LoadingStatus" xml:space="preserve">
+    <value>Loading…</value>
+  </data>
+  <data name="ClearStatus" xml:space="preserve">
+    <value>Your inbox is clear — nothing to process.</value>
+  </data>
+  <data name="DecideStatus" xml:space="preserve">
+    <value>Decide where each captured note belongs.</value>
+  </data>
+  <data name="ProcessSelected" xml:space="preserve">
+    <value>Process {0} selected</value>
+  </data>
+  <data name="Clear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="ProcessNext" xml:space="preserve">
+    <value>Process next</value>
+  </data>
+  <data name="SelectAll" xml:space="preserve">
+    <value>Select all</value>
+  </data>
+  <data name="ProgressLabel" xml:space="preserve">
+    <value>{0} / {1} processed</value>
+  </data>
+  <data name="Waiting" xml:space="preserve">
+    <value>Waiting</value>
+  </data>
+  <data name="CapturedToday" xml:space="preserve">
+    <value>Captured Today</value>
+  </data>
+  <data name="OldestItem" xml:space="preserve">
+    <value>Oldest Item</value>
+  </data>
+  <data name="AvgProcessing" xml:space="preserve">
+    <value>Avg. Processing</value>
+  </data>
+  <data name="LoadingInbox" xml:space="preserve">
+    <value>Loading inbox…</value>
+  </data>
+  <data name="LoadError" xml:space="preserve">
+    <value>Inbox could not be loaded. Check your connection and try again.</value>
+  </data>
+  <data name="Retry" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="AllClear" xml:space="preserve">
+    <value>All clear</value>
+  </data>
+  <data name="AllProcessed" xml:space="preserve">
+    <value>Every captured note has been processed. Great work.</value>
+  </data>
+  <data name="CaptureNewNote" xml:space="preserve">
+    <value>Capture a new note</value>
+  </data>
+  <data name="Unprocessed" xml:space="preserve">
+    <value>Unprocessed</value>
+  </data>
+  <data name="SuggestedPrefix" xml:space="preserve">
+    <value>Suggested: {0}</value>
+  </data>
+  <data name="Process" xml:space="preserve">
+    <value>Process</value>
+  </data>
+  <data name="SelectForBulkAria" xml:space="preserve">
+    <value>Select {0} for bulk processing</value>
+  </data>
+  <data name="EditAria" xml:space="preserve">
+    <value>Edit {0}</value>
+  </data>
+  <data name="ArchiveAria" xml:space="preserve">
+    <value>Archive {0} without processing</value>
+  </data>
+</root>

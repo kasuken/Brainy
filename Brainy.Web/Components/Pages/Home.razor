@@ -672,6 +672,14 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
 
+    /// <summary>Set by the command palette's "New task" / "Set current focus" commands
+    /// (issue #318) — <c>new-task</c> or <c>set-focus</c> — to run the same dialog its own
+    /// quick action would.</summary>
+    [SupplyParameterFromQuery(Name = "action")]
+    public string? PaletteAction { get; set; }
+
+    private bool _paletteActionHandled;
+
     private const int DefaultInboxWarningThreshold = 10;
     private const string DailySnapshotWidgetKey = "daily-snapshot";
     private const string CurrentFocusWidgetKey = "current-focus";
@@ -743,6 +751,20 @@
         catch (JSDisconnectedException)
         {
             // Circuit gone before this could run; the next successful Today visit will retry.
+        }
+
+        if (!_paletteActionHandled && !string.IsNullOrEmpty(PaletteAction))
+        {
+            _paletteActionHandled = true;
+            switch (PaletteAction)
+            {
+                case "new-task":
+                    await OpenAddTaskDialogAsync();
+                    break;
+                case "set-focus":
+                    await OpenFocusPickerAsync();
+                    break;
+            }
         }
     }
 
@@ -934,6 +956,35 @@
         catch (Exception ex)
         {
             Snackbar.Add($"Could not open edit dialog: {ex.Message}", Severity.Error);
+        }
+    }
+
+    /// <summary>Opens the same focus picker as <see cref="TodayQuickActions"/>'s "Set Focus"
+    /// button — used directly by the command palette's "Set current focus" command
+    /// (issue #318), which navigates here with <c>?action=set-focus</c>.</summary>
+    private async Task OpenFocusPickerAsync()
+    {
+        try
+        {
+            var parameters = new DialogParameters<FocusPickerDialog>
+            {
+                { d => d.CurrentTaskId, _aggregate?.CurrentTask?.Id }
+            };
+
+            var dialog = await DialogService.ShowAsync<FocusPickerDialog>(
+                "Choose your current focus",
+                parameters,
+                new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+
+            var result = await dialog.Result;
+            if (result is { Canceled: false })
+            {
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not open focus picker: {ex.Message}", Severity.Error);
         }
     }
 

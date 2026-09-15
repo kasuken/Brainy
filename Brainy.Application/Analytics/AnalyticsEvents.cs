@@ -32,6 +32,13 @@ public static class AnalyticsEvents
     /// <summary>The user selected their first current-focus task (fires once per user).</summary>
     public const string FirstCurrentFocusSelected = "activation.first_focus";
 
+    /// <summary>
+    /// The user created their first Output (fires once per user). Completes the activation
+    /// funnel from issue #324: registered &rarr; first capture &rarr; first classify &rarr;
+    /// first task &rarr; first current focus &rarr; first output.
+    /// </summary>
+    public const string FirstOutputCreated = "activation.first_output";
+
     // ── Capture lifecycle ───────────────────────────────────────────────────
 
     /// <summary>A note was captured (every capture, not just the first).</summary>
@@ -153,6 +160,7 @@ public static class AnalyticsEvents
         new(FirstInboxItemProcessed, "Detect activation: time-to-first-processed-item.", DefaultRetentionPeriod, true),
         new(FirstTaskCreated, "Detect activation: time-to-first-task.", DefaultRetentionPeriod, true),
         new(FirstCurrentFocusSelected, "Detect activation: time-to-first-focus-selection.", DefaultRetentionPeriod, true),
+        new(FirstOutputCreated, "Detect activation: time-to-first-output, the final step of the activation funnel.", DefaultRetentionPeriod, true),
         new(CaptureCreated, "Measure capture volume over time.", DefaultRetentionPeriod, true),
         new(InboxItemProcessed, "Measure Inbox processing throughput.", DefaultRetentionPeriod, true),
         new(CaptureReusedAsProject, "Measure capture-to-project reuse (retrieval value).", DefaultRetentionPeriod, true),

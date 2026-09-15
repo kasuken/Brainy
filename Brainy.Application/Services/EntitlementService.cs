@@ -156,33 +156,45 @@ internal sealed class EntitlementService(
             cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task LinkBillingAccountAsync(
+    public async Task RecordBillingReferencesAsync(
         string userId,
-        string? providerCustomerId,
-        string? providerSubscriptionId,
+        string? billingProviderCustomerId,
+        string? billingProviderSubscriptionId,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
 
         var userPlan = await GetOrCreateUserPlanAsync(userId, cancellationToken).ConfigureAwait(false);
 
-        // Null means "this event didn't carry that id", not "clear it": a subscription
-        // update carries no checkout session, and clearing the customer id would strand the
-        // user's billing portal.
-        var customerChanged = !string.IsNullOrWhiteSpace(providerCustomerId)
-            && userPlan.BillingProviderCustomerId != providerCustomerId;
-        var subscriptionChanged = !string.IsNullOrWhiteSpace(providerSubscriptionId)
-            && userPlan.BillingProviderSubscriptionId != providerSubscriptionId;
+        var changed = false;
+        if (billingProviderCustomerId is not null && userPlan.BillingProviderCustomerId != billingProviderCustomerId)
+        {
+            userPlan.BillingProviderCustomerId = billingProviderCustomerId;
+            changed = true;
+        }
 
-        if (!customerChanged && !subscriptionChanged)
+        if (billingProviderSubscriptionId is not null && userPlan.BillingProviderSubscriptionId != billingProviderSubscriptionId)
+        {
+            userPlan.BillingProviderSubscriptionId = billingProviderSubscriptionId;
+            changed = true;
+        }
+
+        if (changed)
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SetGracePeriodAsync(
+        string userId,
+        DateTime? gracePeriodEndsAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+
+        var userPlan = await GetOrCreateUserPlanAsync(userId, cancellationToken).ConfigureAwait(false);
+        if (userPlan.GracePeriodEndsAtUtc == gracePeriodEndsAtUtc)
             return;
 
-        if (customerChanged)
-            userPlan.BillingProviderCustomerId = providerCustomerId;
-
-        if (subscriptionChanged)
-            userPlan.BillingProviderSubscriptionId = providerSubscriptionId;
-
+        userPlan.GracePeriodEndsAtUtc = gracePeriodEndsAtUtc;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 

@@ -210,4 +210,45 @@ public sealed class EntitlementServiceTests
             .ToListAsync();
         remaining.Should().OnlyContain(p => !p.IsReadOnly);
     }
+
+    // ── Billing references / grace period (issue #308) ──────────────────────
+
+    [Fact]
+    public async Task RecordBillingReferencesAsync_OnAUserWithNoPlanRowYet_CreatesOneAndStoresBothIds()
+    {
+        var (entitlements, _, _, db) = BuildServices(nameof(RecordBillingReferencesAsync_OnAUserWithNoPlanRowYet_CreatesOneAndStoresBothIds));
+
+        await entitlements.RecordBillingReferencesAsync(UserId, "cus_1", "sub_1");
+
+        var userPlan = await db.UserPlans.SingleAsync(p => p.UserId == UserId);
+        userPlan.BillingProviderCustomerId.Should().Be("cus_1");
+        userPlan.BillingProviderSubscriptionId.Should().Be("sub_1");
+        userPlan.Tier.Should().Be(PlanTier.Starter, "recording billing references must not itself change the plan tier");
+    }
+
+    [Fact]
+    public async Task RecordBillingReferencesAsync_WithOnlyOneIdSupplied_LeavesTheOtherUnchanged()
+    {
+        var (entitlements, _, _, db) = BuildServices(nameof(RecordBillingReferencesAsync_WithOnlyOneIdSupplied_LeavesTheOtherUnchanged));
+        await entitlements.RecordBillingReferencesAsync(UserId, "cus_1", "sub_1");
+
+        await entitlements.RecordBillingReferencesAsync(UserId, null, "sub_2");
+
+        var userPlan = await db.UserPlans.SingleAsync(p => p.UserId == UserId);
+        userPlan.BillingProviderCustomerId.Should().Be("cus_1");
+        userPlan.BillingProviderSubscriptionId.Should().Be("sub_2");
+    }
+
+    [Fact]
+    public async Task SetGracePeriodAsync_SetsAndThenClearsTheGracePeriod()
+    {
+        var (entitlements, _, _, db) = BuildServices(nameof(SetGracePeriodAsync_SetsAndThenClearsTheGracePeriod));
+        var gracePeriodEnd = new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        await entitlements.SetGracePeriodAsync(UserId, gracePeriodEnd);
+        (await db.UserPlans.SingleAsync(p => p.UserId == UserId)).GracePeriodEndsAtUtc.Should().Be(gracePeriodEnd);
+
+        await entitlements.SetGracePeriodAsync(UserId, null);
+        (await db.UserPlans.SingleAsync(p => p.UserId == UserId)).GracePeriodEndsAtUtc.Should().BeNull();
+    }
 }

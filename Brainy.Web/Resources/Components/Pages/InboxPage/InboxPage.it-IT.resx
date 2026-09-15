@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="PageTitle" xml:space="preserve">
+    <value>Posta in arrivo – Brainy</value>
+  </data>
+  <data name="Heading" xml:space="preserve">
+    <value>Posta in arrivo</value>
+  </data>
+  <data name="LoadingStatus" xml:space="preserve">
+    <value>Caricamento…</value>
+  </data>
+  <data name="ClearStatus" xml:space="preserve">
+    <value>La tua posta in arrivo è vuota — niente da elaborare.</value>
+  </data>
+  <data name="DecideStatus" xml:space="preserve">
+    <value>Decidi dove inserire ogni nota acquisita.</value>
+  </data>
+  <data name="ProcessSelected" xml:space="preserve">
+    <value>Elabora {0} selezionate</value>
+  </data>
+  <data name="Clear" xml:space="preserve">
+    <value>Cancella</value>
+  </data>
+  <data name="ProcessNext" xml:space="preserve">
+    <value>Elabora la prossima</value>
+  </data>
+  <data name="SelectAll" xml:space="preserve">
+    <value>Seleziona tutto</value>
+  </data>
+  <data name="ProgressLabel" xml:space="preserve">
+    <value>{0} / {1} elaborate</value>
+  </data>
+  <data name="Waiting" xml:space="preserve">
+    <value>In attesa</value>
+  </data>
+  <data name="CapturedToday" xml:space="preserve">
+    <value>Acquisite oggi</value>
+  </data>
+  <data name="OldestItem" xml:space="preserve">
+    <value>Elemento più vecchio</value>
+  </data>
+  <data name="AvgProcessing" xml:space="preserve">
+    <value>Elaborazione media</value>
+  </data>
+  <data name="LoadingInbox" xml:space="preserve">
+    <value>Caricamento della posta in arrivo…</value>
+  </data>
+  <data name="LoadError" xml:space="preserve">
+    <value>Impossibile caricare la posta in arrivo. Controlla la connessione e riprova.</value>
+  </data>
+  <data name="Retry" xml:space="preserve">
+    <value>Riprova</value>
+  </data>
+  <data name="AllClear" xml:space="preserve">
+    <value>Tutto a posto</value>
+  </data>
+  <data name="AllProcessed" xml:space="preserve">
+    <value>Ogni nota acquisita è stata elaborata. Ottimo lavoro.</value>
+  </data>
+  <data name="CaptureNewNote" xml:space="preserve">
+    <value>Acquisisci una nuova nota</value>
+  </data>
+  <data name="Unprocessed" xml:space="preserve">
+    <value>Non elaborata</value>
+  </data>
+  <data name="SuggestedPrefix" xml:space="preserve">
+    <value>Suggerito: {0}</value>
+  </data>
+  <data name="Process" xml:space="preserve">
+    <value>Elabora</value>
+  </data>
+  <data name="SelectForBulkAria" xml:space="preserve">
+    <value>Seleziona {0} per l'elaborazione in blocco</value>
+  </data>
+  <data name="EditAria" xml:space="preserve">
+    <value>Modifica {0}</value>
+  </data>
+  <data name="ArchiveAria" xml:space="preserve">
+    <value>Archivia {0} senza elaborarla</value>
+  </data>
+</root>

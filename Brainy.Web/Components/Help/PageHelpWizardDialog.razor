@@ -72,6 +72,21 @@
                     }
                 }
             </div>
+
+            @* ── Keyboard shortcuts reference (issue #318) ── *@
+            <div class="phw__shortcuts">
+                <div class="phw__shortcuts-title">Keyboard shortcuts</div>
+                <ul class="phw__shortcuts-list">
+                    <li><kbd>Ctrl</kbd> <span class="phw__shortcuts-plus">+</span> <kbd>K</kbd> <span class="phw__shortcuts-desc">Open search &amp; commands</span></li>
+                    <li><kbd>↑</kbd> <kbd>↓</kbd> <span class="phw__shortcuts-desc">Move between results</span></li>
+                    <li><kbd>Enter</kbd> <span class="phw__shortcuts-desc">Open the highlighted result or run the highlighted command</span></li>
+                    <li><kbd>Esc</kbd> <span class="phw__shortcuts-desc">Close search</span></li>
+                </ul>
+                <p class="phw__shortcuts-hint">
+                    Type a page name, a record title, or an action like "new task" or "weekly review" —
+                    the palette finds records and runnable commands together.
+                </p>
+            </div>
         </div>
     </DialogContent>
 
@@ -255,6 +270,73 @@
     .phw__points--ordered li::marker {
         color: var(--clay);
         font-weight: 700;
+    }
+
+    /* ── Keyboard shortcuts reference (issue #318) ── */
+    .phw__shortcuts {
+        margin-top: 1.1rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--line);
+    }
+
+    .phw__shortcuts-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin-bottom: 0.6rem;
+    }
+
+    .phw__shortcuts-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+    }
+
+    .phw__shortcuts-list li {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        font-size: 0.85rem;
+        color: var(--ink);
+    }
+
+    .phw__shortcuts-list kbd {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.4rem;
+        padding: 0.12rem 0.4rem;
+        font-family: var(--font-body);
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--ink-soft);
+        background: var(--paper-raised);
+        border: 1px solid var(--line-strong);
+        border-radius: 5px;
+        line-height: 1.4;
+    }
+
+    .phw__shortcuts-plus {
+        color: var(--ink-faint);
+        font-size: 0.75rem;
+    }
+
+    .phw__shortcuts-desc {
+        color: var(--ink-soft);
+        margin-left: 0.3rem;
+    }
+
+    .phw__shortcuts-hint {
+        margin: 0.7rem 0 0;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        color: var(--ink-faint);
     }
 
     /* ── Actions ── */

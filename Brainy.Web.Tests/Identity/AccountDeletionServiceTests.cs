@@ -286,6 +286,12 @@ public sealed class AccountDeletionServiceTests
                 {
                     Id = Guid.NewGuid(), SourceNote = sourceNote, TargetNote = targetNote
                 },
+                new NoteRevision
+                {
+                    Id = Guid.NewGuid(), UserId = CurrentUserId, Note = sourceNote,
+                    Title = sourceNote.Title, Content = sourceNote.Content,
+                    Reason = Brainy.Domain.Enums.NoteRevisionReason.UserEdit
+                },
                 new Highlight { Id = Guid.NewGuid(), Note = sourceNote, Text = "Highlight" },
                 new Summary { Id = Guid.NewGuid(), Note = sourceNote, Content = "Summary" },
                 new NoteImage
@@ -326,6 +332,7 @@ public sealed class AccountDeletionServiceTests
             (await Context.Tags.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.Notes.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.NoteImages.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
+            (await Context.NoteRevisions.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.Outputs.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.Ideas.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
             (await Context.ActionItems.AnyAsync(entity => entity.UserId == CurrentUserId)).Should().BeFalse();
