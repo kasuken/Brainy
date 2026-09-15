@@ -80,3 +80,5 @@ Thumbs.db
 desktop.ini
 
 _copilot_build/
+# Claude Code agent worktrees (local only)
+.claude/worktrees/

@@ -28,4 +28,9 @@ public record UpdateNoteDto(
     /// <summary>
     /// Replacement tag names. Pass <c>null</c> to keep current tags or an empty list to remove all tags.
     /// </summary>
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    /// <summary>
+    /// Why this edit's revision is being captured, when the title or content changed.
+    /// Defaults to <see cref="NoteRevisionReason.UserEdit"/> when not supplied.
+    /// </summary>
+    NoteRevisionReason? ChangeReason = null);

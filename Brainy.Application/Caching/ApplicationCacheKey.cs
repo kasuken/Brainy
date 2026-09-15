@@ -6,6 +6,7 @@ namespace Brainy.Application.Caching;
 internal static class ApplicationCacheKey
 {
     public static string TimeZoneTag { get; } = Create("tag", "time-zone");
+    public static string CultureTag { get; } = Create("tag", "culture");
 
     public static string Create(params object?[] segments)
     {

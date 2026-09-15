@@ -12,4 +12,9 @@ public record ProcessNoteDto(
     Guid? ResourceId = null,
     string? Title = null,
     string? Content = null,
-    byte[]? RowVersion = null);
+    byte[]? RowVersion = null,
+    /// <summary>
+    /// Why this edit's revision is being captured, when the title or content changed.
+    /// Defaults to <see cref="NoteRevisionReason.UserEdit"/> when not supplied.
+    /// </summary>
+    NoteRevisionReason? ChangeReason = null);

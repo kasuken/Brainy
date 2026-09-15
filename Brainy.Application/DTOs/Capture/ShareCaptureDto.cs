@@ -1,3 +1,5 @@
+using Brainy.Domain.Enums;
+
 namespace Brainy.Application.DTOs.Capture;
 
 /// <summary>
@@ -6,4 +8,10 @@ namespace Brainy.Application.DTOs.Capture;
 /// browser/OS share sheet or the user; <see cref="IShareCaptureService"/> owns trimming,
 /// length validation and de-duplication of it.
 /// </summary>
-public sealed record ShareCaptureDto(string? Title, string? Text, string? Url);
+/// <param name="ChangeReason">
+/// Why the resulting note's initial revision is being captured. Defaults to
+/// <see cref="NoteRevisionReason.UserEdit"/> when not supplied; the offline-sync flush path
+/// passes <see cref="NoteRevisionReason.OfflineSync"/> instead.
+/// </param>
+public sealed record ShareCaptureDto(
+    string? Title, string? Text, string? Url, NoteRevisionReason? ChangeReason = null);

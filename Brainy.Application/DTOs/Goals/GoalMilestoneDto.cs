@@ -6,5 +6,6 @@ public record GoalMilestoneDto(
     string Title,
     bool IsCompleted,
     DateTime? CompletedAtUtc,
-    DateTime CreatedAtUtc
+    DateTime CreatedAtUtc,
+    DateTime? DueDate = null
 );

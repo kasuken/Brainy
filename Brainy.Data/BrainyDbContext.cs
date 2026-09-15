@@ -34,6 +34,8 @@ public class BrainyDbContext(
 
     public DbSet<NoteImage> NoteImages => Set<NoteImage>();
 
+    public DbSet<NoteRevision> NoteRevisions => Set<NoteRevision>();
+
     public DbSet<Tag> Tags => Set<Tag>();
 
     public DbSet<Highlight> Highlights => Set<Highlight>();
@@ -75,6 +77,24 @@ public class BrainyDbContext(
     public DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents => Set<ProcessedWebhookEvent>();
 
     public DbSet<OfflineCaptureSyncRecord> OfflineCaptureSyncRecords => Set<OfflineCaptureSyncRecord>();
+
+    public DbSet<ProjectTemplate> ProjectTemplates => Set<ProjectTemplate>();
+
+    public DbSet<ProjectTemplateTask> ProjectTemplateTasks => Set<ProjectTemplateTask>();
+
+    public DbSet<NoteTemplate> NoteTemplates => Set<NoteTemplate>();
+
+    public DbSet<OutputTemplate> OutputTemplates => Set<OutputTemplate>();
+
+    public DbSet<CalendarFeedToken> CalendarFeedTokens => Set<CalendarFeedToken>();
+
+    public DbSet<OutputShareLink> OutputShareLinks => Set<OutputShareLink>();
+
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+
+    public DbSet<PushNotificationPreference> PushNotificationPreferences => Set<PushNotificationPreference>();
+
+    public DbSet<PushNotificationDeliveryLog> PushNotificationDeliveryLogs => Set<PushNotificationDeliveryLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

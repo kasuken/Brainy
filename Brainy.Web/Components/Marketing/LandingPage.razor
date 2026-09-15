@@ -1,29 +1,28 @@
 @page "/"
 @layout MarketingLayout
 @inject NavigationManager Navigation
+@inject IStringLocalizer<LandingPage> Localizer
 
 <HeadContent>
     <SeoHeadContent Path="/"
-                    Title="Brainy — A practical second brain for professionals"
-                    Description="Brainy turns scattered information into organized, reusable knowledge. Built for focus — including ADHD and AuDHD brains. Capture fast, organize with PARA, distill what matters, and turn what you know into real output."
+                    Title="@Localizer["SeoTitle"]"
+                    Description="@Localizer["SeoDescription"]"
                     JsonLd="@JsonLd" />
 </HeadContent>
 
 <section class="mkt-hero">
     <div class="mkt-wrap mkt-hero__grid">
         <div>
-            <span class="mkt-eyebrow mkt-rise">Your second brain, on paper that thinks</span>
-            <h1 class="mkt-title mkt-rise mkt-d1">Stop storing. Start <em>using</em> what you know.</h1>
+            <span class="mkt-eyebrow mkt-rise">@Localizer["HeroEyebrow"]</span>
+            <h1 class="mkt-title mkt-rise mkt-d1">@((MarkupString)Localizer["HeroTitle"].Value)</h1>
             <p class="mkt-lead mkt-rise mkt-d2">
-                Brainy helps professionals build a practical second brain — turning scattered
-                notes, links, and meeting scraps into organized, reusable knowledge that
-                shows up exactly when you work.
+                @Localizer["HeroLead"]
             </p>
             <div class="mkt-hero__cta mkt-rise mkt-d3">
-                <a class="mkt-btn mkt-btn--primary" href="/Account/Register">Start capturing free</a>
-                <a class="mkt-btn mkt-btn--ghost" href="/features">Explore the features</a>
+                <a class="mkt-btn mkt-btn--primary" href="/Account/Register">@Localizer["HeroCtaPrimary"]</a>
+                <a class="mkt-btn mkt-btn--ghost" href="/features">@Localizer["HeroCtaSecondary"]</a>
             </div>
-            <p class="mkt-hero__note mkt-rise mkt-d4">No credit card. Your notes stay yours.</p>
+            <p class="mkt-hero__note mkt-rise mkt-d4">@Localizer["HeroNote"]</p>
         </div>
         <div class="mkt-rise mkt-d3">
             <svg class="mkt-hero-art" viewBox="0 0 600 560" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
@@ -50,10 +49,10 @@
                     <circle class="node node--gold" cx="440" cy="470" r="5.5" />
                 </g>
                 <g>
-                    <text x="248" y="172">Capture</text>
-                    <text x="330" y="392">Organize</text>
-                    <text x="538" y="244">Distill</text>
-                    <text x="458" y="492">Express</text>
+                    <text x="248" y="172">@Localizer["CodeCapture"]</text>
+                    <text x="330" y="392">@Localizer["CodeOrganize"]</text>
+                    <text x="538" y="244">@Localizer["CodeDistill"]</text>
+                    <text x="458" y="492">@Localizer["CodeExpress"]</text>
                 </g>
             </svg>
         </div>
@@ -62,51 +61,47 @@
 
 <div class="mkt-strip">
     <div class="mkt-wrap mkt-strip__inner">
-        <span><strong>P</strong>rojects</span>
-        <span><strong>A</strong>reas</span>
-        <span><strong>R</strong>esources</span>
-        <span><strong>A</strong>rchives</span>
-        <span>— The PARA method, built in</span>
+        <span>@((MarkupString)Localizer["ParaStripProjects"].Value)</span>
+        <span>@((MarkupString)Localizer["ParaStripAreas"].Value)</span>
+        <span>@((MarkupString)Localizer["ParaStripResources"].Value)</span>
+        <span>@((MarkupString)Localizer["ParaStripArchives"].Value)</span>
+        <span>@Localizer["ParaStripTagline"]</span>
     </div>
 </div>
 
 <section class="mkt-section">
     <div class="mkt-wrap">
         <div class="mkt-section__head">
-            <span class="mkt-eyebrow">The CODE workflow</span>
-            <h2 class="mkt-title">From scattered scraps to <em>finished work</em>, in four moves.</h2>
+            <span class="mkt-eyebrow">@Localizer["CodeEyebrow"]</span>
+            <h2 class="mkt-title">@((MarkupString)Localizer["CodeSectionTitle"].Value)</h2>
         </div>
         <div class="mkt-code-grid">
             <article class="mkt-code-cell">
                 <span class="mkt-code-cell__no">№ 01</span>
-                <h3>Capture</h3>
+                <h3>@Localizer["CodeCapture"]</h3>
                 <p>
-                    Save notes, links, and meeting scraps the moment they appear.
-                    No forms, no upfront filing — the Inbox catches everything.
+                    @Localizer["Code01Body"]
                 </p>
             </article>
             <article class="mkt-code-cell">
                 <span class="mkt-code-cell__no">№ 02</span>
-                <h3>Organize</h3>
+                <h3>@Localizer["CodeOrganize"]</h3>
                 <p>
-                    File items close to action with smart PARA suggestions —
-                    project, area, resource, or archive. No deep folder mazes.
+                    @Localizer["Code02Body"]
                 </p>
             </article>
             <article class="mkt-code-cell">
                 <span class="mkt-code-cell__no">№ 03</span>
-                <h3>Distill</h3>
+                <h3>@Localizer["CodeDistill"]</h3>
                 <p>
-                    Highlight what matters, extract action items and decisions,
-                    and summarize progressively so notes stay useful for months.
+                    @Localizer["Code03Body"]
                 </p>
             </article>
             <article class="mkt-code-cell">
                 <span class="mkt-code-cell__no">№ 04</span>
-                <h3>Express</h3>
+                <h3>@Localizer["CodeExpress"]</h3>
                 <p>
-                    Turn stored knowledge into blog posts, reports, specs, and
-                    briefs. Knowledge is only valuable when it becomes output.
+                    @Localizer["Code04Body"]
                 </p>
             </article>
         </div>
@@ -116,33 +111,32 @@
 <section class="mkt-section mkt-para">
     <div class="mkt-wrap">
         <div class="mkt-section__head">
-            <span class="mkt-eyebrow">The PARA method</span>
-            <h2 class="mkt-title">One home for everything, organized by <em>actionability</em>.</h2>
+            <span class="mkt-eyebrow">@Localizer["ParaEyebrow"]</span>
+            <h2 class="mkt-title">@((MarkupString)Localizer["ParaSectionTitle"].Value)</h2>
             <p class="mkt-lead">
-                Every item answers one question: is this for a current project, an ongoing
-                responsibility, future reference — or done and worth keeping?
+                @Localizer["ParaSectionLead"]
             </p>
         </div>
         <div class="mkt-para-grid">
             <article class="mkt-para-card">
                 <span class="mkt-para-card__letter">P</span>
-                <h3>Projects</h3>
-                <p>Short-term outcomes with deadlines. Tasks, notes, and priorities in one place.</p>
+                <h3>@Localizer["ParaCardProjectsTitle"]</h3>
+                <p>@Localizer["ParaCardProjectsBody"]</p>
             </article>
             <article class="mkt-para-card">
                 <span class="mkt-para-card__letter">A</span>
-                <h3>Areas</h3>
-                <p>Ongoing responsibilities without a fixed end. Standards you maintain over time.</p>
+                <h3>@Localizer["ParaCardAreasTitle"]</h3>
+                <p>@Localizer["ParaCardAreasBody"]</p>
             </article>
             <article class="mkt-para-card">
                 <span class="mkt-para-card__letter">R</span>
-                <h3>Resources</h3>
-                <p>Topics of interest and reference material, ready when a project needs them.</p>
+                <h3>@Localizer["ParaCardResourcesTitle"]</h3>
+                <p>@Localizer["ParaCardResourcesBody"]</p>
             </article>
             <article class="mkt-para-card">
                 <span class="mkt-para-card__letter">A</span>
-                <h3>Archives</h3>
-                <p>Inactive material kept — reversibly — for later. Out of your way, never lost.</p>
+                <h3>@Localizer["ParaCardArchivesTitle"]</h3>
+                <p>@Localizer["ParaCardArchivesBody"]</p>
             </article>
         </div>
     </div>
@@ -151,44 +145,43 @@
 <section class="mkt-section">
     <div class="mkt-wrap mkt-split">
         <div>
-            <span class="mkt-eyebrow">Today</span>
-            <h2 class="mkt-title">A front page for your <em>working day</em>.</h2>
+            <span class="mkt-eyebrow">@Localizer["TodayEyebrow"]</span>
+            <h2 class="mkt-title">@((MarkupString)Localizer["TodaySectionTitle"].Value)</h2>
             <p class="mkt-lead" style="margin-top: 1.1rem;">
-                Today is where knowledge meets execution: the task you're on now,
-                what's due, what's overdue, and what's next — never archived noise.
+                @Localizer["TodaySectionLead"]
             </p>
             <ul class="mkt-checklist">
-                <li><strong>Current task</strong> — the one thing you're actively working on.</li>
-                <li><strong>High-priority project work</strong> — important tasks from priority projects.</li>
-                <li><strong>Due &amp; overdue</strong> — deadlines for today, this week, and what slipped.</li>
-                <li><strong>Next tasks</strong> — what's coming in the days and weeks ahead.</li>
+                <li>@((MarkupString)Localizer["TodayChecklist1"].Value)</li>
+                <li>@((MarkupString)Localizer["TodayChecklist2"].Value)</li>
+                <li>@((MarkupString)Localizer["TodayChecklist3"].Value)</li>
+                <li>@((MarkupString)Localizer["TodayChecklist4"].Value)</li>
             </ul>
         </div>
         <div>
-            <div class="mkt-sheet" role="img" aria-label="Illustration of the Today screen with a current task and deadline queues">
+            <div class="mkt-sheet" role="img" aria-label="@Localizer["TodaySheetAriaLabel"]">
                 <div class="mkt-sheet__head">
-                    <h4>Today</h4>
-                    <span>Thu · Ed. № 47</span>
+                    <h4>@Localizer["TodayEyebrow"]</h4>
+                    <span>@Localizer["TodaySheetEdition"]</span>
                 </div>
                 <div class="mkt-sheet__row">
                     <span class="mkt-sheet__dot mkt-sheet__dot--clay"></span>
-                    Draft Q3 product narrative
-                    <span class="mkt-sheet__tag">Current</span>
+                    @Localizer["TodaySheetRow1"]
+                    <span class="mkt-sheet__tag">@Localizer["TodaySheetRow1Tag"]</span>
                 </div>
                 <div class="mkt-sheet__row">
                     <span class="mkt-sheet__dot mkt-sheet__dot--gold"></span>
-                    Review onboarding research notes
-                    <span class="mkt-sheet__tag mkt-sheet__tag--muted">Due today</span>
+                    @Localizer["TodaySheetRow2"]
+                    <span class="mkt-sheet__tag mkt-sheet__tag--muted">@Localizer["TodaySheetRow2Tag"]</span>
                 </div>
                 <div class="mkt-sheet__row">
                     <span class="mkt-sheet__dot mkt-sheet__dot--sage"></span>
-                    Distill customer interview #12
-                    <span class="mkt-sheet__tag mkt-sheet__tag--muted">This week</span>
+                    @Localizer["TodaySheetRow3"]
+                    <span class="mkt-sheet__tag mkt-sheet__tag--muted">@Localizer["TodaySheetRow3Tag"]</span>
                 </div>
                 <div class="mkt-sheet__row">
                     <span class="mkt-sheet__dot mkt-sheet__dot--line"></span>
-                    <s>Send launch brief to design</s>
-                    <span class="mkt-sheet__tag mkt-sheet__tag--muted">Done</span>
+                    <s>@Localizer["TodaySheetRow4"]</s>
+                    <span class="mkt-sheet__tag mkt-sheet__tag--muted">@Localizer["TodaySheetRow4Tag"]</span>
                 </div>
             </div>
         </div>
@@ -198,61 +191,53 @@
 <section class="mkt-section mkt-nd">
     <div class="mkt-wrap">
         <div class="mkt-section__head">
-            <span class="mkt-eyebrow">Built for every brain</span>
-            <h2 class="mkt-title">Designed for focus — <em>including ADHD &amp; AuDHD brains</em>.</h2>
+            <span class="mkt-eyebrow">@Localizer["NdEyebrow"]</span>
+            <h2 class="mkt-title">@((MarkupString)Localizer["NdSectionTitle"].Value)</h2>
             <p class="mkt-lead">
-                Working memory shouldn't be a job requirement. Brainy externalizes the
-                remembering, the sorting, and the "what was I doing?" — so your
-                attention can go where it actually wants to go.
+                @Localizer["NdSectionLead"]
             </p>
         </div>
         <div class="mkt-nd-grid">
             <article class="mkt-note-card">
-                <h3>Catch it before it slips</h3>
+                <h3>@Localizer["NdCard1Title"]</h3>
                 <p>
-                    Racing thought? Save it in seconds — no forms, no filing decisions.
-                    A captured thought is a thought off your mind.
+                    @Localizer["NdCard1Body"]
                 </p>
             </article>
             <article class="mkt-note-card">
-                <h3>One thing at a time</h3>
+                <h3>@Localizer["NdCard2Title"]</h3>
                 <p>
-                    Today puts your current task front and center. Coming back after a
-                    distraction is one glance, not a scavenger hunt.
+                    @Localizer["NdCard2Body"]
                 </p>
             </article>
             <article class="mkt-note-card">
-                <h3>Structure that remembers for you</h3>
+                <h3>@Localizer["NdCard3Title"]</h3>
                 <p>
-                    PARA gives everything one obvious home. No willpower-based filing
-                    systems, no twenty-folder decision trees.
+                    @Localizer["NdCard3Body"]
                 </p>
             </article>
             <article class="mkt-note-card">
-                <h3>Calm by design</h3>
+                <h3>@Localizer["NdCard4Title"]</h3>
                 <p>
-                    A quiet, predictable interface with low cognitive load. Overdue is
-                    information, not punishment — no streaks, no guilt.
+                    @Localizer["NdCard4Body"]
                 </p>
             </article>
         </div>
         <p class="mkt-nd__note">
-            No shame mechanics. No noise. Just a system that <strong>meets your brain
-            where it is</strong> — however it works.
+            @((MarkupString)Localizer["NdFooterNote"].Value)
         </p>
     </div>
 </section>
 
 <section class="mkt-cta">
     <div class="mkt-wrap">
-        <h2 class="mkt-title">Think better. Work faster. <em>Create more</em> from what you already know.</h2>
+        <h2 class="mkt-title">@((MarkupString)Localizer["CtaTitle"].Value)</h2>
         <p>
-            Set up your second brain in minutes. Capture your first note today and
-            let PARA keep it exactly where your future self will look.
+            @Localizer["CtaBody"]
         </p>
         <div class="mkt-cta__actions">
-            <a class="mkt-btn mkt-btn--onDark" href="/Account/Register">Get started free</a>
-            <a class="mkt-btn mkt-btn--ghost" href="/pricing">See pricing</a>
+            <a class="mkt-btn mkt-btn--onDark" href="/Account/Register">@Localizer["CtaPrimary"]</a>
+            <a class="mkt-btn mkt-btn--ghost" href="/pricing">@Localizer["CtaSecondary"]</a>
         </div>
     </div>
 </section>
@@ -281,7 +266,7 @@
                 ["name"] = "Brainy",
                 ["applicationCategory"] = "ProductivityApplication",
                 ["operatingSystem"] = "Web",
-                ["description"] = "A practical second brain for capture, organization, and focused work."
+                ["description"] = Localizer["JsonLdDescription"].Value
             }
         }
     });

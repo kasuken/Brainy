@@ -14,12 +14,37 @@ namespace Brainy.Web.Identity;
 /// component or circuit DI scope at all, where <see cref="AuthenticationStateProvider"/>
 /// throws <see cref="InvalidOperationException"/> rather than returning a result.
 /// </summary>
+/// <remarks>
+/// A third source, checked first, is <see cref="IBackgroundUserContextAccessor"/> (backed by
+/// the scoped <see cref="BackgroundUserContext"/>): issue #315's push notification
+/// dispatcher runs with no request, circuit, or <see cref="HttpContext"/> at all, so it sets
+/// that holder to impersonate one user for the DI scope's lifetime instead of every scoped
+/// service needing its own explicit-userId variant.
+/// </remarks>
 internal sealed class CurrentUserService(
     AuthenticationStateProvider authenticationStateProvider,
-    IHttpContextAccessor httpContextAccessor) : ICurrentUserService
+    IHttpContextAccessor httpContextAccessor,
+    IBackgroundUserContextAccessor backgroundUserContext) : ICurrentUserService
 {
     public async Task<string?> GetUserIdAsync(CancellationToken cancellationToken = default)
     {
+        if (backgroundUserContext.UserId is { } impersonatedUserId)
+        {
+            // Impersonation is checked before the authenticated principal, so it must never be
+            // reachable from a request scope: anything that set it there would silently override
+            // the signed-in user for every scoped service. The only legitimate caller creates a
+            // fresh background scope, which has no HttpContext. Fail loudly rather than serving
+            // one user's data under another user's request.
+            if (httpContextAccessor.HttpContext is not null)
+            {
+                throw new InvalidOperationException(
+                    "Background user impersonation was set inside an HTTP request scope. It is only valid " +
+                    "in a dedicated background scope (see IBackgroundUserContextAccessor).");
+            }
+
+            return impersonatedUserId;
+        }
+
         try
         {
             var state = await authenticationStateProvider.GetAuthenticationStateAsync().ConfigureAwait(false);

@@ -54,7 +54,8 @@ internal sealed class GoalMilestoneService(
         {
             Id = Guid.NewGuid(),
             GoalId = dto.GoalId,
-            Title = dto.Title
+            Title = dto.Title,
+            DueDate = dto.DueDate?.Date
         };
 
         context.GoalMilestones.Add(milestone);
@@ -75,6 +76,7 @@ internal sealed class GoalMilestoneService(
             ?? throw new KeyNotFoundException($"Milestone {dto.Id} not found.");
 
         milestone.Title = dto.Title;
+        milestone.DueDate = dto.DueDate?.Date;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await InvalidateMilestoneAsync(userId, milestone.Id).ConfigureAwait(false);
 
@@ -144,5 +146,5 @@ internal sealed class GoalMilestoneService(
             CancellationToken.None);
 
     private static GoalMilestoneDto ToDto(GoalMilestone m) =>
-        new(m.Id, m.GoalId, m.Title, m.IsCompleted, m.CompletedAtUtc, m.CreatedAtUtc);
+        new(m.Id, m.GoalId, m.Title, m.IsCompleted, m.CompletedAtUtc, m.CreatedAtUtc, m.DueDate);
 }

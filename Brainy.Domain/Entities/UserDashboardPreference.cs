@@ -26,6 +26,17 @@ public class UserDashboardPreference : BaseEntity, IUserOwnedEntity
     public string TimeZoneId { get; set; } = "UTC";
 
     /// <summary>
+    /// BCP-47 UI culture id (e.g. "en-US", "it-IT") the user has selected, or negotiated
+    /// automatically from their browser on first sign-in. Null means no preference has been
+    /// recorded yet, in which case the browser's negotiated culture (or the app default) is
+    /// used for that request without being persisted. This governs UI language and
+    /// culture-aware display formatting only — it never affects how due dates or audit
+    /// timestamps are stored (see <c>AGENTS.md</c>: due dates are user-calendar dates,
+    /// audit timestamps remain UTC, both stored and computed independently of culture).
+    /// </summary>
+    public string? CultureId { get; set; }
+
+    /// <summary>
     /// Consent flag for internal product-analytics event tracking (see
     /// <c>Brainy.Application.Analytics.AnalyticsEvents</c>). Defaults to opted-in with clear
     /// disclosure and a one-click opt-out; toggling this off makes

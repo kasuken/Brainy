@@ -18,6 +18,7 @@ public interface IApplicationDbContext
     DbSet<Source> Sources { get; }
     DbSet<Note> Notes { get; }
     DbSet<NoteImage> NoteImages { get; }
+    DbSet<NoteRevision> NoteRevisions { get; }
     DbSet<Tag> Tags { get; }
     DbSet<Highlight> Highlights { get; }
     DbSet<Summary> Summaries { get; }
@@ -39,6 +40,15 @@ public interface IApplicationDbContext
     DbSet<UserPlan> UserPlans { get; }
     DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents { get; }
     DbSet<OfflineCaptureSyncRecord> OfflineCaptureSyncRecords { get; }
+    DbSet<ProjectTemplate> ProjectTemplates { get; }
+    DbSet<ProjectTemplateTask> ProjectTemplateTasks { get; }
+    DbSet<NoteTemplate> NoteTemplates { get; }
+    DbSet<OutputTemplate> OutputTemplates { get; }
+    DbSet<CalendarFeedToken> CalendarFeedTokens { get; }
+    DbSet<OutputShareLink> OutputShareLinks { get; }
+    DbSet<PushSubscription> PushSubscriptions { get; }
+    DbSet<PushNotificationPreference> PushNotificationPreferences { get; }
+    DbSet<PushNotificationDeliveryLog> PushNotificationDeliveryLogs { get; }
 
     /// <summary>
     /// Change-tracker entry for <paramref name="entity"/>; used to set the original

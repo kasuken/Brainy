@@ -1,0 +1,107 @@
+@using Brainy.Application.DTOs.Templates
+@using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Enums
+@inject INoteTemplateService NoteTemplateService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(TemplateId.HasValue ? "Edit note template" : "New note template")</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            <MudTextField @bind-Value="_name" Label="Template name" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Class="mb-3" MaxLength="200" Required="true" />
+
+            <MudTextField @bind-Value="_titlePattern" Label="Note title pattern" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Class="mb-3" MaxLength="200" Required="true"
+                          HelperText="Use {Date} or {Year} to include the instantiation date." />
+
+            <MudSelect T="ParaCategory" @bind-Value="_category" Label="Default PARA category" Variant="Variant.Outlined"
+                       Margin="Margin.Dense" Class="mb-3" AnchorOrigin="Origin.BottomCenter">
+                @foreach (var c in Enum.GetValues<ParaCategory>())
+                {
+                    <MudSelectItem Value="@c">@c</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudTextField @bind-Value="_contentScaffold" Label="Content scaffold" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Lines="8" />
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">Save Template</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public Guid? TemplateId { get; set; }
+
+    private bool _loading = true;
+    private string _name = "";
+    private string _titlePattern = "";
+    private string _contentScaffold = "";
+    private ParaCategory _category = ParaCategory.Project;
+    private byte[]? _rowVersion;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (TemplateId.HasValue)
+        {
+            var template = await NoteTemplateService.GetByIdAsync(TemplateId.Value);
+            if (template is not null)
+            {
+                _name = template.Name;
+                _titlePattern = template.TitlePattern;
+                _contentScaffold = template.ContentScaffold;
+                _category = template.DefaultParaCategory;
+                _rowVersion = template.RowVersion;
+            }
+        }
+
+        _loading = false;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_titlePattern))
+        {
+            Snackbar.Add("A template name and note title pattern are required.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            if (TemplateId.HasValue)
+            {
+                var updated = await NoteTemplateService.UpdateAsync(new UpdateNoteTemplateDto(
+                    TemplateId.Value, _name.Trim(), _titlePattern.Trim(), _contentScaffold, _category, _rowVersion));
+                MudDialog.Close(DialogResult.Ok(updated));
+            }
+            else
+            {
+                var created = await NoteTemplateService.CreateAsync(new CreateNoteTemplateDto(
+                    _name.Trim(), _titlePattern.Trim(), _contentScaffold, _category));
+                MudDialog.Close(DialogResult.Ok(created));
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

@@ -100,6 +100,8 @@ internal sealed class NoteService(
         note.Tags = await ResolveTagsAsync(userId, dto.Tags ?? [], cancellationToken).ConfigureAwait(false);
 
         context.Notes.Add(note);
+        context.NoteRevisions.Add(NoteRevisionSupport.BuildRevision(
+            userId, note.Id, note.Title, note.Content, dto.ChangeReason ?? NoteRevisionReason.UserEdit));
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await InvalidateNoteAsync(
             userId,
@@ -139,6 +141,8 @@ internal sealed class NoteService(
         // tab/circuit since then are detected instead of silently overwritten.
         if (dto.RowVersion is not null)
             context.Entry(note).Property(n => n.RowVersion).OriginalValue = dto.RowVersion;
+
+        var contentChanged = note.Title != dto.Title || note.Content != dto.Content;
 
         note.Title = dto.Title;
         note.Content = dto.Content;
@@ -200,6 +204,10 @@ internal sealed class NoteService(
             }
         }
 
+        if (contentChanged)
+            context.NoteRevisions.Add(NoteRevisionSupport.BuildRevision(
+                userId, note.Id, note.Title, note.Content, dto.ChangeReason ?? NoteRevisionReason.UserEdit));
+
         try
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -208,6 +216,10 @@ internal sealed class NoteService(
         {
             throw new ConcurrencyConflictException("note", ex);
         }
+
+        if (contentChanged)
+            await NoteRevisionSupport.TrimRetentionAsync(context, userId, note.Id, CancellationToken.None)
+                .ConfigureAwait(false);
 
         if (note.SourceId.HasValue)
             sourceIds.Add(note.SourceId.Value);
@@ -253,16 +265,20 @@ internal sealed class NoteService(
         await context.EnsureNoteLinksOwnedAsync(
             userId, dto.ProjectId, dto.AreaId, dto.ResourceId, cancellationToken).ConfigureAwait(false);
 
+        var newTitle = note.Title;
         if (dto.Title is not null)
         {
             if (string.IsNullOrWhiteSpace(dto.Title))
                 throw new ArgumentException("A note title is required.", nameof(dto));
 
-            note.Title = dto.Title.Trim();
+            newTitle = dto.Title.Trim();
         }
 
-        if (dto.Content is not null)
-            note.Content = dto.Content;
+        var newContent = dto.Content ?? note.Content;
+        var contentChanged = newTitle != note.Title || newContent != note.Content;
+
+        note.Title = newTitle;
+        note.Content = newContent;
 
         if (dto.RowVersion is not null)
             context.Entry(note).Property(n => n.RowVersion).OriginalValue = dto.RowVersion;
@@ -285,6 +301,10 @@ internal sealed class NoteService(
             note.ArchivedAtUtc = null;
         }
 
+        if (contentChanged)
+            context.NoteRevisions.Add(NoteRevisionSupport.BuildRevision(
+                userId, note.Id, note.Title, note.Content, dto.ChangeReason ?? NoteRevisionReason.UserEdit));
+
         try
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -293,6 +313,10 @@ internal sealed class NoteService(
         {
             throw new ConcurrencyConflictException("note", ex);
         }
+
+        if (contentChanged)
+            await NoteRevisionSupport.TrimRetentionAsync(context, userId, note.Id, CancellationToken.None)
+                .ConfigureAwait(false);
 
         await InvalidateNoteAsync(userId, note.Id).ConfigureAwait(false);
 

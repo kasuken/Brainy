@@ -127,6 +127,8 @@ public sealed class AccountDeletionService(
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await context.Summaries.Where(summary => summary.Note.UserId == userId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await context.NoteRevisions.Where(revision => revision.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await context.NoteImages.Where(image => image.UserId == userId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await context.LifecycleActivities.Where(activity => activity.UserId == userId)
@@ -138,6 +140,14 @@ public sealed class AccountDeletionService(
         await context.UserPlans.Where(plan => plan.UserId == userId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await context.ProcessedWebhookEvents.Where(webhookEvent => webhookEvent.TargetUserId == userId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await context.ProjectTemplateTasks.Where(task => task.ProjectTemplate.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await context.ProjectTemplates.Where(template => template.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await context.NoteTemplates.Where(template => template.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await context.OutputTemplates.Where(template => template.UserId == userId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
         await context.Outputs.Where(output => output.UserId == userId)
@@ -181,6 +191,12 @@ public sealed class AccountDeletionService(
                 project.UserId != userId &&
                 ((project.AreaId.HasValue && context.Areas.Any(area => area.Id == project.AreaId.Value && area.UserId == userId)) ||
                  (project.GoalId.HasValue && context.Goals.Any(goal => goal.Id == project.GoalId.Value && goal.UserId == userId))),
+            cancellationToken).ConfigureAwait(false);
+
+        var hasForeignProjectTemplateReference = await context.ProjectTemplates.AnyAsync(template =>
+                template.UserId != userId &&
+                ((template.DefaultAreaId.HasValue && context.Areas.Any(area => area.Id == template.DefaultAreaId.Value && area.UserId == userId)) ||
+                 (template.DefaultGoalId.HasValue && context.Goals.Any(goal => goal.Id == template.DefaultGoalId.Value && goal.UserId == userId))),
             cancellationToken).ConfigureAwait(false);
 
         var hasForeignResourceReference = await context.Resources.AnyAsync(resource =>
@@ -257,7 +273,7 @@ public sealed class AccountDeletionService(
                 (selection.UserId != userId && selection.Task.UserId == userId),
             cancellationToken).ConfigureAwait(false);
 
-        if (hasForeignTaskReference || hasForeignProjectReference || hasForeignResourceReference ||
+        if (hasForeignTaskReference || hasForeignProjectReference || hasForeignProjectTemplateReference || hasForeignResourceReference ||
             hasForeignGoalReference || hasForeignIdeaReference || hasForeignOutputReference ||
             hasForeignNoteReference || hasForeignImageReference || hasForeignActionReference ||
             hasCrossUserTaskDependency || hasCrossUserNoteRelationship || hasCrossUserNoteTag ||

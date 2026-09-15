@@ -209,6 +209,78 @@ public sealed class DataImportServiceTests
     }
 
     [Fact]
+    public async Task ImportCurrentUserAsync_RoundTripsProjectNoteAndOutputTemplates()
+    {
+        var databaseName = nameof(ImportCurrentUserAsync_RoundTripsProjectNoteAndOutputTemplates);
+        var root = new InMemoryDatabaseRoot();
+        const string sourceUserId = "template-source-user";
+        const string targetUserId = "template-target-user";
+
+        var (exportSut, sourceDb) = BuildExportService(databaseName, root, sourceUserId);
+        var area = new Area { Id = Guid.NewGuid(), UserId = sourceUserId, Name = "Client Work" };
+        var projectTemplate = new ProjectTemplate
+        {
+            Id = Guid.NewGuid(),
+            UserId = sourceUserId,
+            Name = "Client Kickoff",
+            ProjectNamePattern = "Client Kickoff — {Date}",
+            DefaultPriority = ProjectPriority.High,
+            DefaultArea = area,
+            Tasks =
+            [
+                new ProjectTemplateTask
+                {
+                    Id = Guid.NewGuid(), Title = "Send agenda", Priority = TaskPriority.High,
+                    DueDateOffsetDays = 2, SortOrder = 0
+                }
+            ]
+        };
+        var noteTemplate = new NoteTemplate
+        {
+            Id = Guid.NewGuid(), UserId = sourceUserId, Name = "Meeting Notes",
+            TitlePattern = "Meeting — {Date}", ContentScaffold = "## Agenda\n", DefaultParaCategory = ParaCategory.Project
+        };
+        var outputTemplate = new OutputTemplate
+        {
+            Id = Guid.NewGuid(), UserId = sourceUserId, Name = "Status Report",
+            TitlePattern = "Status — {Date}", Type = OutputType.Report, ContentScaffold = "## Summary\n",
+            DefaultSourceSelection = OutputTemplateSourceSelectionMode.ActiveProjectNotes
+        };
+        sourceDb.AddRange(area, projectTemplate, noteTemplate, outputTemplate);
+        await sourceDb.SaveChangesAsync();
+
+        var export = await exportSut.ExportCurrentUserAsync();
+
+        var (importSut, targetDb) = BuildService(databaseName, new FakeCurrentUserService(targetUserId), root);
+        var result = await importSut.ImportCurrentUserAsync(new MemoryStream(export.Content));
+
+        result.EntityOutcomes.Should().Contain(o => o.EntityType == "Project templates" && o.Created == 1);
+        result.EntityOutcomes.Should().Contain(o => o.EntityType == "Project template tasks" && o.Created == 1);
+        result.EntityOutcomes.Should().Contain(o => o.EntityType == "Note templates" && o.Created == 1);
+        result.EntityOutcomes.Should().Contain(o => o.EntityType == "Output templates" && o.Created == 1);
+
+        var importedArea = await targetDb.Areas.AsNoTracking().SingleAsync(a => a.UserId == targetUserId);
+        var importedProjectTemplate = await targetDb.ProjectTemplates.AsNoTracking()
+            .Include(t => t.Tasks)
+            .SingleAsync(t => t.UserId == targetUserId);
+        importedProjectTemplate.Name.Should().Be("Client Kickoff");
+        importedProjectTemplate.DefaultAreaId.Should().Be(importedArea.Id);
+        importedProjectTemplate.Tasks.Should().ContainSingle(t => t.Title == "Send agenda" && t.DueDateOffsetDays == 2);
+
+        var importedNoteTemplate = await targetDb.NoteTemplates.AsNoTracking().SingleAsync(t => t.UserId == targetUserId);
+        importedNoteTemplate.TitlePattern.Should().Be("Meeting — {Date}");
+
+        var importedOutputTemplate = await targetDb.OutputTemplates.AsNoTracking().SingleAsync(t => t.UserId == targetUserId);
+        importedOutputTemplate.DefaultSourceSelection.Should().Be(OutputTemplateSourceSelectionMode.ActiveProjectNotes);
+
+        // Re-importing the same export must not duplicate the templates.
+        await importSut.ImportCurrentUserAsync(new MemoryStream(export.Content));
+        (await targetDb.ProjectTemplates.CountAsync(t => t.UserId == targetUserId)).Should().Be(1);
+        (await targetDb.NoteTemplates.CountAsync(t => t.UserId == targetUserId)).Should().Be(1);
+        (await targetDb.OutputTemplates.CountAsync(t => t.UserId == targetUserId)).Should().Be(1);
+    }
+
+    [Fact]
     public async Task ImportCurrentUserAsync_WithMismatchedImageChecksum_ReportsIntegrityIssueButImportsActualBytes()
     {
         var (sut, db) = BuildService(nameof(ImportCurrentUserAsync_WithMismatchedImageChecksum_ReportsIntegrityIssueButImportsActualBytes));
@@ -238,6 +310,7 @@ public sealed class DataImportServiceTests
                 "highlights": [], "summaries": [],
                 "tasks": [], "actionItems": [], "noteRelationships": [], "taskDependencies": [],
                 "outputs": [], "outputSourceNoteLinks": [],
+                "projectTemplates": [], "projectTemplateTasks": [], "noteTemplates": [], "outputTemplates": [],
                 "ideas": [], "goalMilestones": [], "goalActivities": [],
                 "archiveRetentionRules": [], "weeklyTaskSelections": []
               }
@@ -262,6 +335,7 @@ public sealed class DataImportServiceTests
             "noteImages": [], "highlights": [], "summaries": [],
             "tasks": [], "actionItems": [], "noteRelationships": [], "taskDependencies": [],
             "outputs": [], "outputSourceNoteLinks": [],
+            "projectTemplates": [], "projectTemplateTasks": [], "noteTemplates": [], "outputTemplates": [],
             "ideas": [], "goalMilestones": [], "goalActivities": [],
             "archiveRetentionRules": [], "weeklyTaskSelections": []
           }
