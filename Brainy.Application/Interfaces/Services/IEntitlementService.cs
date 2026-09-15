@@ -56,10 +56,10 @@ public interface IEntitlementService
     /// webhooks can be linked back to this user.
     /// </summary>
     Task RecordBillingReferencesAsync(
-        string userId,
-        string? billingProviderCustomerId,
-        string? billingProviderSubscriptionId,
-        CancellationToken cancellationToken = default);
+       string userId,
+       string? billingProviderCustomerId,
+       string? billingProviderSubscriptionId,
+       CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Sets (when <paramref name="gracePeriodEndsAtUtc"/> is non-null) or clears (when null) the
@@ -68,7 +68,7 @@ public interface IEntitlementService
     /// changes via <see cref="SetPlanTierAsync"/> once the provider actually ends the subscription.
     /// </summary>
     Task SetGracePeriodAsync(
-        string userId,
-        DateTime? gracePeriodEndsAtUtc,
-        CancellationToken cancellationToken = default);
+       string userId,
+       DateTime? gracePeriodEndsAtUtc,
+       CancellationToken cancellationToken = default);
 }

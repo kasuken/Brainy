@@ -10,11 +10,16 @@ namespace Brainy.Web.Endpoints;
 public static class BillingWebhookEndpoints
 {
     /// <summary>
-    /// The header a billing provider signs its webhook payload with. This is Stripe's own
-    /// header name (<c>Stripe-Signature</c>) — Stripe controls what it sends, so this cannot
-    /// be a generic placeholder once a real provider is wired in.
+    /// The header Stripe signs its webhook payloads with. Stripe's header name is fixed and
+    /// cannot be configured in the Dashboard, so it has to be read verbatim.
     /// </summary>
-    public const string SignatureHeaderName = "Stripe-Signature";
+    public const string StripeSignatureHeaderName = "Stripe-Signature";
+
+    /// <summary>
+    /// Provider-neutral fallback header, for a provider whose signature header is
+    /// configurable. Only consulted when <see cref="StripeSignatureHeaderName"/> is absent.
+    /// </summary>
+    public const string SignatureHeaderName = "X-Billing-Signature";
 
     public static IEndpointRouteBuilder MapBillingWebhookEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -25,7 +30,11 @@ public static class BillingWebhookEndpoints
         {
             using var reader = new StreamReader(request.Body);
             var payload = await reader.ReadToEndAsync(cancellationToken);
-            var signature = request.Headers[SignatureHeaderName].ToString();
+
+            var stripeSignature = request.Headers[StripeSignatureHeaderName].ToString();
+            var signature = string.IsNullOrEmpty(stripeSignature)
+                ? request.Headers[SignatureHeaderName].ToString()
+                : stripeSignature;
 
             var result = await processor.ProcessAsync(payload, signature, cancellationToken);
 

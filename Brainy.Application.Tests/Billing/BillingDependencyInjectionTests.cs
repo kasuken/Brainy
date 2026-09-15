@@ -22,6 +22,7 @@ public sealed class BillingDependencyInjectionTests
     private static IServiceCollection BaseServices()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddSingleton(TimeProvider.System);
         services.AddDbContext<BrainyDbContext>(o => o.UseInMemoryDatabase(Guid.NewGuid().ToString()));
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<BrainyDbContext>());
@@ -57,8 +58,11 @@ public sealed class BillingDependencyInjectionTests
     [Theory]
     [InlineData("ApiKey")]
     [InlineData("WebhookSigningSecret")]
-    [InlineData("ProPriceId")]
-    [InlineData("AppBaseUrl")]
+    [InlineData("ProMonthlyPriceId")]
+    [InlineData("ProYearlyPriceId")]
+    [InlineData("CheckoutSuccessUrl")]
+    [InlineData("CheckoutCancelUrl")]
+    [InlineData("PortalReturnUrl")]
     public void AddBilling_WithStripeProviderMissingARequiredSetting_ThrowsAtRegistrationTime(string missingKey)
     {
         var services = BaseServices();
@@ -67,15 +71,18 @@ public sealed class BillingDependencyInjectionTests
             ["Billing:Provider"] = "Stripe",
             ["Billing:ApiKey"] = "sk_test_fake",
             ["Billing:WebhookSigningSecret"] = "whsec_fake",
-            ["Billing:ProPriceId"] = "price_fake",
-            ["Billing:AppBaseUrl"] = "https://app.example.test",
+            ["Billing:ProMonthlyPriceId"] = "price_monthly",
+            ["Billing:ProYearlyPriceId"] = "price_yearly",
+            ["Billing:CheckoutSuccessUrl"] = "https://app.example.test/Account/Manage?checkout=success",
+            ["Billing:CheckoutCancelUrl"] = "https://app.example.test/Account/Manage?checkout=cancelled",
+            ["Billing:PortalReturnUrl"] = "https://app.example.test/Account/Manage",
         };
         settings.Remove($"Billing:{missingKey}");
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
 
         var act = () => services.AddBilling(configuration);
 
-        act.Should().Throw<ArgumentException>();
+        act.Should().Throw<InvalidOperationException>().WithMessage($"*{missingKey}*");
     }
 
     [Fact]
@@ -88,8 +95,11 @@ public sealed class BillingDependencyInjectionTests
                 ["Billing:Provider"] = "Stripe",
                 ["Billing:ApiKey"] = "sk_test_fake",
                 ["Billing:WebhookSigningSecret"] = "whsec_fake",
-                ["Billing:ProPriceId"] = "price_fake",
-                ["Billing:AppBaseUrl"] = "https://app.example.test",
+                ["Billing:ProMonthlyPriceId"] = "price_monthly",
+                ["Billing:ProYearlyPriceId"] = "price_yearly",
+                ["Billing:CheckoutSuccessUrl"] = "https://app.example.test/Account/Manage?checkout=success",
+                ["Billing:CheckoutCancelUrl"] = "https://app.example.test/Account/Manage?checkout=cancelled",
+                ["Billing:PortalReturnUrl"] = "https://app.example.test/Account/Manage",
             })
             .Build();
 

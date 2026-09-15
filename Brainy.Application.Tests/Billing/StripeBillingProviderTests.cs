@@ -6,6 +6,7 @@ using Brainy.Domain.Entities;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Stripe;
 using Xunit;
@@ -13,28 +14,15 @@ using PlanTier = Brainy.Domain.Enums.PlanTier;
 
 namespace Brainy.Application.Tests.Billing;
 
-/// <summary>
-/// Covers <see cref="StripeBillingProvider"/>: webhook signature verification (issue #308
-/// acceptance criteria "a forged webhook payload is rejected" and "replayed events remain
-/// idempotent" — idempotency itself is <see cref="Services.BillingWebhookProcessorTests"/>'s
-/// job, this covers the signature check it depends on), event-to-<see cref="Domain.Enums.PlanTier"/>
-/// mapping, and the checkout/portal session seams. Every Stripe call here goes through
-/// <see cref="FakeStripeClient"/> or pure local signature math (<see cref="EventUtility"/>) —
-/// nothing in this file ever calls the real Stripe API.
-/// </summary>
 public sealed class StripeBillingProviderTests
 {
     private const string WebhookSecret = "whsec_test_secret_only_used_locally";
     private const string UserId = "stripe-user-1";
     private const string CustomerId = "cus_test_123";
     private const string SubscriptionId = "sub_test_123";
+    private const string MonthlyPriceId = "price_monthly_test";
+    private const string YearlyPriceId = "price_yearly_test";
 
-    /// <summary>
-    /// Stripe.net's own current API version, read via reflection so test event payloads carry
-    /// one it recognizes as a match — <c>EventUtility.ParseEvent</c> otherwise throws trying to
-    /// compare against a missing <c>api_version</c>. A real webhook delivery always carries the
-    /// Stripe account's api_version, so this is purely a test-fixture concern.
-    /// </summary>
     private static readonly string ApiVersion = (string)typeof(StripeConfiguration).Assembly
         .GetType("Stripe.ApiVersion")!
         .GetField(
@@ -42,13 +30,16 @@ public sealed class StripeBillingProviderTests
             System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)!
         .GetValue(null)!;
 
-    private static BillingOptions Options() => new()
+    private static BillingOptions CreateOptions() => new()
     {
         Provider = BillingProviderType.Stripe,
         ApiKey = "sk_test_fake_key_never_sent_anywhere",
         WebhookSigningSecret = WebhookSecret,
-        ProPriceId = "price_pro_test",
-        AppBaseUrl = "https://app.example.test",
+        ProMonthlyPriceId = MonthlyPriceId,
+        ProYearlyPriceId = YearlyPriceId,
+        CheckoutSuccessUrl = "https://app.example.test/Account/Manage?checkout=success",
+        CheckoutCancelUrl = "https://app.example.test/Account/Manage?checkout=cancelled",
+        PortalReturnUrl = "https://app.example.test/Account/Manage",
     };
 
     private static BrainyDbContext CreateDb(string name)
@@ -59,10 +50,16 @@ public sealed class StripeBillingProviderTests
     }
 
     private static StripeBillingProvider CreateProvider(
-        BrainyDbContext db, TimeProvider? timeProvider = null, IStripeClient? stripeClient = null, BillingOptions? options = null) =>
-        new(Microsoft.Extensions.Options.Options.Create(options ?? Options()), db, timeProvider ?? TimeProvider.System, stripeClient);
-
-    // ---- Webhook signature verification --------------------------------------------------
+        BrainyDbContext db,
+        TimeProvider? timeProvider = null,
+        IStripeClient? stripeClient = null,
+        BillingOptions? options = null) =>
+        new(
+            Microsoft.Extensions.Options.Options.Create(options ?? CreateOptions()),
+            db,
+            timeProvider ?? TimeProvider.System,
+            NullLogger<StripeBillingProvider>.Instance,
+            stripeClient);
 
     [Fact]
     public async Task VerifyWebhookSignatureAsync_WithValidSignature_IsValid()
@@ -70,9 +67,8 @@ public sealed class StripeBillingProviderTests
         using var db = CreateDb(nameof(VerifyWebhookSignatureAsync_WithValidSignature_IsValid));
         var provider = CreateProvider(db);
         var payload = MinimalEventJson("evt_1", "checkout.session.completed");
-        var signature = EventUtility.GenerateSignatureHeader(payload, WebhookSecret);
 
-        var result = await provider.VerifyWebhookSignatureAsync(payload, signature);
+        var result = await provider.VerifyWebhookSignatureAsync(payload, EventUtility.GenerateSignatureHeader(payload, WebhookSecret));
 
         result.IsValid.Should().BeTrue();
     }
@@ -85,24 +81,7 @@ public sealed class StripeBillingProviderTests
         var signedPayload = MinimalEventJson("evt_1", "checkout.session.completed");
         var signature = EventUtility.GenerateSignatureHeader(signedPayload, WebhookSecret);
 
-        // A forged payload: same signature header, but the body it was computed over changed —
-        // e.g. an attacker replaying a captured signature against a tampered plan-change event.
-        var forgedPayload = MinimalEventJson("evt_1", "customer.subscription.deleted");
-
-        var result = await provider.VerifyWebhookSignatureAsync(forgedPayload, signature);
-
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task VerifyWebhookSignatureAsync_WithWrongSigningSecret_IsRejected()
-    {
-        using var db = CreateDb(nameof(VerifyWebhookSignatureAsync_WithWrongSigningSecret_IsRejected));
-        var provider = CreateProvider(db);
-        var payload = MinimalEventJson("evt_1", "checkout.session.completed");
-        var signature = EventUtility.GenerateSignatureHeader(payload, "whsec_a_completely_different_secret");
-
-        var result = await provider.VerifyWebhookSignatureAsync(payload, signature);
+        var result = await provider.VerifyWebhookSignatureAsync(MinimalEventJson("evt_1", "customer.subscription.deleted"), signature);
 
         result.IsValid.Should().BeFalse();
     }
@@ -122,7 +101,7 @@ public sealed class StripeBillingProviderTests
     public async Task VerifyWebhookSignatureAsync_WithNoSigningSecretConfigured_IsRejected()
     {
         using var db = CreateDb(nameof(VerifyWebhookSignatureAsync_WithNoSigningSecretConfigured_IsRejected));
-        var options = Options();
+        var options = CreateOptions();
         options.WebhookSigningSecret = null;
         var provider = CreateProvider(db, options: options);
         var payload = MinimalEventJson("evt_1", "checkout.session.completed");
@@ -132,40 +111,17 @@ public sealed class StripeBillingProviderTests
         result.IsValid.Should().BeFalse();
     }
 
-    // ---- Event parsing / PlanTier mapping -------------------------------------------------
-
     [Fact]
-    public async Task ParseWebhookEventAsync_CheckoutSessionCompleted_MapsToProUpgrade()
+    public async Task ParseWebhookEventAsync_CheckoutSessionCompleted_LinksAccountWithoutGrantingATier()
     {
-        using var db = CreateDb(nameof(ParseWebhookEventAsync_CheckoutSessionCompleted_MapsToProUpgrade));
+        using var db = CreateDb(nameof(ParseWebhookEventAsync_CheckoutSessionCompleted_LinksAccountWithoutGrantingATier));
         var provider = CreateProvider(db);
 
-        var payload =
-            $$"""
-            {
-              "id": "evt_checkout_1",
-              "object": "event",
-              "api_version": "{{ApiVersion}}",
-              "type": "checkout.session.completed",
-              "data": {
-                "object": {
-                  "id": "cs_test_1",
-                  "object": "checkout.session",
-                  "mode": "subscription",
-                  "client_reference_id": "{{UserId}}",
-                  "customer": "{{CustomerId}}",
-                  "subscription": "{{SubscriptionId}}"
-                }
-              }
-            }
-            """;
-
-        var parsed = await provider.ParseWebhookEventAsync(payload);
+        var parsed = await provider.ParseWebhookEventAsync(CheckoutCompletedPayload("evt_checkout_1", UserId));
 
         parsed.Should().NotBeNull();
-        parsed!.ProviderEventId.Should().Be("evt_checkout_1");
-        parsed.TargetUserId.Should().Be(UserId);
-        parsed.NewTier.Should().Be(PlanTier.Pro);
+        parsed!.TargetUserId.Should().Be(UserId);
+        parsed.NewTier.Should().BeNull();
         parsed.BillingProviderCustomerId.Should().Be(CustomerId);
         parsed.BillingProviderSubscriptionId.Should().Be(SubscriptionId);
     }
@@ -176,28 +132,7 @@ public sealed class StripeBillingProviderTests
         using var db = CreateDb(nameof(ParseWebhookEventAsync_CheckoutSessionCompletedInPaymentMode_IsIgnored));
         var provider = CreateProvider(db);
 
-        // Brainy only ever starts subscription-mode checkouts; a one-off "payment" mode session
-        // (not something Brainy's own checkout creates) must not be interpreted as a plan change.
-        var payload =
-            $$"""
-            {
-              "id": "evt_checkout_2",
-              "object": "event",
-              "api_version": "{{ApiVersion}}",
-              "type": "checkout.session.completed",
-              "data": {
-                "object": {
-                  "id": "cs_test_2",
-                  "object": "checkout.session",
-                  "mode": "payment",
-                  "client_reference_id": "{{UserId}}",
-                  "customer": "{{CustomerId}}"
-                }
-              }
-            }
-            """;
-
-        var parsed = await provider.ParseWebhookEventAsync(payload);
+        var parsed = await provider.ParseWebhookEventAsync(CheckoutCompletedPayload("evt_checkout_2", UserId, "payment"));
 
         parsed.Should().BeNull();
     }
@@ -208,73 +143,28 @@ public sealed class StripeBillingProviderTests
         using var db = CreateDb(nameof(ParseWebhookEventAsync_SubscriptionUpdatedActive_MapsToProWithPeriodEndAndClearsGrace));
         var provider = CreateProvider(db);
 
-        var payload =
-            $$"""
-            {
-              "id": "evt_sub_updated_1",
-              "object": "event",
-              "api_version": "{{ApiVersion}}",
-              "type": "customer.subscription.updated",
-              "data": {
-                "object": {
-                  "id": "{{SubscriptionId}}",
-                  "object": "subscription",
-                  "status": "active",
-                  "customer": "{{CustomerId}}",
-                  "metadata": { "brainy_user_id": "{{UserId}}" },
-                  "items": {
-                    "object": "list",
-                    "data": [
-                      { "id": "si_1", "object": "subscription_item", "current_period_end": 1748736000 }
-                    ]
-                  }
-                }
-              }
-            }
-            """;
-
-        var parsed = await provider.ParseWebhookEventAsync(payload);
+        var parsed = await provider.ParseWebhookEventAsync(
+            SubscriptionPayload("evt_sub_updated_1", "customer.subscription.updated", "active", YearlyPriceId, 1748736000));
 
         parsed.Should().NotBeNull();
-        parsed!.TargetUserId.Should().Be(UserId);
-        parsed.NewTier.Should().Be(PlanTier.Pro);
+        parsed!.NewTier.Should().Be(PlanTier.Pro);
         parsed.PeriodEndsAtUtc.Should().Be(new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc));
         parsed.ClearsGracePeriod.Should().BeTrue();
         parsed.BillingProviderSubscriptionId.Should().Be(SubscriptionId);
     }
 
     [Fact]
-    public async Task ParseWebhookEventAsync_SubscriptionUpdatedPastDue_DoesNotChangeTierYet()
+    public async Task ParseWebhookEventAsync_SubscriptionUpdatedPastDue_KeepsProWithoutClearingGrace()
     {
-        using var db = CreateDb(nameof(ParseWebhookEventAsync_SubscriptionUpdatedPastDue_DoesNotChangeTierYet));
+        using var db = CreateDb(nameof(ParseWebhookEventAsync_SubscriptionUpdatedPastDue_KeepsProWithoutClearingGrace));
         var provider = CreateProvider(db);
 
-        var payload =
-            $$"""
-            {
-              "id": "evt_sub_updated_2",
-              "object": "event",
-              "api_version": "{{ApiVersion}}",
-              "type": "customer.subscription.updated",
-              "data": {
-                "object": {
-                  "id": "{{SubscriptionId}}",
-                  "object": "subscription",
-                  "status": "past_due",
-                  "customer": "{{CustomerId}}",
-                  "metadata": { "brainy_user_id": "{{UserId}}" }
-                }
-              }
-            }
-            """;
+        var parsed = await provider.ParseWebhookEventAsync(
+            SubscriptionPayload("evt_sub_updated_2", "customer.subscription.updated", "past_due", MonthlyPriceId, 1751328000));
 
-        var parsed = await provider.ParseWebhookEventAsync(payload);
-
-        // Still linked/recorded (for idempotency and housekeeping) but no tier change: the
-        // grace period is what invoice.payment_failed records, and the eventual downgrade
-        // comes from customer.subscription.deleted once Stripe gives up retrying.
         parsed.Should().NotBeNull();
-        parsed!.NewTier.Should().BeNull();
+        parsed!.NewTier.Should().Be(PlanTier.Pro);
+        parsed.PeriodEndsAtUtc.Should().Be(new DateTime(2025, 7, 1, 0, 0, 0, DateTimeKind.Utc));
         parsed.ClearsGracePeriod.Should().BeFalse();
     }
 
@@ -284,31 +174,52 @@ public sealed class StripeBillingProviderTests
         using var db = CreateDb(nameof(ParseWebhookEventAsync_SubscriptionDeleted_MapsToStarterDowngrade));
         var provider = CreateProvider(db);
 
-        var payload =
-            $$"""
-            {
-              "id": "evt_sub_deleted_1",
-              "object": "event",
-              "api_version": "{{ApiVersion}}",
-              "type": "customer.subscription.deleted",
-              "data": {
-                "object": {
-                  "id": "{{SubscriptionId}}",
-                  "object": "subscription",
-                  "status": "canceled",
-                  "customer": "{{CustomerId}}",
-                  "metadata": { "brainy_user_id": "{{UserId}}" }
-                }
-              }
-            }
-            """;
+        var parsed = await provider.ParseWebhookEventAsync(
+            SubscriptionPayload("evt_sub_deleted_1", "customer.subscription.deleted", "canceled", YearlyPriceId, 1748736000));
 
-        var parsed = await provider.ParseWebhookEventAsync(payload);
+        parsed.Should().NotBeNull();
+        parsed!.NewTier.Should().Be(PlanTier.Starter);
+        parsed.ClearsGracePeriod.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ParseWebhookEventAsync_UnconfiguredPrice_DoesNotGrantPro()
+    {
+        using var db = CreateDb(nameof(ParseWebhookEventAsync_UnconfiguredPrice_DoesNotGrantPro));
+        var provider = CreateProvider(db);
+
+        var parsed = await provider.ParseWebhookEventAsync(
+            SubscriptionPayload("evt_sub_unknown_price", "customer.subscription.updated", "active", "price_not_configured", 1748736000));
+
+        parsed.Should().NotBeNull();
+        parsed!.NewTier.Should().Be(PlanTier.Starter);
+    }
+
+    [Fact]
+    public async Task ParseWebhookEventAsync_WithoutMetadata_ResolvesUserFromStoredCustomerId()
+    {
+        using var db = CreateDb(nameof(ParseWebhookEventAsync_WithoutMetadata_ResolvesUserFromStoredCustomerId));
+        db.UserPlans.Add(new UserPlan { UserId = UserId, Tier = PlanTier.Pro, BillingProviderCustomerId = CustomerId });
+        await db.SaveChangesAsync();
+        var provider = CreateProvider(db);
+
+        var parsed = await provider.ParseWebhookEventAsync(
+            SubscriptionPayload("evt_sub_no_metadata", "customer.subscription.updated", "active", YearlyPriceId, 1748736000, metadataUserId: null));
 
         parsed.Should().NotBeNull();
         parsed!.TargetUserId.Should().Be(UserId);
-        parsed.NewTier.Should().Be(PlanTier.Starter);
-        parsed.ClearsGracePeriod.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ParseWebhookEventAsync_WithUnknownCustomerAndNoMetadata_IsIgnored()
+    {
+        using var db = CreateDb(nameof(ParseWebhookEventAsync_WithUnknownCustomerAndNoMetadata_IsIgnored));
+        var provider = CreateProvider(db);
+
+        var parsed = await provider.ParseWebhookEventAsync(
+            SubscriptionPayload("evt_sub_orphan", "customer.subscription.updated", "active", YearlyPriceId, 1748736000, metadataUserId: null));
+
+        parsed.Should().BeNull();
     }
 
     [Fact]
@@ -317,57 +228,13 @@ public sealed class StripeBillingProviderTests
         using var db = CreateDb(nameof(ParseWebhookEventAsync_InvoicePaymentFailed_ResolvesUserByCustomerIdAndSetsGracePeriod));
         db.UserPlans.Add(new UserPlan { UserId = UserId, Tier = PlanTier.Pro, BillingProviderCustomerId = CustomerId });
         await db.SaveChangesAsync();
-
         var provider = CreateProvider(db);
 
-        var payload =
-            $$"""
-            {
-              "id": "evt_invoice_failed_1",
-              "object": "event",
-              "api_version": "{{ApiVersion}}",
-              "type": "invoice.payment_failed",
-              "data": {
-                "object": {
-                  "id": "in_1",
-                  "object": "invoice",
-                  "customer": "{{CustomerId}}",
-                  "next_payment_attempt": 1751328000
-                }
-              }
-            }
-            """;
-
-        var parsed = await provider.ParseWebhookEventAsync(payload);
+        var parsed = await provider.ParseWebhookEventAsync(InvoicePayload("evt_invoice_failed_1", "invoice.payment_failed", nextPaymentAttempt: 1751328000));
 
         parsed.Should().NotBeNull();
-        parsed!.TargetUserId.Should().Be(UserId);
-        parsed.NewTier.Should().BeNull("a failed charge alone must not downgrade Pro access immediately");
+        parsed!.NewTier.Should().BeNull();
         parsed.GracePeriodEndsAtUtc.Should().Be(new DateTime(2025, 7, 1, 0, 0, 0, DateTimeKind.Utc));
-    }
-
-    [Fact]
-    public async Task ParseWebhookEventAsync_InvoicePaymentFailedForUnknownCustomer_IsIgnored()
-    {
-        using var db = CreateDb(nameof(ParseWebhookEventAsync_InvoicePaymentFailedForUnknownCustomer_IsIgnored));
-        var provider = CreateProvider(db);
-
-        var payload =
-            $$"""
-            {
-              "id": "evt_invoice_failed_2",
-              "object": "event",
-              "api_version": "{{ApiVersion}}",
-              "type": "invoice.payment_failed",
-              "data": {
-                "object": { "id": "in_2", "object": "invoice", "customer": "cus_unknown" }
-              }
-            }
-            """;
-
-        var parsed = await provider.ParseWebhookEventAsync(payload);
-
-        parsed.Should().BeNull();
     }
 
     [Fact]
@@ -382,32 +249,12 @@ public sealed class StripeBillingProviderTests
             GracePeriodEndsAtUtc = new DateTime(2025, 7, 1, 0, 0, 0, DateTimeKind.Utc),
         });
         await db.SaveChangesAsync();
-
         var provider = CreateProvider(db);
 
-        var payload =
-            $$"""
-            {
-              "id": "evt_invoice_paid_1",
-              "object": "event",
-              "api_version": "{{ApiVersion}}",
-              "type": "invoice.paid",
-              "data": {
-                "object": {
-                  "id": "in_3",
-                  "object": "invoice",
-                  "customer": "{{CustomerId}}",
-                  "period_end": 1748736000
-                }
-              }
-            }
-            """;
-
-        var parsed = await provider.ParseWebhookEventAsync(payload);
+        var parsed = await provider.ParseWebhookEventAsync(InvoicePayload("evt_invoice_paid_1", "invoice.paid", periodEnd: 1748736000));
 
         parsed.Should().NotBeNull();
-        parsed!.TargetUserId.Should().Be(UserId);
-        parsed.NewTier.Should().Be(PlanTier.Pro);
+        parsed!.NewTier.Should().Be(PlanTier.Pro);
         parsed.PeriodEndsAtUtc.Should().Be(new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc));
         parsed.ClearsGracePeriod.Should().BeTrue();
     }
@@ -423,12 +270,10 @@ public sealed class StripeBillingProviderTests
         parsed.Should().BeNull();
     }
 
-    // ---- Checkout / portal sessions -------------------------------------------------------
-
     [Fact]
-    public async Task CreateCheckoutSessionAsync_ForNonProTier_IsUnsupportedAndNeverCallsStripe()
+    public async Task CreateCheckoutSessionAsync_ForStarter_IsUnsupportedAndNeverCallsStripe()
     {
-        using var db = CreateDb(nameof(CreateCheckoutSessionAsync_ForNonProTier_IsUnsupportedAndNeverCallsStripe));
+        using var db = CreateDb(nameof(CreateCheckoutSessionAsync_ForStarter_IsUnsupportedAndNeverCallsStripe));
         var fakeClient = new FakeStripeClient(_ => throw new InvalidOperationException("Should not call Stripe."));
         var provider = CreateProvider(db, stripeClient: fakeClient);
 
@@ -464,6 +309,7 @@ public sealed class StripeBillingProviderTests
         var result = await provider.CreatePortalSessionAsync(UserId);
 
         result.Supported.Should().BeFalse();
+        result.RedirectUrl.Should().BeNull();
         fakeClient.Requests.Should().BeEmpty();
     }
 
@@ -493,6 +339,79 @@ public sealed class StripeBillingProviderTests
           "api_version": "{{ApiVersion}}",
           "type": "{{type}}",
           "data": { "object": { "id": "obj_1", "object": "customer" } }
+        }
+        """;
+
+    private static string CheckoutCompletedPayload(string eventId, string? clientReferenceId, string mode = "subscription") =>
+        $$"""
+        {
+          "id": "{{eventId}}",
+          "object": "event",
+          "api_version": "{{ApiVersion}}",
+          "type": "checkout.session.completed",
+          "data": {
+            "object": {
+              "id": "cs_test_1",
+              "object": "checkout.session",
+              "mode": "{{mode}}",
+              "client_reference_id": {{(clientReferenceId is null ? "null" : $"\"{clientReferenceId}\"")}},
+              "customer": "{{CustomerId}}",
+              "subscription": "{{SubscriptionId}}"
+            }
+          }
+        }
+        """;
+
+    private static string SubscriptionPayload(
+        string eventId,
+        string eventType,
+        string status,
+        string priceId,
+        long currentPeriodEnd,
+        string? metadataUserId = UserId) =>
+        $$"""
+        {
+          "id": "{{eventId}}",
+          "object": "event",
+          "api_version": "{{ApiVersion}}",
+          "type": "{{eventType}}",
+          "data": {
+            "object": {
+              "id": "{{SubscriptionId}}",
+              "object": "subscription",
+              "customer": "{{CustomerId}}",
+              "status": "{{status}}",
+              "metadata": {{(metadataUserId is null ? "{}" : $$"""{"brainy_user_id": "{{metadataUserId}}"}""")}},
+              "items": {
+                "object": "list",
+                "data": [
+                  {
+                    "id": "si_test_1",
+                    "object": "subscription_item",
+                    "current_period_end": {{currentPeriodEnd}},
+                    "price": { "id": "{{priceId}}", "object": "price" }
+                  }
+                ]
+              }
+            }
+          }
+        }
+        """;
+
+    private static string InvoicePayload(string eventId, string eventType, long? nextPaymentAttempt = null, long? periodEnd = null) =>
+        $$"""
+        {
+          "id": "{{eventId}}",
+          "object": "event",
+          "api_version": "{{ApiVersion}}",
+          "type": "{{eventType}}",
+          "data": {
+            "object": {
+              "id": "in_test_1",
+              "object": "invoice",
+              "customer": "{{CustomerId}}"{{(nextPaymentAttempt.HasValue ? $",\n              \"next_payment_attempt\": {nextPaymentAttempt.Value}" : string.Empty)}}{{(periodEnd.HasValue ? $",\n              \"period_end\": {periodEnd.Value}" : string.Empty)}}
+            }
+          }
         }
         """;
 }

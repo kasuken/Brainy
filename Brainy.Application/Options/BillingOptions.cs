@@ -1,3 +1,5 @@
+using Brainy.Domain.Enums;
+
 namespace Brainy.Application.Options;
 
 /// <summary>Configuration options for the billing/payment provider.</summary>
@@ -16,19 +18,32 @@ public sealed class BillingOptions
     public string? WebhookSigningSecret { get; set; }
 
     /// <summary>
-    /// The provider's price id for the Pro plan's recurring subscription (e.g. a Stripe
-    /// <c>price_...</c> id for the "$2/month, billed yearly" price). Required when
-    /// <see cref="Provider"/> is <see cref="BillingProviderType.Stripe"/>.
+    /// Provider price identifier for <see cref="PlanTier.Pro"/> billed monthly. Required when
+    /// <see cref="Provider"/> is <see cref="BillingProviderType.Stripe"/>: it is both the price
+    /// a monthly checkout charges and the identifier inbound subscription webhooks are matched
+    /// against to resolve a tier.
     /// </summary>
-    public string? ProPriceId { get; set; }
+    public string? ProMonthlyPriceId { get; set; }
 
     /// <summary>
-    /// The absolute base URL of this Brainy deployment (e.g. <c>https://app.example.com</c>, no
-    /// trailing slash), used to build the checkout success/cancel and billing-portal return
-    /// URLs the provider redirects back to. Required when <see cref="Provider"/> is
-    /// <see cref="BillingProviderType.Stripe"/>.
+    /// Provider price identifier for <see cref="PlanTier.Pro"/> billed yearly — Brainy's
+    /// marketed default ("$2 / month, billed yearly"). Required under Stripe, for the same
+    /// two reasons as <see cref="ProMonthlyPriceId"/>.
     /// </summary>
-    public string? AppBaseUrl { get; set; }
+    public string? ProYearlyPriceId { get; set; }
+
+    /// <summary>
+    /// Absolute URL the provider returns to after a completed checkout. Required under Stripe.
+    /// Kept in configuration rather than derived from the request because webhook and
+    /// background callers have no originating request to derive a host from.
+    /// </summary>
+    public string? CheckoutSuccessUrl { get; set; }
+
+    /// <summary>Absolute URL the provider returns to when the user abandons checkout. Required under Stripe.</summary>
+    public string? CheckoutCancelUrl { get; set; }
+
+    /// <summary>Absolute URL the provider's self-service billing portal returns to. Required under Stripe.</summary>
+    public string? PortalReturnUrl { get; set; }
 }
 
 /// <summary>Supported billing provider back-ends.</summary>
@@ -37,15 +52,14 @@ public enum BillingProviderType
     /// <summary>
     /// No live payment integration. Plan changes only happen through the internal/admin path
     /// (<c>IEntitlementService.SetPlanTierAsync</c>) or a manually-applied webhook test event.
-    /// This is Brainy's only working option today — there is no live Stripe/Paddle account to
-    /// integrate with yet (see issue #296's "Decision needed" section).
     /// </summary>
     None,
 
     /// <summary>
-    /// Stripe hosted Checkout and Customer Portal, via the official Stripe.net SDK. Requires
-    /// <see cref="BillingOptions.ApiKey"/>, <see cref="BillingOptions.WebhookSigningSecret"/>,
-    /// <see cref="BillingOptions.ProPriceId"/>, and <see cref="BillingOptions.AppBaseUrl"/>.
+    /// Live Stripe integration (<c>StripeBillingProvider</c>): hosted Checkout for upgrades,
+    /// the hosted Customer Portal for self-service changes, and signature-verified webhooks
+    /// that drive <see cref="PlanTier"/> changes. Requires <see cref="ApiKey"/>,
+    /// <see cref="WebhookSigningSecret"/>, both price ids, and all three redirect URLs.
     /// </summary>
     Stripe,
 }

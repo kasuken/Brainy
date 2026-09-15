@@ -48,10 +48,10 @@ public sealed class BillingWebhookSqlIntegrationTests
     }
 
     [Fact]
-    public async Task ValidCheckoutWebhook_UpgradesUserToProAndReplaysIdempotently()
+    public async Task ValidSubscriptionWebhook_UpgradesUserToProAndReplaysIdempotently()
     {
         await using var fixture = await Fixture.CreateAsync();
-        var payload = fixture.CheckoutCompletedPayload("evt_sql_checkout_1");
+        var payload = fixture.SubscriptionUpdatedPayload("evt_sql_subscription_1");
         var signature = EventUtility.GenerateSignatureHeader(payload, WebhookSecret);
 
         var first = await fixture.Processor.ProcessAsync(payload, signature);
@@ -113,6 +113,36 @@ public sealed class BillingWebhookSqlIntegrationTests
             }
             """;
 
+        public string SubscriptionUpdatedPayload(string eventId) =>
+            $$"""
+            {
+              "id": "{{eventId}}",
+              "object": "event",
+              "api_version": "{{ApiVersion}}",
+              "type": "customer.subscription.updated",
+              "data": {
+                "object": {
+                  "id": "sub_sql_1",
+                  "object": "subscription",
+                  "customer": "cus_sql_1",
+                  "status": "active",
+                  "metadata": { "brainy_user_id": "{{UserId}}" },
+                  "items": {
+                    "object": "list",
+                    "data": [
+                      {
+                        "id": "si_sql_1",
+                        "object": "subscription_item",
+                        "current_period_end": 1748736000,
+                        "price": { "id": "price_yearly_sql", "object": "price" }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            """;
+
         private static readonly string ApiVersion = (string)typeof(StripeConfiguration).Assembly
             .GetType("Stripe.ApiVersion")!
             .GetField("Current", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)!
@@ -143,8 +173,11 @@ public sealed class BillingWebhookSqlIntegrationTests
                     ["Billing:Provider"] = "Stripe",
                     ["Billing:ApiKey"] = "sk_test_fake_never_called",
                     ["Billing:WebhookSigningSecret"] = WebhookSecret,
-                    ["Billing:ProPriceId"] = "price_fake",
-                    ["Billing:AppBaseUrl"] = "https://app.example.test",
+                    ["Billing:ProMonthlyPriceId"] = "price_monthly_sql",
+                    ["Billing:ProYearlyPriceId"] = "price_yearly_sql",
+                    ["Billing:CheckoutSuccessUrl"] = "https://app.example.test/Account/Manage?checkout=success",
+                    ["Billing:CheckoutCancelUrl"] = "https://app.example.test/Account/Manage?checkout=cancelled",
+                    ["Billing:PortalReturnUrl"] = "https://app.example.test/Account/Manage",
                 })
                 .Build();
 
