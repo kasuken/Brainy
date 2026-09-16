@@ -1,5 +1,17 @@
 # Changelog
 
+## [7.1.2] - 2026-09-16
+
+### Added
+
+- **Guided onboarding** — expanded the getting-started journey from six to seven steps with Areas and project-template setup, localized English and Italian strings, and a replay entry point from an empty Today.
+
+### Improved
+
+- **Onboarding reliability** — interactive-only controls are now hidden on static account pages, dismissed journeys are tracked, and cross-component journey launching is supported.
+
+---
+
 ## [7.1.1] - 2026-09-16
 
 ### Improved
