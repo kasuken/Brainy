@@ -81,6 +81,7 @@ internal sealed class StripeBillingProvider : IBillingProvider
             ClientReferenceId = userId,
             Metadata = new Dictionary<string, string> { [UserIdMetadataKey] = userId },
             LineItems = [new SessionLineItemOptions { Price = priceId, Quantity = 1 }],
+            AllowPromotionCodes = true,
             SuccessUrl = _options.CheckoutSuccessUrl,
             CancelUrl = _options.CheckoutCancelUrl,
             SubscriptionData = new SessionSubscriptionDataOptions

@@ -160,6 +160,10 @@
 
             @if (_planUsage.Tier == PlanTier.Starter)
             {
+                <MudRadioGroup T="BillingInterval" Value="_selectedInterval" ValueChanged="@((BillingInterval value) => _selectedInterval = value)" Class="account-manage__notice">
+                    <MudRadio T="BillingInterval" Value="BillingInterval.Yearly" Color="Color.Primary">Yearly (billed annually)</MudRadio>
+                    <MudRadio T="BillingInterval" Value="BillingInterval.Monthly" Color="Color.Primary">Monthly</MudRadio>
+                </MudRadioGroup>
                 <div class="account-manage__actions">
                     <MudButton Variant="Variant.Filled"
                                Color="Color.Primary"
@@ -1058,6 +1062,7 @@
     private PlanUsageSummaryDto? _planUsage;
     private string? _planUsageError;
     private bool _startingCheckout;
+    private BillingInterval _selectedInterval = BillingInterval.Yearly;
     private bool _openingPortal;
     private string? _billingActionError;
     private bool _starterModeEnabled = true;
@@ -1431,7 +1436,7 @@
                 return;
             }
 
-            var result = await BillingProvider.CreateCheckoutSessionAsync(userId, PlanTier.Pro);
+            var result = await BillingProvider.CreateCheckoutSessionAsync(userId, PlanTier.Pro, _selectedInterval);
             if (!result.Supported)
             {
                 _billingActionError = result.UnsupportedReason ?? "Checkout is not available right now.";
