@@ -94,6 +94,7 @@
                     <span class="brainy-user__avatar">@GetInitials(context.User.Identity?.Name)</span>
                     <span class="brainy-user__email d-none d-sm-flex">@context.User.Identity?.Name</span>
                 </a>
+                <form action="Account/Logout" method="post" class="brainy-logout-form">
                 @* data-enhance="false": opts this form out of Blazor's enhanced-navigation
                    interception so the plain submit listener registered in App.razor (Offline
                    Lite / issue #302 sign-out cleanup — see that file) is the only thing
@@ -269,6 +270,7 @@
     private void UpdateTheme()
     {
         _currentTheme = AppThemes.GetTheme(ThemeService.Theme);
+        _isDarkMode = ThemeService.Theme is AppTheme.Dracula or AppTheme.MidnightBlush;
         _isDarkMode = ThemeService.Theme is AppTheme.Dracula or AppTheme.MidnightBlush or AppTheme.OneDarkPro;
     }
 

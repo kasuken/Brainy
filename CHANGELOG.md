@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.1.0] - 2026-09-16
+
+### Improved
+
+- **Subscription billing** — the Stripe provider now supports promotion codes and lets users choose the billing interval when managing their Pro subscription.
+- **Release operations** — increased smoke-test retry attempts after deployment to reduce false-negative release verification.
+
+---
+
 ## [7.0.0] - 2026-09-16
 
 ### Added
