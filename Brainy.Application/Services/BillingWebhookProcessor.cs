@@ -45,26 +45,12 @@ internal sealed class BillingWebhookProcessor(
         if (alreadyProcessed)
             return Record(BillingWebhookProcessingResult.AlreadyProcessed);
 
-        context.ProcessedWebhookEvents.Add(new ProcessedWebhookEvent
-        {
-            Id = Guid.NewGuid(),
-            ProviderEventId = parsed.ProviderEventId,
-            EventType = parsed.EventType,
-            TargetUserId = parsed.TargetUserId,
-            ProcessedAtUtc = timeProvider.GetUtcNow().UtcDateTime,
-        });
-
-        try
-        {
-            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (DbUpdateException)
-        {
-            // Unique index on ProviderEventId: a concurrent delivery of the same event won
-            // the race. Treat this one as the safe no-op it is instead of double-applying.
-            return Record(BillingWebhookProcessingResult.AlreadyProcessed);
-        }
-
+        // State is applied before the event is marked processed, never the other way round.
+        // The reverse order turns any failure below — a transient database fault, a deadlock —
+        // into a permanently lost plan change: the provider's retry would find the event
+        // already recorded and skip it, so a paying customer would silently stay on Starter.
+        // Every operation below is idempotent (each is a no-op when the value already
+        // matches), so a retry that re-applies part of an event is harmless.
         if (!string.IsNullOrWhiteSpace(parsed.TargetUserId))
         {
             if (parsed.BillingProviderCustomerId is not null || parsed.BillingProviderSubscriptionId is not null)
@@ -92,6 +78,26 @@ internal sealed class BillingWebhookProcessor(
                     parsed.PeriodEndsAtUtc,
                     cancellationToken).ConfigureAwait(false);
             }
+        }
+
+        context.ProcessedWebhookEvents.Add(new ProcessedWebhookEvent
+        {
+            Id = Guid.NewGuid(),
+            ProviderEventId = parsed.ProviderEventId,
+            EventType = parsed.EventType,
+            TargetUserId = parsed.TargetUserId,
+            ProcessedAtUtc = timeProvider.GetUtcNow().UtcDateTime,
+        });
+
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateException)
+        {
+            // Unique index on ProviderEventId: a concurrent delivery of the same event won
+            // the race and has already applied the same idempotent changes.
+            return Record(BillingWebhookProcessingResult.AlreadyProcessed);
         }
 
         return Record(BillingWebhookProcessingResult.Applied);

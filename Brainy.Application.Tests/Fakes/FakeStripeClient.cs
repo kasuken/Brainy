@@ -12,6 +12,9 @@ internal sealed class FakeStripeClient(Func<Type, IStripeEntity> respond) : IStr
 {
     public List<(HttpMethod Method, string Path)> Requests { get; } = [];
 
+    /// <summary>The options object sent with each request, so tests can assert what Stripe was actually asked for.</summary>
+    public List<BaseOptions> SentOptions { get; } = [];
+
     public string ApiKey => "sk_test_fake";
     public string? ClientId => null;
     public string ApiBase => "https://api.stripe.com";
@@ -28,6 +31,7 @@ internal sealed class FakeStripeClient(Func<Type, IStripeEntity> respond) : IStr
         where T : IStripeEntity
     {
         Requests.Add((method, path));
+        SentOptions.Add(options);
         return Task.FromResult((T)respond(typeof(T)));
     }
 

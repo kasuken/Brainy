@@ -1429,14 +1429,18 @@
 
         try
         {
-            var userId = await GetCurrentUserIdAsync();
-            if (userId is null)
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(authenticationState.User);
+            if (user is null)
             {
                 _billingActionError = "Your sign-in session is no longer valid. Sign in again and retry.";
                 return;
             }
 
-            var result = await BillingProvider.CreateCheckoutSessionAsync(userId, PlanTier.Pro, _selectedInterval);
+            // The account email is passed so the billing customer is created under the address
+            // the user signed in with, rather than one the hosted checkout page fills in itself.
+            var result = await BillingProvider.CreateCheckoutSessionAsync(
+                user.Id, PlanTier.Pro, _selectedInterval, await UserManager.GetEmailAsync(user));
             if (!result.Supported)
             {
                 _billingActionError = result.UnsupportedReason ?? "Checkout is not available right now.";

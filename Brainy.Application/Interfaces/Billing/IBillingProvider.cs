@@ -18,10 +18,19 @@ public interface IBillingProvider
     /// <paramref name="targetTier"/> on <paramref name="interval"/>. Defaults to
     /// <see cref="BillingInterval.Yearly"/>, the cadence the <c>/pricing</c> page headlines.
     /// </summary>
+    /// <param name="accountEmail">
+    /// The Brainy account's email address, used to seed the customer the provider creates.
+    /// Without it the hosted page collects an address of its own — Stripe Checkout prefills
+    /// whatever the visitor's Stripe Link account remembers — and the customer record ends up
+    /// carrying an email unrelated to the Brainy account, so receipts and support lookups
+    /// point at the wrong person. Ignored once the user has a customer record with the
+    /// provider, because that customer's own email wins from then on.
+    /// </param>
     Task<CheckoutSessionResult> CreateCheckoutSessionAsync(
         string userId,
         PlanTier targetTier,
         BillingInterval interval = BillingInterval.Yearly,
+        string? accountEmail = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>Starts a hosted self-service billing-portal session for <paramref name="userId"/>.</summary>

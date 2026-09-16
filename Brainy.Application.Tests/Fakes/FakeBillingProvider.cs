@@ -17,6 +17,7 @@ internal sealed class FakeBillingProvider(ParsedBillingWebhookEvent? eventToRetu
         string userId,
         PlanTier targetTier,
         BillingInterval interval = BillingInterval.Yearly,
+        string? accountEmail = null,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(new CheckoutSessionResult(false, null, "not implemented in test"));
 

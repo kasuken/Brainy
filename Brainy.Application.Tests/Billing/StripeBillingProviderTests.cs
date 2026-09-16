@@ -300,6 +300,39 @@ public sealed class StripeBillingProviderTests
     }
 
     [Fact]
+    public async Task CreateCheckoutSessionAsync_ForAFirstPurchase_SeedsTheCustomerWithTheAccountEmail()
+    {
+        using var db = CreateDb(nameof(CreateCheckoutSessionAsync_ForAFirstPurchase_SeedsTheCustomerWithTheAccountEmail));
+        var fakeClient = new FakeStripeClient(_ => new Stripe.Checkout.Session { Id = "cs_test_1", Url = "https://checkout.stripe.com/c/pay/cs_test_1" });
+        var provider = CreateProvider(db, stripeClient: fakeClient);
+
+        await provider.CreateCheckoutSessionAsync(UserId, PlanTier.Pro, Brainy.Domain.Enums.BillingInterval.Yearly, "account@example.test");
+
+        var sent = fakeClient.SentOptions.Should().ContainSingle().Which.Should().BeOfType<Stripe.Checkout.SessionCreateOptions>().Subject;
+        sent.CustomerEmail.Should().Be("account@example.test");
+        sent.Customer.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSessionAsync_ForAnExistingCustomer_SendsNoEmailAlongsideTheCustomerId()
+    {
+        // Stripe rejects customer and customer_email together, so an account email must be
+        // dropped once the user has a customer record rather than sent with it.
+        using var db = CreateDb(nameof(CreateCheckoutSessionAsync_ForAnExistingCustomer_SendsNoEmailAlongsideTheCustomerId));
+        db.UserPlans.Add(new UserPlan { UserId = UserId, Tier = PlanTier.Starter, BillingProviderCustomerId = CustomerId });
+        await db.SaveChangesAsync();
+
+        var fakeClient = new FakeStripeClient(_ => new Stripe.Checkout.Session { Id = "cs_test_1", Url = "https://checkout.stripe.com/c/pay/cs_test_1" });
+        var provider = CreateProvider(db, stripeClient: fakeClient);
+
+        await provider.CreateCheckoutSessionAsync(UserId, PlanTier.Pro, Brainy.Domain.Enums.BillingInterval.Yearly, "account@example.test");
+
+        var sent = fakeClient.SentOptions.Should().ContainSingle().Which.Should().BeOfType<Stripe.Checkout.SessionCreateOptions>().Subject;
+        sent.Customer.Should().Be(CustomerId);
+        sent.CustomerEmail.Should().BeNull();
+    }
+
+    [Fact]
     public async Task CreatePortalSessionAsync_WithNoStoredCustomerId_IsUnsupportedAndNeverCallsStripe()
     {
         using var db = CreateDb(nameof(CreatePortalSessionAsync_WithNoStoredCustomerId_IsUnsupportedAndNeverCallsStripe));

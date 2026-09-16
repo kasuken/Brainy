@@ -27,6 +27,7 @@ internal sealed class NullBillingProvider : IBillingProvider
         string userId,
         PlanTier targetTier,
         BillingInterval interval = BillingInterval.Yearly,
+        string? accountEmail = null,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(new CheckoutSessionResult(false, null, NotConfiguredReason));
 

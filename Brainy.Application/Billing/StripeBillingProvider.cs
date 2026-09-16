@@ -64,6 +64,7 @@ internal sealed class StripeBillingProvider : IBillingProvider
         string userId,
         PlanTier targetTier,
         BillingInterval interval = BillingInterval.Yearly,
+        string? accountEmail = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
@@ -78,6 +79,14 @@ internal sealed class StripeBillingProvider : IBillingProvider
         {
             Mode = "subscription",
             Customer = existingCustomerId,
+            // Stripe rejects customer and customer_email together, and an existing customer
+            // already carries its own address, so this only seeds the first checkout. Left
+            // unset, Checkout collects the email itself and prefills it from the visitor's
+            // Stripe Link account, which is how a customer ends up under an address that has
+            // nothing to do with the signed-in Brainy account.
+            CustomerEmail = string.IsNullOrWhiteSpace(existingCustomerId) && !string.IsNullOrWhiteSpace(accountEmail)
+                ? accountEmail
+                : null,
             ClientReferenceId = userId,
             Metadata = new Dictionary<string, string> { [UserIdMetadataKey] = userId },
             LineItems = [new SessionLineItemOptions { Price = priceId, Quantity = 1 }],
