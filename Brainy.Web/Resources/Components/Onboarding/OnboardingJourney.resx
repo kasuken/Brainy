@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="RegionLabel" xml:space="preserve">
+    <value>Getting started guide</value>
+  </data>
+  <data name="Eyebrow" xml:space="preserve">
+    <value>Getting started</value>
+  </data>
+  <data name="StepCount" xml:space="preserve">
+    <value>Step {0} of {1}</value>
+    <comment>{0} = current step number, {1} = total steps.</comment>
+  </data>
+  <data name="StepLabel" xml:space="preserve">
+    <value>Step {0}</value>
+  </data>
+  <data name="ProgressLabel" xml:space="preserve">
+    <value>Onboarding progress</value>
+  </data>
+  <data name="ResumeChip" xml:space="preserve">
+    <value>Continue setup · Step {0} of {1}</value>
+  </data>
+  <data name="ResumeLabel" xml:space="preserve">
+    <value>Resume the getting-started guide</value>
+  </data>
+  <data name="MinimizeLabel" xml:space="preserve">
+    <value>Minimize getting-started guide</value>
+  </data>
+  <data name="DismissLabel" xml:space="preserve">
+    <value>Skip the getting-started guide</value>
+  </data>
+
+  <data name="IntroTitle" xml:space="preserve">
+    <value>Let's get you one real win</value>
+  </data>
+  <data name="IntroBody" xml:space="preserve">
+    <value>In a couple of minutes you'll capture something real, map out your areas, give it a home, turn it into a next action, and set it as your current focus — the whole loop Brainy is built around. Skip any step at any time; you can always resume later.</value>
+  </data>
+
+  <data name="CaptureTitle" xml:space="preserve">
+    <value>Capture something real</value>
+  </data>
+  <data name="CaptureBody" xml:space="preserve">
+    <value>Jot down your next meeting, an idea, or a note about this very journey. This becomes a real Inbox item — nothing synthetic.</value>
+  </data>
+  <data name="CaptureField" xml:space="preserve">
+    <value>What's on your mind?</value>
+  </data>
+
+  <data name="AreasTitle" xml:space="preserve">
+    <value>Map out your areas</value>
+  </data>
+  <data name="AreasBody" xml:space="preserve">
+    <value>Areas are the standing parts of your life that never really finish — work, health, money. Pick the ones that are yours and Brainy will set them up, so every project you create later has somewhere to belong.</value>
+  </data>
+  <data name="AreasExisting" xml:space="preserve">
+    <value>You already have: {0}</value>
+    <comment>{0} = comma-separated list of the user's existing area names.</comment>
+  </data>
+  <data name="AreasSuggestionsLabel" xml:space="preserve">
+    <value>Suggested areas</value>
+  </data>
+  <data name="AreasCustomField" xml:space="preserve">
+    <value>Add your own</value>
+  </data>
+  <data name="AreaSuggestionWork" xml:space="preserve">
+    <value>Work</value>
+  </data>
+  <data name="AreaSuggestionPersonal" xml:space="preserve">
+    <value>Personal</value>
+  </data>
+  <data name="AreaSuggestionHealth" xml:space="preserve">
+    <value>Health</value>
+  </data>
+  <data name="AreaSuggestionFinances" xml:space="preserve">
+    <value>Finances</value>
+  </data>
+  <data name="AreaSuggestionLearning" xml:space="preserve">
+    <value>Learning</value>
+  </data>
+  <data name="AreaSuggestionHome" xml:space="preserve">
+    <value>Home</value>
+  </data>
+  <data name="AreaSuggestionFamily" xml:space="preserve">
+    <value>Family</value>
+  </data>
+  <data name="AreaSuggestionSideProject" xml:space="preserve">
+    <value>Side project</value>
+  </data>
+  <data name="AreaFallbackName" xml:space="preserve">
+    <value>General</value>
+    <comment>Catch-all area created only when the user skipped the areas step entirely.</comment>
+  </data>
+
+  <data name="ProjectTitle" xml:space="preserve">
+    <value>Give it a home</value>
+  </data>
+  <data name="ProjectBody" xml:space="preserve">
+    <value>Place your capture into a project so it has context.</value>
+  </data>
+  <data name="ProjectField" xml:space="preserve">
+    <value>Project</value>
+  </data>
+  <data name="ProjectNoneHint" xml:space="preserve">
+    <value>You don't have a project yet — name your first one.</value>
+  </data>
+  <data name="ProjectAreaField" xml:space="preserve">
+    <value>Area</value>
+  </data>
+  <data name="ProjectNameField" xml:space="preserve">
+    <value>Project name</value>
+  </data>
+  <data name="ProjectTemplateField" xml:space="preserve">
+    <value>Start from</value>
+  </data>
+  <data name="ProjectTemplateBlank" xml:space="preserve">
+    <value>A blank project</value>
+  </data>
+
+  <data name="TaskTitle" xml:space="preserve">
+    <value>Define the next action</value>
+  </data>
+  <data name="TaskBody" xml:space="preserve">
+    <value>What is the very next physical step? Keep it small and concrete.</value>
+  </data>
+  <data name="TaskField" xml:space="preserve">
+    <value>Next action</value>
+  </data>
+
+  <data name="FocusTitle" xml:space="preserve">
+    <value>Choose your current focus</value>
+  </data>
+  <data name="FocusBody" xml:space="preserve">
+    <value>Current focus is the one thing Today keeps front and center. Make your new task your current focus now.</value>
+  </data>
+
+  <data name="WrapTitle" xml:space="preserve">
+    <value>Here's how to get back to this</value>
+  </data>
+  <data name="WrapBody" xml:space="preserve">
+    <value>Everything you just did lives on &lt;a href="/today"&gt;Today&lt;/a&gt; — your current focus is always there waiting for you.</value>
+    <comment>Rendered as markup; the anchor must survive translation.</comment>
+  </data>
+
+  <data name="Start" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="Back" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="SkipStep" xml:space="preserve">
+    <value>Skip this step</value>
+  </data>
+  <data name="SkipTour" xml:space="preserve">
+    <value>Skip the tour</value>
+  </data>
+  <data name="ActionCapture" xml:space="preserve">
+    <value>Capture</value>
+  </data>
+  <data name="ActionCreateAreas" xml:space="preserve">
+    <value>Set up my areas</value>
+  </data>
+  <data name="ActionProcess" xml:space="preserve">
+    <value>Process</value>
+  </data>
+  <data name="ActionCreateAndProcess" xml:space="preserve">
+    <value>Create &amp; process</value>
+  </data>
+  <data name="ActionCreateTask" xml:space="preserve">
+    <value>Create task</value>
+  </data>
+  <data name="ActionMakeFocus" xml:space="preserve">
+    <value>Make this my focus</value>
+  </data>
+  <data name="ActionDone" xml:space="preserve">
+    <value>Done</value>
+  </data>
+
+  <data name="ErrorCaptureEmpty" xml:space="preserve">
+    <value>Write a few words to capture.</value>
+  </data>
+  <data name="ErrorCaptureFailed" xml:space="preserve">
+    <value>Could not save your capture. Try again.</value>
+  </data>
+  <data name="ErrorAreasFailed" xml:space="preserve">
+    <value>Could not set up your areas. Try again.</value>
+  </data>
+  <data name="ErrorPickProject" xml:space="preserve">
+    <value>Choose a project first.</value>
+  </data>
+  <data name="ErrorProcessFailed" xml:space="preserve">
+    <value>Could not process this item. Try again.</value>
+  </data>
+  <data name="ErrorProjectNameEmpty" xml:space="preserve">
+    <value>Name your first project.</value>
+  </data>
+  <data name="ErrorProjectFailed" xml:space="preserve">
+    <value>Could not create your project. Try again.</value>
+  </data>
+  <data name="ErrorTaskEmpty" xml:space="preserve">
+    <value>Name the next action.</value>
+  </data>
+  <data name="ErrorTaskFailed" xml:space="preserve">
+    <value>Could not create the task. Try again.</value>
+  </data>
+  <data name="ErrorNeedProject" xml:space="preserve">
+    <value>Create a project in the previous step first.</value>
+  </data>
+  <data name="ErrorNeedTask" xml:space="preserve">
+    <value>Create a next action first.</value>
+  </data>
+</root>

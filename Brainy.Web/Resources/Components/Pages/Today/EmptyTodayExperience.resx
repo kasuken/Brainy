@@ -46,4 +46,7 @@
   <data name="AllClear" xml:space="preserve">
     <value>All clear</value>
   </data>
+  <data name="ShowMeAround" xml:space="preserve">
+    <value>Show me around</value>
+  </data>
 </root>

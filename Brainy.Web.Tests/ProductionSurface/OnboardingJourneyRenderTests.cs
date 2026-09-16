@@ -42,9 +42,9 @@ public sealed class OnboardingJourneyRenderTests
 
         response.EnsureSuccessStatusCode();
 
-        // Onboarding journey renders, shows step 1 of 6, and offers a dismiss control.
+        // Onboarding journey renders, shows step 1 of 7, and offers a dismiss control.
         content.Should().Contain("Getting started guide");
-        content.Should().Contain("Step 1 of 6");
+        content.Should().Contain("Step 1 of 7");
         content.Should().Contain("Skip the getting-started guide");
         content.Should().Contain("Skip the tour");
 
@@ -55,6 +55,67 @@ public sealed class OnboardingJourneyRenderTests
         content.Should().Contain("Show full navigation");
         content.Should().NotContain("<div class=\"mud-nav-item\"><a href=\"/tasks-hub\"");
         content.Should().NotContain("<div class=\"mud-nav-item\"><a href=\"/pulse\"");
+    }
+
+    /// <summary>
+    /// Regression test for the dead onboarding panel on /Account/*. Those routes are
+    /// [ExcludeFromInteractiveRouting], so MainLayout renders statically there with no
+    /// circuit behind it. The journey used to render anyway, giving a fresh account a
+    /// "Getting started · Step 1 of 7" card whose every button was inert — next to that
+    /// page's own working "Replay the guided tour" button. The Capture FAB was dead for
+    /// the same reason, so it is asserted here too.
+    /// </summary>
+    [Fact]
+    public async Task StaticallyRenderedAccountPage_DoesNotRenderInteractiveOnlyChrome()
+    {
+        await using var factory = new OnboardingTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        await factory.ResetDatabaseAsync();
+
+        using var response = await client.GetAsync("/Account/Manage");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.EnsureSuccessStatusCode();
+        content.Should().NotContain("Getting started guide");
+        // The element, not the class name: MainLayout's <style> block always emits a
+        // ".layout-fab" rule whether or not the FAB itself was rendered.
+        content.Should().NotContain("<div class=\"layout-fab\">");
+
+        // MainLayout itself still rendered — otherwise the two assertions above would pass
+        // for the wrong reason. Asserted against the layout's own app bar rather than
+        // anything from Manage.razor, which sets prerender: false and so contributes
+        // nothing to this static response.
+        content.Should().Contain("brainy-appbar");
+    }
+
+    /// <summary>
+    /// An empty Today is where a user who skipped the journey lands, so it has to offer a
+    /// way back into it. Before this, the only re-entry point was in Account &amp; data.
+    /// </summary>
+    [Fact]
+    public async Task EmptyToday_OffersAWayBackIntoTheGuidedJourney()
+    {
+        await using var factory = new OnboardingTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        await factory.ResetDatabaseAsync();
+        await factory.SetPreferenceAsync(onboardingCompleted: false, starterModeEnabled: true, onboardingDismissed: true);
+
+        using var response = await client.GetAsync("/today");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.EnsureSuccessStatusCode();
+        content.Should().NotContain("Getting started guide");
+        content.Should().Contain("Show me around");
     }
 
     [Fact]
@@ -149,7 +210,10 @@ public sealed class OnboardingJourneyRenderTests
             await db.Database.EnsureCreatedAsync();
         }
 
-        public async Task SetPreferenceAsync(bool onboardingCompleted, bool starterModeEnabled)
+        public async Task SetPreferenceAsync(
+            bool onboardingCompleted,
+            bool starterModeEnabled,
+            bool onboardingDismissed = false)
         {
             await using var scope = Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<BrainyDbContext>();
@@ -158,6 +222,7 @@ public sealed class OnboardingJourneyRenderTests
                 Id = Guid.NewGuid(),
                 UserId = UserId,
                 OnboardingCompleted = onboardingCompleted,
+                OnboardingDismissed = onboardingDismissed,
                 StarterModeEnabled = starterModeEnabled
             });
             await db.SaveChangesAsync();

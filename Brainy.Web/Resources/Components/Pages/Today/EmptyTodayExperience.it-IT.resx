@@ -46,4 +46,7 @@
   <data name="AllClear" xml:space="preserve">
     <value>Tutto a posto</value>
   </data>
+  <data name="ShowMeAround" xml:space="preserve">
+    <value>Fammi fare un giro</value>
+  </data>
 </root>

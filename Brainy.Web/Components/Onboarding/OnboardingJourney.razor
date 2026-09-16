@@ -1,18 +1,28 @@
 @* ─────────────────────────────────────────────────────────────────────────────
    OnboardingJourney — guided, dismissible first-run journey (issue #294).
    A non-modal floating panel (not a blocking dialog) that walks a new user
-   through one real capture -> process -> next action -> current focus loop,
-   using their own real data (never synthetic sample rows). Every step is
+   through one real capture -> areas -> process -> next action -> current focus
+   loop, using their own real data (never synthetic sample rows). Every step is
    skippable and the current step is persisted so the journey resumes where
    the user left off.
+
+   Capture stays first on purpose: the first step asks for almost nothing and
+   returns something real, so the user gets a win before being asked to set
+   anything up. Structure (areas) is introduced at step 2, the moment it is
+   actually needed to give that capture a home.
 ───────────────────────────────────────────────────────────────────────────── *@
+@implements IDisposable
+
 @using Brainy.Application.Analytics
+@using Brainy.Application.Common
 @using Brainy.Application.DTOs.Areas
 @using Brainy.Application.DTOs.Notes
 @using Brainy.Application.DTOs.Projects
 @using Brainy.Application.DTOs.Tasks
+@using Brainy.Application.DTOs.Templates
 @using Brainy.Application.Interfaces.Identity
 @using Brainy.Application.Interfaces.Services
+@using Brainy.Domain.Common
 @using Brainy.Domain.Enums
 
 @inject IUserDashboardPreferenceService PreferenceService
@@ -20,19 +30,21 @@
 @inject ICurrentUserService CurrentUser
 @inject INoteService NoteService
 @inject IProjectService ProjectService
+@inject IProjectTemplateService ProjectTemplateService
 @inject IAreaService AreaService
 @inject ITaskService TaskService
-@inject NavigationManager Nav
+@inject OnboardingJourneyLauncher Launcher
+@inject IStringLocalizer<OnboardingJourney> L
 
 @if (_visible)
 {
-    <div class="ob-journey" role="region" aria-label="Getting started guide">
+    <div class="ob-journey" role="region" aria-label="@L["RegionLabel"]">
         @if (_minimized)
         {
             <button type="button" class="ob-journey__chip" @onclick="() => _minimized = false"
-                    aria-label="Resume the getting-started guide">
+                    aria-label="@L["ResumeLabel"]">
                 <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" />
-                <span>Continue setup · Step @(_step + 1) of @TotalSteps</span>
+                <span>@L["ResumeChip", _step + 1, TotalSteps]</span>
             </button>
         }
         else
@@ -43,24 +55,24 @@
                         <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" />
                     </span>
                     <div class="ob-journey__head-text">
-                        <span class="ob-journey__eyebrow">Getting started</span>
-                        <span class="ob-journey__step-count">Step @(_step + 1) of @TotalSteps</span>
+                        <span class="ob-journey__eyebrow">@L["Eyebrow"]</span>
+                        <span class="ob-journey__step-count">@L["StepCount", _step + 1, TotalSteps]</span>
                     </div>
                     <MudSpacer />
                     <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
-                                   aria-label="Minimize getting-started guide"
+                                   aria-label="@L["MinimizeLabel"]"
                                    OnClick="() => _minimized = true" />
                     <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
-                                   aria-label="Skip the getting-started guide"
+                                   aria-label="@L["DismissLabel"]"
                                    OnClick="DismissAsync" />
                 </div>
 
-                <div class="ob-journey__dots" role="tablist" aria-label="Onboarding progress">
+                <div class="ob-journey__dots" role="tablist" aria-label="@L["ProgressLabel"]">
                     @for (var i = 0; i < TotalSteps; i++)
                     {
                         var idx = i;
                         var state = idx == _step ? "ob-journey__dot--active" : idx < _step ? "ob-journey__dot--done" : "";
-                        <span class="ob-journey__dot @state" role="tab" aria-selected="@(idx == _step)" aria-label="@($"Step {idx + 1}")"></span>
+                        <span class="ob-journey__dot @state" role="tab" aria-selected="@(idx == _step)" aria-label="@L["StepLabel", idx + 1]"></span>
                     }
                 </div>
 
@@ -72,27 +84,53 @@
                 <div class="ob-journey__body" @key="_step">
                     @switch (_step)
                     {
-                        case 0:
-                            <h3 class="ob-journey__title">Let's get you one real win</h3>
-                            <p class="ob-journey__copy">
-                                In a couple of minutes you'll capture something real, give it a home, turn it
-                                into a next action, and set it as your current focus — the whole loop Brainy is
-                                built around. Skip any step at any time; you can always resume later.
-                            </p>
+                        case StepIntro:
+                            <h3 class="ob-journey__title">@L["IntroTitle"]</h3>
+                            <p class="ob-journey__copy">@L["IntroBody"]</p>
                             break;
-                        case 1:
-                            <h3 class="ob-journey__title">Capture something real</h3>
-                            <p class="ob-journey__copy">Jot down your next meeting, an idea, or a note about this very journey. This becomes a real Inbox item — nothing synthetic.</p>
-                            <MudTextField T="string" @bind-Value="_captureText" Label="What's on your mind?"
+
+                        case StepCapture:
+                            <h3 class="ob-journey__title">@L["CaptureTitle"]</h3>
+                            <p class="ob-journey__copy">@L["CaptureBody"]</p>
+                            <MudTextField T="string" @bind-Value="_captureText" Label="@L["CaptureField"]"
                                           Variant="Variant.Outlined" Lines="3" Immediate="true"
-                                          aria-label="Capture text" />
+                                          aria-label="@L["CaptureField"]" />
                             break;
-                        case 2:
-                            <h3 class="ob-journey__title">Give it a home</h3>
-                            <p class="ob-journey__copy">Place your capture into a project so it has context.</p>
+
+                        case StepAreas:
+                            <h3 class="ob-journey__title">@L["AreasTitle"]</h3>
+                            <p class="ob-journey__copy">@L["AreasBody"]</p>
+                            @if (_areas.Count > 0)
+                            {
+                                <p class="ob-journey__hint">@L["AreasExisting", string.Join(", ", _areas.Select(a => a.Name))]</p>
+                            }
+                            <div class="ob-journey__chips" role="group" aria-label="@L["AreasSuggestionsLabel"]">
+                                @foreach (var suggestion in AreaSuggestions)
+                                {
+                                    var key = suggestion.Key;
+                                    var name = L[$"AreaSuggestion{key}"].Value;
+                                    var picked = _selectedSuggestions.Contains(key);
+                                    var already = HasArea(name);
+                                    <button type="button"
+                                            class="ob-journey__chip-option @(picked ? "ob-journey__chip-option--on" : "")"
+                                            disabled="@already"
+                                            aria-pressed="@picked"
+                                            @onclick="() => ToggleSuggestion(key)">
+                                        <span aria-hidden="true">@suggestion.Emoji</span>
+                                        <span>@name</span>
+                                    </button>
+                                }
+                            </div>
+                            <MudTextField T="string" @bind-Value="_customAreaName" Label="@L["AreasCustomField"]"
+                                          Variant="Variant.Outlined" Class="mt-2" aria-label="@L["AreasCustomField"]" />
+                            break;
+
+                        case StepProject:
+                            <h3 class="ob-journey__title">@L["ProjectTitle"]</h3>
+                            <p class="ob-journey__copy">@L["ProjectBody"]</p>
                             @if (_projects.Count > 0)
                             {
-                                <MudSelect T="Guid?" @bind-Value="_selectedProjectId" Label="Project" Variant="Variant.Outlined">
+                                <MudSelect T="Guid?" @bind-Value="_selectedProjectId" Label="@L["ProjectField"]" Variant="Variant.Outlined">
                                     @foreach (var project in _projects)
                                     {
                                         <MudSelectItem T="Guid?" Value="@project.Id">@project.Name</MudSelectItem>
@@ -101,75 +139,93 @@
                             }
                             else
                             {
-                                <p class="ob-journey__hint">You don't have a project yet — name your first one.</p>
-                                <MudTextField T="string" @bind-Value="_newAreaName" Label="Area (e.g. Work, Personal)" Variant="Variant.Outlined" Class="mb-2" />
-                                <MudTextField T="string" @bind-Value="_newProjectName" Label="Project name" Variant="Variant.Outlined" />
+                                <p class="ob-journey__hint">@L["ProjectNoneHint"]</p>
+                                @if (_areas.Count > 0)
+                                {
+                                    <MudSelect T="Guid?" @bind-Value="_selectedAreaId" Label="@L["ProjectAreaField"]" Variant="Variant.Outlined" Class="mb-2">
+                                        @foreach (var area in _areas)
+                                        {
+                                            <MudSelectItem T="Guid?" Value="@area.Id">@area.Emoji @area.Name</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                }
+                                @if (_projectTemplates.Count > 0)
+                                {
+                                    <MudSelect T="Guid?" @bind-Value="_selectedTemplateId" Label="@L["ProjectTemplateField"]" Variant="Variant.Outlined" Class="mb-2">
+                                        <MudSelectItem T="Guid?" Value="@((Guid?)null)">@L["ProjectTemplateBlank"]</MudSelectItem>
+                                        @foreach (var template in _projectTemplates)
+                                        {
+                                            <MudSelectItem T="Guid?" Value="@template.Id">@template.Name</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                }
+                                <MudTextField T="string" @bind-Value="_newProjectName" Label="@L["ProjectNameField"]" Variant="Variant.Outlined" />
                             }
                             break;
-                        case 3:
-                            <h3 class="ob-journey__title">Define the next action</h3>
-                            <p class="ob-journey__copy">What is the very next physical step? Keep it small and concrete.</p>
-                            <MudTextField T="string" @bind-Value="_taskTitle" Label="Next action" Variant="Variant.Outlined"
-                                          aria-label="Next action title" />
+
+                        case StepTask:
+                            <h3 class="ob-journey__title">@L["TaskTitle"]</h3>
+                            <p class="ob-journey__copy">@L["TaskBody"]</p>
+                            <MudTextField T="string" @bind-Value="_taskTitle" Label="@L["TaskField"]" Variant="Variant.Outlined"
+                                          aria-label="@L["TaskField"]" />
                             break;
-                        case 4:
-                            <h3 class="ob-journey__title">Choose your current focus</h3>
-                            <p class="ob-journey__copy">
-                                Current focus is the one thing Today keeps front and center. Make your new task
-                                your current focus now.
-                            </p>
+
+                        case StepFocus:
+                            <h3 class="ob-journey__title">@L["FocusTitle"]</h3>
+                            <p class="ob-journey__copy">@L["FocusBody"]</p>
                             break;
-                        case 5:
-                            <h3 class="ob-journey__title">Here's how to get back to this</h3>
-                            <p class="ob-journey__copy">
-                                Everything you just did lives on <MudLink Href="/today">Today</MudLink> — your
-                                current focus is always there waiting for you.
-                            </p>
+
+                        case StepWrapUp:
+                            <h3 class="ob-journey__title">@L["WrapTitle"]</h3>
+                            <p class="ob-journey__copy">@((MarkupString)L["WrapBody"].Value)</p>
                             <TodayWeekTasksHubExplainer />
                             break;
                     }
                 </div>
 
                 <div class="ob-journey__actions">
-                    @if (_step > 0 && _step < TotalSteps - 1)
+                    @if (_step > StepIntro && _step < TotalSteps - 1)
                     {
-                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="SkipStepAsync">Skip this step</MudButton>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="SkipStepAsync">@L["SkipStep"]</MudButton>
                     }
-                    @if (_step == 0)
+                    @if (_step == StepIntro)
                     {
-                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="DismissAsync">Skip the tour</MudButton>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="DismissAsync">@L["SkipTour"]</MudButton>
                     }
                     <MudSpacer />
-                    @if (_step > 0)
+                    @if (_step > StepIntro)
                     {
-                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="() => GoToStepAsync(_step - 1)">Back</MudButton>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="() => GoToStepAsync(_step - 1)">@L["Back"]</MudButton>
                     }
                     @switch (_step)
                     {
-                        case 0:
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="() => AdvanceAsync(1)">Start</MudButton>
+                        case StepIntro:
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="() => GoToStepAsync(StepCapture)">@L["Start"]</MudButton>
                             break;
-                        case 1:
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="SubmitCaptureAsync">Capture</MudButton>
+                        case StepCapture:
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="SubmitCaptureAsync">@L["ActionCapture"]</MudButton>
                             break;
-                        case 2:
+                        case StepAreas:
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="CreateAreasAsync">@L["ActionCreateAreas"]</MudButton>
+                            break;
+                        case StepProject:
                             @if (_projects.Count > 0)
                             {
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="ProcessIntoExistingProjectAsync">Process</MudButton>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="ProcessIntoExistingProjectAsync">@L["ActionProcess"]</MudButton>
                             }
                             else
                             {
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="CreateProjectAndProcessAsync">Create &amp; process</MudButton>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="CreateProjectAndProcessAsync">@L["ActionCreateAndProcess"]</MudButton>
                             }
                             break;
-                        case 3:
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="CreateTaskAsync">Create task</MudButton>
+                        case StepTask:
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="CreateTaskAsync">@L["ActionCreateTask"]</MudButton>
                             break;
-                        case 4:
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="SetFocusAsync">Make this my focus</MudButton>
+                        case StepFocus:
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="SetFocusAsync">@L["ActionMakeFocus"]</MudButton>
                             break;
-                        case 5:
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Check" OnClick="FinishAsync">Done</MudButton>
+                        case StepWrapUp:
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Check" OnClick="FinishAsync">@L["ActionDone"]</MudButton>
                             break;
                     }
                 </div>
@@ -286,6 +342,46 @@
             color: var(--ink-faint, var(--mud-palette-text-disabled));
         }
 
+        .ob-journey__chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+
+        .ob-journey__chip-option {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--line, var(--mud-palette-lines-default));
+            background: transparent;
+            color: var(--ink-soft, var(--mud-palette-text-secondary));
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .ob-journey__chip-option:hover:not(:disabled) {
+            border-color: var(--clay-ring, #d98a4f);
+        }
+
+        .ob-journey__chip-option:focus-visible {
+            outline: 3px solid var(--clay-ring, #d98a4f);
+            outline-offset: 2px;
+        }
+
+        .ob-journey__chip-option--on {
+            border-color: var(--clay, #c0561d);
+            background: var(--clay-soft, rgba(192, 86, 29, 0.12));
+            color: var(--clay, #c0561d);
+        }
+
+        .ob-journey__chip-option:disabled {
+            opacity: 0.55;
+            cursor: default;
+        }
+
         .ob-journey__actions {
             display: flex;
             align-items: center;
@@ -305,7 +401,36 @@
 }
 
 @code {
-    private const int TotalSteps = 6;
+    // Named rather than bare integers because these indices are persisted per user in
+    // UserDashboardPreference.OnboardingStep — a step inserted in the middle shifts every
+    // index after it, and a bare "case 3:" gives no hint that it did.
+    private const int StepIntro = 0;
+    private const int StepCapture = 1;
+    private const int StepAreas = 2;
+    private const int StepProject = 3;
+    private const int StepTask = 4;
+    private const int StepFocus = 5;
+    private const int StepWrapUp = 6;
+    private const int TotalSteps = 7;
+
+    /// <summary>
+    /// The starter areas offered at <see cref="StepAreas"/>. Deliberately a short, broad
+    /// list: enough that most people recognise two or three of their own life divisions,
+    /// few enough that picking is not itself a chore. Names are resolved through the
+    /// localizer (key <c>AreaSuggestion{Key}</c>) so the created area is named in the
+    /// user's own language.
+    /// </summary>
+    private static readonly (string Key, string Emoji)[] AreaSuggestions =
+    [
+        ("Work", "\U0001F4BC"),
+        ("Personal", "\U0001F331"),
+        ("Health", "\U0001F3C3"),
+        ("Finances", "\U0001F4B0"),
+        ("Learning", "\U0001F4DA"),
+        ("Home", "\U0001F3E1"),
+        ("Family", "\U0001F465"),
+        ("SideProject", "\U0001F680"),
+    ];
 
     private bool _visible;
     private bool _minimized;
@@ -316,9 +441,15 @@
     private string _captureText = string.Empty;
     private Guid? _noteId;
 
+    private IReadOnlyList<AreaDto> _areas = [];
+    private readonly HashSet<string> _selectedSuggestions = [];
+    private string _customAreaName = string.Empty;
+
     private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<ProjectTemplateDto> _projectTemplates = [];
     private Guid? _selectedProjectId;
-    private string _newAreaName = string.Empty;
+    private Guid? _selectedAreaId;
+    private Guid? _selectedTemplateId;
     private string _newProjectName = string.Empty;
     private Guid? _projectId;
 
@@ -327,6 +458,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Launcher.OnRestartRequested += RestartAsync;
+
         try
         {
             var preferences = await PreferenceService.GetOrCreateAsync();
@@ -338,7 +471,7 @@
 
             _visible = true;
             _step = Math.Clamp(preferences.OnboardingStep, 0, TotalSteps - 1);
-            await LoadProjectsAsync();
+            await LoadWorkspaceAsync();
         }
         catch
         {
@@ -346,7 +479,46 @@
         }
     }
 
-    private async Task LoadProjectsAsync()
+    public void Dispose() => Launcher.OnRestartRequested -= RestartAsync;
+
+    /// <summary>
+    /// Reopens the journey from the start at a page's request (Today's empty state).
+    /// Clears the in-memory answers too, so a replay does not silently reuse the note,
+    /// project or task from the run the user abandoned.
+    /// </summary>
+    private async Task RestartAsync()
+    {
+        try
+        {
+            await PreferenceService.ResetOnboardingAsync();
+        }
+        catch
+        {
+            // Showing the journey again matters more than recording that we did; an
+            // unpersisted reset simply means it will not resume after a reload.
+        }
+
+        _step = StepIntro;
+        _error = null;
+        _minimized = false;
+        _visible = true;
+        _captureText = string.Empty;
+        _noteId = null;
+        _selectedSuggestions.Clear();
+        _customAreaName = string.Empty;
+        _selectedProjectId = null;
+        _selectedAreaId = null;
+        _selectedTemplateId = null;
+        _newProjectName = string.Empty;
+        _projectId = null;
+        _taskTitle = string.Empty;
+        _taskId = null;
+
+        await LoadWorkspaceAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadWorkspaceAsync()
     {
         try
         {
@@ -358,6 +530,42 @@
         {
             _projects = [];
         }
+
+        await LoadAreasAsync();
+
+        try
+        {
+            // Seeds the built-in starter templates on first access for a brand-new user,
+            // which is precisely the moment this runs.
+            _projectTemplates = await ProjectTemplateService.GetAllAsync();
+        }
+        catch
+        {
+            _projectTemplates = [];
+        }
+    }
+
+    private async Task LoadAreasAsync()
+    {
+        try
+        {
+            _areas = await AreaService.GetAllActiveAsync();
+            if (_selectedAreaId is null && _areas.Count > 0)
+                _selectedAreaId = _areas[0].Id;
+        }
+        catch
+        {
+            _areas = [];
+        }
+    }
+
+    private bool HasArea(string name) =>
+        _areas.Any(area => string.Equals(area.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    private void ToggleSuggestion(string key)
+    {
+        if (!_selectedSuggestions.Remove(key))
+            _selectedSuggestions.Add(key);
     }
 
     private async Task GoToStepAsync(int step)
@@ -375,8 +583,6 @@
             // persist here should not block the user from moving through the journey.
         }
     }
-
-    private Task AdvanceAsync(int step) => GoToStepAsync(step);
 
     private Task SkipStepAsync() => GoToStepAsync(_step + 1);
 
@@ -396,7 +602,7 @@
     {
         if (string.IsNullOrWhiteSpace(_captureText))
         {
-            _error = "Write a few words to capture.";
+            _error = L["ErrorCaptureEmpty"];
             return;
         }
 
@@ -407,12 +613,64 @@
             var title = _captureText.Length > 120 ? _captureText[..120] : _captureText;
             var note = await NoteService.CreateAsync(new CreateNoteDto(Title: title, Content: _captureText));
             _noteId = note.Id;
-            await TrackStepCompletedAsync(1);
-            await GoToStepAsync(2);
+            await TrackStepCompletedAsync(StepCapture);
+            await GoToStepAsync(StepAreas);
         }
         catch
         {
-            _error = "Could not save your capture. Try again.";
+            _error = L["ErrorCaptureFailed"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// Creates the areas the user picked, then moves on. Areas the user already has are
+    /// left alone — their chip is disabled — so resuming the journey after a break, or
+    /// replaying it later, never produces a second "Work".
+    /// </summary>
+    private async Task CreateAreasAsync()
+    {
+        var wanted = new List<(string Name, string Emoji)>();
+
+        foreach (var (key, emoji) in AreaSuggestions)
+        {
+            if (!_selectedSuggestions.Contains(key))
+                continue;
+
+            var name = L[$"AreaSuggestion{key}"].Value;
+            if (!HasArea(name))
+                wanted.Add((name, emoji));
+        }
+
+        var custom = _customAreaName.Trim();
+        if (custom.Length > 0 &&
+            !HasArea(custom) &&
+            !wanted.Any(area => string.Equals(area.Name, custom, StringComparison.OrdinalIgnoreCase)))
+        {
+            wanted.Add((custom, AreaEmojiDefaults.DefaultEmoji));
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            foreach (var (name, emoji) in wanted)
+                await AreaService.CreateAsync(new CreateAreaDto(name, Emoji: emoji));
+
+            _selectedSuggestions.Clear();
+            _customAreaName = string.Empty;
+            _selectedAreaId = null;
+            await LoadAreasAsync();
+
+            await TrackStepCompletedAsync(StepAreas);
+            await GoToStepAsync(StepProject);
+        }
+        catch
+        {
+            _error = L["ErrorAreasFailed"];
         }
         finally
         {
@@ -424,7 +682,7 @@
     {
         if (_noteId is null || _selectedProjectId is null)
         {
-            _error = "Choose a project first.";
+            _error = L["ErrorPickProject"];
             return;
         }
 
@@ -435,12 +693,12 @@
             await NoteService.ProcessNoteAsync(new ProcessNoteDto(
                 _noteId.Value, ParaCategory.Project, NoteStatus.Active, ProjectId: _selectedProjectId));
             _projectId = _selectedProjectId;
-            await TrackStepCompletedAsync(2);
-            await GoToStepAsync(3);
+            await TrackStepCompletedAsync(StepProject);
+            await GoToStepAsync(StepTask);
         }
         catch
         {
-            _error = "Could not process this item. Try again.";
+            _error = L["ErrorProcessFailed"];
         }
         finally
         {
@@ -450,9 +708,10 @@
 
     private async Task CreateProjectAndProcessAsync()
     {
-        if (string.IsNullOrWhiteSpace(_newProjectName))
+        var projectName = _newProjectName.Trim();
+        if (projectName.Length == 0 && _selectedTemplateId is null)
         {
-            _error = "Name your first project.";
+            _error = L["ErrorProjectNameEmpty"];
             return;
         }
 
@@ -460,9 +719,29 @@
         _error = null;
         try
         {
-            var areaName = string.IsNullOrWhiteSpace(_newAreaName) ? "General" : _newAreaName.Trim();
-            var area = await AreaService.CreateAsync(new CreateAreaDto(areaName));
-            var project = await ProjectService.CreateAsync(new CreateProjectDto(_newProjectName.Trim(), area.Id));
+            // The areas step is skippable, so a user can still arrive here with none.
+            // Fall back to a single catch-all area rather than blocking the journey.
+            var areaId = _selectedAreaId;
+            if (areaId is null)
+            {
+                var fallback = await AreaService.CreateAsync(new CreateAreaDto(L["AreaFallbackName"].Value));
+                areaId = fallback.Id;
+                await LoadAreasAsync();
+            }
+
+            ProjectDto project;
+            if (_selectedTemplateId is Guid templateId)
+            {
+                project = await ProjectTemplateService.InstantiateAsync(new InstantiateProjectTemplateDto(
+                    templateId,
+                    Name: projectName.Length > 0 ? projectName : null,
+                    AreaId: areaId));
+            }
+            else
+            {
+                project = await ProjectService.CreateAsync(new CreateProjectDto(projectName, areaId.Value));
+            }
+
             _projectId = project.Id;
 
             if (_noteId is not null)
@@ -471,12 +750,17 @@
                     _noteId.Value, ParaCategory.Project, NoteStatus.Active, ProjectId: project.Id));
             }
 
-            await TrackStepCompletedAsync(2);
-            await GoToStepAsync(3);
+            await TrackStepCompletedAsync(StepProject);
+            await GoToStepAsync(StepTask);
+        }
+        catch (PlanEntitlementDeniedException ex)
+        {
+            // A plan limit is a real, actionable answer — not the generic failure below.
+            _error = ex.Message;
         }
         catch
         {
-            _error = "Could not create your project. Try again.";
+            _error = L["ErrorProjectFailed"];
         }
         finally
         {
@@ -488,7 +772,7 @@
     {
         if (string.IsNullOrWhiteSpace(_taskTitle))
         {
-            _error = "Name the next action.";
+            _error = L["ErrorTaskEmpty"];
             return;
         }
 
@@ -497,24 +781,25 @@
         try
         {
             if (_projectId is null)
-                await LoadProjectsAsync();
-
-            _projectId ??= _projects.Count > 0 ? _projects[0].Id : null;
+            {
+                _projects = await ProjectService.GetAllNonArchivedAsync();
+                _projectId = _projects.Count > 0 ? _projects[0].Id : null;
+            }
 
             if (_projectId is null)
             {
-                _error = "Create a project in the previous step first.";
+                _error = L["ErrorNeedProject"];
                 return;
             }
 
             var task = await TaskService.CreateAsync(new CreateTaskDto(_projectId.Value, _taskTitle.Trim()));
             _taskId = task.Id;
-            await TrackStepCompletedAsync(3);
-            await GoToStepAsync(4);
+            await TrackStepCompletedAsync(StepTask);
+            await GoToStepAsync(StepFocus);
         }
         catch
         {
-            _error = "Could not create the task. Try again.";
+            _error = L["ErrorTaskFailed"];
         }
         finally
         {
@@ -526,7 +811,7 @@
     {
         if (_taskId is null)
         {
-            _error = "Create a next action first.";
+            _error = L["ErrorNeedTask"];
             return;
         }
 
@@ -535,8 +820,8 @@
         try
         {
             await TaskService.SetCurrentTaskAsync(_taskId.Value);
-            await TrackStepCompletedAsync(4);
-            await GoToStepAsync(5);
+            await TrackStepCompletedAsync(StepFocus);
+            await GoToStepAsync(StepWrapUp);
         }
         catch (Exception ex)
         {

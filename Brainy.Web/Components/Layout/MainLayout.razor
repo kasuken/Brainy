@@ -135,18 +135,32 @@
             @Body
         </MudContainer>
 
-        <AuthorizeView>
-            <Authorized>
-                <div class="layout-fab">
-                    <MudFab Color="Color.Primary"
-                            StartIcon="@Icons.Material.Filled.Add"
-                            Label="Capture"
-                            Size="Size.Medium"
-                            OnClick="OpenQuickCaptureAsync" />
-                </div>
-                <OnboardingJourney />
-            </Authorized>
-        </AuthorizeView>
+        @* Both of these are click-only chrome: the Capture FAB opens a dialog and the
+           onboarding journey is a multi-step form. Routes under /Account are marked
+           [ExcludeFromInteractiveRouting], so App.razor renders them — and therefore this
+           layout — statically, with no circuit behind them. Rendering either one there
+           produced visibly dead controls: a new user opening Account & data met a
+           "Getting started" card whose Start, Skip, Minimize and Close buttons did
+           nothing, sitting next to that page's own working "Replay the guided tour"
+           button. AssignedRenderMode (not RendererInfo.IsInteractive) is the right
+           test: it is already non-null during the prerender pass of an interactive page,
+           so this chrome still renders in the initial HTML instead of popping in once the
+           circuit connects. *@
+        @if (AssignedRenderMode is not null)
+        {
+            <AuthorizeView>
+                <Authorized>
+                    <div class="layout-fab">
+                        <MudFab Color="Color.Primary"
+                                StartIcon="@Icons.Material.Filled.Add"
+                                Label="Capture"
+                                Size="Size.Medium"
+                                OnClick="OpenQuickCaptureAsync" />
+                    </div>
+                    <OnboardingJourney />
+                </Authorized>
+            </AuthorizeView>
+        }
     </MudMainContent>
 </MudLayout>
 </CascadingValue>

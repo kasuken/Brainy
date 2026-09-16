@@ -4,6 +4,7 @@
 ───────────────────────────────────────────────────────────────────────────── *@
 @using Brainy.Web.Components.Onboarding
 @inject NavigationManager Nav
+@inject OnboardingJourneyLauncher OnboardingLauncher
 @inject IStringLocalizer<EmptyTodayExperience> Localizer
 
 <div class="td-section" style="text-align:center; padding:3rem 1rem;">
@@ -35,6 +36,17 @@
             @Localizer["CreateProject"]
         </MudButton>
 
+        @* An empty Today is exactly where someone who skipped (or never finished) the
+           guided journey ends up, and until this button existed the only way back to it
+           was buried in Account & data. The launcher hands the request across the page /
+           layout boundary to the journey mounted in MainLayout. *@
+        <MudButton Variant="Variant.Outlined" Size="Size.Medium"
+                   StartIcon="@Icons.Material.Outlined.AutoAwesome"
+                   Style="border-color:var(--line-strong); color:var(--ink-soft);"
+                   OnClick="ShowMeAroundAsync">
+            @Localizer["ShowMeAround"]
+        </MudButton>
+
         <div style="display:flex; align-items:center; gap:0.4rem; padding:0.4rem 0.85rem; border:1px solid var(--line); border-radius:999px; background:var(--paper-raised); font-size:0.78rem; color:var(--sage);">
             <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Style="font-size:14px;" />
             @Localizer["AllClear"]
@@ -47,3 +59,7 @@
     </div>
 
 </div>
+
+@code {
+    private Task ShowMeAroundAsync() => OnboardingLauncher.RequestRestartAsync();
+}

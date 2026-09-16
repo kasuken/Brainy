@@ -291,6 +291,7 @@ builder.Services.AddScoped<Brainy.Application.Interfaces.Identity.IUserDirectory
 builder.Services.AddBrainyApplication();
 
 builder.Services.AddScoped<Brainy.Web.Themes.ThemeService>();
+builder.Services.AddScoped<Brainy.Web.Components.Onboarding.OnboardingJourneyLauncher>();
 
 // Provider=None remains a safe no-op; configured providers can now be enabled
 // without changing the application binary.
