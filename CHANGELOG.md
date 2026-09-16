@@ -1,5 +1,31 @@
 # Changelog
 
+## [7.0.0] - 2026-09-16
+
+### Added
+
+- **Subscription billing** — added a live Stripe provider for Pro subscriptions alongside server-side plan and entitlement handling.
+- **Localization** — added culture negotiation, user language preferences, an English and Italian translation surface, and localized marketing, Inbox, Notes, and Today workflows.
+- **Knowledge import and export** — added Notion, Evernote, Obsidian, and Markdown-folder importers, plus Markdown and Obsidian vault export.
+- **Public output sharing** — added read-only share links and a public output page with rate limiting and cross-user isolation.
+- **Web push notifications** — added push subscription management, preferences, service-worker handling, and background dispatch.
+- **Calendar feeds** — added tokenized ICS feeds for calendar events and milestone due dates, with settings and documentation.
+- **Templates** — added project, note, and output templates, creation-flow entry points, and export, import, and account-deletion support.
+- **Note version history** — added note revisions, retention, restore support, and version history in the note editor.
+- **Transactional email** — added provider-abstracted account email delivery with SMTP/MailKit support for confirmation and password reset flows.
+- **Tag management** — added user-scoped tag rename, merge, delete, and unused-tag cleanup workflows.
+- **Command palette search** — extended global search with command-palette actions.
+- **Observability and analytics** — added OpenTelemetry traces, metrics, and logs plus activation-funnel metrics in the analytics dashboard.
+
+### Improved
+
+- **Security hardening** — restored antiforgery middleware ordering and rejected background impersonation inside request scopes.
+- **Reliability and coverage** — added end-to-end coverage for offline capture and sync, PWA share targets, circuit reconnection, and the primary application loop, plus SQL Server and HTTP-level coverage for the new workflows.
+- **Data integrity** — tightened the note-revision self-reference constraint and added explicit cleanup for retained revision links.
+- **Release operations** — added a dedicated Playwright E2E CI job and documented the release 7 epic backlog.
+
+---
+
 ## [6.0.0] - 2026-09-11
 
 ### Added
