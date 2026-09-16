@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.1.1] - 2026-09-16
+
+### Improved
+
+- **Subscription billing** — first-time Stripe Checkout sessions now use the signed-in Brainy account email, while existing Stripe customers keep their stored customer email.
+- **Billing reliability** — webhook state changes are applied before marking events as processed, allowing provider retries to recover from transient failures without losing plan changes.
+
+---
+
 ## [7.1.0] - 2026-09-16
 
 ### Improved
