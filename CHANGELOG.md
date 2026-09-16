@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.1.3] - 2026-09-16
+
+### Fixed
+
+- **Onboarding journey layout** — repositioned the journey panel away from the navigation drawer and capture control, and added viewport-aware scrolling for longer onboarding steps.
+
+---
+
 ## [7.1.2] - 2026-09-16
 
 ### Added
