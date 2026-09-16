@@ -234,11 +234,18 @@
     </div>
 
     <style>
+        /* Anchored bottom-RIGHT, not bottom-left: the nav drawer occupies the bottom-left
+           corner, and at z-index 999 the panel simply disappeared behind it. Raising the
+           z-index above the drawer (MudBlazor's --mud-zindex-drawer is 1100) would be the
+           wrong fix — on narrow screens that drawer is a full-screen overlay that should
+           cover this panel, not sit under it. Staying below the drawer and moving out of
+           its column satisfies both cases. Bottom is offset to clear MainLayout's Capture
+           FAB (bottom: 2rem), which shares this corner. */
         .ob-journey {
             position: fixed;
-            left: 2rem;
-            bottom: 2rem;
-            z-index: 999;
+            right: 2rem;
+            bottom: 6.5rem;
+            z-index: 1000;
             max-width: 380px;
         }
 
@@ -266,6 +273,11 @@
             border: 1px solid var(--line, var(--mud-palette-lines-default));
             background: var(--paper-raised, var(--mud-palette-surface));
             box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,0.16));
+            /* Leaves room for the app bar above and the bottom offset below, so the
+               tallest step (the wrap-up, which embeds the Today/Week explainer) scrolls
+               inside the card instead of running off the top of the viewport. */
+            max-height: calc(100vh - 12rem);
+            overflow-y: auto;
         }
 
         .ob-journey__head {
@@ -393,8 +405,12 @@
             .ob-journey {
                 left: 1rem;
                 right: 1rem;
-                bottom: 1rem;
+                bottom: 5rem;
                 max-width: none;
+            }
+
+            .ob-journey__card {
+                max-height: calc(100vh - 10rem);
             }
         }
     </style>
