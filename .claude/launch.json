@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "brainy-web",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--no-build", "--project", "Brainy.Web/Brainy.Web.csproj", "--urls", "http://localhost:5255"],
+      "port": 5255
+    }
+  ]
+}
