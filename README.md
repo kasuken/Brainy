@@ -8,7 +8,7 @@
 ![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-512BD4?style=flat-square&logo=blazor&logoColor=white)
 ![SQL Server](https://img.shields.io/badge/SQL%20Server-EF%20Core-CC2927?style=flat-square&logo=microsoftsqlserver&logoColor=white)
 
-[Overview](#overview) | [Features](#features) | [Getting started](#getting-started) | [Development](#development)
+[Overview](#overview) | [Features](#features) | [Screenshots](#screenshots) | [Getting started](#getting-started) | [Development](#development)
 
 </div>
 
@@ -36,6 +36,87 @@ Capture notes and ideas, organize them into projects, areas, resources, and arch
 - **Per-user data isolation** enforced through ASP.NET Core Identity and application services.
 - **Data portability** through a versioned JSON export of the signed-in user's content and relationships.
 - **Responsive Blazor UI** built with MudBlazor and interactive server rendering.
+
+## Screenshots
+
+<table>
+<tr>
+<td width="50%">
+
+**Today dashboard**<br>
+Daily briefing with in-progress, overdue, and due-today counts, current focus, and goal deadlines.
+<img src="docs/marketing/screenshots/today.png" alt="Today dashboard" width="100%" />
+
+</td>
+<td width="50%">
+
+**PARA overview**<br>
+Projects, areas, resources, and archives at a glance, with recent active items.
+<img src="docs/marketing/screenshots/para-overview.png" alt="PARA overview" width="100%" />
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Inbox processing**<br>
+Triage captured notes with suggested categorization before they're organized.
+<img src="docs/marketing/screenshots/inbox.png" alt="Inbox processing" width="100%" />
+
+</td>
+<td width="50%">
+
+**Areas**<br>
+Ongoing responsibilities tracked independently of project deadlines.
+<img src="docs/marketing/screenshots/areas.png" alt="Areas" width="100%" />
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Project detail**<br>
+Tasks, board, notes, resources, and outputs for a single project, with progress and deadlines.
+<img src="docs/marketing/screenshots/project-detail.png" alt="Project detail" width="100%" />
+
+</td>
+<td width="50%">
+
+**Tasks calendar**<br>
+Month view of scheduled tasks with filters and upcoming deadlines.
+<img src="docs/marketing/screenshots/tasks-calendar.png" alt="Tasks calendar" width="100%" />
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Command search**<br>
+Jump to any note, task, project, or command from a single search palette.
+<img src="docs/marketing/screenshots/search-palette.png" alt="Command search palette" width="100%" />
+
+</td>
+<td width="50%">
+
+**Pulse analytics**<br>
+Activity intelligence that surfaces working rhythm and forward progress over time.
+<img src="docs/marketing/screenshots/pulse-analytics.png" alt="Pulse analytics" width="100%" />
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Login**<br>
+Sign-in screen for returning users.
+<img src="docs/marketing/screenshots/login.png" alt="Login screen" width="100%" />
+
+</td>
+<td width="50%">
+
+</td>
+</tr>
+</table>
 
 ## Architecture
 
