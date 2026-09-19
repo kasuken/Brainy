@@ -1,0 +1,99 @@
+@using Brainy.Application.DTOs.Today
+
+@* ─────────────────────────────────────────────────────────────────────────────
+   StatusConsistencyWidget — surfaces mismatches between a project's status and the
+   status of its tasks (e.g. in-progress work in a non-active project, an archived
+   project with open tasks). Each row links to the project so the user can reconcile it.
+───────────────────────────────────────────────────────────────────────────── *@
+
+@if (Warnings.Count > 0)
+{
+    <div class="td-widget td-section">
+        <div class="td-section-head">
+            <span class="td-section-label">
+                <MudIcon Icon="@Icons.Material.Outlined.Rule" Size="Size.Small" Style="vertical-align:-4px; margin-right:0.35rem;" />
+                Needs a look
+            </span>
+            <span class="td-section-count">@Warnings.Count @(Warnings.Count == 1 ? "issue" : "issues")</span>
+        </div>
+
+        <p class="td-consistency-lead">
+            These projects and their tasks are out of step. A quick tidy keeps Today accurate.
+        </p>
+
+        @foreach (var w in Warnings)
+        {
+            var isWarning = w.Severity == StatusConsistencySeverity.Warning;
+            <a class="td-consistency @(isWarning ? "td-consistency--warning" : "td-consistency--info")"
+               href="@($"/projects/{w.ProjectId}")">
+                <MudIcon Icon="@(isWarning ? Icons.Material.Outlined.WarningAmber : Icons.Material.Outlined.Lightbulb)"
+                         Style="@($"color:{(isWarning ? "var(--gold)" : "var(--ink-faint)")}; font-size:18px; flex-shrink:0;")" />
+                <span class="td-consistency-message">@w.Message</span>
+                <MudIcon Icon="@Icons.Material.Outlined.ChevronRight"
+                         Style="color:var(--ink-faint); font-size:18px; flex-shrink:0; margin-left:auto;" />
+            </a>
+        }
+    </div>
+}
+
+<style>
+    .td-consistency-lead {
+        margin: 0 0 0.6rem;
+        font-size: 0.82rem;
+        color: var(--ink-soft);
+    }
+
+    .td-consistency {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.65rem 0.85rem;
+        background: var(--paper-raised);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-bottom: 0.4rem;
+        position: relative;
+        overflow: hidden;
+        text-decoration: none;
+        transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+    }
+
+    .td-consistency::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+    }
+
+    .td-consistency:hover {
+        border-color: var(--line-strong);
+        box-shadow: var(--shadow-sm);
+        transform: translateY(-1px);
+    }
+
+    .td-consistency--warning {
+        background: rgba(205,154,58,0.05);
+        border-color: rgba(205,154,58,0.35);
+    }
+
+    .td-consistency--warning::before {
+        background: var(--gold);
+    }
+
+    .td-consistency--info::before {
+        background: var(--line-strong);
+    }
+
+    .td-consistency-message {
+        font-size: 0.86rem;
+        color: var(--ink);
+        line-height: 1.35;
+    }
+</style>
+
+@code {
+    /// <summary>The detected status inconsistencies to display, ordered most important first.</summary>
+    [Parameter] public IReadOnlyList<StatusConsistencyWarningDto> Warnings { get; set; } = [];
+}

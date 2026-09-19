@@ -68,6 +68,7 @@ public static class DependencyInjection
         services.AddScoped<ICurrentTaskRecommendationService, CurrentTaskRecommendationService>();
         services.AddScoped<IResumeContextService, ResumeContextService>();
         services.AddScoped<ITodayNotificationService, TodayNotificationService>();
+        services.AddScoped<IStatusConsistencyService, StatusConsistencyService>();
         services.AddScoped<IUserDashboardPreferenceService, UserDashboardPreferenceService>();
         // Layouts and pages resolve this service concurrently during Blazor SSR.
         // Keep its captured transient DbContext isolated per consumer.
