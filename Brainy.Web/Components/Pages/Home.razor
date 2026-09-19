@@ -18,6 +18,7 @@
 @inject IUserTimeZoneService UserTimeZoneService
 @inject IProjectPrioritizationService ProjectPrioritizationService
 @inject IProjectService ProjectService
+@inject IStatusConsistencyService StatusConsistencyService
 @inject IGoalService GoalService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -504,6 +505,12 @@
                                        OnFocusChanged="LoadAsync" />
                 </div>
 
+                @* ── Status consistency warnings ── *@
+                @if (IsWidgetVisible(StatusConsistencyWidgetKey) && _statusWarnings.Count > 0)
+                {
+                    <StatusConsistencyWidget Warnings="_statusWarnings" />
+                }
+
                 @* ── Task sections ── *@
                 <div class="td-sections">
 
@@ -632,6 +639,7 @@
                 Points =
                 [
                     "Track your Current focus alongside a daily snapshot and Inbox reminder.",
+                    "Catch projects whose status conflicts with their tasks (e.g. in-progress work in a paused project) under \"Needs a look\".",
                     "See every task marked In Progress at the top of the execution flow.",
                     "Review overdue, due today, due this week, and next tasks in one execution flow.",
                     "Bring deliberate weekly commitments into execution without confusing them with deadlines.",
@@ -683,6 +691,7 @@
     private const int DefaultInboxWarningThreshold = 10;
     private const string DailySnapshotWidgetKey = "daily-snapshot";
     private const string CurrentFocusWidgetKey = "current-focus";
+    private const string StatusConsistencyWidgetKey = "status-consistency";
     private const string InProgressWidgetKey = "in-progress";
     private const string OverdueWidgetKey = "overdue";
     private const string GoalDeadlinesWidgetKey = "goal-deadlines";
@@ -697,6 +706,7 @@
     [
         DailySnapshotWidgetKey,
         CurrentFocusWidgetKey,
+        StatusConsistencyWidgetKey,
         InProgressWidgetKey,
         OverdueWidgetKey,
         GoalDeadlinesWidgetKey,
@@ -717,6 +727,7 @@
     private IReadOnlyList<ProjectSummaryDto> _prioritizedProjects = [];
     private IReadOnlyList<GoalDto> _overdueGoals = [];
     private IReadOnlyList<GoalDto> _dueSoonGoals = [];
+    private IReadOnlyList<StatusConsistencyWarningDto> _statusWarnings = [];
     private UserDashboardPreferenceDto? _dashboardPreferences;
     private HashSet<string> _visibleWidgetKeys = new(DefaultWidgetKeys, StringComparer.OrdinalIgnoreCase);
 
@@ -795,6 +806,7 @@
             _prioritizedProjects = await ProjectPrioritizationService.GetPrioritizedProjectsAsync(5);
             _overdueGoals = await GoalService.GetOverdueAsync();
             _dueSoonGoals = await GoalService.GetDueSoonAsync();
+            _statusWarnings = await StatusConsistencyService.GetWarningsAsync();
         }
         catch
         {
