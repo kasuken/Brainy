@@ -83,6 +83,7 @@ public static class DependencyInjection
         services.AddScoped<ICalendarService, CalendarService>();
         services.AddScoped<ICalendarFeedService, CalendarFeedService>();
         services.AddScoped<ICalendarFeedTokenService, CalendarFeedTokenService>();
+        services.AddScoped<IMcpAccessTokenService, McpAccessTokenService>();
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<IGoalMilestoneService, GoalMilestoneService>();
         services.AddScoped<IOutputService, OutputService>();

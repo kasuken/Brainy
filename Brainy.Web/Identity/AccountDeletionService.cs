@@ -174,6 +174,10 @@ public sealed class AccountDeletionService(
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await context.DashboardPreferences.Where(preference => preference.UserId == userId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        // MCP access tokens are user-owned with a restrictive delete, so they must be removed
+        // before the account row (they have no dependents of their own).
+        await context.McpAccessTokens.Where(token => token.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task EnsureNoCrossUserDependentsAsync(string userId, CancellationToken cancellationToken)

@@ -11,6 +11,7 @@ using Brainy.Web.Endpoints;
 using Brainy.Web.Health;
 using Brainy.Web.Identity;
 using Brainy.Web.Localization;
+using Brainy.Web.Mcp;
 using Brainy.Web.Telemetry;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -188,6 +189,30 @@ builder.Services.AddRateLimiter(options =>
                 });
         }
 
+        // The MCP endpoint (issue: MCP server) is bearer-authenticated JSON-RPC over POST (with
+        // a GET for streaming), and MCP clients are chatty — a session lists tools then fires
+        // several tool calls. Partition by a hash of the Authorization header, for the same
+        // reason the feed partitions by its token: the limiter runs ahead of authentication, a
+        // shared egress IP must not let one client throttle another, and a guessing attempt
+        // should throttle itself. Falls back to the IP only when no credential is presented.
+        if (context.Request.Path.StartsWithSegments(McpServerRoutes.BasePath, StringComparison.OrdinalIgnoreCase))
+        {
+            var authorization = context.Request.Headers.Authorization.ToString();
+            var partitionKey = string.IsNullOrEmpty(authorization)
+                ? $"mcp:ip:{context.Connection.RemoteIpAddress}"
+                : $"mcp:token:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(authorization)))}";
+
+            return RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey,
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 120,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+        }
+
         if (!HttpMethods.IsPost(context.Request.Method))
             return RateLimitPartition.GetNoLimiter("read");
 
@@ -248,7 +273,24 @@ builder.Services.AddAuthentication(options =>
         options.DefaultScheme = IdentityConstants.ApplicationScheme;
         options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
     })
+    // MCP clients (Claude, Copilot, ChatGPT, local hosts) authenticate with a per-user bearer
+    // token instead of a login cookie. This adds the scheme only; the default scheme is
+    // unchanged, so the cookie-based Blazor app is unaffected. Added before AddIdentityCookies
+    // because that call returns a narrower builder type that no longer chains AddScheme.
+    .AddMcpAuthentication()
     .AddIdentityCookies();
+
+// Authorization policy requiring the MCP scheme specifically, applied to the MCP endpoint in
+// Program's endpoint mapping. Naming the scheme keeps cookie and MCP credentials from
+// satisfying each other's surfaces.
+builder.Services.AddMcpAuthorization();
+
+// Model Context Protocol server (Streamable HTTP transport). Tools are the [McpServerToolType]
+// classes in Brainy.Web.Mcp.Tools; they inject application services and are scoped per request
+// to the token-authenticated user. The endpoint itself is mapped and secured below.
+builder.Services.AddMcpServer()
+    .WithHttpTransport()
+    .WithToolsFromAssembly();
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -398,6 +440,11 @@ app.MapMarkdownExportEndpoints();
 
 // Public, token-authenticated ICS calendar feed of deadlines (issue #314).
 app.MapCalendarFeedEndpoints();
+
+// Model Context Protocol server for LLM clients (Claude, Copilot, ChatGPT, local hosts).
+// Authenticated by a per-user MCP bearer token via the BrainyMcp scheme — never the login
+// cookie — so every tool call is scoped to the token's owner.
+app.MapMcp(McpServerRoutes.BasePath).RequireMcpAuthorization();
 
 // Inbound billing-provider webhooks (plan/subscription state changes).
 app.MapBillingWebhookEndpoints();
