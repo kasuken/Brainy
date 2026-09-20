@@ -88,6 +88,8 @@ public class BrainyDbContext(
 
     public DbSet<CalendarFeedToken> CalendarFeedTokens => Set<CalendarFeedToken>();
 
+    public DbSet<McpAccessToken> McpAccessTokens => Set<McpAccessToken>();
+
     public DbSet<OutputShareLink> OutputShareLinks => Set<OutputShareLink>();
 
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();

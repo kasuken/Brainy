@@ -31,6 +31,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
     <PackageReference Include="MudBlazor" Version="8.4.0" />
     <!-- OpenTelemetry traces/metrics/logs (issue #322). Disabled by default at runtime
          (Telemetry:Enabled=false); see Brainy.Web/Telemetry/DependencyInjection.cs. -->

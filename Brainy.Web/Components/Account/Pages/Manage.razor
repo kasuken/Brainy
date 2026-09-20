@@ -16,6 +16,7 @@
 @using Brainy.Application.DTOs.Calendar
 @using Brainy.Application.DTOs.DataExport
 @using Brainy.Application.DTOs.DataImport
+@using Brainy.Application.DTOs.Mcp
 @using Brainy.Application.DTOs.Push
 @using Brainy.Application.DTOs.Search
 @using Brainy.Application.Interfaces.Billing
@@ -24,6 +25,7 @@
 @using Brainy.Domain.Enums
 @using Brainy.Web.Endpoints
 @using Brainy.Web.Identity
+@using Brainy.Web.Mcp
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Identity
@@ -39,6 +41,7 @@
 @inject IEntitlementService EntitlementService
 @inject IBillingProvider BillingProvider
 @inject ICalendarFeedTokenService CalendarFeedTokenService
+@inject IMcpAccessTokenService McpAccessTokenService
 @inject IPushSubscriptionService PushSubscriptionService
 @inject IPushNotificationPreferenceService PushNotificationPreferenceService
 @inject ISnackbar Snackbar
@@ -52,6 +55,10 @@
 <PageTitle>Account and data — Brainy</PageTitle>
 
 <MudPopoverProvider />
+@* Like MudPopoverProvider above, MainLayout's MudDialogProvider renders as inert static
+   markup in this page's own interactive island, so a local one is needed for confirmation
+   dialogs (calendar feed revoke, MCP token revoke) to render at all. *@
+<MudDialogProvider />
 
 <main class="account-manage" aria-labelledby="account-manage-title">
     <header class="account-manage__header">
@@ -747,6 +754,116 @@
 
         <MudPaper Class="account-manage__card" Elevation="0">
             <div class="account-manage__card-heading">
+                <MudIcon Icon="@Icons.Material.Outlined.SmartToy" aria-hidden="true" />
+                <div>
+                    <h2>AI assistant access (MCP)</h2>
+                    <p>
+                        Connect an AI assistant — Claude, GitHub Copilot, or ChatGPT — to your Brainy
+                        knowledge over the Model Context Protocol. Issue one token per client and paste
+                        it into that client's MCP configuration.
+                    </p>
+                </div>
+            </div>
+
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="account-manage__notice">
+                Each token is a credential, not just a setting: anyone who has it can search and read
+                your notes, tasks, projects and other Brainy data through the MCP endpoint. It is shown
+                once, on creation — copy it then. Revoke a token any time to cut off that client
+                immediately; the others keep working. Tokens are never shown in analytics or logs.
+            </MudAlert>
+
+            <div class="account-manage__meta-grid">
+                <div>
+                    <span class="account-manage__meta-label">MCP server URL</span>
+                    <strong>@McpServerUrl</strong>
+                </div>
+                <div>
+                    <span class="account-manage__meta-label">Authentication</span>
+                    <strong>Bearer token (below)</strong>
+                </div>
+            </div>
+
+            @if (_mcpError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="account-manage__notice" role="alert">
+                    @_mcpError
+                </MudAlert>
+            }
+
+            @if (_mcpTokenSecret is not null)
+            {
+                <MudTextField Value="@_mcpTokenSecret"
+                              Label="New token — shown once, copy it now"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              ReadOnly="true"
+                              Class="account-manage__notice" />
+                <div class="account-manage__actions">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="CopyMcpTokenSecretAsync">
+                        Copy token
+                    </MudButton>
+                </div>
+            }
+
+            <div class="account-manage__settings-stack">
+                <MudTextField T="string"
+                              @bind-Value="_newMcpTokenName"
+                              Label="Token name (e.g. Claude Desktop)"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              MaxLength="100"
+                              Disabled="_mcpBusy" />
+            </div>
+
+            <div class="account-manage__actions">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Outlined.Key"
+                           Disabled="@(_mcpBusy || string.IsNullOrWhiteSpace(_newMcpTokenName))"
+                           aria-busy="@_mcpBusy.ToString().ToLowerInvariant()"
+                           OnClick="IssueMcpTokenAsync">
+                    @(_mcpBusy ? "Working…" : "Generate token")
+                </MudButton>
+            </div>
+
+            @if (_mcpTokens.Count > 0)
+            {
+                <div class="account-manage__settings-stack">
+                    <h3 class="account-manage__subheading">Your tokens</h3>
+                    @foreach (var token in _mcpTokens)
+                    {
+                        <div class="account-manage__device-row">
+                            <span>
+                                <strong>@token.Name</strong> — @(token.IsActive ? "active" : "revoked"),
+                                created @token.CreatedAtUtc.ToString("MMM d, yyyy")@(token.LastUsedAtUtc is { } used ? $", last used {used:MMM d, yyyy}" : ", never used")
+                            </span>
+                            @if (token.IsActive)
+                            {
+                                <MudButton Variant="Variant.Text"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           Disabled="_mcpBusy"
+                                           OnClick="() => RevokeMcpTokenAsync(token.Id, token.Name)">
+                                    Revoke
+                                </MudButton>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            <MudExpansionPanels Class="account-manage__notice" Elevation="0">
+                <MudExpansionPanel Text="How to connect">
+                    <ul>
+                        <li><strong>Claude / ChatGPT:</strong> add a custom connector pointing at the MCP server URL above, using the token as a bearer credential.</li>
+                        <li><strong>GitHub Copilot (VS Code):</strong> add an MCP server entry with the URL above and an <code>Authorization: Bearer &lt;token&gt;</code> header.</li>
+                    </ul>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        </MudPaper>
+
+        <MudPaper Class="account-manage__card" Elevation="0">
+            <div class="account-manage__card-heading">
                 <MudIcon Icon="@Icons.Material.Outlined.UploadFile" aria-hidden="true" />
                 <div>
                     <h2>Import Brainy data</h2>
@@ -1077,6 +1194,11 @@
     private string? _calendarFeedUrl;
     private bool _calendarFeedBusy;
     private string? _calendarFeedError;
+    private IReadOnlyList<McpAccessTokenDto> _mcpTokens = [];
+    private string _newMcpTokenName = string.Empty;
+    private string? _mcpTokenSecret;
+    private bool _mcpBusy;
+    private string? _mcpError;
     private bool _pushEnabled;
     private bool _pushOverdueTaskEnabled = true;
     private bool _pushDailyFocusNudgeEnabled = true;
@@ -1118,6 +1240,15 @@
         catch
         {
             _calendarFeedError = "Brainy could not load your calendar feed status. Try reloading this page.";
+        }
+
+        try
+        {
+            _mcpTokens = await McpAccessTokenService.ListAsync();
+        }
+        catch
+        {
+            _mcpError = "Brainy could not load your MCP access tokens. Try reloading this page.";
         }
 
         try
@@ -1410,6 +1541,86 @@
         {
             // Clipboard access can be unavailable (insecure context, permission denied);
             // the URL is still visible and selectable in the read-only field above.
+        }
+    }
+
+    private string McpServerUrl => Navigation.ToAbsoluteUri(McpServerRoutes.BasePath).ToString();
+
+    private async Task IssueMcpTokenAsync()
+    {
+        if (_mcpBusy || string.IsNullOrWhiteSpace(_newMcpTokenName))
+            return;
+
+        _mcpBusy = true;
+        _mcpError = null;
+
+        try
+        {
+            var issued = await McpAccessTokenService.IssueAsync(_newMcpTokenName);
+            _mcpTokenSecret = issued.RawToken;
+            _newMcpTokenName = string.Empty;
+            _mcpTokens = await McpAccessTokenService.ListAsync();
+            Snackbar.Add("MCP token created. Copy it now — it will not be shown again.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _mcpError = ex.Message;
+        }
+        finally
+        {
+            _mcpBusy = false;
+        }
+    }
+
+    private async Task RevokeMcpTokenAsync(Guid tokenId, string tokenName)
+    {
+        if (_mcpBusy)
+            return;
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Revoke MCP token",
+            $"The assistant using \"{tokenName}\" will lose access immediately. Continue?",
+            yesText: "Revoke",
+            cancelText: "Cancel");
+
+        if (confirmed != true)
+            return;
+
+        _mcpBusy = true;
+        _mcpError = null;
+
+        try
+        {
+            var revoked = await McpAccessTokenService.RevokeAsync(tokenId);
+            _mcpTokens = await McpAccessTokenService.ListAsync();
+            Snackbar.Add(
+                revoked ? "MCP token revoked." : "That token was already revoked.",
+                revoked ? Severity.Success : Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            _mcpError = ex.Message;
+        }
+        finally
+        {
+            _mcpBusy = false;
+        }
+    }
+
+    private async Task CopyMcpTokenSecretAsync()
+    {
+        if (_mcpTokenSecret is null)
+            return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _mcpTokenSecret);
+            Snackbar.Add("Token copied.", Severity.Success);
+        }
+        catch (JSException)
+        {
+            // Clipboard access can be unavailable (insecure context, permission denied);
+            // the token is still visible and selectable in the read-only field above.
         }
     }
 

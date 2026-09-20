@@ -45,6 +45,7 @@ public interface IApplicationDbContext
     DbSet<NoteTemplate> NoteTemplates { get; }
     DbSet<OutputTemplate> OutputTemplates { get; }
     DbSet<CalendarFeedToken> CalendarFeedTokens { get; }
+    DbSet<McpAccessToken> McpAccessTokens { get; }
     DbSet<OutputShareLink> OutputShareLinks { get; }
     DbSet<PushSubscription> PushSubscriptions { get; }
     DbSet<PushNotificationPreference> PushNotificationPreferences { get; }
