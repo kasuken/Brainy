@@ -399,6 +399,10 @@
             Snackbar.Add("Subtask moved to In Progress.", Severity.Info);
             await OnChanged.InvokeAsync();
         }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
         catch
         {
             Snackbar.Add("Could not update subtask.", Severity.Error);

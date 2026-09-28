@@ -875,6 +875,10 @@
             Snackbar.Add("Task moved to In Progress.", Severity.Info);
             await LoadAsync();
         }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
         catch
         {
             Snackbar.Add("Could not update task.", Severity.Error);
