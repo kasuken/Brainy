@@ -1,5 +1,16 @@
 # Changelog
 
+## [8.1.1] - 2026-09-29
+
+### Fixed
+
+- **Billing webhooks on a shared Stripe account** — Brainy now ignores Stripe events that belong to another product billed through the same account (such as LearnStack). Stripe delivers every event to every endpoint, signed with that endpoint's own secret, so a valid signature alone never proved an event was Brainy's.
+  - Checkout completions identify the user only from Brainy's own `brainy_user_id` metadata, never from `client_reference_id` alone. Another product's checkout previously failed the `UserPlan` foreign key and returned 500, which would make Stripe retry and eventually disable the endpoint.
+  - Subscription events are ignored unless they carry Brainy metadata or a configured Brainy price, so another product's subscription on the same customer can no longer downgrade a Brainy user to Starter.
+  - Invoice events must belong to a Brainy subscription (metadata snapshot, stored subscription id, or a Brainy price line), so another product's paid or failed invoice can no longer grant Pro or start a grace period.
+
+---
+
 ## [7.1.3] - 2026-09-16
 
 ### Fixed

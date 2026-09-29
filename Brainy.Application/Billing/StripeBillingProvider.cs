@@ -32,6 +32,14 @@ namespace Brainy.Application.Billing;
 /// price that exists in Stripe but is not configured here resolves to no paid tier rather
 /// than silently granting Pro.
 /// </para>
+/// <para>
+/// The Stripe account is shared with other products (LearnStack), and Stripe delivers every
+/// event on an account to every webhook endpoint, each signed with that endpoint's own secret.
+/// A valid signature therefore does not mean an event is Brainy's. Every event is ignored
+/// unless it carries Brainy's own metadata key, bills a configured Brainy price, or names the
+/// subscription Brainy stored; <c>client_reference_id</c> is a generic field every product sets,
+/// so it never identifies a Brainy user on its own.
+/// </para>
 /// </remarks>
 internal sealed class StripeBillingProvider : IBillingProvider
 {
@@ -210,10 +218,13 @@ internal sealed class StripeBillingProvider : IBillingProvider
         if (stripeEvent.Data.Object is not Session session || session.Mode != "subscription")
             return null;
 
-        var userId = session.ClientReferenceId ?? GetMetadataUserId(session.Metadata);
-        if (string.IsNullOrWhiteSpace(userId))
+        // Metadata, not client_reference_id: another product's checkout sets its own user id in
+        // client_reference_id, and treating that as a Brainy user id would fail the UserPlan
+        // foreign key and make Stripe retry the delivery until it disables the endpoint.
+        var userId = GetMetadataUserId(session.Metadata);
+        if (userId is null)
         {
-            _logger.LogWarning("Stripe checkout session {SessionId} completed without a Brainy user id; ignoring.", session.Id);
+            _logger.LogInformation("Stripe checkout session {SessionId} carries no Brainy user id; ignoring it as another product's.", session.Id);
             return null;
         }
 
@@ -234,7 +245,17 @@ internal sealed class StripeBillingProvider : IBillingProvider
         if (stripeEvent.Data.Object is not Subscription subscription)
             return null;
 
-        var userId = GetMetadataUserId(subscription.Metadata)
+        var metadataUserId = GetMetadataUserId(subscription.Metadata);
+        if (metadataUserId is null && !GetPriceIds(subscription).Any(IsConfiguredPrice))
+        {
+            // Neither Brainy's metadata nor a Brainy price: another product's subscription, even
+            // when its customer id happens to match a Brainy customer. Mapping it would downgrade
+            // (unknown price → Starter) or relink a paying Brainy user.
+            _logger.LogInformation("Stripe subscription {SubscriptionId} is not a Brainy subscription; ignoring.", subscription.Id);
+            return null;
+        }
+
+        var userId = metadataUserId
             ?? await ResolveUserIdFromCustomerIdAsync(subscription.CustomerId, cancellationToken).ConfigureAwait(false);
 
         if (string.IsNullOrWhiteSpace(userId))
@@ -287,7 +308,7 @@ internal sealed class StripeBillingProvider : IBillingProvider
         if (stripeEvent.Data.Object is not Invoice invoice)
             return null;
 
-        var userId = await ResolveUserIdFromCustomerIdAsync(invoice.CustomerId, cancellationToken).ConfigureAwait(false);
+        var userId = await ResolveInvoiceUserIdAsync(invoice, cancellationToken).ConfigureAwait(false);
         if (userId is null)
             return null;
 
@@ -308,7 +329,7 @@ internal sealed class StripeBillingProvider : IBillingProvider
         if (stripeEvent.Data.Object is not Invoice invoice)
             return null;
 
-        var userId = await ResolveUserIdFromCustomerIdAsync(invoice.CustomerId, cancellationToken).ConfigureAwait(false);
+        var userId = await ResolveInvoiceUserIdAsync(invoice, cancellationToken).ConfigureAwait(false);
         if (userId is null)
             return null;
 
@@ -321,14 +342,60 @@ internal sealed class StripeBillingProvider : IBillingProvider
             ClearsGracePeriod: true);
     }
 
-    private PlanTier ResolveTier(Subscription subscription)
+    /// <summary>
+    /// Resolves the Brainy user an invoice belongs to, or null when it is another product's.
+    /// Invoices carry no user metadata of their own, so ownership comes from the subscription
+    /// they bill: its metadata snapshot, the subscription id Brainy stored, or a Brainy price on
+    /// one of the lines. The customer id alone is never enough, because it says nothing about
+    /// which product's subscription the invoice is for.
+    /// </summary>
+    private async Task<string?> ResolveInvoiceUserIdAsync(Invoice invoice, CancellationToken cancellationToken)
     {
-        var priceIds = subscription.Items?.Data?
+        var subscriptionDetails = invoice.Parent?.SubscriptionDetails;
+
+        var metadataUserId = GetMetadataUserId(subscriptionDetails?.Metadata);
+        if (metadataUserId is not null)
+            return metadataUserId;
+
+        var subscriptionId = subscriptionDetails?.SubscriptionId;
+        if (!string.IsNullOrWhiteSpace(subscriptionId))
+        {
+            var storedUserId = await _context.UserPlans.AsNoTracking()
+                .Where(plan => plan.BillingProviderSubscriptionId == subscriptionId)
+                .Select(plan => plan.UserId)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (storedUserId is not null)
+                return storedUserId;
+        }
+
+        var billsBrainyPrice = invoice.Lines?.Data?
+            .Any(line => IsConfiguredPrice(line.Pricing?.PriceDetails?.PriceId)) == true;
+        if (!billsBrainyPrice)
+        {
+            _logger.LogInformation("Stripe invoice {InvoiceId} is not for a Brainy subscription; ignoring.", invoice.Id);
+            return null;
+        }
+
+        return await ResolveUserIdFromCustomerIdAsync(invoice.CustomerId, cancellationToken).ConfigureAwait(false);
+    }
+
+    private bool IsConfiguredPrice(string? priceId) =>
+        !string.IsNullOrWhiteSpace(priceId)
+        && (priceId == _options.ProMonthlyPriceId || priceId == _options.ProYearlyPriceId);
+
+    private static List<string> GetPriceIds(Subscription subscription) =>
+        subscription.Items?.Data?
             .Select(item => item.Price?.Id)
             .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
             .ToList() ?? [];
 
-        if (priceIds.Any(id => id == _options.ProMonthlyPriceId || id == _options.ProYearlyPriceId))
+    private PlanTier ResolveTier(Subscription subscription)
+    {
+        var priceIds = GetPriceIds(subscription);
+
+        if (priceIds.Any(IsConfiguredPrice))
             return PlanTier.Pro;
 
         _logger.LogWarning(

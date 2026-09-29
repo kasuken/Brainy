@@ -75,6 +75,25 @@ public sealed class BillingWebhookSqlIntegrationTests
         (await fixture.Db.UserPlans.SingleAsync(p => p.UserId == UserId)).Tier.Should().Be(PlanTier.Starter);
     }
 
+    [Fact]
+    public async Task AnotherProductsCheckoutWebhook_IsAcknowledgedAndWritesNothing()
+    {
+        // Stripe sends every event on a shared account to every endpoint, signed with this
+        // endpoint's own secret. Another product's checkout names a user id that does not exist
+        // here; before this was guarded it failed the UserPlan foreign key, returned 500, and
+        // Stripe would have retried until it disabled Brainy's endpoint.
+        await using var fixture = await Fixture.CreateAsync();
+        var payload = fixture.OtherProductCheckoutCompletedPayload("evt_sql_other_product_1");
+        var signature = EventUtility.GenerateSignatureHeader(payload, WebhookSecret);
+
+        var result = await fixture.Processor.ProcessAsync(payload, signature);
+
+        result.Accepted.Should().BeTrue();
+        result.Reason.Should().Be("ignored_event_type");
+        (await fixture.Db.UserPlans.CountAsync()).Should().Be(0);
+        (await fixture.Db.ProcessedWebhookEvents.CountAsync()).Should().Be(0);
+    }
+
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly string _masterConnectionString;
@@ -106,8 +125,30 @@ public sealed class BillingWebhookSqlIntegrationTests
                   "object": "checkout.session",
                   "mode": "subscription",
                   "client_reference_id": "{{UserId}}",
+                  "metadata": { "brainy_user_id": "{{UserId}}" },
                   "customer": "cus_sql_1",
                   "subscription": "sub_sql_1"
+                }
+              }
+            }
+            """;
+
+        public string OtherProductCheckoutCompletedPayload(string eventId) =>
+            $$"""
+            {
+              "id": "{{eventId}}",
+              "object": "event",
+              "api_version": "{{ApiVersion}}",
+              "type": "checkout.session.completed",
+              "data": {
+                "object": {
+                  "id": "cs_sql_other_1",
+                  "object": "checkout.session",
+                  "mode": "subscription",
+                  "client_reference_id": "learnstack-user-1",
+                  "metadata": { "learnstack_user_id": "learnstack-user-1" },
+                  "customer": "cus_sql_other_1",
+                  "subscription": "sub_sql_other_1"
                 }
               }
             }

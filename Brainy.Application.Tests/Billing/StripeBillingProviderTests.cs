@@ -22,6 +22,14 @@ public sealed class StripeBillingProviderTests
     private const string SubscriptionId = "sub_test_123";
     private const string MonthlyPriceId = "price_monthly_test";
     private const string YearlyPriceId = "price_yearly_test";
+    private const string BrainyMetadataKey = "brainy_user_id";
+
+    // Another product (LearnStack) billed through the same Stripe account: its events reach
+    // Brainy's endpoint too, validly signed with Brainy's own endpoint secret.
+    private const string OtherProductMetadataKey = "learnstack_user_id";
+    private const string OtherProductUserId = "learnstack-user-1";
+    private const string OtherProductPriceId = "price_learnstack_pro";
+    private const string OtherProductSubscriptionId = "sub_learnstack_1";
 
     private static readonly string ApiVersion = (string)typeof(StripeConfiguration).Assembly
         .GetType("Stripe.ApiVersion")!
@@ -230,7 +238,8 @@ public sealed class StripeBillingProviderTests
         await db.SaveChangesAsync();
         var provider = CreateProvider(db);
 
-        var parsed = await provider.ParseWebhookEventAsync(InvoicePayload("evt_invoice_failed_1", "invoice.payment_failed", nextPaymentAttempt: 1751328000));
+        var parsed = await provider.ParseWebhookEventAsync(
+            InvoicePayload("evt_invoice_failed_1", "invoice.payment_failed", nextPaymentAttempt: 1751328000, linePriceId: YearlyPriceId));
 
         parsed.Should().NotBeNull();
         parsed!.NewTier.Should().BeNull();
@@ -251,12 +260,112 @@ public sealed class StripeBillingProviderTests
         await db.SaveChangesAsync();
         var provider = CreateProvider(db);
 
-        var parsed = await provider.ParseWebhookEventAsync(InvoicePayload("evt_invoice_paid_1", "invoice.paid", periodEnd: 1748736000));
+        var parsed = await provider.ParseWebhookEventAsync(
+            InvoicePayload("evt_invoice_paid_1", "invoice.paid", periodEnd: 1748736000, linePriceId: YearlyPriceId));
 
         parsed.Should().NotBeNull();
         parsed!.NewTier.Should().Be(PlanTier.Pro);
         parsed.PeriodEndsAtUtc.Should().Be(new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc));
         parsed.ClearsGracePeriod.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ParseWebhookEventAsync_InvoiceWithBrainySubscriptionMetadata_ResolvesUserFromTheMetadata()
+    {
+        using var db = CreateDb(nameof(ParseWebhookEventAsync_InvoiceWithBrainySubscriptionMetadata_ResolvesUserFromTheMetadata));
+        var provider = CreateProvider(db);
+
+        var parsed = await provider.ParseWebhookEventAsync(
+            InvoicePayload("evt_invoice_metadata", "invoice.paid", periodEnd: 1748736000, subscriptionMetadataUserId: UserId));
+
+        parsed.Should().NotBeNull();
+        parsed!.TargetUserId.Should().Be(UserId);
+    }
+
+    [Fact]
+    public async Task ParseWebhookEventAsync_InvoiceForTheStoredSubscription_ResolvesUserWithoutAConfiguredPrice()
+    {
+        using var db = CreateDb(nameof(ParseWebhookEventAsync_InvoiceForTheStoredSubscription_ResolvesUserWithoutAConfiguredPrice));
+        db.UserPlans.Add(new UserPlan
+        {
+            UserId = UserId,
+            Tier = PlanTier.Pro,
+            BillingProviderCustomerId = CustomerId,
+            BillingProviderSubscriptionId = SubscriptionId,
+        });
+        await db.SaveChangesAsync();
+        var provider = CreateProvider(db);
+
+        var parsed = await provider.ParseWebhookEventAsync(
+            InvoicePayload("evt_invoice_stored_sub", "invoice.payment_failed", nextPaymentAttempt: 1751328000, subscriptionId: SubscriptionId));
+
+        parsed.Should().NotBeNull();
+        parsed!.TargetUserId.Should().Be(UserId);
+    }
+
+    [Fact]
+    public async Task ParseWebhookEventAsync_CheckoutFromAnotherProduct_IsIgnored()
+    {
+        // client_reference_id is set by every product's checkout, so it alone must never be
+        // read as a Brainy user id (on SQL Server it would also fail the UserPlan foreign key).
+        using var db = CreateDb(nameof(ParseWebhookEventAsync_CheckoutFromAnotherProduct_IsIgnored));
+        var provider = CreateProvider(db);
+
+        var parsed = await provider.ParseWebhookEventAsync(
+            CheckoutCompletedPayload("evt_other_checkout", OtherProductUserId, metadataKey: OtherProductMetadataKey));
+
+        parsed.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("customer.subscription.created")]
+    [InlineData("customer.subscription.updated")]
+    [InlineData("customer.subscription.deleted")]
+    public async Task ParseWebhookEventAsync_AnotherProductsSubscriptionOnABrainyCustomer_IsIgnored(string eventType)
+    {
+        // Same Stripe customer as a paying Brainy user. Before this was guarded, an unknown
+        // price mapped to Starter and a deletion downgraded the Brainy user.
+        using var db = CreateDb(nameof(ParseWebhookEventAsync_AnotherProductsSubscriptionOnABrainyCustomer_IsIgnored) + eventType);
+        db.UserPlans.Add(new UserPlan { UserId = UserId, Tier = PlanTier.Pro, BillingProviderCustomerId = CustomerId, BillingProviderSubscriptionId = SubscriptionId });
+        await db.SaveChangesAsync();
+        var provider = CreateProvider(db);
+
+        var parsed = await provider.ParseWebhookEventAsync(SubscriptionPayload(
+            "evt_other_subscription",
+            eventType,
+            "active",
+            OtherProductPriceId,
+            1748736000,
+            metadataUserId: OtherProductUserId,
+            metadataKey: OtherProductMetadataKey,
+            subscriptionId: OtherProductSubscriptionId));
+
+        parsed.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("invoice.paid")]
+    [InlineData("invoice.payment_failed")]
+    public async Task ParseWebhookEventAsync_AnotherProductsInvoiceOnABrainyCustomer_IsIgnored(string eventType)
+    {
+        // Before this was guarded, a paid invoice for another product granted Brainy Pro and a
+        // failed one put the Brainy user into a grace period.
+        using var db = CreateDb(nameof(ParseWebhookEventAsync_AnotherProductsInvoiceOnABrainyCustomer_IsIgnored) + eventType);
+        db.UserPlans.Add(new UserPlan { UserId = UserId, Tier = PlanTier.Starter, BillingProviderCustomerId = CustomerId, BillingProviderSubscriptionId = SubscriptionId });
+        await db.SaveChangesAsync();
+        var provider = CreateProvider(db);
+
+        var parsed = await provider.ParseWebhookEventAsync(InvoicePayload(
+            "evt_other_invoice",
+            eventType,
+            nextPaymentAttempt: 1751328000,
+            periodEnd: 1748736000,
+            subscriptionId: OtherProductSubscriptionId,
+            subscriptionMetadataUserId: OtherProductUserId,
+            metadataKey: OtherProductMetadataKey,
+            linePriceId: OtherProductPriceId));
+
+        parsed.Should().BeNull();
     }
 
     [Fact]
@@ -375,7 +484,11 @@ public sealed class StripeBillingProviderTests
         }
         """;
 
-    private static string CheckoutCompletedPayload(string eventId, string? clientReferenceId, string mode = "subscription") =>
+    private static string CheckoutCompletedPayload(
+        string eventId,
+        string? clientReferenceId,
+        string mode = "subscription",
+        string metadataKey = BrainyMetadataKey) =>
         $$"""
         {
           "id": "{{eventId}}",
@@ -388,6 +501,7 @@ public sealed class StripeBillingProviderTests
               "object": "checkout.session",
               "mode": "{{mode}}",
               "client_reference_id": {{(clientReferenceId is null ? "null" : $"\"{clientReferenceId}\"")}},
+              "metadata": {{MetadataJson(metadataKey, clientReferenceId)}},
               "customer": "{{CustomerId}}",
               "subscription": "{{SubscriptionId}}"
             }
@@ -401,7 +515,9 @@ public sealed class StripeBillingProviderTests
         string status,
         string priceId,
         long currentPeriodEnd,
-        string? metadataUserId = UserId) =>
+        string? metadataUserId = UserId,
+        string metadataKey = BrainyMetadataKey,
+        string subscriptionId = SubscriptionId) =>
         $$"""
         {
           "id": "{{eventId}}",
@@ -410,11 +526,11 @@ public sealed class StripeBillingProviderTests
           "type": "{{eventType}}",
           "data": {
             "object": {
-              "id": "{{SubscriptionId}}",
+              "id": "{{subscriptionId}}",
               "object": "subscription",
               "customer": "{{CustomerId}}",
               "status": "{{status}}",
-              "metadata": {{(metadataUserId is null ? "{}" : $$"""{"brainy_user_id": "{{metadataUserId}}"}""")}},
+              "metadata": {{MetadataJson(metadataKey, metadataUserId)}},
               "items": {
                 "object": "list",
                 "data": [
@@ -431,7 +547,20 @@ public sealed class StripeBillingProviderTests
         }
         """;
 
-    private static string InvoicePayload(string eventId, string eventType, long? nextPaymentAttempt = null, long? periodEnd = null) =>
+    /// <summary>
+    /// An invoice event in the shape Stripe's current API sends: the billed subscription (and a
+    /// snapshot of its metadata) under <c>parent.subscription_details</c>, and each line's
+    /// price under <c>pricing.price_details</c>.
+    /// </summary>
+    private static string InvoicePayload(
+        string eventId,
+        string eventType,
+        long? nextPaymentAttempt = null,
+        long? periodEnd = null,
+        string subscriptionId = "sub_unrecorded",
+        string? subscriptionMetadataUserId = null,
+        string metadataKey = BrainyMetadataKey,
+        string linePriceId = "price_unconfigured") =>
         $$"""
         {
           "id": "{{eventId}}",
@@ -442,9 +571,32 @@ public sealed class StripeBillingProviderTests
             "object": {
               "id": "in_test_1",
               "object": "invoice",
-              "customer": "{{CustomerId}}"{{(nextPaymentAttempt.HasValue ? $",\n              \"next_payment_attempt\": {nextPaymentAttempt.Value}" : string.Empty)}}{{(periodEnd.HasValue ? $",\n              \"period_end\": {periodEnd.Value}" : string.Empty)}}
+              "customer": "{{CustomerId}}",
+              "parent": {
+                "type": "subscription_details",
+                "subscription_details": {
+                  "subscription": "{{subscriptionId}}",
+                  "metadata": {{MetadataJson(metadataKey, subscriptionMetadataUserId)}}
+                }
+              },
+              "lines": {
+                "object": "list",
+                "data": [
+                  {
+                    "id": "il_test_1",
+                    "object": "line_item",
+                    "pricing": {
+                      "type": "price_details",
+                      "price_details": { "price": "{{linePriceId}}", "product": "prod_test_1" }
+                    }
+                  }
+                ]
+              }{{(nextPaymentAttempt.HasValue ? $",\n              \"next_payment_attempt\": {nextPaymentAttempt.Value}" : string.Empty)}}{{(periodEnd.HasValue ? $",\n              \"period_end\": {periodEnd.Value}" : string.Empty)}}
             }
           }
         }
         """;
+
+    private static string MetadataJson(string key, string? userId) =>
+        userId is null ? "{}" : $$"""{"{{key}}": "{{userId}}"}""";
 }
