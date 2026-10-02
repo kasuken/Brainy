@@ -7,8 +7,8 @@ namespace Brainy.Web.Tests.Markup;
 public sealed class TodayTaskStatusErrorMarkupTests
 {
     [Theory]
-    [InlineData(@"Components\Pages\Home.razor")]
-    [InlineData(@"Components\Pages\Today\CurrentTaskWidget.razor")]
+    [InlineData("Components/Pages/Home.razor")]
+    [InlineData("Components/Pages/Today/CurrentTaskWidget.razor")]
     public void SetInProgressHandler_ShowsExpectedValidationReason(string relativePath)
     {
         var markup = ReadWebFile(relativePath);

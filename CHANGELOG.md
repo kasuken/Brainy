@@ -8,6 +8,7 @@
   - Checkout completions identify the user only from Brainy's own `brainy_user_id` metadata, never from `client_reference_id` alone. Another product's checkout previously failed the `UserPlan` foreign key and returned 500, which would make Stripe retry and eventually disable the endpoint.
   - Subscription events are ignored unless they carry Brainy metadata or a configured Brainy price, so another product's subscription on the same customer can no longer downgrade a Brainy user to Starter.
   - Invoice events must belong to a Brainy subscription (metadata snapshot, stored subscription id, or a Brainy price line), so another product's paid or failed invoice can no longer grant Pro or start a grace period.
+- **CI on Linux** — the Today task-status markup test used Windows path separators and failed on the Linux build agent.
 
 ---
 
