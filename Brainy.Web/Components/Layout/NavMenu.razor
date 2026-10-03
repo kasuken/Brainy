@@ -1,5 +1,6 @@
 @using Brainy.Application.Interfaces.Services
 @inject IUserDashboardPreferenceService PreferenceService
+@inject IConfiguration Configuration
 
 <MudNavMenu>
     <MudText Typo="Typo.subtitle2" Class="px-4 py-2 mud-text-secondary">Main</MudText>
@@ -48,11 +49,17 @@
             </MudButton>
         </div>
     }
+
+    <MudDivider Class="my-2" />
+    <MudNavLink Href="@SourceCodeUrl" Target="_blank" Icon="@Icons.Custom.Brands.GitHub">Source code</MudNavLink>
 </MudNavMenu>
 
 @code {
     private bool _starterModeEnabled = true;
     private bool _showFullNav;
+
+    // AGPL-3.0 section 13: users of a network deployment must be offered the corresponding source.
+    private string SourceCodeUrl => Configuration["SourceCodeUrl"] is { Length: > 0 } url ? url : "https://github.com/kasuken/Brainy";
 
     protected override async Task OnInitializedAsync()
     {

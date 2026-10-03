@@ -12,8 +12,8 @@ namespace Brainy.Web.Localization;
 /// active non-default UI culture's own <c>.resx</c> is missing that key — is visibly marked
 /// instead of rendering identically to a real translation. Production behavior is always the
 /// plain fallback value: this class never throws and never changes what value is returned
-/// outside Development. See docs/roadmap/release-7/17-localization.md: "Missing translations
-/// fall back to English visibly in development, silently in production."
+/// outside Development: missing translations fall back to English visibly in development,
+/// silently in production.
 /// </summary>
 internal sealed class FallbackVisibleStringLocalizer(IStringLocalizer inner, bool isDevelopment) : IStringLocalizer
 {

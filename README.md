@@ -7,8 +7,9 @@
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square&logo=dotnet&logoColor=white)
 ![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-512BD4?style=flat-square&logo=blazor&logoColor=white)
 ![SQL Server](https://img.shields.io/badge/SQL%20Server-EF%20Core-CC2927?style=flat-square&logo=microsoftsqlserver&logoColor=white)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square)](LICENSE)
 
-[Overview](#overview) | [Features](#features) | [Screenshots](#screenshots) | [Getting started](#getting-started) | [Development](#development)
+[Overview](#overview) | [Features](#features) | [Screenshots](#screenshots) | [Getting started](#getting-started) | [Development](#development) | [Contributing](#contributing)
 
 </div>
 
@@ -16,12 +17,24 @@
 
 ## Overview
 
-Brainy is a SaaS second-brain application built with .NET 10, Blazor, MudBlazor, Entity Framework Core, and SQL Server. It is inspired by Tiago Forte's PARA method and CODE workflow, with an emphasis on actionability rather than passive storage.
+Brainy is an open source second-brain application built with .NET 10, Blazor, MudBlazor, Entity Framework Core, and SQL Server. It is inspired by Tiago Forte's PARA method and CODE workflow, with an emphasis on actionability rather than passive storage.
 
 Capture notes and ideas, organize them into projects, areas, resources, and archives, then retrieve, summarize, and reuse that knowledge in real work.
 
 > [!NOTE]
 > AI assistant integration is implemented behind an application service boundary, but the default configuration disables AI features. Set an AI provider explicitly before using AI-assisted workflows.
+
+## Hosted or self-hosted
+
+Brainy is available as a hosted service at **[brainy-me.com](https://www.brainy-me.com)**, and it's also fully open source: you can run your own instance from this repository.
+
+To self-host, you need a SQL Server database (see [Getting started](#getting-started)). Paid plans on the hosted service use Stripe, which is selected by `Billing:Provider`:
+
+- `Development` configuration uses `Billing:Provider = None`: no payment provider is called and the entitlement system works without a Stripe account.
+- The shipped `appsettings.json` also uses `Billing:Provider = None`, so a self-hosted production instance runs without any payment provider. The hosted service sets `Billing__Provider=Stripe` as an App Service setting during deployment.
+- To run your own Stripe billing, set `Billing__Provider=Stripe` plus the Stripe settings under `Billing` (the app refuses to start until they are all present).
+
+AI features are disabled by default as well (see the note above).
 
 ## Features
 
@@ -222,3 +235,19 @@ The release workflow builds, audits, tests, verifies migrations, publishes `Brai
 - [Blazor documentation](https://learn.microsoft.com/aspnet/core/blazor/)
 - [MudBlazor documentation](https://mudblazor.com/)
 - [Entity Framework Core documentation](https://learn.microsoft.com/ef/core/)
+
+## Contributing
+
+Contributions are welcome! Please read the [contributing guidelines](https://github.com/kasuken/.github/blob/main/CONTRIBUTING.md) and the [Code of Conduct](https://github.com/kasuken/.github/blob/main/CODE_OF_CONDUCT.md) before opening a pull request. All contributors must sign the [Contributor License Agreement](https://github.com/kasuken/.github/blob/main/CLA.md); a bot will ask you to on your first pull request.
+
+## Security
+
+Please **do not** report security vulnerabilities in public issues. Use [private vulnerability reporting](https://github.com/kasuken/Brainy/security/advisories/new) instead. See the [Security Policy](https://github.com/kasuken/.github/blob/main/SECURITY.md) for details.
+
+## License
+
+Brainy is licensed under the [GNU Affero General Public License v3.0 only](LICENSE) (`AGPL-3.0-only`). If you run a modified version of Brainy as a network service, the AGPL requires you to make your modified source code available to its users. Set `SourceCodeUrl` in configuration to point the in-app "Source code" link at your repository.
+
+Third-party components and their licenses are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+"Brainy" and the Brainy logo are trademarks of Emanuele Bartolesi and are not licensed under the AGPL. If you publish a modified public instance, please use a different name and logo.
