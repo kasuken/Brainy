@@ -44,6 +44,10 @@ stage-and-swap deployment with immediate slot rollback.
   still password-based. Moving SQL to managed-identity authentication requires a
   database user/role grant and a validated connection-string change.
 - Keep only `DefaultConnection`; do not reintroduce duplicate connection strings.
+- `appsettings.json` ships `Billing:Provider=None` for self-hosted instances. The release
+  workflow sets the `Billing__Provider=Stripe` App Service setting before every deploy; the
+  OIDC identity needs permission to write the web app's configuration. If that step fails,
+  the deploy stops and production keeps running the previous version.
 - Keep `Identity__AllowRegistration=false` for private deployments. Enabling public
   registration requires an explicit abuse, email-verification, and account-recovery decision.
 - Brainy requires 10-character passwords, locks sign-in after five failures for

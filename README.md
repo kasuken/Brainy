@@ -31,7 +31,8 @@ Brainy is available as a hosted service at **[brainy-me.com](https://www.brainy-
 To self-host, you need a SQL Server database (see [Getting started](#getting-started)). Paid plans on the hosted service use Stripe, which is selected by `Billing:Provider`:
 
 - `Development` configuration uses `Billing:Provider = None`: no payment provider is called and the entitlement system works without a Stripe account.
-- The shipped `appsettings.json` is the hosted service's production configuration and uses `Billing:Provider = Stripe`. With that value the app refuses to start until all Stripe settings are present. **For a self-hosted production instance, set `Billing__Provider=None`** (environment variable) unless you want to run your own Stripe billing.
+- The shipped `appsettings.json` also uses `Billing:Provider = None`, so a self-hosted production instance runs without any payment provider. The hosted service sets `Billing__Provider=Stripe` as an App Service setting during deployment.
+- To run your own Stripe billing, set `Billing__Provider=Stripe` plus the Stripe settings under `Billing` (the app refuses to start until they are all present).
 
 AI features are disabled by default as well (see the note above).
 

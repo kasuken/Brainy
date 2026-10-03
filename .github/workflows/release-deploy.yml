@@ -92,6 +92,15 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # appsettings.json ships Billing:Provider=None for self-hosted instances; the hosted
+      # service selects Stripe here. Runs before the deploy so a failure leaves production as is.
+      - name: Configure hosted billing provider
+        run: |
+          resource_group=$(az webapp list --query "[?name=='${AZURE_WEBAPP_NAME}'].resourceGroup | [0]" --output tsv)
+          test -n "$resource_group" || { echo "Web app ${AZURE_WEBAPP_NAME} not found"; exit 1; }
+          az webapp config appsettings set --name "$AZURE_WEBAPP_NAME" --resource-group "$resource_group" \
+            --settings Billing__Provider=Stripe --output none
+
       - name: Deploy to App Service
         uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383 # v3.0.8
         with:
