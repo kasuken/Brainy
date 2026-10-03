@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/kasuken/Brainy/security/advisories/new
+    about: Please report security issues privately, never in public issues.
+  - name: 💬 Hosted service support (brainy-me.com)
+    url: https://www.brainy-me.com
+    about: Account, billing or subscription questions about the hosted service.

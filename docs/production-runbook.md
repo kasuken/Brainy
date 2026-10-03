@@ -104,7 +104,7 @@ for the flows that carry cost or risk and fail silently/asynchronously by nature
   Markdown/Obsidian export background job outcome and duration.
 
 AI request count/latency/failure-rate is deliberately **not** instrumented yet — AI
-is out of scope for this release (see `docs/roadmap/release-7/16-opentelemetry.md`).
+is out of scope for this release.
 
 **Privacy is enforced, not just requested.** No note or output content, titles,
 search terms, or email addresses are ever placed into a span attribute, log

@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Open source release.** Brainy is now licensed under AGPL-3.0-only, with a Contributor License Agreement, issue forms, CODEOWNERS, `.editorconfig`, `.gitattributes` and third-party notices. Shared community files (Code of Conduct, contributing guide, security policy, support) come from [kasuken/.github](https://github.com/kasuken/.github).
+- **Source code link.** The navigation menu links to the application's source code, as AGPL-3.0 section 13 requires. Self-hosters can point it at their own fork with the `SourceCodeUrl` setting.
+
+### Removed
+
+- Internal release-planning documents under `docs/roadmap/`.
+
+---
+
 ## [8.1.1] - 2026-09-29
 
 ### Fixed
