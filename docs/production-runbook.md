@@ -2,27 +2,38 @@
 
 ## Release gate
 
-The production site is served at `https://www.brainy-me.com`. The release workflow
-writes the public origin and related SEO settings to App Service application settings
-using the double-underscore environment-variable form consumed by .NET configuration.
+The production site is served at `https://www.brainy-me.com`. Merging to `main` never
+deploys: production changes only through the [Release workflow](../.github/workflows/release.yml),
+which runs the shared kasuken pipeline described in
+[RELEASING.md](https://github.com/kasuken/.github/blob/main/RELEASING.md). The workflow
+never writes App Service settings; hosted-only configuration (origin, SEO, billing) and
+secrets are App Service application settings in the double-underscore form consumed by
+.NET configuration.
 
-Before publishing a GitHub release:
+To release:
 
 1. Merge through protected `main` with the `build-and-test` check passing.
-2. Confirm NuGet audit, application tests, web integration tests, SQL Server
-   migration tests, and the pending-model check are green.
-3. Review the generated EF migration. Brainy currently applies pending migrations
-   at application startup because the production SQL endpoint is private and the
-   GitHub-hosted runner cannot connect to it directly.
-4. Publish the release and approve the protected `production` environment.
+2. Review the generated EF migration. Brainy applies pending migrations at application
+   startup because the production SQL endpoint is private and the GitHub-hosted runner
+   cannot connect to it directly.
+3. Optionally move the `## [Unreleased]` entries in `CHANGELOG.md` under
+   `## [X.Y.Z] - date`; that section becomes the release notes.
+4. Run `gh workflow run release.yml -R kasuken/Brainy -f bump=patch` (or `minor` /
+   `major`). It waits for the full CI run (NuGet audit, unit, SQL Server integration and
+   e2e tests, pending-model check) to pass on the commit, builds once, deploys through the
+   `production` environment (deployments only from `main` or `v*` tags), checks
+   `/health/ready`, `/Account/Login` and the HTTP to HTTPS redirect, and only then tags
+   and publishes the GitHub release.
 5. Run `scripts/Test-Production.ps1` after deployment.
 
 ## Rollback
 
-The current B1 App Service plan does not provide deployment slots. Keep the last
-known-good workflow artifact/release available, redeploy it if the readiness probe
-fails, and restore the database only when a schema/data rollback is actually
-required. Never reverse a migration by deleting production data without a tested
+The current B1 App Service plan does not provide deployment slots. To roll back,
+redeploy the last known-good tag with
+`gh workflow run release.yml -R kasuken/Brainy -f redeploy=vX.Y.Z`: it rebuilds that tag
+and deploys it without creating a new release. Startup migrations are not reversed, so
+roll back only to a version that works with the current schema, and restore the database
+only when a schema/data rollback is actually required. Never reverse a migration by deleting production data without a tested
 restore point.
 
 Upgrading to a Standard or Premium plan is required before Brainy can use a
@@ -39,15 +50,16 @@ stage-and-swap deployment with immediate slot rollback.
 
 ## Identity and secrets
 
-- Azure deployment uses GitHub OIDC.
+- Azure deployment uses GitHub OIDC with the `id-brainy-github-deploy` user-assigned
+  identity, federated to the repository's `production` environment, with Website
+  Contributor on the web app only. Basic-auth (FTP/SCM) publishing credentials stay disabled.
 - A system-assigned App Service identity exists, but the application connection is
   still password-based. Moving SQL to managed-identity authentication requires a
   database user/role grant and a validated connection-string change.
 - Keep only `DefaultConnection`; do not reintroduce duplicate connection strings.
-- `appsettings.json` ships `Billing:Provider=None` for self-hosted instances. The release
-  workflow sets the `Billing__Provider=Stripe` App Service setting before every deploy; the
-  OIDC identity needs permission to write the web app's configuration. If that step fails,
-  the deploy stops and production keeps running the previous version.
+- `appsettings.json` ships `Billing:Provider=None` for self-hosted instances. The hosted
+  service sets `Billing__Provider=Stripe` as a permanent App Service application setting;
+  removing it turns billing off in production on the next restart.
 - Keep `Identity__AllowRegistration=false` for private deployments. Enabling public
   registration requires an explicit abuse, email-verification, and account-recovery decision.
 - Brainy requires 10-character passwords, locks sign-in after five failures for
@@ -61,8 +73,8 @@ and are **disabled by default** — a self-hosted deployment sees no added behav
 dependencies, or overhead unless it opts in.
 
 To enable, set the following (as App Service application settings, using the same
-double-underscore environment-variable form the release workflow already uses for
-`Seo__SiteOrigin`):
+double-underscore environment-variable form as the existing `Seo__SiteOrigin`
+setting):
 
 - `Telemetry__Enabled=true`
 - `Telemetry__OtlpEndpoint=<collector URL>` — required whenever `Enabled` is true;
@@ -139,7 +151,7 @@ OpenTelemetry Collector) rather than `localhost`.
 4. Confirm SQL private-endpoint and DNS status before enabling public access as a
    diagnostic shortcut.
 5. If a deployment introduced the problem, redeploy the last known-good release
-   before attempting broad data repairs.
+   (`-f redeploy=vX.Y.Z`, see Rollback) before attempting broad data repairs.
 6. When `Telemetry:Enabled` is on, use the trace spanning the web request, the
    Blazor circuit event, and the database query (see Observability above) to
    localize which layer actually failed before guessing.
