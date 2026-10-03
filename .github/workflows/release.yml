@@ -1,0 +1,39 @@
+# Production releases. Run this workflow on main to cut the next version, or publish a
+# GitHub release. The steps live in kasuken/.github; see its RELEASING.md.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version part to increment
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      redeploy:
+        description: Existing tag to redeploy instead (rollback), e.g. v8.1.1
+        type: string
+        default: ''
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+  id-token: write
+
+jobs:
+  release:
+    uses: kasuken/.github/.github/workflows/release-azure-webapp.yml@main
+    with:
+      app-name: brainy-prod-002
+      web-project: Brainy.Web/Brainy.Web.csproj
+      base-url: https://www.brainy-me.com
+      smoke-paths: /Account/Login
+      bump: ${{ inputs.bump || 'patch' }}
+      redeploy: ${{ inputs.redeploy || '' }}
+    secrets: inherit
