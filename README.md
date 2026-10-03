@@ -31,7 +31,7 @@ Brainy is available as a hosted service at **[brainy-me.com](https://www.brainy-
 To self-host, you need a SQL Server database (see [Getting started](#getting-started)). Paid plans on the hosted service use Stripe, which is selected by `Billing:Provider`:
 
 - `Development` configuration uses `Billing:Provider = None`: no payment provider is called and the entitlement system works without a Stripe account.
-- The shipped `appsettings.json` also uses `Billing:Provider = None`, so a self-hosted production instance runs without any payment provider. The hosted service sets `Billing__Provider=Stripe` as an App Service setting during deployment.
+- The shipped `appsettings.json` also uses `Billing:Provider = None`, so a self-hosted production instance runs without any payment provider. The hosted service sets `Billing__Provider=Stripe` as an App Service application setting.
 - To run your own Stripe billing, set `Billing__Provider=Stripe` plus the Stripe settings under `Billing` (the app refuses to start until they are all present).
 
 AI features are disabled by default as well (see the note above).
@@ -223,7 +223,14 @@ Brainy uses ASP.NET Core Identity with cookie authentication. Principal entities
 
 ## Deployment
 
-The release workflow builds, audits, tests, verifies migrations, publishes `Brainy.Web`, and deploys it to Azure App Service when a GitHub release is published or the workflow is started manually. It uses GitHub Actions with Azure OIDC authentication and requires approval through the protected `production` environment.
+Merging to `main` only runs CI. The [Release workflow](.github/workflows/release.yml) ships to Azure App Service: it waits for CI to pass on the commit, builds once, deploys through the protected `production` environment with Azure OIDC, smoke tests `/health/ready`, and then tags and publishes the GitHub release.
+
+```bash
+gh workflow run release.yml -R kasuken/Brainy -f bump=minor      # patch | minor | major
+gh workflow run release.yml -R kasuken/Brainy -f redeploy=v8.1.1 # roll back
+```
+
+The steps are shared with the other kasuken SaaS apps; see [RELEASING.md](https://github.com/kasuken/.github/blob/main/RELEASING.md).
 
 `/health/live` and the backwards-compatible `/health` endpoint check the process only. `/health/ready` checks SQL connectivity and is used by deployment validation. See [`docs/production-runbook.md`](docs/production-runbook.md) for release, rollback, and recovery procedures.
 

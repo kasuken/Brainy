@@ -9,7 +9,8 @@
 
 ### Changed
 
-- **Billing is off by default.** The shipped `appsettings.json` now uses `Billing:Provider = None`, so self-hosted instances run without a payment provider. The release workflow sets `Billing__Provider=Stripe` on the hosted App Service before each deploy.
+- **Releases.** The release workflow is now the shared kasuken workflow: run **Release** on `main` with a version bump (or publish a GitHub release), and it waits for CI, builds once, deploys, smoke tests, and only then tags the release. `redeploy` rolls back to an earlier tag. It no longer changes App Service settings.
+- **Billing is off by default.** The shipped `appsettings.json` now uses `Billing:Provider = None`, so self-hosted instances run without a payment provider. The hosted service sets `Billing__Provider=Stripe` as an App Service application setting.
 
 ### Removed
 
