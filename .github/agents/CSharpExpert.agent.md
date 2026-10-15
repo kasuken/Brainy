@@ -1,6 +1,8 @@
 ---
 name: "C# Expert"
 description: An agent designed to assist with software development tasks for .NET projects.
+tools: [execute, web, todo]
+model: Claude Haiku 5.5 (copilot)
 # version: 2026-01-20a
 ---
 
