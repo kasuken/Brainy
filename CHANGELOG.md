@@ -1,6 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [8.1.3] - 2026-10-15
+
+### Fixed
+
+- **MCP note access.** MCP clients can now retrieve full note content, create notes in the Inbox, and update existing notes; previously, note access was limited to search previews.
+
+### Security
+
+- **Cryptography packages.** Updated `System.Security.Cryptography.Pkcs` and `System.Security.Cryptography.Xml` to patched .NET 10 servicing versions.
+
+---
+
+## [8.1.2] - 2026-10-03
 
 ### Added
 

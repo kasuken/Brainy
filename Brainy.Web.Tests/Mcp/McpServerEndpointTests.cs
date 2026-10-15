@@ -23,11 +23,10 @@ using Xunit;
 namespace Brainy.Web.Tests.Mcp;
 
 /// <summary>
-/// End-to-end coverage of the MCP endpoint (Phase 1, Step 3) through the real HTTP pipeline:
-/// authentication, authorization, and the <c>search</c> tool. The security gate: a valid MCP
-/// bearer token reaches the tool and sees only its owner's data, and no/invalid token is
-/// rejected before any tool runs. Complements <see cref="McpAuthenticationHandlerTests"/>,
-/// which covers token resolution at the handler boundary.
+/// End-to-end coverage of the MCP endpoint through the real HTTP pipeline: authentication,
+/// authorization, search, note access, and write tools. A valid MCP bearer token sees and changes
+/// only its owner's data; no or invalid tokens are rejected before any tool runs. Complements
+/// <see cref="McpAuthenticationHandlerTests"/>, which covers token resolution at the handler boundary.
 /// </summary>
 public sealed class McpServerEndpointTests
 {
@@ -140,7 +139,7 @@ public sealed class McpServerEndpointTests
 
         var tools = (await mcpClient.ListToolsAsync()).Select(t => t.Name).ToList();
 
-        new[] { "search", "list_projects", "create_project", "update_project",
+        new[] { "search", "get_note", "create_note", "update_note", "list_projects", "create_project", "update_project",
             "create_task", "complete_task", "get_week", "add_task_to_week" }
             .Should().BeSubsetOf(tools);
     }
@@ -204,6 +203,82 @@ public sealed class McpServerEndpointTests
             "a token must only ever surface its own owner's data");
     }
 
+    [Fact]
+    public async Task NoteTools_CreateGetAndUpdateExposeFullContentAndPersistChanges()
+    {
+        await using var factory = new McpFactory();
+        var token = await factory.SeedTokenAsync(McpFactory.UserA);
+        await using var mcpClient = await ConnectAsync(factory, token);
+        const string initialContent = "Full note content, not only a search preview.";
+
+        var created = await mcpClient.CallToolAsync(
+            "create_note",
+            new Dictionary<string, object?>
+            {
+                ["title"] = "MCP note",
+                ["content"] = initialContent
+            });
+
+        created.IsError.Should().NotBe(true, Serialize(created));
+        var persisted = await factory.FindNoteAsync(McpFactory.UserA, "MCP note");
+        persisted.Should().NotBeNull("create_note must persist the note for the token owner");
+        persisted!.Content.Should().Be(initialContent);
+        persisted.Status.Should().Be(NoteStatus.Inbox);
+
+        var read = await mcpClient.CallToolAsync(
+            "get_note",
+            new Dictionary<string, object?> { ["noteId"] = persisted.Id.ToString() });
+
+        read.IsError.Should().NotBe(true, Serialize(read));
+        Serialize(read).Should().Contain(initialContent,
+            "get_note must return the full content rather than only a search snippet");
+
+        const string updatedContent = "The complete note was edited through MCP.";
+        var updated = await mcpClient.CallToolAsync(
+            "update_note",
+            new Dictionary<string, object?>
+            {
+                ["noteId"] = persisted.Id.ToString(),
+                ["title"] = "Updated MCP note",
+                ["content"] = updatedContent
+            });
+
+        updated.IsError.Should().NotBe(true, Serialize(updated));
+        persisted = await factory.FindNoteAsync(McpFactory.UserA, "Updated MCP note");
+        persisted.Should().NotBeNull("update_note must persist the requested changes");
+        persisted!.Content.Should().Be(updatedContent);
+    }
+
+    [Fact]
+    public async Task NoteTools_CannotReadOrUpdateAnotherUsersNote()
+    {
+        await using var factory = new McpFactory();
+        var tokenA = await factory.SeedTokenAsync(McpFactory.UserA);
+        await factory.SeedTokenAndNoteAsync(McpFactory.UserB, "Bravo private note");
+        var userBNote = await factory.FindNoteAsync(McpFactory.UserB, "Bravo private note");
+        userBNote.Should().NotBeNull();
+        await using var mcpClient = await ConnectAsync(factory, tokenA);
+
+        var read = await mcpClient.CallToolAsync(
+            "get_note",
+            new Dictionary<string, object?> { ["noteId"] = userBNote!.Id.ToString() });
+
+        read.IsError.Should().NotBe(true);
+        Serialize(read).Should().NotContain("Bravo private note");
+
+        var update = await mcpClient.CallToolAsync(
+            "update_note",
+            new Dictionary<string, object?>
+            {
+                ["noteId"] = userBNote.Id.ToString(),
+                ["title"] = "Overwritten by another user"
+            });
+
+        update.IsError.Should().Be(true);
+        var unchanged = await factory.FindNoteAsync(McpFactory.UserB, "Bravo private note");
+        unchanged.Should().NotBeNull("an MCP token cannot update another user's note");
+        unchanged!.Title.Should().Be("Bravo private note");
+    }
 
     private static HttpClient CreateHttpClient(McpFactory factory) =>
         factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -371,6 +446,15 @@ public sealed class McpServerEndpointTests
             var db = scope.ServiceProvider.GetRequiredService<BrainyDbContext>();
             return await db.Tasks.AsNoTracking()
                 .FirstOrDefaultAsync(t => t.ProjectId == projectId && t.Title == title);
+        }
+
+        /// <summary>Reads back a persisted note for assertions, by owner and title.</summary>
+        public async Task<Note?> FindNoteAsync(string userId, string title)
+        {
+            await using var scope = Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<BrainyDbContext>();
+            return await db.Notes.AsNoTracking()
+                .FirstOrDefaultAsync(note => note.UserId == userId && note.Title == title);
         }
     }
 }
