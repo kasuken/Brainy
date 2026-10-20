@@ -1,5 +1,17 @@
 # Changelog
 
+## [8.2.0] - 2026-10-20
+
+### Added
+
+- **Areas portfolio metrics & live cards.** Redesigned the Areas homepage (`/areas`) with live metric tiles showing active projects, open tasks (with overdue task indicators), knowledge notes, and ideas/resources.
+- **Standards & Purpose callout.** Added dedicated PARA standard & purpose callouts on Area cards to keep ongoing responsibilities clearly distinguished from time-bound projects.
+- **Table view & quick filters.** Added a toggle between rich Card View and a compact, scannable Table View, alongside one-click quick filter chips (`With Projects`, `Needs Attention`, `With Notes`).
+- **Enriched Area summary queries.** Added `GetActiveSummariesAsync` and `GetArchivedSummariesAsync` to `IAreaService` with user-scoped EF Core projections and cache tag invalidation.
+- **C# Expert agent configuration.** Added tools and model configuration to the C# expert agent.
+
+---
+
 ## [8.1.3] - 2026-10-15
 
 ### Fixed
