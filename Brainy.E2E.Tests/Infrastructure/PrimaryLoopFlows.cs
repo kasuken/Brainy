@@ -27,9 +27,26 @@ public static class PrimaryLoopFlows
     {
         await page.GotoAsync($"{baseUrl}/areas");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "New Area" }).First.ClickAsync();
 
         var nameField = page.GetByLabel("Name", new PageGetByLabelOptions { Exact = true });
+        var newAreaBtn = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "New Area" }).First;
+
+        // In Blazor Server, the circuit may still be binding event handlers when the button
+        // is first clicked; retry click if the dialog has not opened within 3s.
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            await newAreaBtn.ClickAsync();
+            try
+            {
+                await nameField.WaitForAsync(new() { Timeout = 3000 });
+                break;
+            }
+            catch (TimeoutException)
+            {
+                await page.WaitForTimeoutAsync(500);
+            }
+        }
+
         await nameField.WaitForAsync();
         await nameField.FillAsync(name);
         // MudTextField validates (and reports up to MudForm's bound _valid, which the submit

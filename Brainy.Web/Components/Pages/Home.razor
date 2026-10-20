@@ -173,11 +173,18 @@
         margin-top: 3.5rem;
     }
 
+    .td-priority-projects-sub {
+        margin: -0.25rem 0 1rem;
+        font-size: 0.82rem;
+        color: var(--ink-soft, var(--mud-palette-text-secondary));
+        line-height: 1.4;
+    }
+
     .td-priority-projects-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
         gap: 1.5rem;
-        margin-top: 1.5rem;
+        margin-top: 0.5rem;
     }
 
     .td-projects-list {
@@ -610,7 +617,18 @@
                         <div class="td-section-head">
                             <span class="td-section-label" style="color:var(--ink-soft);">Priority Projects</span>
                             <span class="td-section-count">@_prioritizedProjects.Count project@(_prioritizedProjects.Count == 1 ? "" : "s")</span>
+                            <MudTooltip Text="Ranked automatically by project priority level, overdue tasks, and deadlines approaching this week."
+                                        Arrow="true"
+                                        Placement="Placement.Top">
+                                <MudIcon Icon="@Icons.Material.Outlined.Info"
+                                         Size="Size.Small"
+                                         Style="color:var(--ink-faint, var(--mud-palette-text-disabled)); font-size:1rem; cursor:help; vertical-align:middle;"
+                                         aria-label="How priority projects are ranked" />
+                            </MudTooltip>
                         </div>
+                        <p class="td-priority-projects-sub">
+                            Active projects ranked automatically by priority level, overdue work, and upcoming deadlines.
+                        </p>
                         <div class="td-priority-projects-grid">
                             @foreach (var p in _prioritizedProjects)
                             {
@@ -643,7 +661,8 @@
                     "See every task marked In Progress at the top of the execution flow.",
                     "Review overdue, due today, due this week, and next tasks in one execution flow.",
                     "Bring deliberate weekly commitments into execution without confusing them with deadlines.",
-                    "See high-priority project work, priority projects, and goal deadlines before they drift.",
+                    "Review Priority Projects ranked dynamically by priority level, overdue work, and upcoming deadlines.",
+                    "Keep high-priority project work and goal deadlines in focus before they drift.",
                     "Use quick actions to add a task, process the Inbox, or create a note."
                 ]
             },
@@ -655,6 +674,7 @@
                 Points =
                 [
                     "Tasks stay tied to projects so you see the outcome behind the work.",
+                    "Priority Projects stay in view so you don't lose sight of the outcomes that need your attention most.",
                     "The screen favors next actions, deadlines, and focus over browsing stored notes.",
                     "Archived projects and tasks stay out of Today because this screen is for active execution."
                 ]
@@ -671,6 +691,7 @@
                     "Work Due Today and High-priority project work before moving to lower-pressure items.",
                     "Use Planned this week to advance deliberate commitments before scanning general upcoming work.",
                     "Plan Due This Week and Next Tasks so upcoming deadlines remain visible early.",
+                    "Review Priority Projects at the bottom to check overall progress and jump into projects whose tasks need momentum.",
                     "Use New Task, Process Inbox, or New Note from quick actions when work needs to be captured."
                 ]
             }

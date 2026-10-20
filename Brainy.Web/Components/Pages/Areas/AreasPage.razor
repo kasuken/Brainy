@@ -321,14 +321,13 @@
     .ap-card-header {
         display: flex;
         align-items: flex-start;
-        justify-content: space-between;
         gap: 0.75rem;
-        margin-bottom: 0.85rem;
+        margin-bottom: 0.65rem;
     }
 
     .ap-card-identity {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 0.75rem;
         min-width: 0;
         flex: 1;
@@ -358,6 +357,7 @@
     .ap-card-headings {
         min-width: 0;
         flex: 1;
+        padding-top: 0.2rem;
     }
 
     .ap-card-title {
@@ -365,11 +365,14 @@
         font-size: 1.25rem;
         font-weight: 600;
         color: var(--mud-palette-text-primary);
-        margin: 0 0 0.25rem;
-        line-height: 1.2;
+        margin: 0;
+        line-height: 1.25;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
         overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
     .ap-card-link {
@@ -383,11 +386,22 @@
         text-underline-offset: 0.16em;
     }
 
+    /* Subbar: Badges & Card Actions */
+    .ap-card-subbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.85rem;
+        min-height: 30px;
+    }
+
     .ap-card-badges {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 0.35rem;
+        min-width: 0;
     }
 
     .ap-badge {
@@ -398,9 +412,10 @@
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        padding: 0.15rem 0.5rem;
+        padding: 0.15rem 0.55rem;
         border-radius: 999px;
         line-height: 1.4;
+        white-space: nowrap;
     }
 
     .ap-badge--active {
@@ -1033,34 +1048,37 @@
                                         <div class="ap-card-emoji-box" aria-hidden="true">@a.Emoji</div>
                                         <div class="ap-card-headings">
                                             <h3 class="ap-card-title">
-                                                <a class="ap-card-link" href="@($"/areas/{a.Id}")">@a.Name</a>
+                                                <a class="ap-card-link" href="@($"/areas/{a.Id}")" title="@a.Name">@a.Name</a>
                                             </h3>
-                                            <div class="ap-card-badges">
-                                                @if (a.IsArchived)
-                                                {
-                                                    <span class="ap-badge ap-badge--archived">Archived</span>
-                                                }
-                                                else if (a.OverdueTaskCount > 0)
-                                                {
-                                                    <span class="ap-badge ap-badge--attention" title="@($"{a.OverdueTaskCount} overdue task{(a.OverdueTaskCount == 1 ? "" : "s")}")">
-                                                        <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Style="font-size:0.75rem;" />
-                                                        @a.OverdueTaskCount overdue
-                                                    </span>
-                                                }
-                                                else if (a.ActiveProjectCount > 0)
-                                                {
-                                                    <span class="ap-badge ap-badge--active">
-                                                        @a.ActiveProjectCount @(a.ActiveProjectCount == 1 ? "project" : "projects")
-                                                    </span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="ap-badge ap-badge--idle">
-                                                        Maintaining standards
-                                                    </span>
-                                                }
-                                            </div>
                                         </div>
+                                    </div>
+                                </div>
+
+                                <div class="ap-card-subbar">
+                                    <div class="ap-card-badges">
+                                        @if (a.IsArchived)
+                                        {
+                                            <span class="ap-badge ap-badge--archived">Archived</span>
+                                        }
+                                        else if (a.OverdueTaskCount > 0)
+                                        {
+                                            <span class="ap-badge ap-badge--attention" title="@($"{a.OverdueTaskCount} overdue task{(a.OverdueTaskCount == 1 ? "" : "s")}")">
+                                                <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Style="font-size:0.75rem;" />
+                                                @a.OverdueTaskCount overdue
+                                            </span>
+                                        }
+                                        else if (a.ActiveProjectCount > 0)
+                                        {
+                                            <span class="ap-badge ap-badge--active">
+                                                @a.ActiveProjectCount @(a.ActiveProjectCount == 1 ? "project" : "projects")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ap-badge ap-badge--idle">
+                                                Maintaining standards
+                                            </span>
+                                        }
                                     </div>
 
                                     <div class="ap-card-actions" aria-label="@($"Actions for {a.Name}")">

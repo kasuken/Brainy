@@ -88,6 +88,26 @@ public sealed class AreasPageMarkupTests
         markup.Should().Contain("<UserLocalTime Utc=\"a.UpdatedAtUtc\" />");
     }
 
+    [Fact]
+    public void AreasPage_AreaCardTitles_AreFullyVisibleAndNotClippedByNowrap()
+    {
+        var markup = ReadWebFile("Components", "Pages", "Areas", "AreasPage.razor");
+
+        // The card title heading and link
+        markup.Should().Contain("ap-card-title");
+        markup.Should().Contain("ap-card-link");
+        markup.Should().Contain("title=\"@a.Name\"");
+
+        // Card titles allow word wrapping up to 2 lines and are not artificially cut off by white-space: nowrap
+        markup.Should().Contain("word-break: break-word");
+        markup.Should().Contain("-webkit-line-clamp: 2");
+
+        // Subbar separates badges and actions from header to give titles full card width
+        markup.Should().Contain("ap-card-subbar");
+        markup.Should().Contain("ap-card-badges");
+        markup.Should().Contain("ap-card-actions");
+    }
+
     private static string ReadWebFile(params string[] relativeSegments)
     {
         var path = Path.Combine([FindRepositoryRoot(), "Brainy.Web", .. relativeSegments]);

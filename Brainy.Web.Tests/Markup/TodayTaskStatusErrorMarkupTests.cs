@@ -17,6 +17,17 @@ public sealed class TodayTaskStatusErrorMarkupTests
         markup.Should().Contain("Snackbar.Add(ex.Message, Severity.Error);");
     }
 
+    [Fact]
+    public void TodayPage_PriorityProjectsSection_IncludesExplanatorySubtitleAndTooltip()
+    {
+        var markup = ReadWebFile("Components/Pages/Home.razor");
+
+        markup.Should().Contain("td-priority-projects-sub");
+        markup.Should().Contain("Active projects ranked automatically by priority level, overdue work, and upcoming deadlines.");
+        markup.Should().Contain("Ranked automatically by project priority level, overdue tasks, and deadlines approaching this week.");
+        markup.Should().Contain("Review Priority Projects ranked dynamically by priority level, overdue work, and upcoming deadlines.");
+    }
+
     private static string ReadWebFile(string relativePath)
     {
         var path = Path.Combine(FindRepositoryRoot(), "Brainy.Web", relativePath);

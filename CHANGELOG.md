@@ -1,5 +1,17 @@
 # Changelog
 
+## [8.2.1] - 2026-10-21
+
+### Added
+
+- **Priority projects ranking guidance.** Added an explanatory subtitle and info tooltip to the Priority Projects section on Today, clarifying how active projects are dynamically ranked by priority level, overdue work, and upcoming deadlines.
+
+### Fixed
+
+- **Area card title visibility & wrapping.** Area card titles on the Areas page (`/areas`) now have full horizontal space, wrap cleanly across up to two lines, and no longer get clipped by ellipsis truncation. Overdue pill badges and action buttons were moved to a dedicated metadata subbar beneath the title to prevent layout crowding.
+
+---
+
 ## [8.2.0] - 2026-10-20
 
 ### Added
