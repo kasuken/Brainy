@@ -19,6 +19,7 @@ namespace Brainy.Application.Services;
 internal sealed class AreaService(
     IApplicationDbContext context,
     ICurrentUserService currentUser,
+    IUserTimeZoneService userTimeZone,
     IApplicationCache cache) : IAreaService
 {
     public async Task<IReadOnlyList<AreaDto>> GetAllActiveAsync(CancellationToken cancellationToken = default)
@@ -49,6 +50,114 @@ internal sealed class AreaService(
                 .Select(a => ToDto(a))
                 .ToListAsync(ct).ConfigureAwait(false),
             cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<AreaSummaryDto>> GetActiveSummariesAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
+
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"areas:summaries:active:{today:yyyy-MM-dd}",
+            AreaSummaryTags(),
+            ct => GetSummariesCoreAsync(userId, isArchived: false, today, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<AreaSummaryDto>> GetArchivedSummariesAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = await currentUser.GetRequiredUserIdAsync(cancellationToken).ConfigureAwait(false);
+        var today = await userTimeZone.GetUserTodayAsync(cancellationToken).ConfigureAwait(false);
+
+        return await cache.GetOrCreateAsync(
+            userId,
+            $"areas:summaries:archived:{today:yyyy-MM-dd}",
+            AreaSummaryTags(),
+            ct => GetSummariesCoreAsync(userId, isArchived: true, today, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string[] AreaSummaryTags() =>
+    [
+        ApplicationCacheKey.EntityTypeTag<Area>(),
+        ApplicationCacheKey.EntityTypeTag<Project>(),
+        ApplicationCacheKey.EntityTypeTag<TaskItem>(),
+        ApplicationCacheKey.EntityTypeTag<Note>(),
+        ApplicationCacheKey.EntityTypeTag<Idea>(),
+        ApplicationCacheKey.EntityTypeTag<Resource>(),
+        ApplicationCacheKey.TimeZoneTag
+    ];
+
+    private async Task<IReadOnlyList<AreaSummaryDto>> GetSummariesCoreAsync(
+        string userId,
+        bool isArchived,
+        DateTime today,
+        CancellationToken cancellationToken)
+    {
+        var query = context.Areas.AsNoTracking()
+            .Where(a => a.UserId == userId && a.IsArchived == isArchived);
+
+        var orderedQuery = isArchived
+            ? query.OrderByDescending(a => a.ArchivedAtUtc).ThenBy(a => a.Name)
+            : query.OrderBy(a => a.Name);
+
+        var data = await orderedQuery
+            .Select(a => new
+            {
+                a.Id,
+                a.Name,
+                a.Description,
+                a.Purpose,
+                a.IsArchived,
+                a.ArchivedAtUtc,
+                a.ArchivedReason,
+                a.CreatedAtUtc,
+                a.UpdatedAtUtc,
+                a.Emoji,
+                ActiveProjectCount = a.Projects.Count(p => !p.IsArchived && p.Status != ProjectStatus.Archived),
+                OpenTaskCount = context.Tasks.Count(t => t.Project.AreaId == a.Id
+                                                      && t.UserId == userId
+                                                      && t.ParentTaskId == null
+                                                      && !t.IsArchived
+                                                      && !t.Project.IsArchived
+                                                      && t.Project.Status != ProjectStatus.Archived
+                                                      && t.Status != TaskItemStatus.Done
+                                                      && t.Status != TaskItemStatus.Archived),
+                OverdueTaskCount = context.Tasks.Count(t => t.Project.AreaId == a.Id
+                                                         && t.UserId == userId
+                                                         && t.ParentTaskId == null
+                                                         && !t.IsArchived
+                                                         && !t.Project.IsArchived
+                                                         && t.Project.Status != ProjectStatus.Archived
+                                                         && t.Status != TaskItemStatus.Done
+                                                         && t.Status != TaskItemStatus.Archived
+                                                         && t.DueDate.HasValue
+                                                         && t.DueDate.Value.Date < today),
+                NoteCount = a.Notes.Count(n => !n.IsArchived && n.Status != NoteStatus.Archived),
+                IdeaCount = a.Ideas.Count(i => !i.IsArchived),
+                ResourceCount = a.Resources.Count(r => !r.IsArchived)
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return data.Select(x => new AreaSummaryDto(
+            x.Id,
+            x.Name,
+            x.Description,
+            x.Purpose,
+            x.IsArchived,
+            x.ArchivedAtUtc,
+            x.CreatedAtUtc,
+            x.UpdatedAtUtc,
+            x.ActiveProjectCount,
+            x.OpenTaskCount,
+            x.OverdueTaskCount,
+            x.NoteCount,
+            x.IdeaCount,
+            x.ResourceCount,
+            NormalizeEmoji(x.Emoji),
+            x.ArchivedReason)).ToList();
     }
 
     public async Task<AreaDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
