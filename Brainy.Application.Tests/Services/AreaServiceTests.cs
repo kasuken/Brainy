@@ -403,4 +403,89 @@ public class AreaServiceTests
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
+
+    // ── Summaries ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetActiveSummariesAsync_ReturnsEnrichedMetricsForActiveAreas()
+    {
+        var (sut, db) = BuildService(nameof(GetActiveSummariesAsync_ReturnsEnrichedMetricsForActiveAreas));
+        var area = CreateArea(DefaultUserId, "Health");
+        area.Purpose = "Stay fit and healthy";
+        area.Description = "Physical and mental health";
+        db.Areas.Add(area);
+
+        var p1 = CreateProject(DefaultUserId, area.Id);
+        var p2 = CreateProject(DefaultUserId, area.Id);
+        var archivedProject = CreateProject(DefaultUserId, area.Id, isArchived: true);
+        db.Projects.AddRange(p1, p2, archivedProject);
+
+        var t1 = CreateTask(DefaultUserId, p1.Id);
+        t1.DueDate = DateTime.Today.AddDays(-2); // Overdue
+        var t2 = CreateTask(DefaultUserId, p1.Id);
+        t2.DueDate = DateTime.Today.AddDays(2);
+        var subtask = CreateTask(DefaultUserId, p1.Id, parentTaskId: t2.Id);
+        var doneTask = CreateTask(DefaultUserId, p1.Id);
+        doneTask.Status = TaskItemStatus.Done;
+        db.Tasks.AddRange(t1, t2, subtask, doneTask);
+
+        var n1 = CreateNote(DefaultUserId, area.Id);
+        var nArchived = CreateNote(DefaultUserId, area.Id, isArchived: true);
+        db.Notes.AddRange(n1, nArchived);
+
+        var idea = new Idea { Id = Guid.NewGuid(), UserId = DefaultUserId, AreaId = area.Id, Title = "Run marathon" };
+        db.Ideas.Add(idea);
+
+        var resource = new Resource { Id = Guid.NewGuid(), UserId = DefaultUserId, AreaId = area.Id, Name = "Workout routines" };
+        db.Resources.Add(resource);
+
+        await db.SaveChangesAsync();
+
+        var summaries = await sut.GetActiveSummariesAsync();
+
+        summaries.Should().ContainSingle();
+        var s = summaries[0];
+        s.Id.Should().Be(area.Id);
+        s.Name.Should().Be("Health");
+        s.Purpose.Should().Be("Stay fit and healthy");
+        s.Description.Should().Be("Physical and mental health");
+        s.ActiveProjectCount.Should().Be(2);
+        s.OpenTaskCount.Should().Be(2); // t1 and t2 (subtask and doneTask excluded)
+        s.OverdueTaskCount.Should().Be(1);
+        s.NoteCount.Should().Be(1);
+        s.IdeaCount.Should().Be(1);
+        s.ResourceCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetActiveSummariesAsync_ExcludesArchivedAreasAndOtherUsers()
+    {
+        var (sut, db) = BuildService(nameof(GetActiveSummariesAsync_ExcludesArchivedAreasAndOtherUsers));
+        var myActive = CreateArea(DefaultUserId, "Mine");
+        var myArchived = CreateArea(DefaultUserId, "Archived", isArchived: true);
+        var otherActive = CreateArea(OtherUserId, "Other");
+        db.Areas.AddRange(myActive, myArchived, otherActive);
+        await db.SaveChangesAsync();
+
+        var summaries = await sut.GetActiveSummariesAsync();
+
+        summaries.Should().ContainSingle(s => s.Id == myActive.Id);
+    }
+
+    [Fact]
+    public async Task GetArchivedSummariesAsync_ReturnsArchivedAreasOnly()
+    {
+        var (sut, db) = BuildService(nameof(GetArchivedSummariesAsync_ReturnsArchivedAreasOnly));
+        var myActive = CreateArea(DefaultUserId, "Mine");
+        var myArchived = CreateArea(DefaultUserId, "Archived", isArchived: true);
+        myArchived.ArchivedAtUtc = DateTime.UtcNow;
+        myArchived.ArchivedReason = "No longer relevant";
+        db.Areas.AddRange(myActive, myArchived);
+        await db.SaveChangesAsync();
+
+        var summaries = await sut.GetArchivedSummariesAsync();
+
+        summaries.Should().ContainSingle(s => s.Id == myArchived.Id);
+        summaries[0].ArchivedReason.Should().Be("No longer relevant");
+    }
 }

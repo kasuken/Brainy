@@ -8,6 +8,10 @@ public interface IAreaService
     // ── Queries ──────────────────────────────────────────────────────────────
     Task<IReadOnlyList<AreaDto>> GetAllActiveAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AreaDto>> GetAllArchivedAsync(CancellationToken cancellationToken = default);
+    /// <summary>Returns active areas enriched with related entity counts and health metrics for the homepage.</summary>
+    Task<IReadOnlyList<AreaSummaryDto>> GetActiveSummariesAsync(CancellationToken cancellationToken = default);
+    /// <summary>Returns archived areas enriched with related entity counts and health metrics.</summary>
+    Task<IReadOnlyList<AreaSummaryDto>> GetArchivedSummariesAsync(CancellationToken cancellationToken = default);
     Task<AreaDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     /// <summary>Returns full detail including related-entity counts.</summary>
     Task<AreaDetailDto?> GetDetailAsync(Guid id, CancellationToken cancellationToken = default);

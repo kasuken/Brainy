@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Brainy.Application.DTOs.Areas
 @using Brainy.Application.Interfaces.Services
+@using Brainy.Web.Components.Shared
 @inject IAreaService AreaService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -11,7 +12,6 @@
 <PageTitle>Areas — Brainy</PageTitle>
 
 <style>
-
     .ap-page {
         max-width: 1500px;
         margin: 0 auto;
@@ -27,9 +27,9 @@
 
     @@media (min-width: 1024px) {
         .ap-layout {
-            grid-template-columns: 360px 1fr;
+            grid-template-columns: 340px 1fr;
             align-items: start;
-            gap: 4rem;
+            gap: 3.5rem;
         }
     }
 
@@ -43,7 +43,7 @@
     }
 
     @@keyframes ap-fade-up {
-        from { opacity: 0; transform: translateY(20px); }
+        from { opacity: 0; transform: translateY(16px); }
         to   { opacity: 1; transform: translateY(0); }
     }
 
@@ -58,9 +58,9 @@
 
     .ap-title {
         font-family: var(--font-display);
-        font-size: clamp(2.5rem, 6vw, 4rem);
+        font-size: clamp(2.2rem, 5vw, 3.5rem);
         font-weight: 600;
-        line-height: 1;
+        line-height: 1.05;
         color: var(--mud-palette-text-primary);
         letter-spacing: -0.02em;
         margin: 0 0 0.5rem;
@@ -68,7 +68,7 @@
 
     .ap-title-row {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         gap: 0.75rem;
         margin-bottom: 0.5rem;
     }
@@ -80,19 +80,19 @@
     .ap-meta {
         font-size: 0.85rem;
         color: var(--mud-palette-text-secondary);
-        margin: 0 0 2rem;
+        margin: 0 0 1.5rem;
         font-weight: 500;
     }
 
     .ap-widget {
         background: var(--mud-palette-surface);
         border: 1px solid var(--mud-palette-lines-default);
-        border-radius: 12px;
+        border-radius: 14px;
         padding: 1.25rem;
         margin-bottom: 1.5rem;
         box-shadow: 0 4px 20px rgba(0,0,0,0.02);
     }
-    
+
     .ap-filter-group {
         display: flex;
         flex-wrap: wrap;
@@ -130,27 +130,134 @@
     .ap-chip:hover {
         background: var(--mud-palette-surface);
         border-color: var(--mud-palette-lines-default);
+        color: var(--mud-palette-text-primary);
     }
 
     .ap-chip--on {
-        background: rgba(192, 86, 29, 0.1);
-        border-color: rgba(192, 86, 29, 0.3);
-        color: var(--clay, #ed6c02);
+        background: rgba(192, 86, 29, 0.12);
+        border-color: rgba(192, 86, 29, 0.35);
+        color: var(--clay, #c0561d);
+        font-weight: 700;
     }
 
-    /* ── Main Area ── */
+    /* ── Main Layout ── */
     .ap-main {
-        animation: ap-fade-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+        animation: ap-fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
     }
 
+    /* ── Overview Strip ── */
+    .ap-overview-strip {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.75rem;
+    }
+
+    @@media (min-width: 640px) {
+        .ap-overview-strip {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
+    .ap-overview-tile {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+        transition: border-color 0.2s ease;
+    }
+
+    .ap-overview-tile:hover {
+        border-color: rgba(192, 86, 29, 0.25);
+    }
+
+    .ap-overview-val {
+        font-family: var(--font-display);
+        font-size: 1.75rem;
+        font-weight: 600;
+        line-height: 1;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .ap-overview-val--clay { color: var(--clay, #c0561d); }
+    .ap-overview-val--red  { color: #d32f2f; }
+    .ap-overview-val--sage { color: var(--sage, #6f7a5a); }
+
+    .ap-overview-lbl {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-disabled);
+    }
+
+    /* ── Toolbar (Quick Filters + View Switcher) ── */
+    .ap-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .ap-toolbar-filters {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .ap-view-switch {
+        display: inline-flex;
+        align-items: center;
+        background: var(--mud-palette-table-lines);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 8px;
+        padding: 2px;
+    }
+
+    .ap-view-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.3rem 0.65rem;
+        border-radius: 6px;
+        border: none;
+        background: transparent;
+        color: var(--mud-palette-text-secondary);
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .ap-view-btn:hover {
+        color: var(--mud-palette-text-primary);
+    }
+
+    .ap-view-btn--active {
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        font-weight: 700;
+    }
+
+    /* ── Area Cards Grid ── */
     .ap-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
         gap: 1.5rem;
     }
 
     @@keyframes ap-card-in {
-        from { opacity: 0; transform: translateY(15px) scale(0.98); }
+        from { opacity: 0; transform: translateY(14px) scale(0.98); }
         to   { opacity: 1; transform: translateY(0) scale(1); }
     }
 
@@ -158,69 +265,185 @@
     .ap-card {
         background: var(--mud-palette-surface);
         border: 1px solid var(--mud-palette-lines-default);
-        border-radius: 14px;
-        padding: 1.5rem;
+        border-radius: 16px;
+        padding: 1.4rem;
         display: flex;
         flex-direction: column;
         position: relative;
         overflow: hidden;
-        transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+        transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
     }
 
     .ap-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.05);
-        border-color: rgba(237, 108, 2, 0.25);
+        transform: translateY(-3px);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.06);
+        border-color: rgba(192, 86, 29, 0.28);
     }
 
-    .ap-card::before {
-        content: '';
+    .ap-card-ribbon {
         position: absolute;
         top: 0; left: 0; right: 0;
         height: 4px;
         background: var(--mud-palette-lines-default);
-        transition: background 0.3s ease, opacity 0.3s ease;
+        opacity: 0.6;
+        transition: background 0.25s ease, opacity 0.25s ease;
+    }
+
+    .ap-card-ribbon--active {
+        background: var(--clay, #c0561d);
+        opacity: 0.9;
+    }
+
+    .ap-card-ribbon--attention {
+        background: #d32f2f;
+        opacity: 1;
+    }
+
+    .ap-card-ribbon--archived {
+        background: var(--mud-palette-text-disabled);
         opacity: 0.5;
     }
 
-    .ap-card:hover::before {
-        background: #ed6c02;
+    .ap-card:hover .ap-card-ribbon {
         opacity: 1;
     }
 
     .ap-card--archived {
-        opacity: 0.7;
-    }
-    
-    .ap-card--archived:hover::before {
-        background: var(--mud-palette-text-disabled);
+        opacity: 0.78;
     }
 
+    .ap-card--attention {
+        border-color: rgba(211, 47, 47, 0.25);
+    }
+
+    /* Card Header */
+    .ap-card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .ap-card-identity {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .ap-card-emoji-box {
+        flex: none;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 12px;
+        background: var(--mud-palette-table-lines);
+        border: 1px solid var(--mud-palette-lines-default);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.45rem;
+        line-height: 1;
+        transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .ap-card:hover .ap-card-emoji-box {
+        transform: scale(1.05);
+        background: rgba(192, 86, 29, 0.08);
+        border-color: rgba(192, 86, 29, 0.25);
+    }
+
+    .ap-card-headings {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .ap-card-title {
+        font-family: var(--font-display);
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        margin: 0 0 0.25rem;
+        line-height: 1.2;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ap-card-link {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .ap-card-link:hover {
+        color: var(--clay, #c0561d);
+        text-decoration: underline;
+        text-underline-offset: 0.16em;
+    }
+
+    .ap-card-badges {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .ap-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        line-height: 1.4;
+    }
+
+    .ap-badge--active {
+        background: rgba(192, 86, 29, 0.12);
+        color: var(--clay-deep, #9c4416);
+    }
+
+    .ap-badge--attention {
+        background: rgba(211, 47, 47, 0.12);
+        color: #d32f2f;
+    }
+
+    .ap-badge--idle {
+        background: var(--mud-palette-table-lines);
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .ap-badge--archived {
+        background: rgba(0, 0, 0, 0.06);
+        color: var(--mud-palette-text-disabled);
+    }
+
+    /* Actions */
     .ap-card-actions {
         display: flex;
+        align-items: center;
         gap: 0.25rem;
-        position: absolute;
-        top: 1rem; right: 1rem;
-        opacity: 0;
+        opacity: 0.85;
         transition: opacity 0.2s;
-    }
-
-    .ap-card:hover .ap-card-actions,
-    .ap-card:focus-within .ap-card-actions {
-        opacity: 1;
     }
 
     .ap-action-btn {
         background: var(--mud-palette-background);
         border: 1px solid var(--mud-palette-lines-default);
         color: var(--mud-palette-text-secondary);
-        width: 32px; height: 32px;
-        border-radius: 6px;
-        display: flex;
+        width: 30px;
+        height: 30px;
+        border-radius: 7px;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all 0.15s ease;
     }
 
     .ap-action-btn:hover {
@@ -232,62 +455,243 @@
     .ap-action-btn--delete:hover {
         color: #d32f2f;
         border-color: #d32f2f;
+        background: rgba(211, 47, 47, 0.08);
     }
 
-    .ap-card-header {
+    .ap-action-btn--archive:hover {
+        color: var(--clay, #c0561d);
+        border-color: var(--clay, #c0561d);
+    }
+
+    .ap-action-btn--restore:hover {
+        color: #2e7d32;
+        border-color: #2e7d32;
+    }
+
+    /* Purpose Callout */
+    .ap-card-purpose {
+        background: rgba(192, 86, 29, 0.07);
+        border-left: 3px solid var(--clay, #c0561d);
+        border-radius: 0 8px 8px 0;
+        padding: 0.55rem 0.8rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .ap-card-purpose-header {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 0.75rem;
-        padding-right: 4rem; /* keep away from actions */
+        gap: 0.35rem;
+        margin-bottom: 0.25rem;
     }
 
-    .ap-card-icon {
-        flex: none;
-        width: 1.6rem;
-        font-size: 1.45rem;
-        line-height: 1;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+    .ap-card-purpose-icon {
+        font-size: 0.8rem;
+        color: var(--clay, #c0561d);
     }
 
-    .ap-card-title {
-        font-family: var(--font-display);
-        font-size: 1.35rem;
-        font-weight: 600;
+    .ap-card-purpose-label {
+        font-size: 0.64rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--clay, #c0561d);
+    }
+
+    .ap-card-purpose-text {
+        font-size: 0.84rem;
+        line-height: 1.45;
         color: var(--mud-palette-text-primary);
+        font-style: italic;
         margin: 0;
-        line-height:1.2;
-    }
-
-    .ap-card-link { color: inherit; text-decoration: none; }
-    .ap-card-link:hover { color: var(--clay); text-decoration: underline; text-underline-offset: .16em; }
-    .ap-card-link:focus-visible, .ap-action-btn:focus-visible, .ap-chip:focus-visible {
-        outline: 3px solid var(--clay-ring);
-        outline-offset: 2px;
-    }
-
-    .ap-card-desc {
-        font-size: 0.9rem;
-        color: var(--mud-palette-text-secondary);
-        margin: 0 0 1.5rem;
-        line-height: 1.5;
-        flex: 1;
         display: -webkit-box;
-        -webkit-line-clamp: 3;
+        -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
     }
 
-    .ap-card-meta {
-        font-size: 0.75rem;
+    /* Description */
+    .ap-card-desc {
+        font-size: 0.86rem;
+        color: var(--mud-palette-text-secondary);
+        margin: 0 0 1rem;
+        line-height: 1.45;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        min-height: 2.5rem;
+    }
+
+    .ap-card-desc--empty {
+        font-style: italic;
+        color: var(--mud-palette-text-disabled);
+    }
+
+    /* Metrics Grid */
+    .ap-card-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.4rem;
+        margin-top: auto;
+        padding-top: 0.85rem;
+        border-top: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .ap-metric-tile {
+        background: var(--mud-palette-table-lines);
+        border: 1px solid transparent;
+        border-radius: 9px;
+        padding: 0.45rem 0.3rem;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.15rem;
+        transition: all 0.18s ease;
+    }
+
+    .ap-metric-tile:hover {
+        background: var(--mud-palette-surface);
+        border-color: var(--mud-palette-lines-default);
+    }
+
+    .ap-metric-tile--overdue {
+        background: rgba(211, 47, 47, 0.08);
+        border-color: rgba(211, 47, 47, 0.2);
+    }
+
+    .ap-metric-header {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        line-height: 1;
+    }
+
+    .ap-metric-icon {
+        font-size: 0.95rem;
+        opacity: 0.65;
+    }
+
+    .ap-metric-icon--projects { color: var(--clay, #c0561d); }
+    .ap-metric-icon--tasks    { color: #2e7d32; }
+    .ap-metric-icon--notes    { color: #0288d1; }
+    .ap-metric-icon--ideas    { color: #ed6c02; }
+
+    .ap-metric-value {
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .ap-metric-value--active  { color: var(--clay, #c0561d); font-weight: 700; }
+    .ap-metric-value--overdue { color: #d32f2f; font-weight: 700; }
+    .ap-metric-value--notes   { color: var(--mud-palette-text-primary); font-weight: 600; }
+
+    .ap-metric-label {
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
         color: var(--mud-palette-text-disabled);
         display: flex;
         align-items: center;
+        gap: 0.2rem;
+    }
+
+    .ap-overdue-tag {
+        color: #d32f2f;
+        font-weight: 800;
+    }
+
+    /* Card Footer */
+    .ap-card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         gap: 0.5rem;
+        margin-top: 0.75rem;
+        padding-top: 0.65rem;
+        border-top: 1px dashed var(--mud-palette-lines-default);
+    }
+
+    .ap-card-meta {
+        font-size: 0.74rem;
+        color: var(--mud-palette-text-disabled);
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
         font-weight: 500;
-        letter-spacing: 0.02em;
+    }
+
+    .ap-card-open-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--clay, #c0561d);
+        text-decoration: none;
+        transition: transform 0.15s ease, color 0.15s ease;
+    }
+
+    .ap-card-open-link:hover {
+        color: var(--clay-deep, #9c4416);
+        transform: translateX(2px);
+    }
+
+    /* Table View Styles */
+    .ap-table {
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+    .ap-table-num {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    .ap-table-num--active  { color: var(--clay, #c0561d); font-weight: 700; }
+    .ap-table-num--overdue { color: #d32f2f; font-weight: 700; }
+
+    .ap-table-overdue-chip {
+        display: inline-block;
+        background: rgba(211, 47, 47, 0.12);
+        color: #d32f2f;
+        font-size: 0.65rem;
+        font-weight: 800;
+        padding: 0.1rem 0.3rem;
+        border-radius: 4px;
+        margin-left: 0.3rem;
+    }
+
+    .ap-table-purpose {
+        font-style: italic;
+        font-size: 0.82rem;
+        color: var(--mud-palette-text-primary);
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        max-width: 280px;
+    }
+
+    .ap-table-desc {
+        font-size: 0.82rem;
+        color: var(--mud-palette-text-secondary);
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        max-width: 280px;
+    }
+
+    .ap-card-link:focus-visible, .ap-action-btn:focus-visible, .ap-chip:focus-visible, .ap-view-btn:focus-visible {
+        outline: 3px solid var(--clay-ring, rgba(192, 86, 29, 0.3));
+        outline-offset: 2px;
     }
 </style>
 
@@ -308,7 +712,7 @@
                        StartIcon="@Icons.Material.Filled.Add"
                        Size="Size.Large"
                        Class="mb-6"
-                       Style="font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; border-radius: 8px;"
+                       Style="font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; border-radius: 10px;"
                        FullWidth="true"
                        OnClick="OpenCreateDialog">
                 New Area
@@ -316,7 +720,7 @@
 
             <div class="ap-widget">
                 <MudTextField @bind-Value="_searchText"
-                              Placeholder="Search areas…"
+                              Placeholder="Search areas, standards…"
                               aria-label="Search areas"
                               Adornment="Adornment.Start"
                               AdornmentIcon="@Icons.Material.Outlined.Search"
@@ -325,17 +729,24 @@
                               Variant="Variant.Outlined"
                               Margin="Margin.Dense"
                               OnKeyDown="@(() => ApplyFilter())"
-                              OnKeyUp="@(() => ApplyFilter())"    
+                              OnKeyUp="@(() => ApplyFilter())"
                               Class="mb-5" />
 
                 <div class="ap-filter-label">Status</div>
                 <div class="ap-filter-group">
                     <button type="button"
+                            class="ap-chip @(!_showArchived ? "ap-chip--on" : "")"
+                            aria-pressed="@(!_showArchived)"
+                            @onclick="() => SetArchived(false)">
+                        <MudIcon Icon="@Icons.Material.Outlined.CheckCircleOutline" Style="font-size:.85rem" />
+                        Active
+                    </button>
+                    <button type="button"
                             class="ap-chip @(_showArchived ? "ap-chip--on" : "")"
                             aria-pressed="@_showArchived"
-                            @onclick="ToggleArchived">
+                            @onclick="() => SetArchived(true)">
                         <MudIcon Icon="@Icons.Material.Outlined.Archive" Style="font-size:.85rem" />
-                        Show Archived
+                        Archived
                     </button>
                 </div>
 
@@ -351,7 +762,7 @@
                             @opt
                             @if (_sortBy == opt)
                             {
-                                <span style="opacity:0.7; font-size:0.7rem;">@(_sortAsc ? "↑" : "↓")</span>
+                                <span style="opacity:0.75; font-size:0.7rem;">@(_sortAsc ? "↑" : "↓")</span>
                             }
                         </button>
                     }
@@ -375,72 +786,407 @@
                     <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="LoadAsync" Class="ml-2">Retry</MudButton>
                 </MudAlert>
             }
-            else if (_filtered is { Count: 0 })
-            {
-                <div style="padding: 5rem 2rem; display: flex; flex-direction: column; align-items: center; text-align: center; border: 1px dashed var(--mud-palette-lines-default); border-radius: 16px; background: var(--mud-palette-table-lines);">
-                    <MudIcon Icon="@Icons.Material.Outlined.FolderSpecial" Style="font-size:4rem; color: var(--mud-palette-text-disabled); margin-bottom: 1.5rem;" />
-                    <h2 style="font-family: var(--font-display); font-size: 1.75rem; margin: 0 0 0.5rem; color: var(--mud-palette-text-primary);">
-                        @(_areas?.Count == 0 ? "No areas yet" : "Nothing matches")
-                    </h2>
-                    <p style="color: var(--mud-palette-text-secondary); margin: 0 0 2rem; max-width: 400px;">
-                        @(_areas?.Count == 0
-                            ? "Areas represent ongoing responsibilities — health, finances, work."
-                            : "Try broadening your search or clearing filters.")
-                    </p>
-                    @if (_areas?.Count == 0)
-                    {
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.Add"
-                                   OnClick="OpenCreateDialog">
-                            Create your first area
-                        </MudButton>
-                    }
-                </div>
-            }
             else
             {
-                <div class="ap-grid">
-                    @for (int i = 0; i < (_filtered?.Count ?? 0); i++)
-                    {
-                        var a = _filtered![i];
-                        var idx = i;
-                        <article class="ap-card @(a.IsArchived ? "ap-card--archived" : "")"
-                                 style="animation-delay:@(idx * 35)ms; animation: ap-card-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;">
-                             
-                            <div class="ap-card-actions">
-                                <button type="button" class="ap-action-btn" aria-label="@($"Edit {a.Name}")" @onclick="() => OpenEditDialog(a)">
-                                    <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
-                                </button>
-                                @if (a.IsArchived)
+                @* ── Portfolio Overview Ribbon ── *@
+                @if (_areas is { Count: > 0 })
+                {
+                    var totalActiveProjects = _areas.Where(a => !a.IsArchived).Sum(a => a.ActiveProjectCount);
+                    var totalOpenTasks = _areas.Where(a => !a.IsArchived).Sum(a => a.OpenTaskCount);
+                    var totalOverdue = _areas.Where(a => !a.IsArchived).Sum(a => a.OverdueTaskCount);
+                    var totalKnowledge = _areas.Where(a => !a.IsArchived).Sum(a => a.NoteCount + a.IdeaCount);
+
+                    <div class="ap-overview-strip">
+                        <div class="ap-overview-tile">
+                            <span class="ap-overview-val">@_areas.Count(a => !a.IsArchived)</span>
+                            <span class="ap-overview-lbl">Active Areas</span>
+                        </div>
+                        <div class="ap-overview-tile">
+                            <span class="ap-overview-val ap-overview-val--clay">@totalActiveProjects</span>
+                            <span class="ap-overview-lbl">Active Projects</span>
+                        </div>
+                        <div class="ap-overview-tile">
+                            <span class="ap-overview-val @(totalOverdue > 0 ? "ap-overview-val--red" : "")">
+                                @totalOpenTasks
+                            </span>
+                            <span class="ap-overview-lbl">
+                                Open Tasks @(totalOverdue > 0 ? $"({totalOverdue} overdue)" : "")
+                            </span>
+                        </div>
+                        <div class="ap-overview-tile">
+                            <span class="ap-overview-val ap-overview-val--sage">@totalKnowledge</span>
+                            <span class="ap-overview-lbl">Notes &amp; Ideas</span>
+                        </div>
+                    </div>
+                }
+
+                @* ── Toolbar (Quick Filters + View Switch) ── *@
+                <div class="ap-toolbar">
+                    <div class="ap-toolbar-filters">
+                        <button type="button"
+                                class="ap-chip @(_quickFilter == "all" ? "ap-chip--on" : "")"
+                                @onclick='() => SetQuickFilter("all")'>
+                            All (@(_areas?.Count ?? 0))
+                        </button>
+                        <button type="button"
+                                class="ap-chip @(_quickFilter == "projects" ? "ap-chip--on" : "")"
+                                @onclick='() => SetQuickFilter("projects")'>
+                            With Projects (@(_areas?.Count(a => a.ActiveProjectCount > 0) ?? 0))
+                        </button>
+                        <button type="button"
+                                class="ap-chip @(_quickFilter == "attention" ? "ap-chip--on" : "")"
+                                @onclick='() => SetQuickFilter("attention")'>
+                            Needs Attention (@(_areas?.Count(a => a.OverdueTaskCount > 0) ?? 0))
+                        </button>
+                        <button type="button"
+                                class="ap-chip @(_quickFilter == "notes" ? "ap-chip--on" : "")"
+                                @onclick='() => SetQuickFilter("notes")'>
+                            With Notes (@(_areas?.Count(a => a.NoteCount > 0) ?? 0))
+                        </button>
+                    </div>
+
+                    <div class="ap-view-switch" role="group" aria-label="View mode">
+                        <button type="button"
+                                class="ap-view-btn @(!_tableViewEnabled ? "ap-view-btn--active" : "")"
+                                aria-pressed="@(!_tableViewEnabled)"
+                                aria-label="Card view"
+                                @onclick="() => _tableViewEnabled = false">
+                            <MudIcon Icon="@Icons.Material.Outlined.GridView" Size="Size.Small" />
+                            <span>Cards</span>
+                        </button>
+                        <button type="button"
+                                class="ap-view-btn @(_tableViewEnabled ? "ap-view-btn--active" : "")"
+                                aria-pressed="@_tableViewEnabled"
+                                aria-label="Table view"
+                                @onclick="() => _tableViewEnabled = true">
+                            <MudIcon Icon="@Icons.Material.Outlined.TableRows" Size="Size.Small" />
+                            <span>Table</span>
+                        </button>
+                    </div>
+                </div>
+
+                @if (_filtered is { Count: 0 })
+                {
+                    <div style="padding: 4.5rem 2rem; display: flex; flex-direction: column; align-items: center; text-align: center; border: 1px dashed var(--mud-palette-lines-default); border-radius: 16px; background: var(--mud-palette-table-lines);">
+                        <MudIcon Icon="@Icons.Material.Outlined.FolderSpecial" Style="font-size:3.75rem; color: var(--mud-palette-text-disabled); margin-bottom: 1.25rem;" />
+                        <h2 style="font-family: var(--font-display); font-size: 1.6rem; margin: 0 0 0.5rem; color: var(--mud-palette-text-primary);">
+                            @(_areas?.Count == 0 ? "No areas yet" : "Nothing matches your filters")
+                        </h2>
+                        <p style="color: var(--mud-palette-text-secondary); margin: 0 0 1.75rem; max-width: 440px; font-size: 0.9rem; line-height: 1.5;">
+                            @(_areas?.Count == 0
+                                ? "In PARA, an Area represents an ongoing responsibility with a standard to maintain — such as Health, Finances, or Team."
+                                : "Try clearing your search term or switching to the 'All' filter chip.")
+                        </p>
+                        @if (_areas?.Count == 0)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       Size="Size.Large"
+                                       OnClick="OpenCreateDialog">
+                                Create your first area
+                            </MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                       OnClick="ResetFilters">
+                                Reset Filters
+                            </MudButton>
+                        }
+                    </div>
+                }
+                else if (_tableViewEnabled)
+                {
+                    <MudTable Items="_filtered" Hover="true" Dense="true" Elevation="0" Breakpoint="Breakpoint.Sm" Class="ap-table">
+                        <HeaderContent>
+                            <MudTh>Area</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh>Purpose &amp; Standards</MudTh>
+                            <MudTh align="Align.Right">Projects</MudTh>
+                            <MudTh align="Align.Right">Open Tasks</MudTh>
+                            <MudTh align="Align.Right">Notes</MudTh>
+                            <MudTh align="Align.Right">Ideas &amp; Res</MudTh>
+                            <MudTh>Updated</MudTh>
+                            <MudTh align="Align.Right">Actions</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Area">
+                                <div style="display:flex; align-items:center; gap:0.6rem;">
+                                    <span style="font-size:1.35rem; line-height:1;">@context.Emoji</span>
+                                    <MudLink Href="@($"/areas/{context.Id}")" Typo="Typo.body2" Style="font-weight:700; color:var(--mud-palette-text-primary);">
+                                        @context.Name
+                                    </MudLink>
+                                </div>
+                            </MudTd>
+                            <MudTd DataLabel="Status">
+                                @if (context.IsArchived)
                                 {
-                                    <button type="button" class="ap-action-btn" aria-label="@($"Restore {a.Name}")" @onclick="() => ConfirmRestore(a.Id, a.Name)">
-                                        <MudIcon Icon="@Icons.Material.Outlined.RestorePage" Size="Size.Small" />
-                                    </button>
+                                    <span class="ap-badge ap-badge--archived">Archived</span>
+                                }
+                                else if (context.OverdueTaskCount > 0)
+                                {
+                                    <span class="ap-badge ap-badge--attention">@context.OverdueTaskCount overdue</span>
+                                }
+                                else if (context.ActiveProjectCount > 0)
+                                {
+                                    <span class="ap-badge ap-badge--active">@context.ActiveProjectCount projects</span>
                                 }
                                 else
                                 {
-                                    <button type="button" class="ap-action-btn" aria-label="@($"Archive {a.Name}")" @onclick="() => ConfirmArchive(a.Id, a.Name)">
-                                        <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
-                                    </button>
+                                    <span class="ap-badge ap-badge--idle">Active</span>
                                 }
-                                <button type="button" class="ap-action-btn ap-action-btn--delete" aria-label="@($"Delete {a.Name}")" @onclick="() => ConfirmDelete(a.Id, a.Name)">
-                                    <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" />
-                                </button>
-                            </div>
-                            
-                            <div class="ap-card-header">
-                                <span class="ap-card-icon" aria-hidden="true">@a.Emoji</span>
-                                <h3 class="ap-card-title"><a class="ap-card-link" href="@($"/areas/{a.Id}")">@a.Name</a></h3>
-                            </div>
-                            <p class="ap-card-desc">@(string.IsNullOrWhiteSpace(a.Description) ? "No description" : a.Description)</p>
-                            
-                            <div class="ap-card-meta">
-                                <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
-                                <span>Updated <UserLocalTime Utc="a.UpdatedAtUtc" /></span>
-                            </div>
-                        </article>
-                    }
-                </div>
+                            </MudTd>
+                            <MudTd DataLabel="Purpose &amp; Standards">
+                                @if (!string.IsNullOrWhiteSpace(context.Purpose))
+                                {
+                                    <span class="ap-table-purpose" title="@context.Purpose">@context.Purpose</span>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(context.Description))
+                                {
+                                    <span class="ap-table-desc" title="@context.Description">@context.Description</span>
+                                }
+                                else
+                                {
+                                    <span style="color:var(--mud-palette-text-disabled); font-size:0.8rem;">—</span>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Projects" align="Align.Right">
+                                <span class="ap-table-num @(context.ActiveProjectCount > 0 ? "ap-table-num--active" : "")">
+                                    @context.ActiveProjectCount
+                                </span>
+                            </MudTd>
+                            <MudTd DataLabel="Open Tasks" align="Align.Right">
+                                <span class="ap-table-num @(context.OverdueTaskCount > 0 ? "ap-table-num--overdue" : context.OpenTaskCount > 0 ? "ap-table-num--active" : "")">
+                                    @context.OpenTaskCount
+                                    @if (context.OverdueTaskCount > 0)
+                                    {
+                                        <span class="ap-table-overdue-chip">!@context.OverdueTaskCount</span>
+                                    }
+                                </span>
+                            </MudTd>
+                            <MudTd DataLabel="Notes" align="Align.Right">
+                                <span class="ap-table-num">@context.NoteCount</span>
+                            </MudTd>
+                            <MudTd DataLabel="Ideas &amp; Res" align="Align.Right">
+                                <span class="ap-table-num">@(context.IdeaCount + context.ResourceCount)</span>
+                            </MudTd>
+                            <MudTd DataLabel="Updated">
+                                <span style="font-size:0.8rem; color:var(--mud-palette-text-secondary);">
+                                    <UserLocalTime Utc="context.UpdatedAtUtc" />
+                                </span>
+                            </MudTd>
+                            <MudTd DataLabel="Actions" align="Align.Right">
+                                <MudTooltip Text="Open area">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.OpenInNew"
+                                                   Color="Color.Default"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => OpenDetail(context.Id))" />
+                                </MudTooltip>
+                                <MudTooltip Text="Edit area">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                                   Color="Color.Default"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => OpenEditDialog(context))" />
+                                </MudTooltip>
+                                @if (context.IsArchived)
+                                {
+                                    <MudTooltip Text="Restore area">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.RestorePage"
+                                                       Color="Color.Success"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => ConfirmRestore(context.Id, context.Name))" />
+                                    </MudTooltip>
+                                }
+                                else
+                                {
+                                    <MudTooltip Text="Archive area">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Archive"
+                                                       Color="Color.Default"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => ConfirmArchive(context.Id, context.Name))" />
+                                    </MudTooltip>
+                                }
+                                <MudTooltip Text="Delete area">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Delete"
+                                                   Color="Color.Error"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => ConfirmDelete(context.Id, context.Name))" />
+                                </MudTooltip>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+                else
+                {
+                    <div class="ap-grid">
+                        @for (int i = 0; i < (_filtered?.Count ?? 0); i++)
+                        {
+                            var a = _filtered![i];
+                            var idx = i;
+                            <article class="ap-card @(a.IsArchived ? "ap-card--archived" : "") @(a.OverdueTaskCount > 0 ? "ap-card--attention" : "")"
+                                     style="animation-delay:@(idx * 30)ms; animation: ap-card-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;">
+
+                                <div class="ap-card-ribbon @(a.IsArchived ? "ap-card-ribbon--archived" : a.OverdueTaskCount > 0 ? "ap-card-ribbon--attention" : a.ActiveProjectCount > 0 ? "ap-card-ribbon--active" : "")"></div>
+
+                                <div class="ap-card-header">
+                                    <div class="ap-card-identity">
+                                        <div class="ap-card-emoji-box" aria-hidden="true">@a.Emoji</div>
+                                        <div class="ap-card-headings">
+                                            <h3 class="ap-card-title">
+                                                <a class="ap-card-link" href="@($"/areas/{a.Id}")">@a.Name</a>
+                                            </h3>
+                                            <div class="ap-card-badges">
+                                                @if (a.IsArchived)
+                                                {
+                                                    <span class="ap-badge ap-badge--archived">Archived</span>
+                                                }
+                                                else if (a.OverdueTaskCount > 0)
+                                                {
+                                                    <span class="ap-badge ap-badge--attention" title="@($"{a.OverdueTaskCount} overdue task{(a.OverdueTaskCount == 1 ? "" : "s")}")">
+                                                        <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Style="font-size:0.75rem;" />
+                                                        @a.OverdueTaskCount overdue
+                                                    </span>
+                                                }
+                                                else if (a.ActiveProjectCount > 0)
+                                                {
+                                                    <span class="ap-badge ap-badge--active">
+                                                        @a.ActiveProjectCount @(a.ActiveProjectCount == 1 ? "project" : "projects")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="ap-badge ap-badge--idle">
+                                                        Maintaining standards
+                                                    </span>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="ap-card-actions" aria-label="@($"Actions for {a.Name}")">
+                                        <MudTooltip Text="Edit area">
+                                            <button type="button" class="ap-action-btn" aria-label="@($"Edit {a.Name}")" @onclick="() => OpenEditDialog(a)">
+                                                <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
+                                            </button>
+                                        </MudTooltip>
+                                        @if (a.IsArchived)
+                                        {
+                                            <MudTooltip Text="Restore area">
+                                                <button type="button" class="ap-action-btn ap-action-btn--restore" aria-label="@($"Restore {a.Name}")" @onclick="() => ConfirmRestore(a.Id, a.Name)">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.RestorePage" Size="Size.Small" />
+                                                </button>
+                                            </MudTooltip>
+                                        }
+                                        else
+                                        {
+                                            <MudTooltip Text="Archive area">
+                                                <button type="button" class="ap-action-btn ap-action-btn--archive" aria-label="@($"Archive {a.Name}")" @onclick="() => ConfirmArchive(a.Id, a.Name)">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
+                                                </button>
+                                            </MudTooltip>
+                                        }
+                                        <MudTooltip Text="Delete area">
+                                            <button type="button" class="ap-action-btn ap-action-btn--delete" aria-label="@($"Delete {a.Name}")" @onclick="() => ConfirmDelete(a.Id, a.Name)">
+                                                <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" />
+                                            </button>
+                                        </MudTooltip>
+                                    </div>
+                                </div>
+
+                                @* Purpose / Standard *@
+                                @if (!string.IsNullOrWhiteSpace(a.Purpose))
+                                {
+                                    <div class="ap-card-purpose" title="Ongoing standard and responsibility">
+                                        <div class="ap-card-purpose-header">
+                                            <MudIcon Icon="@Icons.Material.Outlined.Flag" Class="ap-card-purpose-icon" />
+                                            <span class="ap-card-purpose-label">Standard &amp; Purpose</span>
+                                        </div>
+                                        <p class="ap-card-purpose-text">@a.Purpose</p>
+                                    </div>
+                                }
+
+                                @* Description *@
+                                @if (!string.IsNullOrWhiteSpace(a.Description))
+                                {
+                                    <p class="ap-card-desc">@a.Description</p>
+                                }
+                                else if (string.IsNullOrWhiteSpace(a.Purpose))
+                                {
+                                    <p class="ap-card-desc ap-card-desc--empty">No description or standards recorded yet.</p>
+                                }
+                                else
+                                {
+                                    <p class="ap-card-desc" style="visibility:hidden; min-height:0; margin:0;"></p>
+                                }
+
+                                @* Metrics Grid *@
+                                <div class="ap-card-metrics">
+                                    <div class="ap-metric-tile" title="@($"{a.ActiveProjectCount} active projects")">
+                                        <div class="ap-metric-header">
+                                            <MudIcon Icon="@Icons.Material.Outlined.FolderSpecial" Size="Size.Small" Class="ap-metric-icon ap-metric-icon--projects" />
+                                            <span class="ap-metric-value @(a.ActiveProjectCount > 0 ? "ap-metric-value--active" : "")">@a.ActiveProjectCount</span>
+                                        </div>
+                                        <span class="ap-metric-label">Projects</span>
+                                    </div>
+
+                                    <div class="ap-metric-tile @(a.OverdueTaskCount > 0 ? "ap-metric-tile--overdue" : "")"
+                                         title="@($"{a.OpenTaskCount} open tasks{(a.OverdueTaskCount > 0 ? $" ({a.OverdueTaskCount} overdue)" : "")}")">
+                                        <div class="ap-metric-header">
+                                            <MudIcon Icon="@Icons.Material.Outlined.CheckCircleOutline" Size="Size.Small" Class="ap-metric-icon ap-metric-icon--tasks" />
+                                            <span class="ap-metric-value @(a.OverdueTaskCount > 0 ? "ap-metric-value--overdue" : a.OpenTaskCount > 0 ? "ap-metric-value--active" : "")">
+                                                @a.OpenTaskCount
+                                            </span>
+                                        </div>
+                                        <span class="ap-metric-label">
+                                            @if (a.OverdueTaskCount > 0)
+                                            {
+                                                <span class="ap-overdue-tag">!@a.OverdueTaskCount</span>
+                                            }
+                                            Tasks
+                                        </span>
+                                    </div>
+
+                                    <div class="ap-metric-tile" title="@($"{a.NoteCount} knowledge notes")">
+                                        <div class="ap-metric-header">
+                                            <MudIcon Icon="@Icons.Material.Outlined.Article" Size="Size.Small" Class="ap-metric-icon ap-metric-icon--notes" />
+                                            <span class="ap-metric-value @(a.NoteCount > 0 ? "ap-metric-value--notes" : "")">@a.NoteCount</span>
+                                        </div>
+                                        <span class="ap-metric-label">Notes</span>
+                                    </div>
+
+                                    <div class="ap-metric-tile" title="@($"{a.IdeaCount} ideas · {a.ResourceCount} resources")">
+                                        <div class="ap-metric-header">
+                                            <MudIcon Icon="@Icons.Material.Outlined.Lightbulb" Size="Size.Small" Class="ap-metric-icon ap-metric-icon--ideas" />
+                                            <span class="ap-metric-value">@(a.IdeaCount + a.ResourceCount)</span>
+                                        </div>
+                                        <span class="ap-metric-label">Ideas &amp; Res</span>
+                                    </div>
+                                </div>
+
+                                @* Footer *@
+                                <div class="ap-card-footer">
+                                    <div class="ap-card-meta">
+                                        @if (a.IsArchived && a.ArchivedAtUtc.HasValue)
+                                        {
+                                            <span title="@(!string.IsNullOrWhiteSpace(a.ArchivedReason) ? $"Reason: {a.ArchivedReason}" : "Archived")">
+                                                Archived <UserLocalTime Utc="a.ArchivedAtUtc.Value" />
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
+                                            <span>Updated <UserLocalTime Utc="a.UpdatedAtUtc" /></span>
+                                        }
+                                    </div>
+                                    <a class="ap-card-open-link" href="@($"/areas/{a.Id}")" aria-label="@($"Open {a.Name}")">
+                                        <span>Open Area</span>
+                                        <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Style="font-size:0.85rem;" />
+                                    </a>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
             }
         </main>
     </div>
@@ -461,9 +1207,10 @@
                 Lead = "Use Areas to track ongoing responsibilities you maintain over time, like health, finances, team, or home.",
                 Points =
                 [
-                    "See every active area as a card with its description and last-updated date.",
-                    "Create a new area, open an existing one, or use card actions to edit, archive, restore, or delete it.",
-                    "Search, show archived areas, and sort by name or created date."
+                    "See every area with its live metrics: active projects, open tasks, overdue alerts, notes, ideas, and standards.",
+                    "Review high-level portfolio metrics across all your active areas at a glance.",
+                    "Filter by areas with projects, areas needing attention (overdue tasks), or areas holding knowledge notes.",
+                    "Switch between rich Card view and compact Table view depending on your workflow."
                 ]
             },
             new PageHelpSection
@@ -485,11 +1232,11 @@
                 Ordered = true,
                 Points =
                 [
-                    "Click New Area to define an ongoing responsibility.",
-                    "Use Search areas… to narrow cards by name, description, or purpose.",
-                    "Toggle Show Archived when you need to review or restore inactive areas.",
-                    "Use Sort By to switch between Name and Created, clicking again to reverse the order.",
-                    "Open a card to manage its projects, ideas, and notes, or use the hover actions to edit, archive, restore, or delete."
+                    "Click New Area to define an ongoing responsibility with an emoji, name, purpose, and description.",
+                    "Use Search areas… to find areas matching names, descriptions, or specific standard text.",
+                    "Use Quick Filters (With Projects, Needs Attention, With Notes) to instantly triage your areas.",
+                    "Sort by Name, Projects, Tasks, or Updated to organize what needs attention.",
+                    "Click any card or table row to open the area's workspace and manage its projects, tasks, and notes."
                 ]
             }
         ]
@@ -497,15 +1244,17 @@
 
     private bool _loading = true;
     private string? _loadError;
-    private List<AreaDto>? _areas;
-    private List<AreaDto>? _filtered;
+    private List<AreaSummaryDto>? _areas;
+    private List<AreaSummaryDto>? _filtered;
 
     private string _searchText = "";
     private bool _showArchived;
+    private string _quickFilter = "all";
+    private bool _tableViewEnabled;
     private string _sortBy = "Name";
     private bool _sortAsc = true;
 
-    private static readonly string[] SortOptions = ["Name", "Created"];
+    private static readonly string[] SortOptions = ["Name", "Projects", "Tasks", "Updated", "Created"];
 
     private string SortAriaLabel(string option) => _sortBy == option
         ? $"Sort by {option}, currently {(_sortAsc ? "ascending" : "descending")}; activate to reverse"
@@ -523,8 +1272,8 @@
         try
         {
             var result = _showArchived
-                ? await AreaService.GetAllArchivedAsync()
-                : await AreaService.GetAllActiveAsync();
+                ? await AreaService.GetArchivedSummariesAsync()
+                : await AreaService.GetActiveSummariesAsync();
             _areas = result.ToList();
             ApplyFilter();
         }
@@ -539,27 +1288,29 @@
         }
     }
 
-    private void OnSearchInput(ChangeEventArgs e)
+    private async Task SetArchived(bool showArchived)
     {
-        _searchText = e.Value?.ToString() ?? "";
+        if (_showArchived == showArchived) return;
+        _showArchived = showArchived;
+        await LoadAsync();
+    }
+
+    private void SetQuickFilter(string filter)
+    {
+        _quickFilter = filter;
         ApplyFilter();
     }
 
-    private void ClearSearch()
+    private void ResetFilters()
     {
         _searchText = "";
+        _quickFilter = "all";
         ApplyFilter();
-    }
-
-    private async Task ToggleArchived()
-    {
-        _showArchived = !_showArchived;
-        await LoadAsync();
     }
 
     private void ApplyFilter()
     {
-        IEnumerable<AreaDto> q = _areas ?? [];
+        IEnumerable<AreaSummaryDto> q = _areas ?? [];
 
         if (!string.IsNullOrWhiteSpace(_searchText))
             q = q.Where(a =>
@@ -567,8 +1318,24 @@
                 (a.Description?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
                 (a.Purpose?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false));
 
+        if (_quickFilter == "projects")
+            q = q.Where(a => a.ActiveProjectCount > 0);
+        else if (_quickFilter == "attention")
+            q = q.Where(a => a.OverdueTaskCount > 0);
+        else if (_quickFilter == "notes")
+            q = q.Where(a => a.NoteCount > 0);
+
         q = _sortBy switch
         {
+            "Projects" => _sortAsc
+                ? q.OrderBy(a => a.ActiveProjectCount).ThenBy(a => a.Name)
+                : q.OrderByDescending(a => a.ActiveProjectCount).ThenBy(a => a.Name),
+            "Tasks" => _sortAsc
+                ? q.OrderBy(a => a.OpenTaskCount).ThenBy(a => a.Name)
+                : q.OrderByDescending(a => a.OpenTaskCount).ThenBy(a => a.Name),
+            "Updated" => _sortAsc
+                ? q.OrderBy(a => a.UpdatedAtUtc)
+                : q.OrderByDescending(a => a.UpdatedAtUtc),
             "Created" => _sortAsc
                 ? q.OrderBy(a => a.CreatedAtUtc)
                 : q.OrderByDescending(a => a.CreatedAtUtc),
@@ -600,7 +1367,7 @@
             await LoadAsync();
     }
 
-    private async Task OpenEditDialog(AreaDto area)
+    private async Task OpenEditDialog(AreaSummaryDto area)
     {
         var parameters = new DialogParameters<AreaEditorDialog>();
         parameters.Add(x => x.AreaId, area.Id);
