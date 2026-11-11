@@ -122,6 +122,9 @@ public sealed class ProductionSurfaceTests(BrainyWebApplicationFactory factory)
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         content.Should().Contain("Most popular");
+        content.Should().Contain("Priority email support for account and product questions");
+        content.Should().Contain("Pro support emails are handled ahead of general feedback");
+        content.Should().Contain("href=\"https://github.com/kasuken/Brainy/issues\"");
     }
 
     [Fact]
@@ -194,6 +197,8 @@ public sealed class ProductionSurfaceTests(BrainyWebApplicationFactory factory)
         content.Should().Contain("href=\"/privacy\"");
         content.Should().Contain("href=\"/terms\"");
         content.Should().Contain("href=\"/acceptable-use\"");
+        content.Should().Contain("href=\"mailto:support@brainy-me.com\"");
+        content.Should().Contain("href=\"https://github.com/kasuken/Brainy/issues\"");
         content.Should().NotContain("/ai-transparency");
     }
 
