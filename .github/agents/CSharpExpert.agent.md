@@ -1,8 +1,8 @@
 ---
 name: "C# Expert"
 description: An agent designed to assist with software development tasks for .NET projects.
-tools: [execute, web, todo]
-model: Claude Haiku 5.5 (copilot)
+tools: [execute, read, edit, search, agent, web, todo, 'github-mcp-server/*', 'github/*']
+model: claude-sonnet-5.5
 # version: 2026-01-20a
 ---
 
