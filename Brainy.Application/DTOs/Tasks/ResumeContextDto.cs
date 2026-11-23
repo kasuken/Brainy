@@ -40,7 +40,7 @@ public record ResumeContextDto(
     /// <summary>True when the task has at least one non-archived subtask.</summary>
     bool HasSubtasks,
 
-    /// <summary>Title of the first not-done subtask in order, when <see cref="HasSubtasks"/> is true.</summary>
+    /// <summary>Title of the first Todo or InProgress subtask in order, when <see cref="HasSubtasks"/> is true.</summary>
     string? NextSubtaskTitle,
 
     /// <summary>The most recently updated note or output in the task's project, if any.</summary>
@@ -55,4 +55,7 @@ public record ResumeContextDto(
     DateTime? GoalDueDate,
 
     /// <summary>User-authored handoff note, editable inline from the panel.</summary>
-    string? RestartNote);
+    string? RestartNote,
+
+    /// <summary>True when the task has at least one non-archived waiting subtask.</summary>
+    bool HasWaitingSubtasks = false);

@@ -125,9 +125,9 @@ public class ResumeContextServiceTests
     // ── GetAsync: next actionable step ──────────────────────────────────────────
 
     [Fact]
-    public async Task GetAsync_ReturnsFirstNotDoneSubtaskInOrder_AsNextStep()
+    public async Task GetAsync_ReturnsFirstActionableSubtaskInOrder_AsNextStep()
     {
-        var (sut, db, _) = BuildService(nameof(GetAsync_ReturnsFirstNotDoneSubtaskInOrder_AsNextStep));
+        var (sut, db, _) = BuildService(nameof(GetAsync_ReturnsFirstActionableSubtaskInOrder_AsNextStep));
         var project = CreateProject(DefaultUserId);
         var task = CreateTask(project.Id, DefaultUserId);
         db.Projects.Add(project);
@@ -141,14 +141,37 @@ public class ResumeContextServiceTests
         nextSubtask.ParentTaskId = task.Id;
         nextSubtask.SortOrder = 1;
 
-        db.Tasks.AddRange(doneSubtask, nextSubtask);
+        var waitingSubtask = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Waiting, title: "Not actionable");
+        waitingSubtask.ParentTaskId = task.Id;
+        waitingSubtask.SortOrder = 0;
+        db.Tasks.AddRange(doneSubtask, waitingSubtask, nextSubtask);
         await db.SaveChangesAsync();
 
         var result = await sut.GetAsync(task.Id);
 
         result.Should().NotBeNull();
         result!.HasSubtasks.Should().BeTrue();
+        result.HasWaitingSubtasks.Should().BeTrue();
         result.NextSubtaskTitle.Should().Be("Next up");
+    }
+
+    [Fact]
+    public async Task GetAsync_WhenOnlyWaitingSubtasksRemain_HasNoActionableNextStep()
+    {
+        var (sut, db, _) = BuildService(nameof(GetAsync_WhenOnlyWaitingSubtasksRemain_HasNoActionableNextStep));
+        var project = CreateProject(DefaultUserId);
+        var task = CreateTask(project.Id, DefaultUserId);
+        var waiting = CreateTask(project.Id, DefaultUserId, TaskItemStatus.Waiting);
+        waiting.ParentTaskId = task.Id;
+        db.Projects.Add(project);
+        db.Tasks.AddRange(task, waiting);
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetAsync(task.Id);
+
+        result.Should().NotBeNull();
+        result!.NextSubtaskTitle.Should().BeNull();
+        result.HasWaitingSubtasks.Should().BeTrue();
     }
 
     [Fact]

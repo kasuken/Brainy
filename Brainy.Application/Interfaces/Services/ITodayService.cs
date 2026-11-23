@@ -5,7 +5,7 @@ namespace Brainy.Application.Interfaces.Services;
 
 /// <summary>
 /// Provides pre-filtered task aggregations for the Today screen.
-/// All methods exclude archived tasks and tasks belonging to archived projects.
+/// Task cards exclude waiting, completed, and archived tasks and tasks belonging to archived projects.
 /// Only top-level tasks (no subtasks) are returned.
 /// </summary>
 public interface ITodayService

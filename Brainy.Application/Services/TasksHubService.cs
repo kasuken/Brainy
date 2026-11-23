@@ -489,8 +489,8 @@ internal sealed class TasksHubService(
 
                 task.Status = dto.NewStatus.Value;
 
-                // A completed task can no longer be the user's current focus.
-                if (dto.NewStatus.Value == TaskItemStatus.Done)
+                // Completed or waiting work cannot remain the user's current focus.
+                if (dto.NewStatus.Value is TaskItemStatus.Done or TaskItemStatus.Waiting)
                     task.IsCurrentTask = false;
             }
 

@@ -1,14 +1,19 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using AwesomeAssertions;
+using Brainy.Application.DTOs.Tasks;
+using Brainy.Application.Interfaces.Identity;
 using Brainy.Application.Interfaces.Persistence;
+using Brainy.Application.Interfaces.Services;
 using Brainy.Data;
 using Brainy.Domain.Entities;
+using Brainy.Domain.Enums;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -68,6 +73,113 @@ public sealed class TodayPageLocalizationRenderTests
         content.Should().Contain("<html lang=\"it\"");
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task TodayPage_StatusChangesRemoveWaitingWorkAndRefreshCachedCounts(int mutation)
+    {
+        await using var factory = new TodayLocalizationFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+        await factory.SeedAsync(cultureId: null);
+        Guid taskId;
+        const string taskTitle = "Visible actionable task";
+        const string subtaskTitle = "Hidden waiting subtask";
+        const string otherTitle = "Hidden other-user task";
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BrainyDbContext>();
+            var project = new Project
+            {
+                UserId = TodayLocalizationFactory.UserId,
+                Name = "Task visibility project",
+                Status = ProjectStatus.Active
+            };
+            var task = new TaskItem
+            {
+                UserId = project.UserId,
+                Project = project,
+                Title = taskTitle,
+                Status = TaskItemStatus.InProgress,
+                IsCurrentTask = true,
+                Priority = TaskPriority.High,
+                DueDate = new DateTime(2026, 6, 17)
+            };
+            var otherProject = new Project
+            {
+                UserId = "other-user",
+                Name = "Other project",
+                Status = ProjectStatus.Active
+            };
+            db.Tasks.AddRange(task, new TaskItem
+            {
+                UserId = project.UserId,
+                Project = project,
+                ParentTask = task,
+                Title = subtaskTitle,
+                Status = TaskItemStatus.Waiting,
+                DueDate = task.DueDate
+            }, new TaskItem
+            {
+                UserId = otherProject.UserId,
+                Project = otherProject,
+                Title = otherTitle,
+                Status = TaskItemStatus.InProgress,
+                DueDate = task.DueDate
+            });
+            await db.SaveChangesAsync();
+            taskId = task.Id;
+        }
+
+        var initial = await client.GetStringAsync("/today");
+        initial.Should().Contain(taskTitle).And.NotContain(subtaskTitle).And.NotContain(otherTitle);
+        initial.Should().Contain("Remaining subtasks are waiting.").And.NotContain("is ready to complete.");
+
+        await SetStatusAsync(TaskItemStatus.Waiting);
+
+        var waiting = await client.GetStringAsync("/today");
+        waiting.Should().NotContain(taskTitle).And.NotContain(subtaskTitle).And.NotContain(otherTitle);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            scope.ServiceProvider.GetRequiredService<IBackgroundUserContextAccessor>().UserId = TodayLocalizationFactory.UserId;
+            (await scope.ServiceProvider.GetRequiredService<ITaskService>().GetCurrentTaskAsync()).Should().BeNull();
+            (await scope.ServiceProvider.GetRequiredService<ITodayNotificationService>().GetNotificationsAsync()).Should().BeEmpty();
+            (await scope.ServiceProvider.GetRequiredService<ITasksHubService>().GetOnHoldTasksAsync())
+                .Should().ContainSingle().Which.Id.Should().Be(taskId);
+            (await scope.ServiceProvider.GetRequiredService<ICalendarService>().GetCalendarTasksAsync())
+                .Should().Contain(task => task.Id == taskId && task.Status == TaskItemStatus.Waiting);
+        }
+
+        await SetStatusAsync(TaskItemStatus.Todo);
+
+        var actionable = await client.GetStringAsync("/today");
+        actionable.Should().Contain(taskTitle).And.NotContain(subtaskTitle).And.NotContain(otherTitle);
+
+        async Task SetStatusAsync(TaskItemStatus status)
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            scope.ServiceProvider.GetRequiredService<IBackgroundUserContextAccessor>().UserId = TodayLocalizationFactory.UserId;
+            var service = scope.ServiceProvider.GetRequiredService<ITaskService>();
+            switch (mutation)
+            {
+                case 0:
+                    await service.UpdateAsync(new UpdateTaskDto(taskId, taskTitle, Status: status,
+                        Priority: TaskPriority.High, DueDate: new DateTime(2026, 6, 17)));
+                    break;
+                case 1:
+                    await service.BulkUpdateStatusAsync([taskId], status);
+                    break;
+                case 2:
+                    await scope.ServiceProvider.GetRequiredService<ITasksHubService>()
+                        .BulkOperationAsync(new BulkTaskOperationDto([taskId], NewStatus: status));
+                    break;
+            }
+        }
+    }
+
     private sealed class TodayLocalizationFactory : WebApplicationFactory<Program>
     {
         private const string DatabaseName = "TodayPageLocalizationRenderTests";
@@ -90,6 +202,7 @@ public sealed class TodayPageLocalizationRenderTests
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<DbContextOptions<BrainyDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<BrainyDbContext>>();
                 services.RemoveAll<BrainyDbContext>();
                 services.RemoveAll<IApplicationDbContext>();
 

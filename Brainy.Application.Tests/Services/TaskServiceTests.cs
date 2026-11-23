@@ -68,6 +68,38 @@ public class TaskServiceTests
             UpdatedAtUtc = DateTime.UtcNow
         };
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SettingCurrentTaskToWaiting_ClearsFocusWithoutChangingOtherUsersFocus(bool bulk)
+    {
+        var (sut, db) = BuildService($"{nameof(SettingCurrentTaskToWaiting_ClearsFocusWithoutChangingOtherUsersFocus)}-{bulk}");
+        var project = CreateProject(DefaultUserId);
+        var current = CreateTask(project.Id, DefaultUserId, TaskItemStatus.InProgress);
+        current.IsCurrentTask = true;
+        var otherProject = CreateProject("other-user");
+        var otherCurrent = CreateTask(otherProject.Id, "other-user", TaskItemStatus.InProgress);
+        otherCurrent.IsCurrentTask = true;
+        db.Projects.AddRange(project, otherProject);
+        db.Tasks.AddRange(current, otherCurrent);
+        await db.SaveChangesAsync();
+        (await sut.GetCurrentTaskAsync()).Should().NotBeNull();
+
+        if (bulk)
+            await sut.BulkUpdateStatusAsync([current.Id], TaskItemStatus.Waiting);
+        else
+            await sut.UpdateAsync(new UpdateTaskDto(current.Id, current.Title, Status: TaskItemStatus.Waiting));
+
+        (await sut.GetCurrentTaskAsync()).Should().BeNull();
+        var storedTasks = await db.Tasks.AsNoTracking().ToDictionaryAsync(task => task.Id);
+        storedTasks[current.Id].Status.Should().Be(TaskItemStatus.Waiting);
+        storedTasks[current.Id].IsCurrentTask.Should().BeFalse();
+        storedTasks[otherCurrent.Id].IsCurrentTask.Should().BeTrue();
+        storedTasks[otherCurrent.Id].Status.Should().Be(TaskItemStatus.InProgress);
+        (await sut.GetByProjectAsync(project.Id)).Should().ContainSingle()
+            .Which.Status.Should().Be(TaskItemStatus.Waiting);
+    }
+
     // ── GetByProjectAsync projection ──────────────────────────────────────────
 
     [Fact]

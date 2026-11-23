@@ -54,6 +54,10 @@
                     {
                         <span class="rc-row-value">@ctx.NextSubtaskTitle</span>
                     }
+                    else if (ctx.HasWaitingSubtasks)
+                    {
+                        <span class="rc-row-value rc-row-value--muted">Remaining subtasks are waiting.</span>
+                    }
                     else if (ctx.HasSubtasks)
                     {
                         <span class="rc-row-value rc-row-value--muted">All subtasks are done — "@Task.Title" is ready to complete.</span>

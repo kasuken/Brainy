@@ -48,6 +48,31 @@ public class TasksHubServiceTests
         return (sp.GetRequiredService<ITasksHubService>(), sp.GetRequiredService<BrainyDbContext>());
     }
 
+    [Fact]
+    public async Task BulkOperationAsync_SettingWaitingClearsOnlyOwnedFocusAndKeepsTaskOnHold()
+    {
+        var (sut, db) = BuildService(nameof(BulkOperationAsync_SettingWaitingClearsOnlyOwnedFocusAndKeepsTaskOnHold));
+        var project = CreateProject(DefaultUserId);
+        var current = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.InProgress);
+        current.IsCurrentTask = true;
+        var otherProject = CreateProject("other-user");
+        var otherCurrent = CreateTask(otherProject.Id, "other-user", status: TaskItemStatus.InProgress);
+        otherCurrent.IsCurrentTask = true;
+        db.Projects.AddRange(project, otherProject);
+        db.Tasks.AddRange(current, otherCurrent);
+        await db.SaveChangesAsync();
+        (await sut.GetOnHoldTasksAsync()).Should().BeEmpty();
+
+        await sut.BulkOperationAsync(new BulkTaskOperationDto([current.Id, otherCurrent.Id], NewStatus: TaskItemStatus.Waiting));
+
+        var storedTasks = await db.Tasks.AsNoTracking().ToDictionaryAsync(task => task.Id);
+        storedTasks[current.Id].IsCurrentTask.Should().BeFalse();
+        storedTasks[otherCurrent.Id].IsCurrentTask.Should().BeTrue();
+        storedTasks[otherCurrent.Id].Status.Should().Be(TaskItemStatus.InProgress);
+        (await sut.GetOnHoldTasksAsync()).Should().ContainSingle().Which.Id.Should().Be(current.Id);
+        (await sut.GetStatusSummaryAsync()).WaitingCount.Should().Be(1);
+    }
+
     // ── Seed helpers ──────────────────────────────────────────────────────────
 
     private static Project CreateProject(
