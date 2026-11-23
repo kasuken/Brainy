@@ -89,7 +89,7 @@ internal sealed class ResumeContextService(
             .FirstOrDefault();
 
         var nextSubtaskTitle = task.Subtasks
-            .Where(s => s.Status != TaskItemStatus.Done)
+            .Where(s => s.Status is TaskItemStatus.Todo or TaskItemStatus.InProgress)
             .OrderBy(s => s.SortOrder)
             .ThenBy(s => s.CreatedAtUtc)
             .Select(s => s.Title)
@@ -113,7 +113,8 @@ internal sealed class ResumeContextService(
             GoalId: task.Project.GoalId,
             GoalTitle: task.Project.Goal?.Title,
             GoalDueDate: task.Project.Goal?.TargetDate,
-            RestartNote: task.RestartNote);
+            RestartNote: task.RestartNote,
+            HasWaitingSubtasks: task.Subtasks.Any(s => s.Status == TaskItemStatus.Waiting));
     }
 
     /// <summary>

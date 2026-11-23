@@ -14,7 +14,7 @@ namespace Brainy.Application.Services;
 
 /// <summary>
 /// Provides task aggregations for the Today screen.
-/// Every query enforces: active project, non-archived task, top-level only.
+/// Task cards require an active project, an actionable non-archived task, and top-level only.
 /// </summary>
 internal sealed class TodayService(
     IApplicationDbContext context,
@@ -23,10 +23,9 @@ internal sealed class TodayService(
     IUserTimeZoneService userTimeZone,
     IApplicationCache cache) : ITodayService
 {
-    // Base active-task predicate: excludes archived tasks, tasks from non-active or archived projects,
-    // done/archived statuses, and subtasks.
+    // Waiting work belongs in planning views, not Today's execution sections.
     private static readonly TaskItemStatus[] _inactiveStatuses =
-        [TaskItemStatus.Done, TaskItemStatus.Archived];
+        [TaskItemStatus.Done, TaskItemStatus.Archived, TaskItemStatus.Waiting];
 
     public async Task<IReadOnlyList<TodayTaskItemDto>> GetCurrentTasksAsync(CancellationToken cancellationToken = default)
     {
@@ -57,7 +56,7 @@ internal sealed class TodayService(
             $"today:high-priority:{today:yyyy-MM-dd}",
             TodayTaskTags(),
             async ct => await ActiveBase(userId)
-                .Where(t => t.Priority >= TaskPriority.High && !_inactiveStatuses.Contains(t.Status))
+                .Where(t => t.Priority >= TaskPriority.High)
                 .OrderByDescending(t => t.Priority)
                 .ThenBy(t => t.DueDate)
                 .Take(5)
@@ -77,12 +76,11 @@ internal sealed class TodayService(
             $"today:due-today:{today:yyyy-MM-dd}",
             TodayTaskTags(),
             async ct => await ActiveBase(userId)
-                .Where(t => !_inactiveStatuses.Contains(t.Status)
-                            && ((t.DueDate.HasValue && t.DueDate.Value.Date == today)
+                .Where(t => (t.DueDate.HasValue && t.DueDate.Value.Date == today)
                                 || t.Subtasks.Any(s => !s.IsArchived
                                                        && !_inactiveStatuses.Contains(s.Status)
                                                        && s.DueDate.HasValue
-                                                       && s.DueDate.Value.Date == today)))
+                                                       && s.DueDate.Value.Date == today))
                 .OrderByDescending(t => t.Priority)
                 .ThenBy(t => t.Title)
                 .Select(BuildToDto(today))
@@ -101,12 +99,11 @@ internal sealed class TodayService(
             $"today:overdue:{today:yyyy-MM-dd}",
             TodayTaskTags(),
             async ct => await ActiveBase(userId)
-                .Where(t => !_inactiveStatuses.Contains(t.Status)
-                            && ((t.DueDate.HasValue && t.DueDate.Value.Date < today)
+                .Where(t => (t.DueDate.HasValue && t.DueDate.Value.Date < today)
                                 || t.Subtasks.Any(s => !s.IsArchived
                                                        && !_inactiveStatuses.Contains(s.Status)
                                                        && s.DueDate.HasValue
-                                                       && s.DueDate.Value.Date < today)))
+                                                       && s.DueDate.Value.Date < today))
                 .OrderBy(t => t.DueDate)
                 .ThenByDescending(t => t.Priority)
                 .Select(BuildToDto(today))
@@ -216,8 +213,7 @@ internal sealed class TodayService(
             async ct => await ActiveBase(userId)
                 .Where(t => t.DueDate.HasValue
                             && t.DueDate.Value.Date >= tomorrow
-                            && t.DueDate.Value.Date <= weekEnd
-                            && !_inactiveStatuses.Contains(t.Status))
+                            && t.DueDate.Value.Date <= weekEnd)
                 .OrderBy(t => t.DueDate)
                 .ThenByDescending(t => t.Priority)
                 .Select(BuildToDto(today))
@@ -241,8 +237,7 @@ internal sealed class TodayService(
             async ct => await ActiveBase(userId)
                 .Where(t => t.DueDate.HasValue
                             && t.DueDate.Value.Date >= nextWeekStart
-                            && t.DueDate.Value.Date <= horizon
-                            && !_inactiveStatuses.Contains(t.Status))
+                            && t.DueDate.Value.Date <= horizon)
                 .OrderBy(t => t.DueDate)
                 .ThenByDescending(t => t.Priority)
                 .Take(10)
@@ -359,7 +354,7 @@ internal sealed class TodayService(
 
     /// <summary>
     /// Base queryable that enforces the "active task" contract:
-    /// non-archived, belongs to an active non-archived project, top-level only, owned by the user.
+    /// actionable, non-archived, belongs to an active non-archived project, top-level only, owned by the user.
     /// </summary>
     private static IReadOnlyCollection<string> TodayTaskTags() =>
     [
@@ -373,6 +368,7 @@ internal sealed class TodayService(
             .AsNoTracking()
             .Where(t => t.UserId == userId
                         && !t.IsArchived
+                        && !_inactiveStatuses.Contains(t.Status)
                         && t.Project.Status == ProjectStatus.Active
                         && !t.Project.IsArchived
                         && t.ParentTaskId == null);
@@ -389,22 +385,20 @@ internal sealed class TodayService(
             t.Project.Name,
             t.CreatedAtUtc,
             t.Subtasks.Count(s => !s.IsArchived
-                                   && s.Status != TaskItemStatus.Done
-                                   && s.Status != TaskItemStatus.Archived
+                                   && !_inactiveStatuses.Contains(s.Status)
                                    && s.DueDate.HasValue
                                    && s.DueDate.Value.Date < today),
             t.Subtasks.Count(s => !s.IsArchived
-                                   && s.Status != TaskItemStatus.Done
-                                   && s.Status != TaskItemStatus.Archived
+                                   && !_inactiveStatuses.Contains(s.Status)
                                    && s.DueDate.HasValue
                                    && s.DueDate.Value.Date == today),
             t.Subtasks
-                .Where(s => !s.IsArchived && s.Status != TaskItemStatus.Done && s.Status != TaskItemStatus.Archived)
+                .Where(s => !s.IsArchived && !_inactiveStatuses.Contains(s.Status))
                 .OrderBy(s => s.SortOrder)
                 .Select(s => s.Title)
                 .FirstOrDefault(),
             t.Subtasks
-                .Where(s => !s.IsArchived)
+                .Where(s => !s.IsArchived && s.Status != TaskItemStatus.Waiting)
                 .OrderBy(s => s.SortOrder)
                 .Select(s => new TodaySubtaskItemDto(s.Id, s.Title, s.Status, s.DueDate))
                 .ToList());

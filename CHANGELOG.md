@@ -1,5 +1,18 @@
 # Changelog
 
+## [8.3.1] - 2026-11-23
+
+### Added
+
+- **Support contacts.** The public footer and account settings now link to email support and GitHub Issues, and Pro pricing clarifies priority email support.
+
+### Fixed
+
+- **Waiting tasks on Today.** Waiting tasks and subtasks no longer appear in Today task lists, counts, notifications, or next-step suggestions. Moving a task to Waiting also clears its current-focus flag, including bulk status changes, while keeping it available in planning views.
+- **Resume context.** When only waiting subtasks remain, the current-focus panel explains that they are waiting instead of suggesting one as the next action or saying all subtasks are complete.
+
+---
+
 ## [8.3.0] - 2026-11-05
 
 ### Changed

@@ -462,8 +462,8 @@ internal sealed class TaskService(
 
         task.Status = dto.Status;
 
-        // A completed task can no longer be the user's current focus.
-        if (dto.Status == TaskItemStatus.Done && task.IsCurrentTask)
+        // Completed or waiting work cannot remain the user's current focus.
+        if (dto.Status is TaskItemStatus.Done or TaskItemStatus.Waiting && task.IsCurrentTask)
         {
             task.IsCurrentTask = false;
         }

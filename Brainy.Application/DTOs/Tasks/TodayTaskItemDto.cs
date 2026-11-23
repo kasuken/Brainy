@@ -21,6 +21,6 @@ public record TodayTaskItemDto(
     string? NextSubtaskTitle = null,
     IReadOnlyList<TodaySubtaskItemDto>? Subtasks = null)
 {
-    /// <summary>Non-archived subtasks, ordered for display within the parent task's card.</summary>
+    /// <summary>Non-archived, non-waiting subtasks, ordered for display within the parent task's card.</summary>
     public IReadOnlyList<TodaySubtaskItemDto> Subtasks { get; init; } = Subtasks ?? [];
 }

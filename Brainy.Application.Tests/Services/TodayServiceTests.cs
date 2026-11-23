@@ -606,6 +606,80 @@ public class TodayServiceTests
         result.Overdue.Should().ContainSingle().Which.Id.Should().Be(selected.Id);
     }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(6)]
+    [InlineData(7)]
+    [InlineData(21)]
+    [InlineData(22)]
+    [InlineData(null)]
+    public async Task GetTodayAggregateAsync_OnlyShowsActionableOwnedTasks(int? dueInDays)
+    {
+        var (sut, db) = BuildService($"{nameof(GetTodayAggregateAsync_OnlyShowsActionableOwnedTasks)}-{dueInDays}");
+        var project = CreateProject(DefaultUserId);
+        var otherProject = CreateProject("other-user");
+        var dueDate = dueInDays.HasValue ? Today.AddDays(dueInDays.Value) : (DateTime?)null;
+        var tasks = Enum.GetValues<TaskItemStatus>()
+            .Select(status => CreateTask(project.Id, DefaultUserId, dueDate, status, TaskPriority.Critical))
+            .ToList();
+        // Defend against an old waiting task that still has its focus flag set.
+        tasks.Single(task => task.Status == TaskItemStatus.Waiting).IsCurrentTask = true;
+        var otherTask = CreateTask(otherProject.Id, "other-user", dueDate, priority: TaskPriority.Critical);
+        db.Projects.AddRange(project, otherProject);
+        db.Tasks.AddRange(tasks.Append(otherTask));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetTodayAggregateAsync();
+        var actionableIds = tasks
+            .Where(task => task.Status is TaskItemStatus.Todo or TaskItemStatus.InProgress)
+            .Select(task => task.Id).ToArray();
+
+        result.CurrentTask.Should().BeNull();
+        result.InProgress.Should().ContainSingle().Which.Status.Should().Be(TaskItemStatus.InProgress);
+        result.HighPriorityWork.Select(task => task.Id).Should().BeEquivalentTo(actionableIds);
+        result.Overdue.Select(task => task.Id).Should().BeEquivalentTo(dueInDays < 0 ? actionableIds : []);
+        result.DueToday.Select(task => task.Id).Should().BeEquivalentTo(dueInDays == 0 ? actionableIds : []);
+        result.DueThisWeek.Select(task => task.Id).Should().BeEquivalentTo(dueInDays is > 0 and <= 6 ? actionableIds : []);
+        result.NextTasks.Select(task => task.Id).Should().BeEquivalentTo(dueInDays is >= 7 and <= 21 ? actionableIds : []);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    public async Task GetTodayAggregateAsync_WaitingSubtasksDoNotSurfaceParentOrAppearInCards(int dueInDays)
+    {
+        var (sut, db) = BuildService($"{nameof(GetTodayAggregateAsync_WaitingSubtasksDoNotSurfaceParentOrAppearInCards)}-{dueInDays}");
+        var project = CreateProject(DefaultUserId);
+        var parent = CreateTask(project.Id, DefaultUserId, priority: TaskPriority.High);
+        var waiting = CreateTask(project.Id, DefaultUserId, Today.AddDays(dueInDays), TaskItemStatus.Waiting);
+        waiting.ParentTaskId = parent.Id;
+        waiting.SortOrder = 0;
+        var next = CreateTask(project.Id, DefaultUserId);
+        next.ParentTaskId = parent.Id;
+        next.Title = "Actionable next step";
+        next.SortOrder = 1;
+        var done = CreateTask(project.Id, DefaultUserId, status: TaskItemStatus.Done);
+        done.ParentTaskId = parent.Id;
+        db.Projects.Add(project);
+        db.Tasks.AddRange(parent, waiting, next, done);
+        db.WeeklyTaskSelections.Add(CreateWeeklySelection(DefaultUserId, parent.Id, Today));
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetTodayAggregateAsync();
+
+        result.Overdue.Should().BeEmpty();
+        result.DueToday.Should().BeEmpty();
+        foreach (var card in result.HighPriorityWork.Concat(result.PlannedThisWeek.Tasks))
+        {
+            card.OverdueSubtaskCount.Should().Be(0);
+            card.DueTodaySubtaskCount.Should().Be(0);
+            card.NextSubtaskTitle.Should().Be(next.Title);
+            card.Subtasks.Select(subtask => subtask.Id).Should().BeEquivalentTo([next.Id, done.Id]);
+        }
+    }
+
     private static WeeklyTaskSelection CreateWeeklySelection(string userId, Guid taskId, DateTime weekStartDate) =>
         new()
         {
