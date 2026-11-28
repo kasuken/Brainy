@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/marketing/readme-banner.svg" alt="Brainy: scattered notes become organized PARA knowledge and an actionable next step." width="1080" />
+
 # Brainy
 
 **A practical second brain for turning scattered knowledge into useful work.**
