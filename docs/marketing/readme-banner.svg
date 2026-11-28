@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="560" viewBox="0 0 1080 560" role="img" aria-labelledby="title desc">
+  <title id="title">Brainy - from scattered knowledge to useful work</title>
+  <desc id="desc">Loose notes become four organized PARA folders: Projects, Areas, Resources and Archives. Their paths converge on a single highlighted next step. Brainy's cream, espresso and clay palette connects capture, organization and action.</desc>
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#f4ece0" stroke-opacity=".045"/>
+    </pattern>
+  </defs>
+  <rect width="1080" height="560" rx="20" fill="#1d1812"/>
+  <rect width="1080" height="560" rx="20" fill="url(#grid)"/>
+  <rect x="1" y="1" width="1078" height="558" rx="19" fill="none" stroke="#6b6253"/>
+  <path d="M48 222H1032" stroke="#6b6253" stroke-opacity=".6"/>
+  <g font-family="Georgia, 'Times New Roman', serif" fill="#f4ece0">
+    <rect x="48" y="48" width="70" height="70" rx="15" fill="#c0561d"/>
+    <text x="83" y="102" text-anchor="middle" font-size="58" font-weight="bold">B</text>
+    <text x="140" y="116" font-size="88" letter-spacing="-3">Brainy</text>
+  </g>
+  <g font-family="'Segoe UI', Helvetica, sans-serif">
+    <text x="1032" y="87" text-anchor="end" fill="#cabea8" font-size="23" letter-spacing="3">YOUR PRACTICAL</text>
+    <text x="1032" y="119" text-anchor="end" fill="#f4ece0" font-size="23" letter-spacing="3">SECOND BRAIN</text>
+    <text x="48" y="187" fill="#f4ece0" font-size="40" font-weight="600" letter-spacing="-.7">Less scattered. More actionable.</text>
+  </g>
+  <g fill="none" stroke="#cabea8" stroke-width="2">
+    <path d="M246 347H295C331 347 316 307 362 307H400"/>
+    <path d="M248 381H314C348 381 329 411 362 411H400"/>
+    <path d="M656 307H681C723 307 703 364 752 364H798"/>
+    <path d="M656 411H681C723 411 703 364 752 364"/>
+  </g>
+  <g stroke="#cabea8" stroke-width="2">
+    <g transform="translate(68 305) rotate(-12 75 60)">
+      <rect width="140" height="112" rx="8" fill="#2a2017"/>
+      <path d="M22 28H98M22 49H113M22 70H78" stroke="#a39989" stroke-width="5" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(146 282) rotate(10 50 50)">
+      <rect width="112" height="100" rx="8" fill="#f3ede1" stroke="#f3ede1"/>
+      <path d="M22 29H83M22 49H67M22 69H77" stroke="#6b6253" stroke-width="5" stroke-linecap="round"/>
+      <path d="M22 49H67" stroke="#cd9a3a" stroke-width="8" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(157 382) rotate(-5 52 36)">
+      <rect width="104" height="72" rx="8" fill="#2a2017"/>
+      <path d="M20 25H78M20 46H61" stroke="#a39989" stroke-width="5" stroke-linecap="round"/>
+    </g>
+  </g>
+  <g font-family="'Segoe UI', Helvetica, sans-serif" font-size="26" font-weight="600">
+    <g transform="translate(400 266)">
+      <path d="M0 12Q0 0 12 0H54L66 12H116Q128 12 128 24V82Q128 94 116 94H12Q0 94 0 82Z" fill="#c0561d"/>
+      <text x="64" y="62" text-anchor="middle" fill="#fdf8f0">Projects</text>
+    </g>
+    <g transform="translate(546 266)">
+      <path d="M0 12Q0 0 12 0H54L66 12H116Q128 12 128 24V82Q128 94 116 94H12Q0 94 0 82Z" fill="#6f7a5a"/>
+      <text x="64" y="62" text-anchor="middle" fill="#fdf8f0">Areas</text>
+    </g>
+    <g transform="translate(400 374)">
+      <path d="M0 12Q0 0 12 0H54L66 12H116Q128 12 128 24V82Q128 94 116 94H12Q0 94 0 82Z" fill="#cd9a3a"/>
+      <text x="64" y="62" text-anchor="middle" fill="#1d1812" font-size="24">Resources</text>
+    </g>
+    <g transform="translate(546 374)">
+      <path d="M0 12Q0 0 12 0H54L66 12H116Q128 12 128 24V82Q128 94 116 94H12Q0 94 0 82Z" fill="#2a2017" stroke="#a39989" stroke-width="2"/>
+      <text x="64" y="62" text-anchor="middle" fill="#f4ece0">Archives</text>
+    </g>
+  </g>
+  <g transform="translate(800 277)">
+    <rect x="-8" y="-8" width="224" height="190" rx="20" fill="none" stroke="#c0561d" stroke-opacity=".35"/>
+    <rect width="208" height="174" rx="12" fill="#f3ede1"/>
+    <path d="M0 12Q0 0 12 0H196Q208 0 208 12V49H0Z" fill="#c0561d"/>
+    <text x="20" y="34" font-family="'Segoe UI', Helvetica, sans-serif" font-size="24" font-weight="600" fill="#fdf8f0">Next step</text>
+    <path d="M23 83H94M23 105H132" fill="none" stroke="#6b6253" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="170" cy="131" r="23" fill="#c0561d"/>
+    <path d="M159 131H181M172 122L181 131L172 140" fill="none" stroke="#fdf8f0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g font-family="'Segoe UI', Helvetica, sans-serif" font-size="27" fill="#f4ece0">
+    <text x="165" y="517" text-anchor="middle">Capture</text>
+    <text x="537" y="517" text-anchor="middle">Organize + distill</text>
+    <text x="904" y="517" text-anchor="middle">Express</text>
+  </g>
+</svg>
